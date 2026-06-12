@@ -41,6 +41,7 @@ const ICON_PATHS = {
   dumbbell: 'M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12',
   trending: 'M3 17l6-6 4 4 8-8M15 7h6v6',
   logout:   'M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8M17 8l4 4-4 4M9 12h12',
+  menu:     'M3 6h18M3 12h18M3 18h18',
 };
 export function Icon({ name, size = 18, stroke = 1.8, fill = false, style, ...rest }) {
   const d = ICON_PATHS[name];
@@ -56,15 +57,15 @@ export function Icon({ name, size = 18, stroke = 1.8, fill = false, style, ...re
 }
 
 /* ---- Panel ---- */
-export function Panel({ title, kicker, icon, right, children, solid, className = '', style, bodyStyle, noBody }) {
+export function Panel({ title, kicker, icon, right, children, solid, glow, className = '', style, bodyStyle, noBody }) {
   return (
-    <section className={`nx-panel ${solid ? 'solid' : ''} ${className}`} style={style}>
+    <section className={`nx-panel${solid ? ' solid' : ''}${glow ? ' nx-panel-glow' : ''} ${className}`} style={style}>
       {(title || kicker || right) && (
         <header className="nx-panel-head">
-          {icon && <span style={{ color: 'var(--holo)' }}><Icon name={icon} size={18} /></span>}
+          {icon && <span style={{ color: 'var(--holo)' }}><Icon name={icon} size={15} /></span>}
           <div style={{ flex: 1, minWidth: 0 }}>
-            {kicker && <div className="nx-kicker" style={{ marginBottom: 2 }}>{kicker}</div>}
-            {title && <div className="nx-display" style={{ fontSize: 15, color: 'var(--txt)' }}>{title}</div>}
+            {kicker && <div className="nx-kicker" style={{ marginBottom: 1 }}>{kicker}</div>}
+            {title && <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{title}</div>}
           </div>
           {right}
         </header>
@@ -104,7 +105,7 @@ export function Avatar({ c, size = 40, ring, style }) {
       fontSize: size * 0.4, boxShadow: ring ? `0 0 0 2px ${c.color}66, 0 0 16px -4px ${c.color}` : 'none', ...style }}>
       {c.initials}
       {c.gold && size >= 36 && (
-        <img src="/assets/isotipo-gold.png" alt="" style={{
+        <img src="/assets/isotipo.png" alt="" style={{
           position: 'absolute', bottom: -2, right: -2, width: size * 0.42, height: size * 0.42,
           filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.6))' }} />
       )}
@@ -168,14 +169,14 @@ export function Modal({ open, onClose, title, kicker, children, width = 540 }) {
     <div onMouseDown={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.72)',
       backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 20 }}>
-      <div className="nx-panel solid nx-fade" onMouseDown={(e) => e.stopPropagation()}
+      <div className="nx-panel solid nx-panel-glow nx-fade" onMouseDown={(e) => e.stopPropagation()}
         style={{ width, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto' }}>
         <header className="nx-panel-head">
           <div style={{ flex: 1 }}>
             {kicker && <div className="nx-kicker" style={{ marginBottom: 2 }}>{kicker}</div>}
-            <div className="nx-display" style={{ fontSize: 16 }}>{title}</div>
+            <div className="nx-display" style={{ fontSize: 14 }}>{title}</div>
           </div>
-          <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 7 }}><Icon name="x" size={15} /></button>
+          <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 5 }}><Icon name="x" size={13} /></button>
         </header>
         <div className="nx-panel-body">{children}</div>
       </div>

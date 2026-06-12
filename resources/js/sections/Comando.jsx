@@ -10,8 +10,9 @@ export function classIcon(clsId) {
 }
 
 /* ===================== COMANDO ===================== */
-export function ComandoView({ S, go }) {
+export function ComandoView({ S, go, user }) {
   const me = NX.byId('you');
+  const myTier = user?.tier ?? me.tier;
   const ch = S.character;
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const myTasks = S.tasks.filter(t => t.pupil === 'you' && t.status !== 'completada');
@@ -36,7 +37,7 @@ export function ComandoView({ S, go }) {
             <div className="nx-kicker">Combatiente · {me.sector}</div>
             <h1 className="nx-display" style={{ fontSize: 30, margin: '4px 0 8px', color: 'var(--txt)' }}>{ch.name}</h1>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <TierBadge tier={me.tier} />
+              <TierBadge tier={myTier} />
               <Chip icon={classIcon(ch.cls)}>{NX.CLASSES.find(c => c.id === ch.cls)?.name}</Chip>
               <Chip tone="dim" icon="user">@{ch.handle}</Chip>
               <span className="nx-chip dim" style={{ borderColor: `${sab}66` }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: sab, boxShadow: `0 0 8px ${sab}` }} />Sable {ch.saber}</span>
@@ -74,7 +75,7 @@ export function ComandoView({ S, go }) {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, alignItems: 'start' }} className="nx-grid-2">
+      <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, alignItems: 'start' }}>
         {/* Tareas activas */}
         <Panel title="Tareas Asignadas" kicker="Tutor · Diego Fuentes" icon="tasks"
           right={<Btn sm icon="arrow" iconRight={null} onClick={() => go('tareas')}>Ver todas</Btn>}>
@@ -144,8 +145,9 @@ export function Empty({ label }) {
 }
 
 /* ===================== MI PERSONAJE ===================== */
-export function PersonajeView({ S }) {
+export function PersonajeView({ S, user }) {
   const me = NX.byId('you');
+  const myTier = user?.tier ?? me.tier;
   const ch = S.character;
   const pool = ch.pool;
   const STATS = ['fuerza', 'velocidad', 'tecnica', 'defensa', 'foco'];
@@ -160,7 +162,7 @@ export function PersonajeView({ S }) {
   };
 
   return (
-    <div className="nx-fade" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 18, alignItems: 'start' }}>
+    <div className="nx-fade nx-personaje-grid" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 18, alignItems: 'start' }}>
       {/* Retrato */}
       <div style={{ display: 'grid', gap: 18 }}>
         <Panel kicker="Retrato de combate" title="Identidad" icon="user" noBody>
@@ -178,7 +180,7 @@ export function PersonajeView({ S }) {
               <div className="nx-data" style={{ fontSize: 12, color: 'var(--holo)', marginTop: 2 }}>@{ch.handle}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <TierBadge tier={me.tier} />
+              <TierBadge tier={myTier} />
               <Chip icon={classIcon(ch.cls)}>{NX.CLASSES.find(c => c.id === ch.cls)?.name}</Chip>
             </div>
           </div>

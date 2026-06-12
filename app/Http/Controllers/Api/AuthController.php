@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
@@ -28,14 +29,57 @@ class AuthController extends Controller
 
         $token = $user->createToken('nexus-api')->plainTextToken;
 
+        $user->load('character');
+        $character = $user->character;
+
         return response()->json([
             'token' => $token,
             'user'  => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
+                'id'        => $user->id,
+                'name'      => $user->name,
+                'email'     => $user->email,
+                'tier'      => $user->tier,
+                'is_tutor'  => $user->isTutor(),
+                'character' => $character ? [
+                    'handle'      => $character->handle,
+                    'cls'         => $character->cls,
+                    'saber_color' => $character->saber_color,
+                    'wins'        => $character->wins,
+                    'losses'      => $character->losses,
+                    'credits'     => $character->credits,
+                ] : null,
             ],
         ]);
+    }
+
+    public function register(Request $request): JsonResponse
+    {
+        $request->validate([
+            'name'     => 'required|string|max:100',
+            'email'    => 'required|email|unique:users,email',
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $user = User::create([
+            'name'     => $request->name,
+            'email'    => $request->email,
+            'password' => Hash::make($request->password),
+            'tier'     => 'iniciado',
+        ]);
+
+        $token = $user->createToken('nexus-api')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'user'  => [
+                'id'       => $user->id,
+                'name'     => $user->name,
+                'email'    => $user->email,
+                'tier'     => $user->tier,
+                'is_tutor' => false,
+                'character'=> null,
+            ],
+        ], 201);
     }
 
     public function logout(Request $request): JsonResponse

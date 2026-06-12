@@ -8,12 +8,14 @@ use App\Http\Controllers\Api\CombatantController;
 use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MeController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
 use Illuminate\Support\Facades\Route;
 
 // Public auth routes
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login',    [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -45,4 +47,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bets', [BetController::class, 'store']);
 
     Route::post('/challenges', [ChallengeController::class, 'store']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 });

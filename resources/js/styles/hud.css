@@ -87,9 +87,24 @@ body {
   border: 1px solid var(--holo-line);
   border-radius: var(--radius-lg);
   backdrop-filter: blur(6px);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 40px -18px rgba(0,0,0,0.8);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.06) inset,
+    0 0 0 1px oklch(0.82 0.13 215 / 0.06),
+    0 2px 8px rgba(0,0,0,0.5),
+    0 8px 24px -6px rgba(0,0,0,0.6),
+    0 24px 60px -16px rgba(0,0,0,0.85);
 }
 .nx-panel.solid { background: var(--space-panel-solid); }
+.nx-panel-glow {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.08) inset,
+    0 0 0 1px oklch(0.82 0.13 215 / 0.2),
+    0 0 0 3px oklch(0.82 0.13 215 / 0.06),
+    0 0 40px -12px oklch(0.82 0.13 215 / 0.35),
+    0 2px 8px rgba(0,0,0,0.5),
+    0 8px 24px -6px rgba(0,0,0,0.6),
+    0 24px 60px -16px rgba(0,0,0,0.85);
+}
 .nx-panel::before, .nx-panel::after {
   content: ''; position: absolute; width: 12px; height: 12px; pointer-events: none;
   border: 1.5px solid var(--holo); opacity: 0.7;
@@ -98,22 +113,22 @@ body {
 .nx-panel::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-bottom-right-radius: var(--radius-lg); }
 
 .nx-panel-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 18px; border-bottom: 1px solid var(--holo-line);
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid var(--holo-line);
 }
-.nx-panel-body { padding: 18px; }
+.nx-panel-body { padding: 14px; }
 
 /* Botones */
 .nx-btn {
-  font-family: var(--font-data); font-weight: 700; font-size: 12px;
+  font-family: var(--font-data); font-weight: 700; font-size: 11px;
   letter-spacing: 0.12em; text-transform: uppercase;
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 10px 16px; border-radius: var(--radius-md);
-  border: 1px solid var(--holo-line); background: rgba(56,205,240,0.06);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border-radius: var(--radius-md);
+  border: 1px solid var(--holo-line); background: color-mix(in srgb, var(--holo) 6%, transparent);
   color: var(--txt); cursor: pointer;
   transition: all var(--dur-fast) var(--ease-standard);
 }
-.nx-btn:hover { border-color: var(--holo); background: rgba(56,205,240,0.14); box-shadow: 0 0 18px -6px var(--holo); }
+.nx-btn:hover { border-color: var(--holo); background: color-mix(in srgb, var(--holo) 14%, transparent); box-shadow: 0 0 18px -6px var(--holo); }
 .nx-btn:active { transform: translateY(1px); }
 .nx-btn-accent {
   background: var(--pompeyo-naranja); border-color: var(--pompeyo-naranja); color: #fff;
@@ -125,7 +140,7 @@ body {
 .nx-btn-gold:hover { box-shadow: 0 0 22px -4px var(--pompeyo-oro); }
 .nx-btn-ghost { background: transparent; }
 .nx-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
-.nx-btn-sm { padding: 6px 11px; font-size: 11px; }
+.nx-btn-sm { padding: 4px 9px; font-size: 10px; }
 
 /* Badges / chips */
 .nx-chip {
@@ -142,15 +157,15 @@ body {
 
 /* Inputs */
 .nx-input, .nx-select, .nx-textarea {
-  width: 100%; font-family: var(--font-body); font-size: 14px;
+  width: 100%; font-family: var(--font-body); font-size: 13px;
   background: rgba(4,9,18,0.5); color: var(--txt);
   border: 1px solid var(--holo-line); border-radius: var(--radius-md);
-  padding: 10px 12px; outline: none; transition: border-color var(--dur-fast);
+  padding: 7px 10px; outline: none; transition: border-color var(--dur-fast);
 }
-.nx-input:focus, .nx-select:focus, .nx-textarea:focus { border-color: var(--holo); box-shadow: 0 0 0 3px rgba(56,205,240,0.12); }
+.nx-input:focus, .nx-select:focus, .nx-textarea:focus { border-color: var(--holo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--holo) 12%, transparent); }
 .nx-input::placeholder, .nx-textarea::placeholder { color: var(--txt-faint); }
-.nx-label { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--txt-dim); display:block; margin-bottom: 6px; }
-.nx-textarea { resize: vertical; min-height: 88px; }
+.nx-label { font-family: var(--font-data); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--txt-dim); display:block; margin-bottom: 4px; }
+.nx-textarea { resize: vertical; min-height: 72px; }
 select.nx-select option { background: var(--space-panel-solid); }
 
 /* Barras de stat */
@@ -161,7 +176,7 @@ select.nx-select option { background: var(--space-panel-solid); }
 .nx-divider { height: 1px; background: var(--holo-line); border: 0; margin: 0; }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(56,205,240,0.18); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(56,205,240,0.35); background-clip: padding-box; }
@@ -188,3 +203,76 @@ select.nx-select option { background: var(--space-panel-solid); }
 .nx-hex { clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 
 a { color: var(--holo); }
+
+/* ============================================================
+   RESPONSIVE — Layout principal
+   ============================================================ */
+
+/* Overlay backdrop para el sidebar en mobile */
+.nx-sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 4;
+  background: rgba(4,7,15,0.72);
+  backdrop-filter: blur(2px);
+  animation: nx-fade-up 0.15s ease both;
+}
+
+/* Hamburger — oculto en desktop */
+.nx-hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--holo-line);
+  border-radius: var(--radius-md);
+  color: var(--txt);
+  cursor: pointer;
+  padding: 8px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.nx-hamburger:hover { border-color: var(--holo); background: color-mix(in srgb, var(--holo) 8%, transparent); }
+
+@media (max-width: 768px) {
+  /* Activar hamburger */
+  .nx-hamburger { display: flex; align-items: center; justify-content: center; }
+
+  /* Overlay activo */
+  .nx-sidebar-overlay.open { display: block; }
+
+  /* Sidebar se convierte en drawer lateral */
+  .nx-sidebar {
+    position: fixed !important;
+    top: 0; left: 0; bottom: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.25s var(--ease-standard);
+    height: 100dvh !important;
+    background: rgba(4,7,15,0.97) !important;
+  }
+  .nx-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 40px rgba(0,0,0,0.6);
+  }
+
+  /* Header padding reducido */
+  .nx-header { padding: 12px 16px !important; gap: 10px !important; }
+
+  /* Texto largo del header — ocultar en mobile */
+  .nx-header-btn-text { display: none; }
+
+  /* Reducir padding en main */
+  .nx-main { padding: 16px 14px 60px !important; }
+
+  /* Grids de 2 columnas → 1 columna */
+  .nx-grid-2 { grid-template-columns: 1fr !important; }
+
+  /* Personaje: columna fija → apilado */
+  .nx-personaje-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Tablet: sidebar más estrecho, main ajustado */
+  .nx-sidebar { width: 200px !important; }
+  .nx-main { padding: 20px 18px 60px !important; }
+  .nx-grid-2 { grid-template-columns: 1fr 1fr !important; }
+  .nx-personaje-grid { grid-template-columns: 300px 1fr !important; }
+}

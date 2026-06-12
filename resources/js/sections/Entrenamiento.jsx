@@ -33,7 +33,7 @@ export function TrainingView({ S }) {
   const entry = logged[sel];
 
   return (
-    <div className="nx-fade" style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr', gap: 18, alignItems: 'start' }} >
+    <div className="nx-fade nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr', gap: 18, alignItems: 'start' }}>
       {/* Calendario */}
       <div style={{ display: 'grid', gap: 18 }}>
         <Panel kicker={S.training.month} title="Registro de Asistencia" icon="calendar"

@@ -40,13 +40,16 @@ export function useStore() {
   const [bets, setBets] = useState(saved.bets ?? []);
   const [combats, setCombats] = useState(saved.combats ?? NX.combats);
   const [events, setEvents] = useState(saved.events ?? NX.events);
-  const [role, setRole] = useState(saved.role ?? 'pupilo');
+  const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(me.tier);
+  const [role, setRole] = useState(canTutor ? (saved.role ?? 'pupilo') : 'pupilo');
+  const [combatants, setCombatants] = useState(NX.combatants);
 
   const training = { ...NX.training, logged };
-  const ranking = NX.ranking;
+  const ranking = [...combatants].sort((a, b) => b.wins - a.wins || b.winrate - a.winrate);
 
   const S = {
     credits, character, training, tasks, bets, combats, role, ranking, events,
+    combatants, setCombatants,
     setRole, setCredits,
     setCharacter,
     // POST /api/character

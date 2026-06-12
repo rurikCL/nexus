@@ -47,7 +47,7 @@ class CombatantController extends Controller
             'streak'      => $character->streak,
             'stats'       => $character->stats,
             'gold'        => $character->gold,
-            'tier'        => $character->tier,
+            'tier'        => $character->user->tier ?? 'iniciado',
             'winrate'     => $character->winrate,
         ];
     }

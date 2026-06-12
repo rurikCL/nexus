@@ -17,6 +17,7 @@ class MeController extends Controller
             'id'        => $user->id,
             'name'      => $user->name,
             'email'     => $user->email,
+            'tier'      => $user->tier,
             'is_tutor'  => $user->isTutor(),
             'character' => $character ? [
                 'id'          => $character->id,
@@ -34,7 +35,6 @@ class MeController extends Controller
                 'streak'      => $character->streak,
                 'stats'       => $character->stats,
                 'gold'        => $character->gold,
-                'tier'        => $character->tier,
                 'winrate'     => $character->winrate,
             ] : null,
         ]);

@@ -19,34 +19,11 @@ class Character extends Model
         'gold'  => 'boolean',
     ];
 
-    protected $appends = ['tier', 'winrate'];
+    protected $appends = ['winrate'];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    protected function tier(): Attribute
-    {
-        return Attribute::make(
-            get: function () {
-                $wins = $this->wins ?? 0;
-                $tier = 'iniciado';
-                $tiers = [
-                    'iniciado'    => 0,
-                    'padawan'     => 8,
-                    'caballero'   => 20,
-                    'maestro'     => 38,
-                    'granmaestro' => 50,
-                ];
-                foreach ($tiers as $key => $min) {
-                    if ($wins >= $min) {
-                        $tier = $key;
-                    }
-                }
-                return $tier;
-            }
-        );
     }
 
     protected function winrate(): Attribute

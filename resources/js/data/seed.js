@@ -26,6 +26,7 @@
   const SABERS = {
     azul:    '#3aa0ff', verde:   '#34d36a', ambar:   '#ffb01f',
     purpura: '#b15cff', cian:    '#26e3e3', blanco:  '#eaf2ff',
+    rojo:    '#ff2d45',
   };
 
   // Combatientes (incluye al usuario actual: id 'you')

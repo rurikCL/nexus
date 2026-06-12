@@ -10,7 +10,7 @@ export function CombatientesView({ S }) {
   const [tierF, setTierF] = useState('todos');
   const [profile, setProfile] = useState(null);
 
-  const list = NX.combatants.filter(c => {
+  const list = S.combatants.filter(c => {
     if (tierF !== 'todos' && c.tier !== tierF) return false;
     if (q && !(`${c.name} ${c.handle} ${c.sector || ''}`.toLowerCase().includes(q.toLowerCase()))) return false;
     return true;
@@ -19,7 +19,7 @@ export function CombatientesView({ S }) {
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
       <Panel kicker="Directorio de la academia" title="Combatientes" icon="roster"
-        right={<Chip tone="dim" icon="roster">{NX.combatants.length} registrados</Chip>}>
+        right={<Chip tone="dim" icon="roster">{S.combatants.length} registrados</Chip>}>
         {/* Filtros */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
@@ -111,7 +111,7 @@ export function PublicProfile({ c, S, onClose }) {
           <div style={{ position: 'relative' }}>
             <div className="nx-avatar nx-hex" style={{ width: 110, height: 122, background: `linear-gradient(135deg, ${c.color}, ${c.color}88)`, fontSize: 40, border: 'none' }}>{c.initials}</div>
             <div className="nx-hex" style={{ position: 'absolute', inset: -2, border: `1.5px solid ${c.saber}`, boxShadow: `0 0 22px -6px ${c.saber}`, pointerEvents: 'none' }} />
-            {c.gold && <img src="/assets/isotipo-gold.png" alt="" style={{ position: 'absolute', bottom: -6, right: -10, width: 40, height: 40, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }} />}
+            {c.gold && <img src="/assets/isotipo.png" alt="" style={{ position: 'absolute', bottom: -6, right: -10, width: 40, height: 40, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }} />}
           </div>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div className="nx-kicker">{c.sector || 'Academia Orbital'}{c.sponsor ? ` · ${c.sponsor}` : ''}</div>
@@ -143,7 +143,7 @@ export function PublicProfile({ c, S, onClose }) {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             {/* Atributos */}
             <div>
               <div className="nx-kicker" style={{ marginBottom: 12 }}>Atributos de combate</div>

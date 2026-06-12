@@ -219,12 +219,15 @@ export function BetModal({ data, onClose, S }) {
 }
 
 export function ChallengeModal({ open, onClose, S }) {
-  const opponents = NX.combatants.filter(c => c.id !== 'you');
+  const opponents = S.combatants.filter(c => c.id !== 'you');
   const [oppId, setOppId] = useState(opponents[0].id);
   const [stake, setStake] = useState(300);
   const [msg, setMsg] = useState('');
+  const [picking, setPicking] = useState(false);
+
   useEffect(() => { if (open) { setOppId(opponents[0].id); setStake(300); setMsg(''); } }, [open]);
   if (!open) return null;
+
   const opp = NX.byId(oppId);
   const submit = () => {
     if (stake > S.credits) { toast('No tienes créditos para esa apuesta', { tone: 'error', icon: 'x' }); return; }
@@ -232,34 +235,111 @@ export function ChallengeModal({ open, onClose, S }) {
     onClose();
     toast(`Desafío enviado a ${opp.name}`, { tone: 'success', icon: 'swords', desc: 'Combate oficial pendiente de aceptación' });
   };
+
   return (
-    <Modal open={open} onClose={onClose} kicker="Duelo oficial" title="Retar a Combate" width={480}>
-      <div style={{ display: 'grid', gap: 16 }}>
-        <div>
-          <label className="nx-label">Oponente</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px,1fr))', gap: 8, maxHeight: 200, overflow: 'auto', paddingRight: 4 }}>
-            {opponents.map(c => (
-              <button key={c.id} onClick={() => setOppId(c.id)} className="nx-panel solid" style={{ padding: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, borderColor: oppId === c.id ? 'var(--pompeyo-naranja)' : undefined, background: oppId === c.id ? 'color-mix(in srgb, var(--pompeyo-naranja) 12%, var(--space-panel-solid))' : undefined }}>
-                <Avatar c={c} size={30} />
-                <div style={{ minWidth: 0, textAlign: 'left' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
-                  <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>{c.wins}W-{c.losses}L</div>
+    <>
+      <Modal open={open} onClose={onClose} kicker="Duelo oficial" title="Retar a Combate" width={480}>
+        <div style={{ display: 'grid', gap: 16 }}>
+
+          {/* Oponente seleccionado */}
+          <div>
+            <label className="nx-label">Oponente</label>
+            <button onClick={() => setPicking(true)} className="nx-panel solid" style={{
+              width: '100%', padding: '12px 14px', cursor: 'pointer', display: 'flex',
+              alignItems: 'center', gap: 12, textAlign: 'left',
+              borderColor: 'var(--holo-line)', transition: 'border-color .15s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--holo)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--holo-line)'}>
+              <Avatar c={opp} size={40} ring />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{opp.name}</div>
+                <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
+                  {opp.wins}W-{opp.losses}L · @{opp.handle}
                 </div>
-              </button>
-            ))}
+              </div>
+              <TierBadge tier={opp.tier} sm />
+              <span style={{ color: 'var(--txt-faint)' }}><Icon name="chevron" size={16} /></span>
+            </button>
+          </div>
+
+          <div>
+            <label className="nx-label">Apuesta del duelo (créditos)</label>
+            <input className="nx-input nx-data" type="number" value={stake} onChange={(e) => setStake(+e.target.value)} style={{ fontSize: 16 }} />
+          </div>
+          <div>
+            <label className="nx-label">Mensaje (opcional)</label>
+            <input className="nx-input" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Te espero en la arena..." />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <Btn onClick={onClose}>Cancelar</Btn>
+            <Btn kind="accent" icon="swords" onClick={submit} disabled={stake > S.credits}>Enviar desafío</Btn>
           </div>
         </div>
-        <div>
-          <label className="nx-label">Apuesta del duelo (créditos)</label>
-          <input className="nx-input nx-data" type="number" value={stake} onChange={(e) => setStake(+e.target.value)} style={{ fontSize: 16 }} />
+      </Modal>
+
+      {/* Modal secundario: selector de oponente */}
+      <FighterPickerModal
+        open={picking}
+        opponents={opponents}
+        selected={oppId}
+        onPick={(id) => { setOppId(id); setPicking(false); }}
+        onClose={() => setPicking(false)}
+      />
+    </>
+  );
+}
+
+function FighterPickerModal({ open, opponents, selected, onPick, onClose }) {
+  const [q, setQ] = useState('');
+  useEffect(() => { if (open) setQ(''); }, [open]);
+
+  const filtered = opponents.filter(c =>
+    !q || `${c.name} ${c.handle}`.toLowerCase().includes(q.toLowerCase())
+  );
+
+  return (
+    <Modal open={open} onClose={onClose} kicker="Elige tu rival" title="Seleccionar Oponente" width={520}>
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 11, top: 11, color: 'var(--txt-faint)' }}>
+            <Icon name="filter" size={15} />
+          </span>
+          <input
+            className="nx-input"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Buscar combatiente..."
+            style={{ paddingLeft: 34 }}
+            autoFocus
+          />
         </div>
-        <div>
-          <label className="nx-label">Mensaje (opcional)</label>
-          <input className="nx-input" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Te espero en la arena..." />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <Btn onClick={onClose}>Cancelar</Btn>
-          <Btn kind="accent" icon="swords" onClick={submit} disabled={stake > S.credits}>Enviar desafío</Btn>
+
+        <div style={{ display: 'grid', gap: 8, maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
+          {filtered.map(c => {
+            const active = c.id === selected;
+            return (
+              <button key={c.id} onClick={() => onPick(c.id)} className="nx-panel solid" style={{
+                padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
+                textAlign: 'left', transition: 'all .15s',
+                borderColor: active ? 'var(--pompeyo-naranja)' : undefined,
+                background: active ? 'color-mix(in srgb, var(--pompeyo-naranja) 12%, var(--space-panel-solid))' : undefined }}>
+                <Avatar c={c} size={40} ring />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div>
+                  <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
+                    {c.wins}W-{c.losses}L · {c.winrate}% efic.
+                  </div>
+                </div>
+                <TierBadge tier={c.tier} sm />
+                {active && <span style={{ color: 'var(--pompeyo-naranja)' }}><Icon name="check" size={16} /></span>}
+              </button>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)' }} className="nx-data">
+              Sin resultados
+            </div>
+          )}
         </div>
       </div>
     </Modal>
