@@ -26,6 +26,7 @@ class MeController extends Controller
                 'bio'         => $character->bio,
                 'cls'         => $character->cls,
                 'saber_color' => $character->saber_color,
+                'side'        => $character->side,
                 'sector'      => $character->sector,
                 'sponsor'     => $character->sponsor,
                 'joined_year' => $character->joined_year,

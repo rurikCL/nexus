@@ -44,6 +44,7 @@ class AuthController extends Controller
                     'handle'      => $character->handle,
                     'cls'         => $character->cls,
                     'saber_color' => $character->saber_color,
+                    'side'        => $character->side,
                     'wins'        => $character->wins,
                     'losses'      => $character->losses,
                     'credits'     => $character->credits,

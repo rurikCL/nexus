@@ -11,11 +11,18 @@ use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 // Public auth routes
 Route::post('/login',    [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+
+// Broadcasting auth para SPAs con Sanctum (Bearer token en lugar de sesión web)
+Route::post('/broadcasting/auth', function (Request $request) {
+    return Broadcast::auth($request);
+})->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -49,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/challenges', [ChallengeController::class, 'store']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/test', [NotificationController::class, 'test']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);

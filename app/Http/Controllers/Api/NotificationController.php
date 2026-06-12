@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Pusher\Pusher;
 
 class NotificationController extends Controller
 {
@@ -57,6 +58,78 @@ class NotificationController extends Controller
             ->notifications()
             ->findOrFail($id)
             ->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    // POST /notifications/test — dispara una transmisión de prueba vía Pusher
+    public function test(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => 'required|in:desafio,victoria,derrota,tarea,sistema',
+        ]);
+
+        $templates = [
+            'desafio' => [
+                'icon'         => 'swords',
+                'tone'         => 'orange',
+                'title'        => 'Diego Fuentes te retó a combate',
+                'body'         => 'Apuesta: 750 créditos · Duelo Oficial',
+                'action_label' => 'VER DESAFÍO',
+                'action_url'   => '/combates',
+            ],
+            'victoria' => [
+                'icon'         => 'trophy',
+                'tone'         => 'green',
+                'title'        => '¡Ganaste el combate!',
+                'body'         => 'Carlos Méndez fue derrotado — Ronda clasificatoria',
+                'action_label' => 'VER RESULTADO',
+                'action_url'   => '/combates',
+            ],
+            'derrota' => [
+                'icon'         => 'x',
+                'tone'         => 'red',
+                'title'        => 'Combate perdido',
+                'body'         => 'Carlos Méndez ganó el duelo · Sigue entrenando',
+                'action_label' => 'VER RESULTADO',
+                'action_url'   => '/combates',
+            ],
+            'tarea' => [
+                'icon'         => 'tasks',
+                'tone'         => 'holo',
+                'title'        => 'Nueva tarea asignada',
+                'body'         => '3 sesiones de footwork · Recompensa: 120 créditos',
+                'action_label' => 'VER TAREA',
+                'action_url'   => '/tareas',
+            ],
+            'sistema' => [
+                'icon'         => 'bell',
+                'tone'         => 'blue',
+                'title'        => 'Mensaje del Sistema NÉXUS',
+                'body'         => 'Mantenimiento programado en 10 minutos.',
+                'action_label' => null,
+                'action_url'   => null,
+            ],
+        ];
+
+        $payload = $templates[$data['type']];
+        $user    = $request->user();
+
+        $pusher = new Pusher(
+            config('broadcasting.connections.pusher.key'),
+            config('broadcasting.connections.pusher.secret'),
+            config('broadcasting.connections.pusher.app_id'),
+            [
+                'cluster' => config('broadcasting.connections.pusher.options.cluster'),
+                'useTLS'  => true,
+            ]
+        );
+
+        $pusher->trigger(
+            'private-App.Models.User.' . $user->id,
+            'Illuminate\\Notifications\\Events\\BroadcastNotificationCreated',
+            $payload
+        );
 
         return response()->json(['ok' => true]);
     }

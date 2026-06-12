@@ -31,9 +31,10 @@ export function useStore() {
   const me = NX.byId('you');
   const [credits, setCredits] = useState(saved.credits ?? me.credits);
   const savedChar = saved.character ?? {
-    name: me.name, handle: me.handle, bio: me.bio, cls: me.cls, stats: { ...me.stats }, pool: 6,
+    name: me.name, handle: me.handle, bio: me.bio, cls: me.cls ?? 'forma1', stats: { ...me.stats }, pool: 6,
   };
   if (!savedChar.saber) savedChar.saber = me.saberName;
+  if (!savedChar.side) savedChar.side = 'luminoso';
   const [character, setCharacter] = useState(savedChar);
   const [logged, setLogged] = useState(saved.logged ?? NX.training.logged);
   const [tasks, setTasks] = useState(saved.tasks ?? NX.tasks);

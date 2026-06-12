@@ -49,12 +49,13 @@ const TITLES = {
   combatientes: ['Combatientes', 'Directorio y perfiles públicos'],
 };
 
-export default function App({ user, onLogout }) {
+export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const S = useStore();
   const [view, setView] = useState(() => location.hash.slice(1) || 'comando');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [testOpen, setTestOpen] = useState(false);
   const me = NX.byId('you');
   // Usa tier del usuario autenticado si está disponible, si no cae al de seed
   const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? me.tier);
@@ -102,12 +103,12 @@ export default function App({ user, onLogout }) {
 
   useEffect(() => {
     if (!user?.id || !window.Echo) return;
-    const channel = window.Echo.private(`App.Models.User.${user.id}`);
-    channel.notification((notif) => {
-      setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
-      toast(notif.title, { tone: notif.tone ?? 'info', icon: notif.icon ?? 'bell', desc: notif.body });
-    });
-    return () => window.Echo.leave(`private-App.Models.User.${user.id}`);
+    window.Echo.private(`App.Models.User.${user.id}`)
+      .notification((notif) => {
+        setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
+        onTransmision?.(notif);
+      });
+    return () => window.Echo.leave(`App.Models.User.${user.id}`);
   }, [user?.id]);
 
   const authHeaders = () => {
@@ -125,9 +126,18 @@ export default function App({ user, onLogout }) {
     fetch('/api/notifications/read-all', { method: 'POST', headers: authHeaders() }).catch(() => {});
   };
 
+  const fireTestTransmision = (type) => {
+    setTestOpen(false);
+    fetch('/api/notifications/test', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type }),
+    }).catch(() => {});
+  };
+
   const VIEWS = {
     comando: <ComandoView S={S} go={go} user={user} />,
-    personaje: <PersonajeView S={S} user={user} />,
+    personaje: <PersonajeView S={S} user={user} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     entrenamiento: <TrainingView S={S} />,
     tareas: <TareasView S={S} />,
     eventos: <EventosView S={S} go={go} />,
@@ -232,6 +242,53 @@ export default function App({ user, onLogout }) {
               </span>
             )}
           </button>
+
+          {/* Widget de prueba de transmisiones */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className="nx-btn nx-btn-ghost"
+              title="Probar Transmisión"
+              style={{ padding: 7, color: testOpen ? 'var(--holo)' : 'var(--txt-faint)' }}
+              onClick={() => setTestOpen(o => !o)}
+            >
+              <Icon name="video" size={15} />
+            </button>
+            {testOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                background: 'rgba(6,10,20,.97)', border: '1px solid var(--holo-line)',
+                boxShadow: '0 8px 32px rgba(0,0,0,.6)',
+                padding: 12, minWidth: 200, zIndex: 50,
+              }}>
+                <div style={{ fontFamily: 'var(--font-hud)', fontSize: 9, letterSpacing: '.2em', color: 'var(--holo)', marginBottom: 10 }}>
+                  TEST TRANSMISIÓN
+                </div>
+                {[
+                  { type: 'desafio', label: 'Reto de combate',  color: '#FF6B00' },
+                  { type: 'victoria', label: 'Combate ganado',  color: '#10b981' },
+                  { type: 'derrota',  label: 'Combate perdido', color: '#ff2d45' },
+                  { type: 'tarea',    label: 'Tarea asignada',  color: '#E6B325' },
+                  { type: 'sistema',  label: 'Mensaje sistema', color: '#3aa0ff' },
+                ].map(({ type, label, color }) => (
+                  <button
+                    key={type}
+                    onClick={() => fireTestTransmision(type)}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '7px 10px', marginBottom: 2,
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      fontFamily: 'var(--font-hud)', fontSize: 11, color: 'var(--txt-dim)',
+                      letterSpacing: '.05em',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${color}18`; e.currentTarget.style.color = color; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </header>
 
         <main className="nx-main" style={{ flex: 1, padding: '18px 20px 48px', maxWidth: 1280, width: '100%', margin: '0 auto' }}>

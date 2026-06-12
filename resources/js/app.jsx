@@ -1,15 +1,36 @@
 import './bootstrap.js';
 import '../css/app.css';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
 import './styles/hud.css';
 import App from './App.jsx';
 import Login from './Login.jsx';
+import { TransmisionOverlay } from './components/TransmisionOverlay.jsx';
 
 function Root() {
   const [user, setUser]       = useState(null);
   const [checking, setChecking] = useState(true);
+
+  // Cola de transmisiones en tiempo real
+  const [transmision, setTransmision]   = useState(null);
+  const transmisionQueue                = useRef([]);
+  const transmisionActive               = useRef(null);
+
+  const pushTransmision = (notif) => {
+    if (transmisionActive.current) {
+      transmisionQueue.current.push(notif);
+    } else {
+      transmisionActive.current = notif;
+      setTransmision(notif);
+    }
+  };
+
+  const dismissTransmision = () => {
+    const next = transmisionQueue.current.shift() ?? null;
+    transmisionActive.current = next;
+    setTransmision(next);
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -55,6 +76,12 @@ function Root() {
     });
   };
 
+  const handleUserUpdate = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('nx-user', JSON.stringify(updatedUser));
+  };
+
+
   if (checking && !user) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#04070f' }}>
@@ -68,7 +95,14 @@ function Root() {
 
   if (!user) return <Login onLogin={handleLogin} />;
 
-  return <App user={user} onLogout={handleLogout} />;
+  return (
+    <>
+      <App user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} onTransmision={pushTransmision} />
+      {transmision && (
+        <TransmisionOverlay notification={transmision} onDismiss={dismissTransmision} />
+      )}
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')).render(

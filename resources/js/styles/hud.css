@@ -190,6 +190,8 @@ select.nx-select option { background: var(--space-panel-solid); }
 
 @keyframes nx-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
+@keyframes nx-signal-bar { from { opacity: .25; } to { opacity: 1; } }
+
 /* avatar monograma */
 .nx-avatar {
   position: relative; display: grid; place-items: center;

@@ -14,8 +14,9 @@ class CharacterController extends Controller
             'name'        => 'required|string|max:255',
             'handle'      => 'required|string|max:20',
             'bio'         => 'nullable|string',
-            'cls'         => 'required|in:vanguardia,espectro,titan,oraculo',
+            'cls'         => 'required|in:forma1,forma2,forma3,forma4,forma5,forma6,forma7',
             'saber_color' => 'nullable|string',
+            'side'        => 'nullable|in:luminoso,oscuro',
             'sector'      => 'nullable|string',
             'sponsor'     => 'nullable|string',
             'joined_year' => 'nullable|digits:4|integer',
@@ -51,7 +52,7 @@ class CharacterController extends Controller
         );
 
         return response()->json([
-            'character' => $character->append(['tier', 'winrate']),
-        ], $user->wasRecentlyCreated ? 201 : 200);
+            'character' => $character->append(['winrate']),
+        ], $character->wasRecentlyCreated ? 201 : 200);
     }
 }
