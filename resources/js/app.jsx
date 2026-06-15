@@ -80,6 +80,7 @@ function Root() {
     }).finally(() => {
       localStorage.removeItem('nx-token');
       localStorage.removeItem('nx-user');
+      localStorage.removeItem('nx-state-v3');
       setUser(null);
     });
   };

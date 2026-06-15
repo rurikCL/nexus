@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 
 class TemporadaController extends Controller
 {
-    private const RANGOS = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
+    private const RANGOS = ['iniciado', 'padawan', 'caballero', 'maestro'];
 
     private function eagerLoads(): array
     {
@@ -155,12 +155,12 @@ class TemporadaController extends Controller
             $topGlobal = StatsTemporada::where('temporada_id', $t->id)
                 ->orderByDesc('wins')->orderByDesc('streak')
                 ->limit(3)->with('user.character')->get();
-            $primerLugar  = $fmtUser($topGlobal[0]?->user ?? null);
-            $segundoLugar = $fmtUser($topGlobal[1]?->user ?? null);
-            $tercerLugar  = $fmtUser($topGlobal[2]?->user ?? null);
-            $primerLugarId  = $topGlobal[0]?->user_id;
-            $segundoLugarId = $topGlobal[1]?->user_id;
-            $tercerLugarId  = $topGlobal[2]?->user_id;
+            $primerLugar  = $fmtUser($topGlobal->get(0)?->user ?? null);
+            $segundoLugar = $fmtUser($topGlobal->get(1)?->user ?? null);
+            $tercerLugar  = $fmtUser($topGlobal->get(2)?->user ?? null);
+            $primerLugarId  = $topGlobal->get(0)?->user_id;
+            $segundoLugarId = $topGlobal->get(1)?->user_id;
+            $tercerLugarId  = $topGlobal->get(2)?->user_id;
         } else {
             $primerLugar  = $fmtUser($t->primerLugar);
             $segundoLugar = $fmtUser($t->segundoLugar);
@@ -180,12 +180,12 @@ class TemporadaController extends Controller
                         ->limit(3)->with('user.character')->get();
                     return [
                         'rango'            => $rango,
-                        'primer_lugar'     => $fmtUser($top[0]?->user ?? null),
-                        'segundo_lugar'    => $fmtUser($top[1]?->user ?? null),
-                        'tercer_lugar'     => $fmtUser($top[2]?->user ?? null),
-                        'primer_lugar_id'  => $top[0]?->user_id,
-                        'segundo_lugar_id' => $top[1]?->user_id,
-                        'tercer_lugar_id'  => $top[2]?->user_id,
+                        'primer_lugar'     => $fmtUser($top->get(0)?->user ?? null),
+                        'segundo_lugar'    => $fmtUser($top->get(1)?->user ?? null),
+                        'tercer_lugar'     => $fmtUser($top->get(2)?->user ?? null),
+                        'primer_lugar_id'  => $top->get(0)?->user_id,
+                        'segundo_lugar_id' => $top->get(1)?->user_id,
+                        'tercer_lugar_id'  => $top->get(2)?->user_id,
                     ];
                 })->filter(fn($p) => $p['primer_lugar'] !== null)->values();
             } else {

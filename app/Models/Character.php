@@ -17,6 +17,17 @@ class Character extends Model
         'gold'  => 'boolean',
     ];
 
+    public function getWinrateAttribute(): int
+    {
+        $total = ($this->wins ?? 0) + ($this->losses ?? 0);
+        return $total > 0 ? (int) round($this->wins / $total * 100) : 0;
+    }
+
+    public function getTotalAttribute(): int
+    {
+        return ($this->wins ?? 0) + ($this->losses ?? 0);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

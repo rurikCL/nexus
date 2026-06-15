@@ -164,7 +164,7 @@ const TITLES = {
 
 export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const S = useStore();
-  const [view, setView] = useState(() => location.hash.slice(1) || 'comando');
+  const [view, setView] = useState(() => location.pathname.replace(/^\//, '') || 'comando');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -176,27 +176,43 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
   const go = (v) => {
     setView(v);
-    location.hash = v;
+    history.pushState(null, '', '/' + v);
     window.scrollTo({ top: 0 });
     setSidebarOpen(false);
   };
   useEffect(() => {
-    const h = () => setView(location.hash.slice(1) || 'comando');
-    window.addEventListener('hashchange', h);
-    return () => window.removeEventListener('hashchange', h);
+    const h = () => setView(location.pathname.replace(/^\//, '') || 'comando');
+    window.addEventListener('popstate', h);
+    return () => window.removeEventListener('popstate', h);
   }, []);
 
   useEffect(() => {
     applySaberTheme(S.character.saber);
   }, [S.character.saber]);
 
-  // Sincroniza photo_url del usuario autenticado al store (no persiste en localStorage)
+  // Sincroniza el personaje del usuario autenticado al store cuando cambia la sesión
   useEffect(() => {
-    const photoUrl = user?.character?.photo_url;
-    if (photoUrl && !S.character.photo) {
-      S.setCharacter(ch => ({ ...ch, photo: photoUrl }));
-    }
-  }, [user?.character?.photo_url]);
+    const ch = user?.character;
+    if (!ch) return;
+    S.setCharacter({
+      name:        ch.name        ?? '',
+      handle:      ch.handle      ?? '',
+      bio:         ch.bio         ?? '',
+      lore:        ch.lore        ?? '',
+      cls:         ch.cls         ?? 'forma1',
+      saber:       ch.saber_color ?? 'azul',
+      side:        ch.side        ?? 'luminoso',
+      sector:      ch.sector      ?? '',
+      sponsor:     ch.sponsor     ?? '',
+      joined_year: ch.joined_year ?? '',
+      stats:       ch.stats       ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
+      gold:        ch.gold        ?? false,
+      photo:       ch.photo_url   ?? null,
+      wins:        ch.wins        ?? 0,
+      losses:      ch.losses      ?? 0,
+      winrate:     ch.winrate     ?? 0,
+    });
+  }, [user?.id]);
 
   // Carga notificaciones y suscribe al canal privado de Pusher
   useEffect(() => {

@@ -28,6 +28,7 @@ class MeController extends Controller
                 'handle'      => $character->handle,
                 'name'        => $character->name,
                 'bio'         => $character->bio,
+                'lore'        => $character->lore,
                 'cls'         => $character->cls,
                 'saber_color' => $character->saber_color,
                 'side'        => $character->side,

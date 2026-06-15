@@ -85,6 +85,10 @@ class AdminController extends Controller
             $data[$key] = $path;
         }
 
+        if ($entity === 'usuarios' && empty($data['password'])) {
+            $data['password'] = '1234';
+        }
+
         $record = $model::create($data);
 
         return response()->json(['record' => $record], 201);

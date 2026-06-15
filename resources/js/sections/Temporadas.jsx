@@ -9,11 +9,10 @@ const TIER_COLORS = {
 };
 
 const TIERS = [
-  { id: 'iniciado',    label: 'Iniciado'    },
-  { id: 'padawan',     label: 'Padawan'     },
-  { id: 'caballero',   label: 'Caballero'   },
-  { id: 'maestro',     label: 'Maestro'     },
-  { id: 'granmaestro', label: 'Gran Maestro' },
+  { id: 'iniciado',  label: 'Iniciado'  },
+  { id: 'padawan',   label: 'Padawan'   },
+  { id: 'caballero', label: 'Caballero' },
+  { id: 'maestro',   label: 'Maestro'   },
 ];
 
 const PODIO_CFG = [
@@ -205,7 +204,7 @@ function PodioSelector({ tier, podio, combatants, onChange }) {
               onChange={e => up(p.fieldId, e.target.value)}>
               <option value="">{p.label} — Sin asignar</option>
               {combatants.map(c => (
-                <option key={c.id} value={c.id}>{c.name} (@{c.handle})</option>
+                <option key={c.userId} value={c.userId}>{c.name} (@{c.handle})</option>
               ))}
             </select>
           </div>
@@ -284,11 +283,16 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
         asignacion_automatica: form.asignacion_automatica,
         periodo_inicio:        form.periodo_inicio,
         periodo_fin:           form.periodo_fin,
-        primer_lugar_id:  (manualPodio && !form.divide_por_rango) ? (form.primer_lugar_id  || null) : null,
-        segundo_lugar_id: (manualPodio && !form.divide_por_rango) ? (form.segundo_lugar_id || null) : null,
-        tercer_lugar_id:  (manualPodio && !form.divide_por_rango) ? (form.tercer_lugar_id  || null) : null,
+        primer_lugar_id:  (manualPodio && !form.divide_por_rango) ? (+form.primer_lugar_id  || null) : null,
+        segundo_lugar_id: (manualPodio && !form.divide_por_rango) ? (+form.segundo_lugar_id || null) : null,
+        tercer_lugar_id:  (manualPodio && !form.divide_por_rango) ? (+form.tercer_lugar_id  || null) : null,
         recompensas:      form.recompensas.filter(r => r.nombre.trim()),
-        podios:           (manualPodio && form.divide_por_rango) ? form.podios : [],
+        podios:           (manualPodio && form.divide_por_rango) ? form.podios.map(p => ({
+          ...p,
+          primer_lugar_id:  +p.primer_lugar_id  || null,
+          segundo_lugar_id: +p.segundo_lugar_id || null,
+          tercer_lugar_id:  +p.tercer_lugar_id  || null,
+        })) : [],
       };
       const res  = await fetch(url, {
         method,
@@ -408,7 +412,7 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
                     onChange={e => set(p.fieldId, e.target.value)}>
                     <option value="">{p.label} — Sin asignar</option>
                     {combatants.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} (@{c.handle})</option>
+                      <option key={c.userId} value={c.userId}>{c.name} (@{c.handle})</option>
                     ))}
                   </select>
                 </div>
