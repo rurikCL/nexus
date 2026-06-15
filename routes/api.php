@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\BetController;
 use App\Http\Controllers\Api\CharacterController;
 use App\Http\Controllers\Api\CharacterPhotoController;
@@ -66,4 +68,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // Mapa galáctico
+    Route::get('/map/sistemas',          [MapController::class, 'sistemas']);
+    Route::get('/map/sistemas/{id}',     [MapController::class, 'sistema']);
+    Route::get('/map/planetas/{id}',     [MapController::class, 'planeta']);
+    Route::get('/map/zonas/{id}',        [MapController::class, 'zona']);
+    Route::get('/map/lugares/{id}',      [MapController::class, 'lugar']);
+    Route::get('/map/npcs/{id}',         [MapController::class, 'npc']);
+
+    // Admin CRUD
+    Route::prefix('admin')->group(function () {
+        Route::get('/{entity}/options',  [AdminController::class, 'options']);
+        Route::get('/{entity}',          [AdminController::class, 'index']);
+        Route::post('/{entity}',         [AdminController::class, 'store']);
+        Route::patch('/{entity}/{id}',   [AdminController::class, 'update']);
+        Route::delete('/{entity}/{id}',  [AdminController::class, 'destroy']);
+    });
 });

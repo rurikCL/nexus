@@ -128,6 +128,8 @@ import { TareasView } from './sections/Tareas.jsx';
 import { RankingView, CombatesView } from './sections/Combates.jsx';
 import { EventosView } from './sections/Eventos.jsx';
 import { CombatientesView } from './sections/Combatientes.jsx';
+import MapaView from './sections/Mapa.jsx';
+import AdminView from './sections/Admin.jsx';
 
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
@@ -138,6 +140,7 @@ const NAV = [
   { id: 'ranking', label: 'Ranking', icon: 'trophy' },
   { id: 'combates', label: 'Combates', icon: 'swords' },
   { id: 'combatientes', label: 'Combatientes', icon: 'roster' },
+  { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
 ];
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
@@ -148,6 +151,8 @@ const TITLES = {
   ranking: ['Ranking', 'Escalera de la liga orbital'],
   combates: ['Combates', 'Arena, apuestas y desafíos'],
   combatientes: ['Combatientes', 'Directorio y perfiles públicos'],
+  mapa: ['Mapa Galáctico', 'Navegación entre sistemas y planetas'],
+  configuracion: ['Configuración', 'Gestión de tablas del sistema'],
 };
 
 export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
@@ -271,8 +276,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     ranking: <RankingView S={S} />,
     combates: <CombatesView S={S} user={user} />,
     combatientes: <CombatientesView S={S} />,
+    mapa: <MapaView />,
+    configuracion: <AdminView />,
   };
-  const [title, sub] = TITLES[view];
+  const [title, sub] = TITLES[view] ?? ['', ''];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', position: 'relative', zIndex: 1 }}>
@@ -381,6 +388,40 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           </div>
         )}
 
+        {/* Botón Configuración */}
+        <div style={{ padding: '4px 8px', borderTop: '1px solid var(--holo-line)' }}>
+          <button
+            onClick={() => go('configuracion')}
+            title={sidebarCollapsed ? 'Configuración' : undefined}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center',
+              gap: sidebarCollapsed ? 0 : 8,
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              padding: sidebarCollapsed ? '8px' : '8px 10px',
+              borderRadius: 'var(--radius-md)',
+              border: `1px solid ${view === 'configuracion' ? 'var(--holo-line)' : 'transparent'}`,
+              background: view === 'configuracion' ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'transparent',
+              color: view === 'configuracion' ? 'var(--txt)' : 'var(--txt-faint)',
+              cursor: 'pointer', transition: 'all .15s',
+              fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.06em',
+            }}
+            onMouseEnter={e => { if (view !== 'configuracion') e.currentTarget.style.color = 'var(--txt)'; }}
+            onMouseLeave={e => { if (view !== 'configuracion') e.currentTarget.style.color = 'var(--txt-faint)'; }}
+          >
+            <span style={{ color: view === 'configuracion' ? 'var(--holo)' : 'inherit', flexShrink: 0 }}>
+              <Icon name="filter" size={14} />
+            </span>
+            <span style={{
+              overflow: 'hidden', whiteSpace: 'nowrap',
+              opacity: sidebarCollapsed ? 0 : 1, maxWidth: sidebarCollapsed ? 0 : 200,
+              transition: 'opacity .15s, max-width .22s',
+            }}>
+              Configuración
+            </span>
+          </button>
+        </div>
+
+        {/* Usuario + logout */}
         <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
           <Avatar c={me} size={30} ring style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity .15s' }}>
