@@ -311,7 +311,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         }}
       >
         {/* Logo */}
-        <div style={{ padding: '14px', borderBottom: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 9, minHeight: 57, flexShrink: 0 }}>
+        <div style={{ padding: '14px', borderBottom: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 9, height: 57, flexShrink: 0 }}>
           <img src="/assets/isotipo.png" alt="" style={{ width: 28, height: 28, flexShrink: 0, filter: 'drop-shadow(0 0 10px rgba(230,179,37,.4))' }} />
           <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity .15s' }}>
             <div className="nx-display" style={{ fontSize: 15, letterSpacing: '0.08em', color: 'var(--txt)' }}>NÉXUS</div>
@@ -453,12 +453,12 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
       {/* Main */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <header className="nx-header" style={{ position: 'sticky', top: 0, zIndex: 4, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 20px', borderBottom: '1px solid var(--holo-line)', background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(8px)' }}>
+        <header className="nx-header" style={{ position: 'sticky', top: 0, zIndex: 4, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 57, flexShrink: 0, borderBottom: '1px solid var(--holo-line)', background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(8px)' }}>
           <button className="nx-hamburger" onClick={() => setSidebarOpen(o => !o)} aria-label="Abrir menú">
             <Icon name="menu" size={18} />
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)' }}>{title}</h1>
+            <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', margin: 0 }}>{title}</h1>
             <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.04em' }}>{sub}</div>
           </div>
           <div className="nx-panel" style={{ padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 6 }}>

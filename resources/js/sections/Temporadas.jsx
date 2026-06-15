@@ -2,35 +2,55 @@ import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
 
-/* ── Utilidades ─────────────────────────────────────────── */
+/* ── Constantes ─────────────────────────────────────────── */
 const TIER_COLORS = {
   iniciado: '#8aa0c0', padawan: '#38cdf0', caballero: '#10b981',
   maestro: '#FF6B00', granmaestro: '#E6B325',
 };
 
+const TIERS = [
+  { id: 'iniciado',    label: 'Iniciado'    },
+  { id: 'padawan',     label: 'Padawan'     },
+  { id: 'caballero',   label: 'Caballero'   },
+  { id: 'maestro',     label: 'Maestro'     },
+  { id: 'granmaestro', label: 'Gran Maestro' },
+];
+
 const PODIO_CFG = [
-  { key: 'primer_lugar',   fieldId: 'primer_lugar_id',   label: '1er Lugar', color: 'var(--pompeyo-oro)',  num: '1' },
-  { key: 'segundo_lugar',  fieldId: 'segundo_lugar_id',  label: '2do Lugar', color: '#c0c0c0',             num: '2' },
-  { key: 'tercer_lugar',   fieldId: 'tercer_lugar_id',   label: '3er Lugar', color: '#cd7f32',             num: '3' },
+  { key: 'primer_lugar',  fieldId: 'primer_lugar_id',  label: '1er Lugar', color: 'var(--pompeyo-oro)', num: '1' },
+  { key: 'segundo_lugar', fieldId: 'segundo_lugar_id', label: '2do Lugar', color: '#c0c0c0',            num: '2' },
+  { key: 'tercer_lugar',  fieldId: 'tercer_lugar_id',  label: '3er Lugar', color: '#cd7f32',            num: '3' },
 ];
 
 const fmtDate = (d) =>
   d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const EMPTY_RECOMPENSA = { nombre: '', descripcion: '', creditos: 0, experiencia: 0, medalla_id: '' };
+const EMPTY_PODIO = (rango) => ({ rango, primer_lugar_id: '', segundo_lugar_id: '', tercer_lugar_id: '' });
 
 function makeFormFrom(t) {
   return {
-    nombre:           t?.nombre           ?? '',
-    descripcion:      t?.descripcion      ?? '',
-    foto_emblema:     t?.foto_path        ?? '',
-    foto_url:         t?.foto_emblema     ?? '',
-    periodo_inicio:   t?.periodo_inicio   ?? '',
-    periodo_fin:      t?.periodo_fin      ?? '',
-    primer_lugar_id:  t?.primer_lugar_id  ?? '',
-    segundo_lugar_id: t?.segundo_lugar_id ?? '',
-    tercer_lugar_id:  t?.tercer_lugar_id  ?? '',
-    recompensas:      t?.recompensas?.map(r => ({ ...r })) ?? [],
+    nombre:                t?.nombre                ?? '',
+    descripcion:           t?.descripcion           ?? '',
+    foto_emblema:          t?.foto_path             ?? '',
+    foto_url:              t?.foto_emblema          ?? '',
+    periodo_inicio:        t?.periodo_inicio        ?? '',
+    periodo_fin:           t?.periodo_fin           ?? '',
+    divide_por_rango:      t?.divide_por_rango      ?? false,
+    asignacion_automatica: t?.asignacion_automatica ?? true,
+    primer_lugar_id:       t?.primer_lugar_id       ?? '',
+    segundo_lugar_id:      t?.segundo_lugar_id      ?? '',
+    tercer_lugar_id:       t?.tercer_lugar_id       ?? '',
+    recompensas:           t?.recompensas?.map(r => ({ ...r })) ?? [],
+    podios: TIERS.map(tier => {
+      const existing = t?.podios?.find(p => p.rango === tier.id);
+      return {
+        rango:            tier.id,
+        primer_lugar_id:  existing?.primer_lugar_id  ?? '',
+        segundo_lugar_id: existing?.segundo_lugar_id ?? '',
+        tercer_lugar_id:  existing?.tercer_lugar_id  ?? '',
+      };
+    }),
   };
 }
 
@@ -106,19 +126,16 @@ function RecompensaRow({ r, idx, onChange, onRemove }) {
       background: 'rgba(255,255,255,.03)', borderRadius: 'var(--radius-md)',
       border: '1px solid var(--holo-line)', position: 'relative',
     }}>
-      <button
-        onClick={() => onRemove(idx)}
-        style={{
-          position: 'absolute', top: 8, right: 8, background: 'none', border: 'none',
-          cursor: 'pointer', color: 'var(--txt-faint)', padding: 4, borderRadius: 4,
-          display: 'grid', placeItems: 'center',
-        }}
+      <button onClick={() => onRemove(idx)} style={{
+        position: 'absolute', top: 8, right: 8, background: 'none', border: 'none',
+        cursor: 'pointer', color: 'var(--txt-faint)', padding: 4, borderRadius: 4,
+        display: 'grid', placeItems: 'center',
+      }}
         onMouseEnter={e => e.currentTarget.style.color = '#ff6b6b'}
         onMouseLeave={e => e.currentTarget.style.color = 'var(--txt-faint)'}
       >
         <Icon name="x" size={13} />
       </button>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px', gap: 10, paddingRight: 28 }}>
         <div>
           <label className="nx-label">Nombre recompensa</label>
@@ -136,7 +153,6 @@ function RecompensaRow({ r, idx, onChange, onRemove }) {
             onChange={e => up('experiencia', +e.target.value)} />
         </div>
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px', gap: 10 }}>
         <div>
           <label className="nx-label">Descripción (opcional)</label>
@@ -153,6 +169,78 @@ function RecompensaRow({ r, idx, onChange, onRemove }) {
             ))}
           </select>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── PodioSelector (selector de 3 puestos para un rango) ── */
+function PodioSelector({ tier, podio, combatants, onChange }) {
+  const color = TIER_COLORS[tier.id] ?? '#38cdf0';
+  const up = (field, val) => onChange(tier.id, field, val);
+  return (
+    <div style={{
+      padding: '12px 14px', borderRadius: 'var(--radius-md)',
+      background: 'rgba(255,255,255,.03)',
+      border: `1px solid ${color}33`,
+      borderLeft: `3px solid ${color}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}` }} />
+        <span className="nx-label" style={{ color }}>{tier.label}</span>
+      </div>
+      <div style={{ display: 'grid', gap: 7 }}>
+        {PODIO_CFG.map(p => (
+          <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+              display: 'grid', placeItems: 'center',
+              background: `color-mix(in srgb, ${p.color} 18%, rgba(4,7,15,.8))`,
+              border: `1px solid ${p.color}55`,
+            }}>
+              <span className="nx-num" style={{ fontSize: 8, color: p.color }}>{p.num}</span>
+            </div>
+            <select className="nx-select" style={{ flex: 1, fontSize: 11 }}
+              value={podio[p.fieldId] ?? ''}
+              onChange={e => up(p.fieldId, e.target.value)}>
+              <option value="">{p.label} — Sin asignar</option>
+              {combatants.map(c => (
+                <option key={c.id} value={c.id}>{c.name} (@{c.handle})</option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── ToggleRow ──────────────────────────────────────────── */
+function ToggleRow({ active, onToggle, label, descOn, descOff }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '12px 14px', borderRadius: 'var(--radius-md)',
+      background: active ? 'rgba(56,205,240,.06)' : 'rgba(255,255,255,.03)',
+      border: '1px solid var(--holo-line)',
+      cursor: 'pointer',
+    }} onClick={onToggle}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{label}</div>
+        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 2 }}>
+          {active ? descOn : descOff}
+        </div>
+      </div>
+      <div style={{
+        width: 36, height: 20, borderRadius: 10, flexShrink: 0,
+        background: active ? 'var(--holo)' : 'rgba(255,255,255,.12)',
+        position: 'relative', transition: 'background .2s',
+      }}>
+        <div style={{
+          position: 'absolute', top: 3, left: active ? 18 : 3,
+          width: 14, height: 14, borderRadius: '50%', background: '#fff',
+          transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)',
+        }} />
       </div>
     </div>
   );
@@ -175,6 +263,9 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
   const removeRecompensa = (idx) =>
     setForm(f => ({ ...f, recompensas: f.recompensas.filter((_, i) => i !== idx) }));
 
+  const changePodio = (rango, field, val) =>
+    setForm(f => ({ ...f, podios: f.podios.map(p => p.rango === rango ? { ...p, [field]: val } : p) }));
+
   const handleSave = async () => {
     if (!form.nombre.trim()) { toast('El nombre es requerido', { tone: 'error', icon: 'x' }); return; }
     if (!form.periodo_inicio || !form.periodo_fin) { toast('Las fechas son requeridas', { tone: 'error', icon: 'x' }); return; }
@@ -184,16 +275,20 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
       const token = localStorage.getItem('nx-token');
       const url    = editing ? `/api/temporadas/${editing.id}` : '/api/temporadas';
       const method = editing ? 'PUT' : 'POST';
+      const manualPodio = !form.asignacion_automatica;
       const body = {
-        nombre:           form.nombre.trim(),
-        descripcion:      form.descripcion.trim() || null,
-        foto_emblema:     form.foto_emblema || null,
-        periodo_inicio:   form.periodo_inicio,
-        periodo_fin:      form.periodo_fin,
-        primer_lugar_id:  form.primer_lugar_id  || null,
-        segundo_lugar_id: form.segundo_lugar_id || null,
-        tercer_lugar_id:  form.tercer_lugar_id  || null,
+        nombre:                form.nombre.trim(),
+        descripcion:           form.descripcion.trim() || null,
+        foto_emblema:          form.foto_emblema || null,
+        divide_por_rango:      form.divide_por_rango,
+        asignacion_automatica: form.asignacion_automatica,
+        periodo_inicio:        form.periodo_inicio,
+        periodo_fin:           form.periodo_fin,
+        primer_lugar_id:  (manualPodio && !form.divide_por_rango) ? (form.primer_lugar_id  || null) : null,
+        segundo_lugar_id: (manualPodio && !form.divide_por_rango) ? (form.segundo_lugar_id || null) : null,
+        tercer_lugar_id:  (manualPodio && !form.divide_por_rango) ? (form.tercer_lugar_id  || null) : null,
         recompensas:      form.recompensas.filter(r => r.nombre.trim()),
+        podios:           (manualPodio && form.divide_por_rango) ? form.podios : [],
       };
       const res  = await fetch(url, {
         method,
@@ -218,7 +313,7 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
       onClose={onClose}
       title={editing ? 'Editar Temporada' : 'Nueva Temporada'}
       kicker="GESTIÓN · TEMPORADAS"
-      width={680}
+      width={700}
     >
       <div style={{ display: 'grid', gap: 18 }}>
 
@@ -247,7 +342,7 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
         </div>
 
         {/* Período */}
-        <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <label className="nx-label">Inicio del período *</label>
             <input className="nx-input" type="date" value={form.periodo_inicio}
@@ -260,32 +355,78 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
           </div>
         </div>
 
-        {/* Podio */}
-        <div>
-          <div className="nx-kicker" style={{ marginBottom: 10 }}>Podio</div>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {PODIO_CFG.map(p => (
-              <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                  display: 'grid', placeItems: 'center',
-                  background: `color-mix(in srgb, ${p.color} 18%, rgba(4,7,15,.8))`,
-                  border: `1px solid ${p.color}66`,
-                }}>
-                  <span className="nx-num" style={{ fontSize: 11, color: p.color }}>{p.num}</span>
-                </div>
-                <select className="nx-select" style={{ flex: 1 }}
-                  value={form[p.fieldId] ?? ''}
-                  onChange={e => set(p.fieldId, e.target.value)}>
-                  <option value="">{p.label} — Sin asignar</option>
-                  {combatants.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} (@{c.handle})</option>
-                  ))}
-                </select>
-              </div>
-            ))}
+        {/* Toggle asignación automática */}
+        <ToggleRow
+          active={form.asignacion_automatica}
+          onToggle={() => set('asignacion_automatica', !form.asignacion_automatica)}
+          label="Asignación automática de podio"
+          descOn="El podio se calcula según puntaje de victorias al finalizar la temporada"
+          descOff="El podio se asigna de forma manual"
+        />
+
+        {/* Toggle ranking por rango */}
+        <ToggleRow
+          active={form.divide_por_rango}
+          onToggle={() => set('divide_por_rango', !form.divide_por_rango)}
+          label="Dividir podio por rango"
+          descOn="Cada tier tiene su propio 1°, 2° y 3° lugar"
+          descOff="Un único podio global para la temporada"
+        />
+
+        {/* Podio global o por rango — solo visible en asignación manual */}
+        {!form.asignacion_automatica && form.divide_por_rango ? (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 10 }}>Podio por Rango</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {TIERS.map(tier => (
+                <PodioSelector
+                  key={tier.id}
+                  tier={tier}
+                  podio={form.podios.find(p => p.rango === tier.id) ?? EMPTY_PODIO(tier.id)}
+                  combatants={combatants}
+                  onChange={changePodio}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : !form.asignacion_automatica ? (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 10 }}>Podio Global</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {PODIO_CFG.map(p => (
+                <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    display: 'grid', placeItems: 'center',
+                    background: `color-mix(in srgb, ${p.color} 18%, rgba(4,7,15,.8))`,
+                    border: `1px solid ${p.color}66`,
+                  }}>
+                    <span className="nx-num" style={{ fontSize: 11, color: p.color }}>{p.num}</span>
+                  </div>
+                  <select className="nx-select" style={{ flex: 1 }}
+                    value={form[p.fieldId] ?? ''}
+                    onChange={e => set(p.fieldId, e.target.value)}>
+                    <option value="">{p.label} — Sin asignar</option>
+                    {combatants.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} (@{c.handle})</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            padding: '12px 16px', borderRadius: 'var(--radius-md)',
+            background: 'rgba(56,205,240,.04)', border: '1px dashed var(--holo-line)',
+            display: 'flex', alignItems: 'center', gap: 10, color: 'var(--txt-faint)',
+          }}>
+            <Icon name="trophy" size={14} />
+            <span style={{ fontSize: 12 }}>
+              El podio se calculará automáticamente al finalizar la temporada, según las victorias registradas.
+            </span>
+          </div>
+        )}
 
         {/* Recompensas */}
         <div>
@@ -306,7 +447,6 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
           )}
         </div>
 
-        {/* Acciones */}
         <hr className="nx-divider" />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
@@ -314,15 +454,55 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
             {saving ? 'Guardando...' : editing ? 'Actualizar' : 'Crear Temporada'}
           </Btn>
         </div>
-
       </div>
     </Modal>
+  );
+}
+
+/* ── PodioRow (visual compacto de 1 puesto) ─────────────── */
+function PodioRow({ winner, numColor, num }) {
+  if (!winner) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <PodioNum color={numColor} num={num} />
+      <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin asignar</span>
+    </div>
+  );
+  const avatarC = { initials: winner.initials || (winner.handle || '?').substring(0, 2).toUpperCase(), color: TIER_COLORS[winner.tier] ?? '#38cdf0' };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <PodioNum color={numColor} num={num} />
+      <Avatar c={avatarC} size={24} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{winner.name}</div>
+        <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{winner.handle}</div>
+      </div>
+      <TierBadge tier={winner.tier} sm />
+    </div>
+  );
+}
+
+function PodioNum({ color, num, size = 22 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      display: 'grid', placeItems: 'center',
+      background: `color-mix(in srgb, ${color} 15%, rgba(4,7,15,.8))`,
+      border: `1px solid ${color}55`,
+    }}>
+      <span className="nx-num" style={{ fontSize: 9, color }}>{num}</span>
+    </div>
   );
 }
 
 /* ── TemporadaCard ──────────────────────────────────────── */
 function TemporadaCard({ temporada: t, canEdit, onEdit }) {
   const [showRec, setShowRec] = useState(false);
+  const [openTier, setOpenTier] = useState(null);
+
+  const hasPodios = t.divide_por_rango && t.podios?.length > 0;
+  const activePodios = hasPodios
+    ? t.podios.filter(p => p.primer_lugar || p.segundo_lugar || p.tercer_lugar)
+    : [];
 
   return (
     <div className="nx-panel" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -338,7 +518,10 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
             <div className="nx-kicker" style={{ marginBottom: 2, fontSize: 9 }}>Temporada</div>
             <h3 className="nx-display" style={{ fontSize: 17, color: 'var(--txt)', margin: 0, lineHeight: 1.2 }}>{t.nombre}</h3>
           </div>
-          <Chip tone={t.activa ? 'green' : 'dim'} style={{ flexShrink: 0 }}>{t.activa ? 'ACTIVA' : 'FINALIZADA'}</Chip>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+            {t.divide_por_rango && <Chip tone="dim" icon="user" style={{ fontSize: 9 }}>Por rango</Chip>}
+            <Chip tone={t.activa ? 'green' : 'dim'}>{t.activa ? 'ACTIVA' : 'FINALIZADA'}</Chip>
+          </div>
         </div>
       </div>
 
@@ -350,7 +533,6 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
           <span className="nx-data">{fmtDate(t.periodo_inicio)} → {fmtDate(t.periodo_fin)}</span>
         </div>
 
-        {/* Descripción */}
         {t.descripcion && (
           <div style={{ fontSize: 12, color: 'var(--txt-dim)', lineHeight: 1.55 }}>{t.descripcion}</div>
         )}
@@ -358,38 +540,56 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
         <hr className="nx-divider" />
 
         {/* Podio */}
-        <div style={{ display: 'grid', gap: 7 }}>
-          {PODIO_CFG.map(p => {
-            const winner = t[p.key];
-            const avatarC = winner
-              ? { initials: (winner.handle || '?').substring(0, 2).toUpperCase(), color: TIER_COLORS[winner.tier] ?? '#38cdf0' }
-              : null;
-            return (
-              <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{
-                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                  display: 'grid', placeItems: 'center',
-                  background: `color-mix(in srgb, ${p.color} 15%, rgba(4,7,15,.8))`,
-                  border: `1px solid ${p.color}55`,
+        {t.divide_por_rango ? (
+          /* Podio por rango — acordeón de tiers */
+          <div style={{ display: 'grid', gap: 6 }}>
+            {activePodios.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--txt-faint)', textAlign: 'center', padding: '8px 0' }}>Sin podio asignado aún</div>
+            ) : activePodios.map(p => {
+              const tierInfo = TIERS.find(t => t.id === p.rango);
+              const color    = TIER_COLORS[p.rango] ?? '#38cdf0';
+              const isOpen   = openTier === p.rango;
+              return (
+                <div key={p.rango} style={{
+                  borderRadius: 'var(--radius-md)', overflow: 'hidden',
+                  border: `1px solid ${color}33`, borderLeft: `3px solid ${color}`,
                 }}>
-                  <span className="nx-num" style={{ fontSize: 9, color: p.color }}>{p.num}</span>
-                </div>
-                {winner ? (
-                  <>
-                    <Avatar c={avatarC} size={24} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{winner.name}</div>
-                      <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{winner.handle}</div>
+                  <button
+                    onClick={() => setOpenTier(isOpen ? null : p.rango)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 12px', background: 'rgba(255,255,255,.02)',
+                      border: 'none', cursor: 'pointer', textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0 }} />
+                    <span className="nx-label" style={{ flex: 1, color }}>{tierInfo?.label ?? p.rango}</span>
+                    {p.primer_lugar && (
+                      <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontWeight: 600 }}>
+                        {p.primer_lugar.name}
+                      </span>
+                    )}
+                    <Icon name={isOpen ? 'chevdown' : 'chevron'} size={11} />
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: '8px 12px 10px', display: 'grid', gap: 7 }}>
+                      <PodioRow winner={p.primer_lugar}  numColor="var(--pompeyo-oro)" num="1" />
+                      <PodioRow winner={p.segundo_lugar} numColor="#c0c0c0"            num="2" />
+                      <PodioRow winner={p.tercer_lugar}  numColor="#cd7f32"            num="3" />
                     </div>
-                    <TierBadge tier={winner.tier} sm />
-                  </>
-                ) : (
-                  <span style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Sin asignar</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Podio global */
+          <div style={{ display: 'grid', gap: 7 }}>
+            <PodioRow winner={t.primer_lugar}  numColor="var(--pompeyo-oro)" num="1" />
+            <PodioRow winner={t.segundo_lugar} numColor="#c0c0c0"            num="2" />
+            <PodioRow winner={t.tercer_lugar}  numColor="#cd7f32"            num="3" />
+          </div>
+        )}
 
         {/* Recompensas */}
         {t.recompensas?.length > 0 && (
@@ -411,9 +611,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
                       <div style={{ display: 'flex', gap: 5 }}>
                         {r.creditos > 0 && <Chip tone="gold" icon="coin">{r.creditos} cr</Chip>}
                         {r.experiencia > 0 && <Chip tone="orange">+{r.experiencia} XP</Chip>}
-                        {r.medalla_id && NX.MEDALS[r.medalla_id] && (
-                          <MedalIcon id={r.medalla_id} size={22} />
-                        )}
+                        {r.medalla_id && NX.MEDALS[r.medalla_id] && <MedalIcon id={r.medalla_id} size={22} />}
                       </div>
                     </div>
                     {r.descripcion && (
@@ -426,7 +624,6 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
           </>
         )}
 
-        {/* Acciones tutor */}
         {canEdit && (
           <div style={{ marginTop: 'auto', paddingTop: 8 }}>
             <Btn kind="ghost" sm icon="edit" onClick={() => onEdit(t)} style={{ width: '100%', justifyContent: 'center' }}>
@@ -471,7 +668,6 @@ export function TemporadasView({ S, user }) {
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 20 }}>
-      {/* Header */}
       <Panel
         title="Temporadas de la Academia"
         kicker="HISTORIAL · TEMPORADAS"
@@ -483,7 +679,6 @@ export function TemporadasView({ S, user }) {
         </div>
       </Panel>
 
-      {/* Contenido */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--txt-faint)' }}>
           <span className="nx-live-dot" style={{ marginRight: 8 }} />
@@ -494,25 +689,20 @@ export function TemporadasView({ S, user }) {
           <div style={{ opacity: 0.3, marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
             <Icon name="crown" size={40} />
           </div>
-          <div className="nx-display" style={{ fontSize: 15, color: 'var(--txt-dim)', marginBottom: 6 }}>
-            Aún no hay temporadas
-          </div>
+          <div className="nx-display" style={{ fontSize: 15, color: 'var(--txt-dim)', marginBottom: 6 }}>Aún no hay temporadas</div>
           <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginBottom: 20 }}>
             {canEdit ? 'Crea la primera temporada de la Academia' : 'El tutor registrará las temporadas próximamente'}
           </div>
-          {canEdit && (
-            <Btn kind="accent" icon="plus" onClick={openCreate}>Crear primera temporada</Btn>
-          )}
+          {canEdit && <Btn kind="accent" icon="plus" onClick={openCreate}>Crear primera temporada</Btn>}
         </div>
       ) : (
-        <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18, alignItems: 'start' }}>
           {temporadas.map(t => (
             <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} />
           ))}
         </div>
       )}
 
-      {/* Modal crear/editar */}
       <TemporadaModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

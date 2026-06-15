@@ -14,6 +14,7 @@ class CharacterController extends Controller
             'name'        => 'required|string|max:255',
             'handle'      => 'required|string|max:20',
             'bio'         => 'nullable|string',
+            'lore'        => 'nullable|string',
             'cls'         => 'required|in:forma1,forma2,forma3,forma4,forma5,forma6,forma7',
             'saber_color' => 'nullable|string',
             'side'        => 'nullable|in:luminoso,oscuro',

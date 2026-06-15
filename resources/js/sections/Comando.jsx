@@ -320,38 +320,75 @@ export function ComandoView({ S, go, user }) {
                           </div>
                         </div>
                       )}
-                      <div style={{ display: 'grid', gap: 8 }}>
-                        {PODIO_CMD.map(p => {
-                          const w = t[p.key];
-                          const avatarC = w
-                            ? { initials: w.initials || (w.handle || '?').substring(0, 2).toUpperCase(), color: TIER_COLOR[w.tier] ?? '#38cdf0' }
-                            : null;
-                          return (
-                            <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                              <div style={{
-                                width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                                display: 'grid', placeItems: 'center',
-                                background: `color-mix(in srgb, ${p.color} 18%, rgba(4,7,15,.8))`,
-                                border: `1px solid ${p.color}55`,
+                      {t.divide_por_rango ? (
+                        /* Podio por rango — 1er lugar de cada tier */
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          {(t.podios ?? []).filter(p => p.primer_lugar).map(p => {
+                            const color = TIER_COLOR[p.rango] ?? '#38cdf0';
+                            const w     = p.primer_lugar;
+                            const avatarC = { initials: w.initials || (w.handle || '?').substring(0, 2).toUpperCase(), color };
+                            return (
+                              <div key={p.rango} style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '5px 8px', borderRadius: 'var(--radius-sm)',
+                                background: 'rgba(255,255,255,.025)',
+                                borderLeft: `2px solid ${color}`,
                               }}>
-                                <span className="nx-num" style={{ fontSize: 9, color: p.color }}>{p.num}</span>
+                                <div style={{
+                                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                                  display: 'grid', placeItems: 'center',
+                                  background: `color-mix(in srgb, var(--pompeyo-oro) 15%, rgba(4,7,15,.8))`,
+                                  border: '1px solid color-mix(in srgb, var(--pompeyo-oro) 45%, transparent)',
+                                }}>
+                                  <span className="nx-num" style={{ fontSize: 8, color: 'var(--pompeyo-oro)' }}>1</span>
+                                </div>
+                                <Avatar c={avatarC} size={22} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
+                                </div>
+                                <span className="nx-data" style={{ fontSize: 9, color, whiteSpace: 'nowrap' }}>{p.rango}</span>
                               </div>
-                              {w ? (
-                                <>
-                                  <Avatar c={avatarC} size={26} />
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
-                                    <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{w.handle}</div>
-                                  </div>
-                                  <TierBadge tier={w.tier} sm />
-                                </>
-                              ) : (
-                                <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin asignar</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                          {(t.podios ?? []).filter(p => p.primer_lugar).length === 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin campeones asignados aún</span>
+                          )}
+                        </div>
+                      ) : (
+                        /* Podio global */
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {PODIO_CMD.map(p => {
+                            const w = t[p.key];
+                            const avatarC = w
+                              ? { initials: w.initials || (w.handle || '?').substring(0, 2).toUpperCase(), color: TIER_COLOR[w.tier] ?? '#38cdf0' }
+                              : null;
+                            return (
+                              <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                <div style={{
+                                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                                  display: 'grid', placeItems: 'center',
+                                  background: `color-mix(in srgb, ${p.color} 18%, rgba(4,7,15,.8))`,
+                                  border: `1px solid ${p.color}55`,
+                                }}>
+                                  <span className="nx-num" style={{ fontSize: 9, color: p.color }}>{p.num}</span>
+                                </div>
+                                {w ? (
+                                  <>
+                                    <Avatar c={avatarC} size={26} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
+                                      <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{w.handle}</div>
+                                    </div>
+                                    <TierBadge tier={w.tier} sm />
+                                  </>
+                                ) : (
+                                  <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin asignar</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </Panel>
@@ -422,6 +459,7 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
     name: user?.name ?? '',
     handle: '',
     bio: '',
+    lore: '',
     cls: 'vanguardia',
     side: 'luminoso',
     saber: 'cian',
@@ -454,6 +492,7 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
           name: form.name.trim(),
           handle: form.handle.trim().toUpperCase(),
           bio: form.bio.trim(),
+          lore: form.lore.trim(),
           cls: form.cls,
           side: form.side,
           saber_color: form.saber,
@@ -462,7 +501,7 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message ?? 'Error al crear el personaje.'); return; }
-      S.setCharacter({ name: form.name.trim(), handle: form.handle.trim().toUpperCase(), bio: form.bio.trim(), cls: form.cls, side: form.side, saber: form.saber, stats: form.stats, pool: 0 });
+      S.setCharacter({ name: form.name.trim(), handle: form.handle.trim().toUpperCase(), bio: form.bio.trim(), lore: form.lore.trim(), cls: form.cls, side: form.side, saber: form.saber, stats: form.stats, pool: 0 });
       toast('Personaje creado', { tone: 'success', icon: 'check', desc: `¡Bienvenido a la Academia, ${form.name.trim()}!` });
       onCharacterCreated?.(data.character);
     } catch {
@@ -500,6 +539,10 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="nx-label">Grito de guerra</label>
                 <textarea className="nx-textarea" value={form.bio} onChange={e => set('bio', e.target.value)} placeholder="Tu frase antes del duelo..." style={{ minHeight: 56 }} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label className="nx-label">Lore del personaje</label>
+                <textarea className="nx-textarea" value={form.lore} onChange={e => set('lore', e.target.value)} placeholder="Historia, origen, motivaciones..." style={{ minHeight: 80 }} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="nx-label">Lado de la Fuerza</label>
@@ -612,7 +655,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
       const res = await fetch('/api/character', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: ch.name, handle: ch.handle, bio: ch.bio || '', cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats }),
+        body: JSON.stringify({ name: ch.name, handle: ch.handle, bio: ch.bio || '', lore: ch.lore || '', cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.message ?? 'Error al guardar', { tone: 'error', icon: 'x' }); return; }
@@ -709,6 +752,10 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="nx-label">Grito de guerra</label>
               <textarea className="nx-textarea" value={ch.bio} onChange={(e) => S.setCharacter({ ...ch, bio: e.target.value })} placeholder="Tu frase antes del duelo..." />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label className="nx-label">Lore del personaje</label>
+              <textarea className="nx-textarea" value={ch.lore ?? ''} onChange={(e) => S.setCharacter({ ...ch, lore: e.target.value })} placeholder="Historia, origen, motivaciones..." style={{ minHeight: 90 }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="nx-label">Lado de la Fuerza</label>
