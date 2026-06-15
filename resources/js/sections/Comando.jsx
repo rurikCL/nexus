@@ -125,8 +125,15 @@ export function ComandoView({ S, go, user }) {
     }).then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d?.widgets?.length) return;
-        // compatibilidad con formato antiguo (string[])
-        setWidgetOrder(d.widgets.map(w => typeof w === 'string' ? { id: w, cols: 2 } : w));
+        const knownIds = new Set(WIDGET_DEFAULT_ORDER.map(w => w.id));
+        // compatibilidad con formato antiguo (string[]) + descartar IDs obsoletos
+        const saved = d.widgets
+          .map(w => typeof w === 'string' ? { id: w, cols: 2 } : w)
+          .filter(w => knownIds.has(w.id));
+        // anexar widgets nuevos que no estaban en el layout guardado
+        const savedIds = new Set(saved.map(w => w.id));
+        const fresh = WIDGET_DEFAULT_ORDER.filter(w => !savedIds.has(w.id));
+        setWidgetOrder([...saved, ...fresh]);
       })
       .catch(() => {});
   }, []);
@@ -390,7 +397,7 @@ export function ComandoView({ S, go, user }) {
                 flexDirection: 'column',
               }}
             >
-              {content && cloneElement(content, { style: { flex: 1, ...(content.props?.style ?? {}) } })}
+              {content ? cloneElement(content, { style: { flex: 1, ...(content.props?.style ?? {}) } }) : null}
             </div>
           );
         })}
