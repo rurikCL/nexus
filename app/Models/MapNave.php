@@ -26,6 +26,7 @@ class MapNave extends Model
         'costo',
         'costo_reparacion',
         'rareza',
+        'imagen',
         'descripcion',
     ];
 
