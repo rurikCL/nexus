@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
+use App\Http\Controllers\Api\WidgetLayoutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -60,6 +61,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/challenges', [ChallengeController::class, 'store']);
     Route::post('/challenges/{challenge}/accept', [ChallengeController::class, 'accept']);
     Route::post('/challenges/{challenge}/reject', [ChallengeController::class, 'reject']);
+
+    Route::get('/layout/{section}', [WidgetLayoutController::class, 'show']);
+    Route::put('/layout/{section}', [WidgetLayoutController::class, 'update']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/test', [NotificationController::class, 'test']);
