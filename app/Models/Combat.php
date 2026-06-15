@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Combat extends Model
 {
     protected $fillable = [
-        'combatant_a_id', 'combatant_b_id', 'odds_a', 'odds_b',
+        'temporada_id', 'combatant_a_id', 'combatant_b_id', 'odds_a', 'odds_b',
         'fecha_desafio', 'event_name', 'round', 'live', 'resolved', 'winner', 'score_data',
     ];
 
@@ -19,6 +19,11 @@ class Combat extends Model
         'resolved'     => 'boolean',
         'score_data'   => 'array',
     ];
+
+    public function temporada(): BelongsTo
+    {
+        return $this->belongsTo(Temporada::class);
+    }
 
     public function combatantA(): BelongsTo
     {

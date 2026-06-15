@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Bet;
 use App\Models\Combat;
+use App\Models\StatsTemporada;
 use App\Notifications\CombateResuelto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,6 @@ class CombatController extends Controller
     {
         $user = $request->user();
 
-        // Only admin or tutor can resolve
         if (!$user->isTutor()) {
             return response()->json(['message' => 'No autorizado.'], 403);
         }
@@ -50,28 +50,17 @@ class CombatController extends Controller
             'score_data' => $data['score_data'] ?? null,
         ]);
 
-        // Update winner/loser stats
         $winnerUser = $winner === 'a' ? $combat->combatantA : $combat->combatantB;
         $loserUser  = $winner === 'a' ? $combat->combatantB : $combat->combatantA;
 
-        $winnerChar = $winnerUser->character;
-        $loserChar  = $loserUser->character;
-
-        if ($winnerChar) {
-            $winnerChar->increment('wins');
-            $winnerChar->increment('streak');
-        }
-
-        if ($loserChar) {
-            $loserChar->increment('losses');
-            $loserChar->update(['streak' => 0]);
-        }
+        $temporadaId = $combat->temporada_id;
+        if ($winnerUser) StatsTemporada::recordResult($winnerUser->id, true,  $temporadaId);
+        if ($loserUser)  StatsTemporada::recordResult($loserUser->id,  false, $temporadaId);
 
         // Settle bets
         $bets = $combat->bets()->get();
         foreach ($bets as $bet) {
             if ($bet->pick === $winner) {
-                // Won: payout = amount * odds (rounded)
                 $payout = (int) round($bet->amount * $bet->odds);
                 $bet->update(['status' => 'ganada']);
                 $betUser = $bet->user()->with('character')->first();
@@ -83,7 +72,6 @@ class CombatController extends Controller
             }
         }
 
-        // Notify both fighters
         if ($winnerUser) $winnerUser->notify(new CombateResuelto($combat, true));
         if ($loserUser)  $loserUser->notify(new CombateResuelto($combat, false));
 
@@ -98,23 +86,28 @@ class CombatController extends Controller
         $charA = $combat->combatantA?->character;
         $charB = $combat->combatantB?->character;
 
-        $fmtChar = fn($userId, $char) => $char ? [
-            'user_id' => $userId,
-            'handle'  => $char->handle,
-            'name'    => $char->name,
-            'cls'     => $char->cls,
-            'side'    => $char->side,
-            'saber_color' => $char->saber_color ?? 'azul',
-            'tier'    => $char->tier,
-            'wins'    => $char->wins,
-            'losses'  => $char->losses,
-            'winrate' => $char->total > 0 ? round($char->wins / $char->total * 100) : 0,
-            'streak'  => $char->streak,
-            'credits' => $char->credits,
-        ] : null;
+        $fmtChar = function ($userId, $char) {
+            if (!$char) return null;
+            $stats = StatsTemporada::totalsForUser($userId);
+            return [
+                'user_id'     => $userId,
+                'handle'      => $char->handle,
+                'name'        => $char->name,
+                'cls'         => $char->cls,
+                'side'        => $char->side,
+                'saber_color' => $char->saber_color ?? 'azul',
+                'tier'        => $char->tier,
+                'wins'        => $stats['wins'],
+                'losses'      => $stats['losses'],
+                'winrate'     => $stats['winrate'],
+                'streak'      => $stats['streak'],
+                'credits'     => $char->credits,
+            ];
+        };
 
         return [
             'id'           => $combat->id,
+            'temporada_id' => $combat->temporada_id,
             'event_name'   => $combat->event_name,
             'round'        => $combat->round,
             'scheduled_at' => $combat->fecha_desafio?->toIso8601String(),

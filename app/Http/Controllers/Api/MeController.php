@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\StatsTemporada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +14,8 @@ class MeController extends Controller
     {
         $user = $request->user()->load('character');
         $character = $user->character;
+
+        $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
 
         return response()->json([
             'id'        => $user->id,
@@ -32,12 +35,12 @@ class MeController extends Controller
                 'sponsor'     => $character->sponsor,
                 'joined_year' => $character->joined_year,
                 'credits'     => $character->credits,
-                'wins'        => $character->wins,
-                'losses'      => $character->losses,
-                'streak'      => $character->streak,
+                'wins'        => $stats['wins'],
+                'losses'      => $stats['losses'],
+                'streak'      => $stats['streak'],
+                'winrate'     => $stats['winrate'],
                 'stats'       => $character->stats,
                 'gold'        => $character->gold,
-                'winrate'     => $character->winrate,
                 'photo_url'   => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
                     : null,

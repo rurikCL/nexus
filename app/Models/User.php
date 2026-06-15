@@ -91,6 +91,13 @@ class User extends Authenticatable
         return $this->hasMany(Challenge::class, 'target_id');
     }
 
+    public function misiones(): BelongsToMany
+    {
+        return $this->belongsToMany(Mision::class, 'mision_user')
+            ->withPivot(['status', 'progreso'])
+            ->withTimestamps();
+    }
+
     public function isTutor(): bool
     {
         return in_array($this->tier, ['caballero', 'maestro', 'granmaestro'])

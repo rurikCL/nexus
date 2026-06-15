@@ -130,27 +130,34 @@ import { EventosView } from './sections/Eventos.jsx';
 import { CombatientesView } from './sections/Combatientes.jsx';
 import MapaView from './sections/Mapa.jsx';
 import AdminView from './sections/Admin.jsx';
+import { TemporadasView } from './sections/Temporadas.jsx';
+import { MisionesView } from './sections/Misiones.jsx';
 
+const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
   { id: 'entrenamiento', label: 'Entrenamiento', icon: 'calendar' },
-  { id: 'tareas', label: 'Tareas', icon: 'tasks' },
-  { id: 'eventos', label: 'Eventos', icon: 'star' },
+  { id: 'tareas',   label: 'Tareas',   icon: 'tasks' },
+  { id: 'misiones', label: 'Misiones', icon: 'zap', guard: u => ADMIN_TIERS.includes(u?.tier ?? '') },
+  { id: 'eventos',  label: 'Eventos',  icon: 'star' },
   { id: 'ranking', label: 'Ranking', icon: 'trophy' },
   { id: 'combates', label: 'Combates', icon: 'swords' },
   { id: 'combatientes', label: 'Combatientes', icon: 'roster' },
+  { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
 ];
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
   entrenamiento: ['Entrenamiento', 'Asistencia y bitácora diaria'],
-  tareas: ['Tareas', 'Plan de entrenamiento dirigido'],
-  eventos: ['Eventos', 'Presentaciones y recompensas'],
+  tareas:   ['Tareas',    'Plan de entrenamiento dirigido'],
+  misiones: ['Misiones', 'Administración y asignación de misiones'],
+  eventos:  ['Eventos',  'Presentaciones y recompensas'],
   ranking: ['Ranking', 'Escalera de la liga orbital'],
   combates: ['Combates', 'Arena, apuestas y desafíos'],
   combatientes: ['Combatientes', 'Directorio y perfiles públicos'],
+  temporadas:    ['Temporadas',         'Historial de campeones y recompensas'],
   mapa: ['Mapa Galáctico', 'Navegación entre sistemas y planetas'],
   configuracion: ['Configuración', 'Gestión de tablas del sistema'],
 };
@@ -276,6 +283,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     ranking: <RankingView S={S} />,
     combates: <CombatesView S={S} user={user} />,
     combatientes: <CombatientesView S={S} />,
+    temporadas:   <TemporadasView S={S} user={user} />,
+    misiones:     <MisionesView S={S} user={user} />,
     mapa: <MapaView />,
     configuracion: <AdminView />,
   };
@@ -311,7 +320,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         </div>
 
         <nav style={{ flex: 1, padding: 8, display: 'grid', gap: 2, alignContent: 'start' }}>
-          {NAV.map((n) => {
+          {NAV.filter(n => !n.guard || n.guard(user)).map((n) => {
             const active = view === n.id;
             return (
               <button

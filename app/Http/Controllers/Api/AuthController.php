@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\StatsTemporada;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,15 +41,13 @@ class AuthController extends Controller
                 'email'     => $user->email,
                 'tier'      => $user->tier,
                 'is_tutor'  => $user->isTutor(),
-                'character' => $character ? [
+                'character' => $character ? array_merge([
                     'handle'      => $character->handle,
                     'cls'         => $character->cls,
                     'saber_color' => $character->saber_color,
                     'side'        => $character->side,
-                    'wins'        => $character->wins,
-                    'losses'      => $character->losses,
                     'credits'     => $character->credits,
-                ] : null,
+                ], StatsTemporada::totalsForUser($user->id)) : null,
             ],
         ]);
     }

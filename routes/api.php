@@ -14,6 +14,9 @@ use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
+use App\Http\Controllers\Api\EmblemUploadController;
+use App\Http\Controllers\Api\MisionController;
+use App\Http\Controllers\Api\TemporadaController;
 use App\Http\Controllers\Api\WidgetLayoutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
@@ -66,6 +69,21 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/layout/{section}', [WidgetLayoutController::class, 'show']);
     Route::put('/layout/{section}', [WidgetLayoutController::class, 'update']);
+
+    Route::get('/temporadas', [TemporadaController::class, 'index']);
+    Route::post('/temporadas', [TemporadaController::class, 'store']);
+    Route::get('/temporadas/{temporada}', [TemporadaController::class, 'show']);
+    Route::put('/temporadas/{temporada}', [TemporadaController::class, 'update']);
+
+    Route::post('/upload/emblema', [EmblemUploadController::class, 'store']);
+
+    Route::get('/misiones', [MisionController::class, 'index']);
+    Route::post('/misiones', [MisionController::class, 'store']);
+    Route::patch('/misiones/{mision}', [MisionController::class, 'update']);
+    Route::delete('/misiones/{mision}', [MisionController::class, 'destroy']);
+    Route::post('/misiones/{mision}/assign', [MisionController::class, 'assign']);
+    Route::delete('/misiones/{mision}/users/{userId}', [MisionController::class, 'unassign']);
+    Route::patch('/misiones/{mision}/progress', [MisionController::class, 'updateProgress']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/test', [NotificationController::class, 'test']);

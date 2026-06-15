@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, cloneElement } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 
@@ -59,12 +59,24 @@ function ColToggle({ cols, onToggle }) {
 
 /* ===================== COMANDO ===================== */
 const WIDGET_DEFAULT_ORDER = [
-  { id: 'kpis',    cols: 2 },
-  { id: 'combate', cols: 1 },
-  { id: 'tareas',  cols: 1 },
-  { id: 'eventos', cols: 1 },
-  { id: 'ranking', cols: 1 },
+  { id: 'kpis',       cols: 2 },
+  { id: 'combate',    cols: 1 },
+  { id: 'temporada',  cols: 1 },
+  { id: 'tareas',     cols: 1 },
+  { id: 'eventos',    cols: 1 },
+  { id: 'ranking',    cols: 1 },
 ];
+
+const PODIO_CMD = [
+  { key: 'primer_lugar',  color: 'var(--pompeyo-oro)', num: '1' },
+  { key: 'segundo_lugar', color: '#c0c0c0',            num: '2' },
+  { key: 'tercer_lugar',  color: '#cd7f32',            num: '3' },
+];
+
+const TIER_COLOR = {
+  iniciado: '#8aa0c0', padawan: '#38cdf0', caballero: '#10b981',
+  maestro: '#FF6B00', granmaestro: '#E6B325',
+};
 
 export function ComandoView({ S, go, user }) {
   const me = S.byId('you') ?? {};
@@ -85,10 +97,25 @@ export function ComandoView({ S, go, user }) {
     { k: 'Asistencia', v: `${loggedCount} días`,      icon: 'calendar', tone: 'var(--green-500)' },
   ];
 
-  const [widgetOrder, setWidgetOrder] = useState(WIDGET_DEFAULT_ORDER);
-  const [draggingId,  setDraggingId]  = useState(null);
-  const [overIdx,     setOverIdx]     = useState(null);
+  const [widgetOrder, setWidgetOrder]         = useState(WIDGET_DEFAULT_ORDER);
+  const [draggingId,  setDraggingId]          = useState(null);
+  const [overIdx,     setOverIdx]             = useState(null);
+  const [activaTemporada, setActivaTemporada] = useState(null);
   const saveTimer = useRef(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+    fetch('/api/temporadas', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.temporadas) return;
+        const activa = d.temporadas.find(t => t.activa) ?? d.temporadas[0] ?? null;
+        setActivaTemporada(activa);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -152,7 +179,7 @@ export function ComandoView({ S, go, user }) {
       </section>
 
       {/* Widgets reordenables — grilla de 2 columnas */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
         {widgetOrder.map(({ id, cols }, idx) => {
           const isDragging = draggingId === id;
           const isOver    = overIdx === idx && !isDragging;
@@ -258,6 +285,71 @@ export function ComandoView({ S, go, user }) {
                 </div>
               </Panel>
             ),
+            temporada: (() => {
+              const t = activaTemporada;
+              const fmtDate = (d) => d
+                ? new Date(d + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+                : '—';
+              return (
+                <Panel title={t ? t.nombre : 'Temporada'} kicker={t?.activa ? 'ACTIVA AHORA' : 'TEMPORADA'} icon="crown"
+                  right={panelRight(null)}>
+                  {!t ? (
+                    <Empty label="Sin temporadas registradas" />
+                  ) : (
+                    <div style={{ display: 'grid', gap: 14 }}>
+                      {t.foto_emblema && (
+                        <div style={{ height: 72, borderRadius: 'var(--radius-md)', overflow: 'hidden', position: 'relative' }}>
+                          <img src={t.foto_emblema} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} />
+                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(4,7,15,.85) 0%, transparent 60%)' }} />
+                          <div style={{ position: 'absolute', inset: 0, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                              {fmtDate(t.periodo_inicio)} → {fmtDate(t.periodo_fin)}
+                            </div>
+                            {t.activa && (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#4ade80', fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginTop: 4 }}>
+                                <span className="nx-live-dot" style={{ background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />EN CURSO
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {PODIO_CMD.map(p => {
+                          const w = t[p.key];
+                          const avatarC = w
+                            ? { initials: w.initials || (w.handle || '?').substring(0, 2).toUpperCase(), color: TIER_COLOR[w.tier] ?? '#38cdf0' }
+                            : null;
+                          return (
+                            <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                              <div style={{
+                                width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                                display: 'grid', placeItems: 'center',
+                                background: `color-mix(in srgb, ${p.color} 18%, rgba(4,7,15,.8))`,
+                                border: `1px solid ${p.color}55`,
+                              }}>
+                                <span className="nx-num" style={{ fontSize: 9, color: p.color }}>{p.num}</span>
+                              </div>
+                              {w ? (
+                                <>
+                                  <Avatar c={avatarC} size={26} />
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
+                                    <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{w.handle}</div>
+                                  </div>
+                                  <TierBadge tier={w.tier} sm />
+                                </>
+                              ) : (
+                                <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin asignar</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </Panel>
+              );
+            })(),
             ranking: (
               <Panel title="Top Ranking" kicker="Temporada 3" icon="trophy"
                 right={panelRight(<Btn sm onClick={() => go('ranking')}>Ladder</Btn>)}>
@@ -294,9 +386,11 @@ export function ComandoView({ S, go, user }) {
                 outlineOffset: 4,
                 borderRadius: 'var(--radius-lg)',
                 transition: 'opacity .15s',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              {content}
+              {content && cloneElement(content, { style: { flex: 1, ...(content.props?.style ?? {}) } })}
             </div>
           );
         })}

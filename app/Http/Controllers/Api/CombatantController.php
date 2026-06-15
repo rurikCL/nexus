@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Character;
+use App\Models\StatsTemporada;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,9 +15,10 @@ class CombatantController extends Controller
     public function index(Request $request): JsonResponse
     {
         $characters = Character::with('user')
-            ->orderByDesc('wins')
             ->get()
-            ->map(fn($c) => $this->formatCombatant($c));
+            ->map(fn($c) => $this->formatCombatant($c))
+            ->sortByDesc('wins')
+            ->values();
 
         return response()->json(['combatants' => $characters]);
     }
@@ -32,6 +34,8 @@ class CombatantController extends Controller
 
     private function formatCombatant(Character $character): array
     {
+        $stats = StatsTemporada::totalsForUser($character->user_id);
+
         return [
             'id'          => $character->user_id,
             'handle'      => $character->handle,
@@ -43,14 +47,14 @@ class CombatantController extends Controller
             'sponsor'     => $character->sponsor,
             'joined_year' => $character->joined_year,
             'credits'     => $character->credits,
-            'wins'        => $character->wins,
-            'losses'      => $character->losses,
-            'streak'      => $character->streak,
+            'wins'        => $stats['wins'],
+            'losses'      => $stats['losses'],
+            'streak'      => $stats['streak'],
+            'winrate'     => $stats['winrate'],
             'stats'       => $character->stats,
             'gold'        => $character->gold,
             'side'        => $character->side ?? 'luminoso',
             'tier'        => $character->user->tier ?? 'iniciado',
-            'winrate'     => $character->winrate,
             'photo_url'   => $character->photo
                 ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
                 : null,
