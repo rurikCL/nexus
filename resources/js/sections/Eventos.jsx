@@ -1,9 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 import { Empty } from './Comando.jsx';
-
-/* NÉXUS — Eventos: presentaciones a las que se asiste (todo el año) */
 
 const EVENT_TYPES = {
   'EXHIBICIÓN':   { banner: '#FF6B00', icon: 'zap' },
@@ -19,21 +17,102 @@ const EVENT_STATUS = {
   'REALIZADO': { tone: 'dim',   label: 'Finalizado' },
 };
 
-export function EventosView({ S }) {
+function mapEvent(e) {
+  const date = e.event_date
+    ? new Date(e.event_date + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : 'Por definir';
+  return {
+    id:          e.id,
+    name:        e.name,
+    type:        e.type,
+    status:      e.status,
+    date,
+    location:    e.location ?? 'Por definir',
+    reward:      e.reward ?? 0,
+    rewardBadge: e.reward_badge ?? null,
+    capacity:    e.capacity ?? 0,
+    banner:      e.banner ?? null,
+    desc:        e.description ?? '',
+    registered:  e.registered_count ?? 0,
+    mine:        !!e.mine,
+    claimed:     !!e.claimed,
+  };
+}
+
+function apiCall(method, path, body) {
+  const token = localStorage.getItem('nx-token');
+  return fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  }).then(r => r.json().then(d => (r.ok ? d : Promise.reject(d))));
+}
+
+// ---------- main view ----------
+export function EventosView({ S, go, user }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('todos');
 
-  const list = S.events.filter(e => {
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await apiCall('GET', '/api/events');
+      setEvents((data.events ?? []).map(mapEvent));
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const toggleReg = async (e) => {
+    if (e.mine) {
+      try {
+        await apiCall('DELETE', `/api/events/${e.id}/register`);
+        setEvents(prev => prev.map(x => x.id === e.id ? { ...x, mine: false, registered: x.registered - 1 } : x));
+        toast('Inscripción cancelada', { tone: 'warning', icon: 'x', desc: e.name });
+      } catch (err) {
+        toast(err?.message ?? 'Error al cancelar', { tone: 'error', icon: 'x' });
+      }
+    } else {
+      try {
+        await apiCall('POST', `/api/events/${e.id}/register`);
+        setEvents(prev => prev.map(x => x.id === e.id ? { ...x, mine: true, registered: x.registered + 1 } : x));
+        toast('Inscripción confirmada', { tone: 'success', icon: 'check', desc: `${e.name} · recompensa al asistir` });
+      } catch (err) {
+        toast(err?.message ?? 'Error al inscribir', { tone: 'error', icon: 'x' });
+      }
+    }
+  };
+
+  const claimEvent = async (e) => {
+    try {
+      const data = await apiCall('POST', `/api/events/${e.id}/claim`);
+      setEvents(prev => prev.map(x => x.id === e.id ? { ...x, claimed: true } : x));
+      if (S.setCredits && data.credits_awarded > 0) S.setCredits(c => c + data.credits_awarded);
+      toast('Recompensa reclamada', { tone: 'success', icon: 'coin', desc: `+${e.reward} créditos por ${e.name}` });
+    } catch (err) {
+      toast(err?.message ?? 'Error al reclamar', { tone: 'error', icon: 'x' });
+    }
+  };
+
+  const list = events.filter(e => {
     if (filter === 'mis') return e.mine;
     if (filter === 'abiertos') return e.status === 'ABIERTO' || e.status === 'PRÓXIMO';
     if (filter === 'realizados') return e.status === 'REALIZADO';
     return true;
   });
-  const misCount = S.events.filter(e => e.mine).length;
+  const misCount = events.filter(e => e.mine).length;
+
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+      <span className="nx-data" style={{ color: 'var(--holo)', letterSpacing: '.15em', animation: 'nx-pulse 1.4s infinite' }}>CARGANDO EVENTOS...</span>
+    </div>
+  );
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
-      {/* Barra de acción */}
       <div className="nx-panel" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <span style={{ color: 'var(--holo)' }}><Icon name="star" size={22} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
@@ -48,46 +127,53 @@ export function EventosView({ S }) {
         <Btn kind="accent" icon="plus" onClick={() => setCreating(true)}>Agregar evento</Btn>
       </div>
 
-      {/* Filtros */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {[['todos', 'Todos'], ['abiertos', 'Abiertos'], ['mis', 'Mis eventos'], ['realizados', 'Finalizados']].map(([k, label]) => (
+        {[['todos','Todos'],['abiertos','Abiertos'],['mis','Mis eventos'],['realizados','Finalizados']].map(([k, label]) => (
           <button key={k} onClick={() => setFilter(k)} className={`nx-chip ${filter === k ? '' : 'dim'}`}
             style={{ cursor: 'pointer', borderColor: filter === k ? 'var(--holo)' : undefined }}>{label}</button>
         ))}
       </div>
 
-      {/* Grid de eventos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 16 }}>
         {list.length === 0 && <Empty label="Sin eventos" />}
-        {list.map((e) => <EventCard key={e.id} e={e} S={S} />)}
+        {list.map(e => (
+          <EventCard key={e.id} e={e} onToggleReg={() => toggleReg(e)} onClaim={() => claimEvent(e)} />
+        ))}
       </div>
 
-      <CreateEventModal open={creating} onClose={() => setCreating(false)} S={S} />
+      <CreateEventModal
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={(newEvent) => { setEvents(prev => [newEvent, ...prev]); setCreating(false); }}
+      />
     </div>
   );
 }
 
-export function EventCard({ e, S }) {
-  const meta = EVENT_TYPES[e.type] || { banner: e.banner || 'var(--holo)', icon: 'star' };
-  const banner = e.banner || meta.banner;
-  const st = EVENT_STATUS[e.status] || { tone: 'dim', label: e.status };
-  const full = e.registered >= e.capacity && !e.mine;
-  const pct = Math.min(100, Math.round(e.registered / e.capacity * 100));
+function EventCard({ e, onToggleReg, onClaim }) {
+  const meta = EVENT_TYPES[e.type] ?? { banner: 'var(--holo)', icon: 'star' };
+  const banner = e.banner ?? meta.banner;
+  const st = EVENT_STATUS[e.status] ?? { tone: 'dim', label: e.status };
+  const full = e.capacity > 0 && e.registered >= e.capacity && !e.mine;
+  const pct = e.capacity > 0 ? Math.min(100, Math.round(e.registered / e.capacity * 100)) : 0;
 
   let action;
   if (e.status === 'REALIZADO') {
-    if (e.mine && !e.claimed) action = <Btn kind="gold" icon="coin" sm style={{ width: '100%', justifyContent: 'center' }}
-      onClick={() => { S.claimEvent(e.id); toast('Recompensa reclamada', { tone: 'success', icon: 'coin', desc: `+${e.reward} créditos por ${e.name}` }); }}>Reclamar +{e.reward}</Btn>;
-    else if (e.claimed) action = <Chip tone="green" icon="check" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Recompensa reclamada</Chip>;
-    else action = <Chip tone="dim" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Evento finalizado</Chip>;
+    if (e.mine && !e.claimed)
+      action = <Btn kind="gold" icon="coin" sm style={{ width: '100%', justifyContent: 'center' }}
+        onClick={onClaim}>Reclamar +{e.reward}</Btn>;
+    else if (e.claimed)
+      action = <Chip tone="green" icon="check" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Recompensa reclamada</Chip>;
+    else
+      action = <Chip tone="dim" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Evento finalizado</Chip>;
   } else if (e.mine) {
     action = <Btn icon="x" sm style={{ width: '100%', justifyContent: 'center' }}
-      onClick={() => { S.toggleEventReg(e.id); toast('Inscripción cancelada', { tone: 'warning', icon: 'x', desc: e.name }); }}>Cancelar inscripción</Btn>;
+      onClick={onToggleReg}>Cancelar inscripción</Btn>;
   } else if (full) {
     action = <Btn sm disabled style={{ width: '100%', justifyContent: 'center' }}>Cupo lleno</Btn>;
   } else {
     action = <Btn kind="accent" icon="check" sm style={{ width: '100%', justifyContent: 'center' }}
-      onClick={() => { S.toggleEventReg(e.id); toast('Inscripción confirmada', { tone: 'success', icon: 'check', desc: `${e.name} · recompensa al asistir` }); }}>Inscribirme</Btn>;
+      onClick={onToggleReg}>Inscribirme</Btn>;
   }
 
   return (
@@ -107,8 +193,12 @@ export function EventCard({ e, S }) {
         </div>
 
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-          <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="calendar" size={12} /> {e.date}</span>
-          <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', display: 'flex', alignItems: 'center', gap: 5 }}><Icon name="target" size={12} /> {e.location}</span>
+          <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="calendar" size={12} /> {e.date}
+          </span>
+          <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="target" size={12} /> {e.location}
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
@@ -117,11 +207,17 @@ export function EventCard({ e, S }) {
         </div>
 
         <div style={{ marginTop: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Cupos</span>
-            <span className="nx-num" style={{ fontSize: 12, color: 'var(--txt-dim)' }}>{e.registered}/{e.capacity}</span>
-          </div>
-          <div className="nx-bar" style={{ marginBottom: 12 }}><i style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--pompeyo-naranja)' : `linear-gradient(90deg, ${banner}88, ${banner})` }} /></div>
+          {e.capacity > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Cupos</span>
+                <span className="nx-num" style={{ fontSize: 12, color: 'var(--txt-dim)' }}>{e.registered}/{e.capacity}</span>
+              </div>
+              <div className="nx-bar" style={{ marginBottom: 12 }}>
+                <i style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--pompeyo-naranja)' : `linear-gradient(90deg, ${banner}88, ${banner})` }} />
+              </div>
+            </>
+          )}
           {action}
         </div>
       </div>
@@ -129,70 +225,89 @@ export function EventCard({ e, S }) {
   );
 }
 
-export function CreateEventModal({ open, onClose, S }) {
+function CreateEventModal({ open, onClose, onCreated }) {
   const empty = { name: '', type: 'EXHIBICIÓN', date: '', location: '', capacity: 30, reward: 300, rewardBadge: '', desc: '' };
   const [f, setF] = useState(empty);
+  const [sending, setSending] = useState(false);
   useEffect(() => { if (open) setF(empty); }, [open]);
   if (!open) return null;
-  const submit = () => {
+
+  const submit = async () => {
     if (!f.name.trim()) { toast('Falta el nombre del evento', { tone: 'error', icon: 'x' }); return; }
-    S.addEvent({
-      name: f.name, type: f.type, status: 'ABIERTO', date: f.date || 'Por definir',
-      location: f.location || 'Por definir', reward: +f.reward || 0, rewardBadge: f.rewardBadge.trim() || null,
-      capacity: +f.capacity || 1, banner: (EVENT_TYPES[f.type] || {}).banner, desc: f.desc || 'Presentación abierta a la Orden.',
-    });
-    onClose();
-    toast('Evento creado', { tone: 'success', icon: 'star', desc: `${f.name} · inscripción abierta` });
+    setSending(true);
+    try {
+      const data = await apiCall('POST', '/api/events', {
+        name:         f.name,
+        type:         f.type,
+        event_date:   f.date || null,
+        location:     f.location || null,
+        capacity:     +f.capacity || null,
+        reward:       +f.reward || 0,
+        reward_badge: f.rewardBadge.trim() || null,
+        description:  f.desc || null,
+        banner:       EVENT_TYPES[f.type]?.banner ?? null,
+      });
+      onCreated(mapEvent(data.event));
+      toast('Evento creado', { tone: 'success', icon: 'star', desc: `${f.name} · inscripción abierta` });
+    } catch (e) {
+      toast(e?.message ?? 'Error al crear el evento', { tone: 'error', icon: 'x' });
+    } finally {
+      setSending(false);
+    }
   };
+
   return (
     <Modal open={open} onClose={onClose} kicker="Nueva presentación" title="Agregar Evento" width={540}>
       <div style={{ display: 'grid', gap: 14 }}>
         <div>
           <label className="nx-label">Nombre del evento *</label>
-          <input className="nx-input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Ej: Exhibición de Formas · Invierno" autoFocus />
+          <input className="nx-input" value={f.name} onChange={e => setF({ ...f, name: e.target.value })}
+            placeholder="Ej: Exhibición de Formas · Invierno" autoFocus />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             <label className="nx-label">Tipo</label>
-            <select className="nx-select" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
+            <select className="nx-select" value={f.type} onChange={e => setF({ ...f, type: e.target.value })}>
               {Object.keys(EVENT_TYPES).map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <label className="nx-label">Fecha</label>
-            <input className="nx-input" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} placeholder="DD/MM/AAAA" />
+            <input className="nx-input" type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} />
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             <label className="nx-label">Lugar</label>
-            <input className="nx-input" value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Domo Central" />
+            <input className="nx-input" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} placeholder="Domo Central" />
           </div>
           <div>
             <label className="nx-label">Cupos</label>
-            <input className="nx-input nx-data" type="number" value={f.capacity} onChange={(e) => setF({ ...f, capacity: e.target.value })} />
+            <input className="nx-input nx-data" type="number" value={f.capacity} onChange={e => setF({ ...f, capacity: e.target.value })} />
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             <label className="nx-label">Recompensa (créditos)</label>
-            <input className="nx-input nx-data" type="number" value={f.reward} onChange={(e) => setF({ ...f, reward: e.target.value })} />
+            <input className="nx-input nx-data" type="number" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
           </div>
           <div>
             <label className="nx-label">Insignia / medalla (opcional)</label>
-            <input className="nx-input" value={f.rewardBadge} onChange={(e) => setF({ ...f, rewardBadge: e.target.value })} placeholder="Ej: Insignia Exhibición" />
+            <input className="nx-input" value={f.rewardBadge} onChange={e => setF({ ...f, rewardBadge: e.target.value })} placeholder="Ej: Insignia Exhibición" />
           </div>
         </div>
         <div>
           <label className="nx-label">Descripción</label>
-          <textarea className="nx-textarea" value={f.desc} onChange={(e) => setF({ ...f, desc: e.target.value })} placeholder="Qué se presenta, requisitos, a quién está dirigido..." />
+          <textarea className="nx-textarea" value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })}
+            placeholder="Qué se presenta, requisitos, a quién está dirigido..." />
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <Btn onClick={onClose}>Cancelar</Btn>
-          <Btn kind="accent" icon="check" onClick={submit}>Crear evento</Btn>
+          <Btn kind="accent" icon="check" onClick={submit} disabled={sending}>
+            {sending ? 'Creando...' : 'Crear evento'}
+          </Btn>
         </div>
       </div>
     </Modal>
   );
 }
-

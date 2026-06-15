@@ -10,6 +10,25 @@ use Illuminate\Http\Request;
 
 class EventController extends Controller
 {
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'         => 'required|string|max:255',
+            'type'         => 'required|in:EXHIBICIÓN,CEREMONIA,DEMOSTRACIÓN,TALLER,GALA,CHARLA',
+            'event_date'   => 'nullable|date',
+            'location'     => 'nullable|string|max:255',
+            'capacity'     => 'nullable|integer|min:1',
+            'reward'       => 'nullable|integer|min:0',
+            'reward_badge' => 'nullable|string|max:100',
+            'description'  => 'nullable|string',
+            'banner'       => 'nullable|string|max:50',
+        ]);
+
+        $event = Event::create(array_merge(['status' => 'ABIERTO'], $data));
+
+        return response()->json(['event' => $event], 201);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();

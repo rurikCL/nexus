@@ -2,6 +2,324 @@ import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 
+/* ===================== SCORING ===================== */
+
+const CRITERIA = [
+  { key: 'flujo',           title: 'Flujo y Ritmo',      desc: 'Continuidad, ausencia de tiempos muertos, cadencia dinámica',
+    labels: ['Insuficiente', 'Bueno', 'Coherente', 'Excelente', 'Destacado'] },
+  { key: 'fuerza',          title: 'Control de Fuerza',  desc: 'Equilibrio visual de potencia y seguridad física',
+    labels: ['Excesivo', 'Controlado', 'Coherente', 'Impecable', 'Dominio técnico'] },
+  { key: 'zona',            title: 'Control de Zona',    desc: 'Dominio de la arena, aprovechar el terreno y respetar límites',
+    labels: ['Desorientado', 'Dentro de zona', 'Fluidez de espacio', 'Utiliza entorno', 'Excelencia'] },
+  { key: 'tecnica',         title: 'Técnica y Forma',    desc: 'Precisión y ejecución del estilo de combate elegido',
+    labels: ['Erróneo', 'Confuso', 'Reconocible', 'Correcto', 'Maestral'] },
+  { key: 'caracterizacion', title: 'Caracterización',    desc: 'Inmersión en el rol, presencia escénica, uso de la fuerza',
+    labels: ['Falta compromiso', 'Inmersión', 'Reconocible', 'Comprometido', 'Magistral'] },
+];
+const SCORE_VALS = [0, 0.5, 1, 1.5, 2];
+const SCORE_LABELS = ['0', '½', '1', '1½', '2'];
+
+const PENALTY_TYPES = [
+  { key: 'leve',          label: 'Leve',          pts: 0.5 },
+  { key: 'grave',         label: 'Grave',         pts: 1   },
+  { key: 'muy_grave',     label: 'Muy Grave',     pts: 2   },
+  { key: 'descalificado', label: 'Descalificado', pts: null },
+];
+
+function initScores() { return Object.fromEntries(CRITERIA.map(c => [c.key, null])); }
+function sumScores(scores) { return CRITERIA.reduce((s, c) => s + (scores[c.key] ?? 0), 0); }
+function sumPenalties(pens) {
+  if (pens.includes('descalificado')) return Infinity;
+  return pens.reduce((s, k) => s + (PENALTY_TYPES.find(p => p.key === k)?.pts ?? 0), 0);
+}
+const charImg = (c) => `/assets/${c.cls.charAt(0).toUpperCase() + c.cls.slice(1)}.png`;
+
+function ScorePicker({ value, onChange, labels, color }) {
+  return (
+    <div style={{ display: 'flex', gap: 3 }}>
+      {SCORE_VALS.map((v, i) => {
+        const sel = value === v;
+        return (
+          <button key={v} onClick={() => onChange(sel ? null : v)} title={labels[i]}
+            className="nx-btn"
+            style={{ padding: '5px 8px', minWidth: 34, fontSize: 11, justifyContent: 'center',
+              fontFamily: 'var(--font-data)', letterSpacing: '0.02em',
+              background: sel ? `color-mix(in srgb, ${color} 20%, transparent)` : undefined,
+              borderColor: sel ? color : undefined,
+              color: sel ? color : 'var(--txt-dim)' }}>
+            {SCORE_LABELS[i]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ScoringScreen({ combat, onClose, S }) {
+  const [scoresA, setScoresA] = useState(initScores);
+  const [scoresB, setScoresB] = useState(initScores);
+  const [pensA, setPensA] = useState([]);
+  const [pensB, setPensB] = useState([]);
+
+  useEffect(() => {
+    setScoresA(initScores()); setScoresB(initScores()); setPensA([]); setPensB([]);
+  }, [combat?.id]);
+
+  if (!combat) return null;
+  const a = combat._a ?? S.byId(combat.a);
+  const b = combat._b ?? S.byId(combat.b);
+
+  const rawA = sumScores(scoresA), rawB = sumScores(scoresB);
+  const penA = sumPenalties(pensA),  penB = sumPenalties(pensB);
+  const dqA = pensA.includes('descalificado'), dqB = pensB.includes('descalificado');
+  const totalA = dqA ? -Infinity : rawA - penA;
+  const totalB = dqB ? -Infinity : rawB - penB;
+
+  const allFilled = CRITERIA.every(c => scoresA[c.key] !== null && scoresB[c.key] !== null);
+  const winner = dqA && dqB ? null : dqA ? 'b' : dqB ? 'a' : totalA > totalB ? 'a' : totalB > totalA ? 'b' : null;
+  const canSubmit = allFilled && (winner !== null);
+
+  const submit = async () => {
+    const scoreData = { scoresA, scoresB, pensA, pensB };
+    S.resolveCombatWithWinner(combat.id, winner, scoreData);
+    onClose();
+    const wName = (winner === 'a' ? a : b).name;
+    toast('Resultado registrado', { tone: 'success', icon: 'trophy',
+      desc: `Ganó ${wName} · ${(winner === 'a' ? rawA - penA : rawB - penB).toFixed(1)} pts` });
+
+    // Si es un combate real (ID numérico), persiste en la BD
+    if (typeof combat.id === 'number') {
+      const token = localStorage.getItem('nx-token');
+      try {
+        await fetch(`/api/combats/${combat.id}/resolve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ winner, score_data: scoreData }),
+        });
+      } catch { /* optimistic update ya aplicado */ }
+    }
+  };
+
+  const saberA = a.saber, saberB = b.saber;
+  const scoreA = dqA ? null : Math.max(0, rawA - penA);
+  const scoreB = dqB ? null : Math.max(0, rawB - penB);
+
+  return (
+    <div className="nx-fade" style={{ display: 'grid', gap: 16 }}>
+
+      {/* Topbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="nx-btn" onClick={onClose} style={{ gap: 7, padding: '7px 12px' }}>
+          <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} />
+          <span style={{ fontSize: 12 }}>Volver</span>
+        </button>
+        <div style={{ flex: 1 }}>
+          <div className="nx-kicker" style={{ fontSize: 9 }}>{combat.event} · {combat.round}</div>
+          <div className="nx-display" style={{ fontSize: 14 }}>Evaluación de Combate</div>
+        </div>
+        <Btn kind="accent" icon="trophy" onClick={submit} disabled={!canSubmit}>Registrar resultado</Btn>
+      </div>
+
+      {/* VS hero — cinematic */}
+      <div style={{ position: 'relative', height: 310, overflow: 'hidden',
+        borderRadius: 'var(--radius)', border: '1px solid var(--holo-line)' }}>
+
+        {/* Base oscuro */}
+        <div style={{ position: 'absolute', inset: 0, background: '#030609' }} />
+
+        {/* ── LADO A (izquierda) ── */}
+        <div style={{ position: 'absolute', inset: 0,
+          clipPath: 'polygon(0 0, 57% 0, 43% 100%, 0 100%)' }}>
+          {/* Degradé sable desde el borde */}
+          <div style={{ position: 'absolute', inset: 0,
+            background: `linear-gradient(to right, ${saberA}45 0%, ${saberA}18 55%, transparent 100%)` }} />
+          {/* Glow radial desde la figura */}
+          <div style={{ position: 'absolute', inset: 0,
+            background: `radial-gradient(ellipse at 22% 90%, ${saberA}40 0%, transparent 55%)` }} />
+          <img src={charImg(a)} alt={a.name}
+            style={{ position: 'absolute', bottom: 0, left: '10%',
+              height: '97%', width: 'auto', objectFit: 'contain',
+              filter: `drop-shadow(-6px 0 22px ${saberA}80)` }} />
+        </div>
+
+        {/* ── LADO B (derecha) ── */}
+        <div style={{ position: 'absolute', inset: 0,
+          clipPath: 'polygon(57% 0, 100% 0, 100% 100%, 43% 100%)' }}>
+          <div style={{ position: 'absolute', inset: 0,
+            background: `linear-gradient(to left, ${saberB}45 0%, ${saberB}18 55%, transparent 100%)` }} />
+          <div style={{ position: 'absolute', inset: 0,
+            background: `radial-gradient(ellipse at 78% 90%, ${saberB}40 0%, transparent 55%)` }} />
+          <img src={charImg(b)} alt={b.name}
+            style={{ position: 'absolute', bottom: 0, right: '10%',
+              height: '97%', width: 'auto', objectFit: 'contain',
+              transform: 'scaleX(-1)',
+              filter: `drop-shadow(6px 0 22px ${saberB}80)` }} />
+        </div>
+
+        {/* ── Línea diagonal de separación con glow ── */}
+        <div style={{ position: 'absolute', inset: 0,
+          clipPath: 'polygon(54% 0, 60% 0, 46% 100%, 40% 100%)',
+          background: `linear-gradient(to bottom, ${saberA}55, rgba(255,255,255,0.55) 50%, ${saberB}55)`,
+          filter: 'blur(5px)' }} />
+
+        {/* Fade inferior para legibilidad del texto */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110,
+          background: 'linear-gradient(to top, rgba(3,6,9,0.92) 0%, rgba(3,6,9,0.55) 60%, transparent 100%)' }} />
+
+        {/* ── Puntaje A — arriba izquierda ── */}
+        <div style={{ position: 'absolute', top: 14, left: 18 }}>
+          <div className="nx-num" style={{ fontSize: 40, lineHeight: 1,
+            color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'a' ? 'var(--pompeyo-oro)' : saberA}66` }}>
+            {dqA ? 'DQ' : (scoreA ?? '—')}
+          </div>
+          {penA > 0 && !dqA && (
+            <div className="nx-data" style={{ fontSize: 9, color: '#ff6b6b', marginTop: 1 }}>−{penA.toFixed(1)} pen.</div>
+          )}
+        </div>
+
+        {/* ── Puntaje B — arriba derecha ── */}
+        <div style={{ position: 'absolute', top: 14, right: 18, textAlign: 'right' }}>
+          <div className="nx-num" style={{ fontSize: 40, lineHeight: 1,
+            color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'b' ? 'var(--pompeyo-oro)' : saberB}66` }}>
+            {dqB ? 'DQ' : (scoreB ?? '—')}
+          </div>
+          {penB > 0 && !dqB && (
+            <div className="nx-data" style={{ fontSize: 9, color: '#ff6b6b', marginTop: 1 }}>−{penB.toFixed(1)} pen.</div>
+          )}
+        </div>
+
+        {/* ── Info A — abajo izquierda ── */}
+        <div style={{ position: 'absolute', bottom: 14, left: 18 }}>
+          {winner === 'a' && (
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4 }}>GANADOR</div>
+          )}
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{a.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+            <TierBadge tier={a.tier} sm />
+            <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{a.wins}W-{a.losses}L</span>
+          </div>
+        </div>
+
+        {/* ── Info B — abajo derecha ── */}
+        <div style={{ position: 'absolute', bottom: 14, right: 18, textAlign: 'right' }}>
+          {winner === 'b' && (
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4 }}>GANADOR</div>
+          )}
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{b.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 4 }}>
+            <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{b.wins}W-{b.losses}L</span>
+            <TierBadge tier={b.tier} sm />
+          </div>
+        </div>
+
+        {/* ── VS — centro ── */}
+        <div style={{ position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)', zIndex: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div className="nx-display" style={{
+            fontSize: 76, lineHeight: 1, letterSpacing: '0.03em',
+            background: 'linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.65) 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 28px rgba(255,255,255,0.45))' }}>VS</div>
+          {allFilled && winner === null && (
+            <div className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)',
+              letterSpacing: '0.14em', WebkitTextFillColor: 'unset' }}>EMPATE TÉCNICO</div>
+          )}
+        </div>
+      </div>
+
+      {/* Tabla de evaluación */}
+      <Panel kicker="Tabla de evaluación" title="Criterios de Puntuación" icon="target">
+        {/* Cabecera de columnas */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '0 12px 8px', borderBottom: '1px solid var(--holo-line)' }}>
+          <span className="nx-kicker" style={{ fontSize: 9 }}>Criterio</span>
+          <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: a.color }}>{a.name}</span>
+          <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: b.color }}>{b.name}</span>
+        </div>
+
+        <div style={{ display: 'grid', gap: 4, marginTop: 8 }}>
+          {CRITERIA.map((cr) => (
+            <div key={cr.key} className="nx-panel solid"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '12px', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{cr.title}</div>
+                <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2, lineHeight: 1.4 }}>{cr.desc}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 8, rowGap: 2, marginTop: 8 }}>
+                  {SCORE_VALS.map((v, i) => (
+                    <>
+                      <span key={`v-${v}`} className="nx-num" style={{ fontSize: 9, color: 'var(--txt-dim)', textAlign: 'right' }}>{SCORE_LABELS[i]}</span>
+                      <span key={`l-${v}`} className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>{cr.labels[i]}</span>
+                    </>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center' }}>
+                <ScorePicker value={scoresA[cr.key]} onChange={(v) => setScoresA(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={a.color} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center' }}>
+                <ScorePicker value={scoresB[cr.key]} onChange={(v) => setScoresB(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={b.color} />
+              </div>
+            </div>
+          ))}
+
+          {/* Fila totales */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '10px 12px', marginTop: 4 }}>
+            <div className="nx-kicker" style={{ fontSize: 9, alignSelf: 'center' }}>SUBTOTAL (máx. 10)</div>
+            <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: a.color }}>{sumScores(scoresA).toFixed(1)}</div>
+            <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: b.color }}>{sumScores(scoresB).toFixed(1)}</div>
+          </div>
+        </div>
+      </Panel>
+
+      {/* Penalizaciones */}
+      <Panel kicker="Infracciones" title="Penalizaciones" icon="shield">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {[{ fighter: a, pens: pensA, setPens: setPensA }, { fighter: b, pens: pensB, setPens: setPensB }].map(({ fighter, pens, setPens }) => (
+            <div key={fighter.id}>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: fighter.color }}>{fighter.name}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {PENALTY_TYPES.map((pt) => {
+                  const active = pens.includes(pt.key);
+                  const isDq = pt.key === 'descalificado';
+                  return (
+                    <button key={pt.key} onClick={() => setPens(p => active ? p.filter(x => x !== pt.key) : [...p, pt.key])}
+                      className="nx-chip" style={{ cursor: 'pointer',
+                        background: active ? `color-mix(in srgb, #ff6b6b 22%, transparent)` : undefined,
+                        borderColor: active ? '#ff6b6b' : undefined,
+                        color: active ? '#ff6b6b' : 'var(--txt-dim)' }}>
+                      {isDq ? '⚠ Descalificado' : `${pt.label} −${pt.pts}`}
+                    </button>
+                  );
+                })}
+              </div>
+              {pens.length > 0 && !pens.includes('descalificado') && (
+                <div className="nx-data" style={{ fontSize: 10, color: '#ff6b6b', marginTop: 8 }}>
+                  Total penalización: −{sumPenalties(pens).toFixed(1)} pts
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 14 }}>
+          Los criterios detallados de penalización se configurarán próximamente.
+        </div>
+      </Panel>
+
+      {/* Footer acción */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingBottom: 8 }}>
+        <Btn onClick={onClose}>Cancelar</Btn>
+        <Btn kind="accent" icon="trophy" onClick={submit} disabled={!canSubmit}>
+          {!allFilled ? 'Completa todos los criterios' : winner === null ? 'Resultado empatado' : `Registrar — gana ${(winner === 'a' ? a : b).name}`}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
 /* NÉXUS — Ranking + Combates (eventos, apuestas, retar) */
 
 /* ===================== RANKING ===================== */
@@ -66,9 +384,35 @@ export function RankingView({ S }) {
 }
 
 /* ===================== COMBATES ===================== */
-export function CombatesView({ S }) {
-  const [bet, setBet] = useState(null);     // {combat, pick}
-  const [challenge, setChallenge] = useState(false);
+export function CombatesView({ S, user }) {
+  const [bet,        setBet]        = useState(null);
+  const [challenge,  setChallenge]  = useState(false);
+  const [scoring,    setScoring]    = useState(null);
+  const [pending,    setPending]    = useState([]);
+  const [accepting,  setAccepting]  = useState(null); // challenge a aceptar
+
+  useEffect(() => {
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+    fetch('/api/challenges', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.challenges) setPending(data.challenges); })
+      .catch(() => {});
+  }, []);
+
+  const handleReject = async (id) => {
+    const token = localStorage.getItem('nx-token');
+    await fetch(`/api/challenges/${id}/reject`, { method: 'POST', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } });
+    setPending(p => p.filter(c => c.id !== id));
+    toast('Desafío rechazado', { tone: 'dim', icon: 'x' });
+  };
+
+  if (scoring) {
+    return <ScoringScreen combat={scoring} onClose={() => setScoring(null)} S={S} />;
+  }
+
+  const incoming = pending.filter(c => c.target_id === user?.id);
+  const outgoing = pending.filter(c => c.challenger_id === user?.id);
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
@@ -86,11 +430,60 @@ export function CombatesView({ S }) {
         <Btn kind="accent" icon="swords" onClick={() => setChallenge(true)}>Retar combate</Btn>
       </div>
 
+      {/* Desafíos recibidos */}
+      {incoming.length > 0 && (
+        <Panel kicker="Pendientes de respuesta" title="Desafíos Recibidos" icon="swords">
+          <div style={{ display: 'grid', gap: 10 }}>
+            {incoming.map(c => {
+              const challenger = c.challenger?.character;
+              const fechaProp  = c.fecha_desafio ? new Date(c.fecha_desafio).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sin fecha propuesta';
+              return (
+                <div key={c.id} className="nx-panel solid" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderColor: 'color-mix(in srgb, var(--pompeyo-naranja) 40%, transparent)' }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{challenger?.name ?? 'Combatiente'} <span style={{ color: 'var(--txt-faint)', fontWeight: 400 }}>te desafía</span></div>
+                    <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', marginTop: 3 }}>
+                      Apuesta: {NX.fmtCLP(c.stake)} · {fechaProp}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Btn onClick={() => handleReject(c.id)}>Rechazar</Btn>
+                    <Btn kind="accent" icon="check" onClick={() => setAccepting(c)}>Aceptar</Btn>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      {/* Desafíos enviados pendientes */}
+      {outgoing.length > 0 && (
+        <Panel kicker="En espera" title="Desafíos Enviados" icon="target">
+          <div style={{ display: 'grid', gap: 10 }}>
+            {outgoing.map(c => {
+              const target    = c.target?.character;
+              const fechaProp = c.fecha_desafio ? new Date(c.fecha_desafio).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sin fecha';
+              return (
+                <div key={c.id} className="nx-panel solid" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>vs {target?.name ?? 'Combatiente'}</div>
+                    <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', marginTop: 3 }}>Apuesta: {NX.fmtCLP(c.stake)} · {fechaProp}</div>
+                  </div>
+                  <Chip tone="dim">Esperando respuesta</Chip>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
       {/* Combates oficiales + apuestas */}
       <Panel kicker="Cartelera oficial" title="Combates y Apuestas" icon="target"
         right={<Chip tone="dim" icon="coin">{S.bets.length} apuestas activas</Chip>}>
         <div style={{ display: 'grid', gap: 14 }}>
-          {S.combats.map((m) => <CombatCard key={m.id} m={m} S={S} onBet={(pick) => setBet({ combat: m, pick })} />)}
+          {S.combats.length === 0
+            ? <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>No hay combates en cartelera</div>
+            : S.combats.map((m) => <CombatCard key={m.id} m={m} S={S} onBet={(pick) => setBet({ combat: m, pick })} onScore={() => setScoring(m)} />)}
         </div>
       </Panel>
 
@@ -100,14 +493,13 @@ export function CombatesView({ S }) {
           <div style={{ display: 'grid', gap: 10 }}>
             {S.bets.map((b) => {
               const m = S.combats.find(x => x.id === b.combatId);
-              const fighter = NX.byId(b.pick === 'a' ? m.a : m.b);
-              const settled = b.status !== 'abierta';
+              const fighter = b.pick === 'a' ? (m?._a ?? S.byId(m?.a)) : (m?._b ?? S.byId(m?.b));
               return (
                 <div key={b.id} className="nx-panel solid" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <Avatar c={fighter} size={34} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{fighter.name}</div>
-                    <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>{m.event} · cuota {b.odds}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{fighter?.name ?? '—'}</div>
+                    <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>{m?.event} · cuota {b.odds}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="nx-num" style={{ fontSize: 14, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(b.amount)}</div>
@@ -124,12 +516,22 @@ export function CombatesView({ S }) {
 
       <BetModal data={bet} onClose={() => setBet(null)} S={S} />
       <ChallengeModal open={challenge} onClose={() => setChallenge(false)} S={S} />
+      <AcceptChallengeModal
+        challenge={accepting}
+        onClose={() => setAccepting(null)}
+        onAccepted={(id) => {
+          setPending(p => p.filter(c => c.id !== id));
+          setAccepting(null);
+        }}
+        S={S}
+      />
     </div>
   );
 }
 
-export function CombatCard({ m, S, onBet }) {
-  const a = NX.byId(m.a), b = NX.byId(m.b);
+export function CombatCard({ m, S, onBet, onScore }) {
+  const a = m._a ?? S.byId(m.a);
+  const b = m._b ?? S.byId(m.b);
   const myBet = S.bets.find(x => x.combatId === m.id);
   const Fighter = ({ c, side, odds }) => (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' }}>
@@ -163,11 +565,11 @@ export function CombatCard({ m, S, onBet }) {
       </div>
       {!m.resolved ? (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
-          <Btn sm kind="ghost" icon="zap" onClick={() => S.resolveCombat(m.id)}>Simular resultado</Btn>
+          <Btn sm kind="accent" icon="target" onClick={onScore}>Puntuar combate</Btn>
         </div>
       ) : (
         <div style={{ textAlign: 'center', marginTop: 14, color: 'var(--green-500)' }}>
-          <Chip tone="green" icon="trophy">Ganó {NX.byId(m.winner === 'a' ? m.a : m.b).name}</Chip>
+          <Chip tone="green" icon="trophy">Ganó {(m.winner === 'a' ? a : b).name}</Chip>
         </div>
       )}
     </div>
@@ -179,7 +581,7 @@ export function BetModal({ data, onClose, S }) {
   useEffect(() => { if (data) setAmt(200); }, [data]);
   if (!data) return null;
   const { combat, pick } = data;
-  const fighter = NX.byId(pick === 'a' ? combat.a : combat.b);
+  const fighter = pick === 'a' ? (combat._a ?? S.byId(combat.a)) : (combat._b ?? S.byId(combat.b));
   const odds = pick === 'a' ? combat.oddsA : combat.oddsB;
   const payout = Math.round(amt * odds);
   const QUICK = [100, 250, 500, 1000];
@@ -218,22 +620,47 @@ export function BetModal({ data, onClose, S }) {
   );
 }
 
-export function ChallengeModal({ open, onClose, S }) {
+export function ChallengeModal({ open, onClose, S, initialOppId }) {
   const opponents = S.combatants.filter(c => c.id !== 'you');
-  const [oppId, setOppId] = useState(opponents[0].id);
-  const [stake, setStake] = useState(300);
-  const [msg, setMsg] = useState('');
-  const [picking, setPicking] = useState(false);
+  const [oppId,  setOppId]  = useState(initialOppId ?? opponents[0]?.id ?? null);
+  const [stake,  setStake]  = useState(300);
+  const [msg,    setMsg]    = useState('');
+  const [fecha,  setFecha]  = useState('');
+  const [picking,  setPicking]  = useState(false);
+  const [sending,  setSending]  = useState(false);
 
-  useEffect(() => { if (open) { setOppId(opponents[0].id); setStake(300); setMsg(''); } }, [open]);
+  useEffect(() => {
+    if (open) { setOppId(initialOppId ?? opponents[0]?.id ?? null); setStake(300); setMsg(''); setFecha(''); }
+  }, [open, initialOppId]);
   if (!open) return null;
 
-  const opp = NX.byId(oppId);
-  const submit = () => {
+  const opp = S.byId(oppId);
+  if (!opp) return null;
+
+  const submit = async () => {
     if (stake > S.credits) { toast('No tienes créditos para esa apuesta', { tone: 'error', icon: 'x' }); return; }
-    S.createChallenge(oppId, stake);
-    onClose();
-    toast(`Desafío enviado a ${opp.name}`, { tone: 'success', icon: 'swords', desc: 'Combate oficial pendiente de aceptación' });
+    setSending(true);
+    try {
+      if (opp.userId) {
+        // Usuario real — llama a la API
+        const token = localStorage.getItem('nx-token');
+        const res = await fetch('/api/challenges', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ target_id: opp.userId, stake, fecha_desafio: fecha || null }),
+        });
+        if (!res.ok) throw new Error('Error al enviar desafío');
+      } else {
+        // Combatiente demo (seed) — acción local
+        S.createChallenge(oppId, stake);
+      }
+      onClose();
+      toast(`Desafío enviado a ${opp.name}`, { tone: 'success', icon: 'swords', desc: 'Combate oficial pendiente de aceptación' });
+    } catch {
+      toast('No se pudo enviar el desafío', { tone: 'error', icon: 'x' });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -267,12 +694,18 @@ export function ChallengeModal({ open, onClose, S }) {
             <input className="nx-input nx-data" type="number" value={stake} onChange={(e) => setStake(+e.target.value)} style={{ fontSize: 16 }} />
           </div>
           <div>
+            <label className="nx-label">Fecha propuesta del combate</label>
+            <input className="nx-input" type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          </div>
+          <div>
             <label className="nx-label">Mensaje (opcional)</label>
             <input className="nx-input" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Te espero en la arena..." />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <Btn onClick={onClose}>Cancelar</Btn>
-            <Btn kind="accent" icon="swords" onClick={submit} disabled={stake > S.credits}>Enviar desafío</Btn>
+            <Btn kind="accent" icon="swords" onClick={submit} disabled={stake > S.credits || sending}>
+              {sending ? 'Enviando...' : 'Enviar desafío'}
+            </Btn>
           </div>
         </div>
       </Modal>
@@ -340,6 +773,75 @@ function FighterPickerModal({ open, opponents, selected, onPick, onClose }) {
               Sin resultados
             </div>
           )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---- Modal aceptar desafío ---- */
+function AcceptChallengeModal({ challenge, onClose, onAccepted, S }) {
+  const [fecha,   setFecha]   = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (challenge?.fecha_desafio) {
+      const d = new Date(challenge.fecha_desafio);
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      setFecha(local);
+    } else {
+      setFecha('');
+    }
+  }, [challenge]);
+
+  if (!challenge) return null;
+
+  const challenger = challenge.challenger?.character;
+
+  const submit = async () => {
+    setSending(true);
+    try {
+      const token = localStorage.getItem('nx-token');
+      const res = await fetch(`/api/challenges/${challenge.id}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fecha_desafio: fecha || null }),
+      });
+      if (!res.ok) throw new Error('Error al aceptar');
+      const data = await res.json();
+      if (data.combat) {
+        S.setCombats(prev => [data.combat, ...prev.filter(c => c.id !== data.combat.id)]);
+      }
+      toast('Desafío aceptado', { tone: 'success', icon: 'swords', desc: `Combate agendado con ${challenger?.name ?? 'tu rival'}` });
+      onAccepted(challenge.id);
+    } catch {
+      toast('No se pudo aceptar el desafío', { tone: 'error', icon: 'x' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal open={!!challenge} onClose={onClose} kicker="Responder desafío" title="Aceptar Combate" width={440}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        <div style={{ padding: '12px 14px', background: 'color-mix(in srgb, var(--pompeyo-naranja) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--pompeyo-naranja) 30%, transparent)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
+          <span style={{ fontWeight: 700 }}>{challenger?.name ?? 'Combatiente'}</span> te ha retado a duelo.
+          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
+            Apuesta: {NX.fmtCLP(challenge.stake)}
+          </div>
+        </div>
+        <div>
+          <label className="nx-label">Fecha del combate</label>
+          <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginBottom: 6 }}>
+            {challenge.fecha_desafio ? 'Fecha propuesta — puedes modificarla.' : 'No se propuso fecha, elige una.'}
+          </div>
+          <input className="nx-input" type="datetime-local" value={fecha} onChange={e => setFecha(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <Btn onClick={onClose}>Cancelar</Btn>
+          <Btn kind="accent" icon="swords" onClick={submit} disabled={sending}>
+            {sending ? 'Aceptando...' : 'Confirmar combate'}
+          </Btn>
         </div>
       </div>
     </Modal>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Notifications\TareaAsignada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,9 +12,10 @@ class TaskController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $user        = $request->user();
+        $perspective = $request->query('perspective', $user->isTutor() ? 'tutor' : 'pupil');
 
-        if ($user->isTutor()) {
+        if ($perspective === 'tutor' && $user->isTutor()) {
             $tasks = Task::where('tutor_id', $user->id)
                 ->with(['pupil.character', 'tutor.character'])
                 ->orderByDesc('created_at')
@@ -44,12 +46,6 @@ class TaskController extends Controller
             'reward'   => 'nullable|integer|min:0',
         ]);
 
-        // Verify the authenticated user is actually the tutor of this pupil
-        $isPupil = $user->pupils()->where('pupil_id', $data['pupil_id'])->exists();
-        if (!$isPupil) {
-            return response()->json(['message' => 'Este usuario no es tu pupilo.'], 403);
-        }
-
         $task = Task::create([
             'tutor_id' => $user->id,
             'pupil_id' => $data['pupil_id'],
@@ -61,6 +57,12 @@ class TaskController extends Controller
             'progress' => 0,
         ]);
 
+        // Notify pupil (persists to DB for offline delivery)
+        $pupil = $task->pupil()->first();
+        if ($pupil) {
+            $pupil->notify(new TareaAsignada($task, $user));
+        }
+
         return response()->json(['task' => $task->load(['tutor.character', 'pupil.character'])], 201);
     }
 
@@ -68,20 +70,30 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
-        // Only pupil can update progress
-        if ($task->pupil_id !== $user->id) {
+        $isTutor = $task->tutor_id === $user->id;
+        $isPupil = $task->pupil_id === $user->id;
+
+        if (!$isTutor && !$isPupil) {
             return response()->json(['message' => 'No autorizado.'], 403);
         }
 
-        $data = $request->validate([
-            'progress' => 'nullable|integer|min:0|max:100',
-            'detail'   => 'nullable|string',
-            'status'   => 'nullable|in:pendiente,en-curso,revision,completada',
-        ]);
+        if ($isTutor) {
+            // Tutor can only send back to en-curso (reject)
+            $data = $request->validate([
+                'status'   => 'nullable|in:pendiente,en-curso',
+                'progress' => 'nullable|integer|min:0|max:100',
+            ]);
+        } else {
+            $data = $request->validate([
+                'progress' => 'nullable|integer|min:0|max:100',
+                'detail'   => 'nullable|string',
+                'status'   => 'nullable|in:pendiente,en-curso,revision,completada',
+            ]);
+        }
 
         $task->update($data);
 
-        return response()->json(['task' => $task]);
+        return response()->json(['task' => $task->load(['tutor.character', 'pupil.character'])]);
     }
 
     public function approve(Request $request, Task $task): JsonResponse

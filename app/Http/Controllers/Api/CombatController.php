@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Bet;
 use App\Models\Combat;
+use App\Notifications\CombateResuelto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -37,14 +38,16 @@ class CombatController extends Controller
         }
 
         $data = $request->validate([
-            'winner' => 'required|in:a,b',
+            'winner'     => 'required|in:a,b',
+            'score_data' => 'nullable|array',
         ]);
 
         $winner = $data['winner'];
         $combat->update([
-            'resolved' => true,
-            'live'     => false,
-            'winner'   => $winner,
+            'resolved'   => true,
+            'live'       => false,
+            'winner'     => $winner,
+            'score_data' => $data['score_data'] ?? null,
         ]);
 
         // Update winner/loser stats
@@ -80,6 +83,10 @@ class CombatController extends Controller
             }
         }
 
+        // Notify both fighters
+        if ($winnerUser) $winnerUser->notify(new CombateResuelto($combat, true));
+        if ($loserUser)  $loserUser->notify(new CombateResuelto($combat, false));
+
         return response()->json([
             'message' => 'Combate resuelto.',
             'combat'  => $this->formatCombat($combat->fresh(['combatantA.character', 'combatantB.character', 'bets'])),
@@ -91,34 +98,34 @@ class CombatController extends Controller
         $charA = $combat->combatantA?->character;
         $charB = $combat->combatantB?->character;
 
+        $fmtChar = fn($userId, $char) => $char ? [
+            'user_id' => $userId,
+            'handle'  => $char->handle,
+            'name'    => $char->name,
+            'cls'     => $char->cls,
+            'side'    => $char->side,
+            'saber_color' => $char->saber_color ?? 'azul',
+            'tier'    => $char->tier,
+            'wins'    => $char->wins,
+            'losses'  => $char->losses,
+            'winrate' => $char->total > 0 ? round($char->wins / $char->total * 100) : 0,
+            'streak'  => $char->streak,
+            'credits' => $char->credits,
+        ] : null;
+
         return [
             'id'           => $combat->id,
             'event_name'   => $combat->event_name,
             'round'        => $combat->round,
-            'scheduled_at' => $combat->scheduled_at,
+            'scheduled_at' => $combat->fecha_desafio?->toIso8601String(),
             'live'         => $combat->live,
             'resolved'     => $combat->resolved,
             'winner'       => $combat->winner,
-            'odds_a'       => $combat->odds_a,
-            'odds_b'       => $combat->odds_b,
-            'combatant_a'  => $charA ? [
-                'user_id' => $combat->combatant_a_id,
-                'handle'  => $charA->handle,
-                'name'    => $charA->name,
-                'cls'     => $charA->cls,
-                'tier'    => $charA->tier,
-                'wins'    => $charA->wins,
-                'losses'  => $charA->losses,
-            ] : null,
-            'combatant_b' => $charB ? [
-                'user_id' => $combat->combatant_b_id,
-                'handle'  => $charB->handle,
-                'name'    => $charB->name,
-                'cls'     => $charB->cls,
-                'tier'    => $charB->tier,
-                'wins'    => $charB->wins,
-                'losses'  => $charB->losses,
-            ] : null,
+            'odds_a'       => (float) $combat->odds_a,
+            'odds_b'       => (float) $combat->odds_b,
+            'score_data'   => $combat->score_data,
+            'combatant_a'  => $fmtChar($combat->combatant_a_id, $charA),
+            'combatant_b'  => $fmtChar($combat->combatant_b_id, $charB),
         ];
     }
 }

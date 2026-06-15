@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BetController;
 use App\Http\Controllers\Api\CharacterController;
+use App\Http\Controllers\Api\CharacterPhotoController;
 use App\Http\Controllers\Api\ChallengeController;
 use App\Http\Controllers\Api\CombatantController;
 use App\Http\Controllers\Api\CombatController;
@@ -29,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [MeController::class, 'show']);
 
     Route::post('/character', [CharacterController::class, 'upsert']);
+    Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
 
     Route::get('/combatants', [CombatantController::class, 'index']);
     Route::get('/combatants/{handle}', [CombatantController::class, 'show']);
@@ -43,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);
 
     Route::get('/events', [EventController::class, 'index']);
+    Route::post('/events', [EventController::class, 'store']);
     Route::post('/events/{event}/register', [EventController::class, 'register']);
     Route::delete('/events/{event}/register', [EventController::class, 'unregister']);
     Route::post('/events/{event}/claim', [EventController::class, 'claim']);
@@ -53,7 +56,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bets', [BetController::class, 'index']);
     Route::post('/bets', [BetController::class, 'store']);
 
+    Route::get('/challenges', [ChallengeController::class, 'index']);
     Route::post('/challenges', [ChallengeController::class, 'store']);
+    Route::post('/challenges/{challenge}/accept', [ChallengeController::class, 'accept']);
+    Route::post('/challenges/{challenge}/reject', [ChallengeController::class, 'reject']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/test', [NotificationController::class, 'test']);

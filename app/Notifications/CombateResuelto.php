@@ -29,7 +29,7 @@ class CombateResuelto extends Notification implements ShouldQueue
             'icon'         => 'trophy',
             'tone'         => $this->userWon ? 'green' : 'red',
             'title'        => $this->userWon ? '¡Ganaste el combate!' : 'Combate perdido',
-            'body'         => $this->combat->event ?? 'Duelo oficial',
+            'body'         => $this->combat->event_name ?? 'Duelo oficial',
             'action_url'   => '/combates',
             'action_label' => 'Ver resultado',
             'combat_id'    => $this->combat->id,

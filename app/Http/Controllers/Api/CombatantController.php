@@ -7,6 +7,7 @@ use App\Models\Character;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class CombatantController extends Controller
 {
@@ -47,8 +48,12 @@ class CombatantController extends Controller
             'streak'      => $character->streak,
             'stats'       => $character->stats,
             'gold'        => $character->gold,
+            'side'        => $character->side ?? 'luminoso',
             'tier'        => $character->user->tier ?? 'iniciado',
             'winrate'     => $character->winrate,
+            'photo_url'   => $character->photo
+                ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
+                : null,
         ];
     }
 }

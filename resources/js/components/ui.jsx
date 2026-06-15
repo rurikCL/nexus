@@ -1,5 +1,6 @@
 /* NÉXUS — primitivas HUD compartidas + icon set */
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { NX } from '../data/seed.js';
 
 /* ---- Icon set (línea fina, estilo HUD) ---- */
@@ -165,12 +166,13 @@ export function Modal({ open, onClose, title, kicker, children, width = 540 }) {
     return () => window.removeEventListener('keydown', h);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  return createPortal(
     <div onMouseDown={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.72)',
-      backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 20 }}>
+      backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'start center',
+      padding: '40px 20px 20px', overflowY: 'auto' }}>
       <div className="nx-panel solid nx-panel-glow nx-fade" onMouseDown={(e) => e.stopPropagation()}
-        style={{ width, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto' }}>
+        style={{ width, maxWidth: '100%' }}>
         <header className="nx-panel-head">
           <div style={{ flex: 1 }}>
             {kicker && <div className="nx-kicker" style={{ marginBottom: 2 }}>{kicker}</div>}
@@ -180,7 +182,8 @@ export function Modal({ open, onClose, title, kicker, children, width = 540 }) {
         </header>
         <div className="nx-panel-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -216,30 +219,55 @@ export function ToastHost() {
 }
 
 
-/* ---- ImageSlot: subida de imagen (reemplaza al web component image-slot) ---- */
-export function ImageSlot({ id, className = '', style, shape = 'rounded', radius = 12, placeholder = 'Sube una imagen' }) {
-  const KEY = 'nx-img-' + id;
-  const [url, setUrl] = useState(() => { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } });
+/* ---- ImageSlot: subida de imagen al servidor ---- */
+export function ImageSlot({ src, onUpload, className = '', style, shape = 'rounded', radius = 12, placeholder = 'Sube tu retrato' }) {
+  const [url, setUrl]         = useState(src || '');
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
   const br = shape === 'circle' ? '50%' : shape === 'rect' ? '0' : radius + 'px';
-  const onFile = (f) => {
+
+  useEffect(() => { setUrl(src || ''); }, [src]);
+
+  const onFile = async (f) => {
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => { setUrl(r.result); try { localStorage.setItem(KEY, r.result); } catch (e) {} };
-    r.readAsDataURL(f);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', f);
+      const token = localStorage.getItem('nx-token');
+      const res = await fetch('/api/character/photo', {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? 'Error al subir');
+      setUrl(data.photo_url);
+      onUpload?.(data.photo_url);
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setUploading(false);
+    }
   };
+
   return (
-    <div className={className} onClick={() => inputRef.current && inputRef.current.click()}
+    <div className={className} onClick={() => !uploading && inputRef.current?.click()}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files[0]); }}
       style={{ borderRadius: br, border: '1px dashed var(--holo-line)', background: 'rgba(4,9,18,0.5)',
-        cursor: 'pointer', overflow: 'hidden', display: 'grid', placeItems: 'center', color: 'var(--txt-faint)', ...style }}>
-      {url
-        ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        : <div style={{ textAlign: 'center', padding: 8 }}>
-            <Icon name="upload" size={20} />
-            <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>{placeholder}</div>
-          </div>}
+        cursor: uploading ? 'wait' : 'pointer', overflow: 'hidden', display: 'grid', placeItems: 'center', color: 'var(--txt-faint)', ...style }}>
+      {uploading
+        ? <div style={{ textAlign: 'center', padding: 8 }}>
+            <span className="nx-live-dot" style={{ background: 'var(--holo)', boxShadow: 'none', margin: '0 auto 6px' }} />
+            <div style={{ fontSize: 10, fontFamily: 'var(--font-data)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Subiendo...</div>
+          </div>
+        : url
+          ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <div style={{ textAlign: 'center', padding: 8 }}>
+              <Icon name="upload" size={20} />
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>{placeholder}</div>
+            </div>}
       <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => onFile(e.target.files[0])} />
     </div>
   );

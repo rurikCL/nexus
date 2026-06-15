@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -21,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'tier',
+        'tutor_id',
         'password',
     ];
 
@@ -57,14 +59,14 @@ class User extends Authenticatable
         return $this->hasMany(Task::class, 'pupil_id');
     }
 
-    public function pupils(): BelongsToMany
+    public function pupils(): HasMany
     {
-        return $this->belongsToMany(User::class, 'tutor_pupil', 'tutor_id', 'pupil_id');
+        return $this->hasMany(User::class, 'tutor_id');
     }
 
-    public function tutors(): BelongsToMany
+    public function tutor(): BelongsTo
     {
-        return $this->belongsToMany(User::class, 'tutor_pupil', 'pupil_id', 'tutor_id');
+        return $this->belongsTo(User::class, 'tutor_id');
     }
 
     public function events(): BelongsToMany
@@ -91,6 +93,7 @@ class User extends Authenticatable
 
     public function isTutor(): bool
     {
-        return $this->pupils()->exists();
+        return in_array($this->tier, ['caballero', 'maestro', 'granmaestro'])
+            || $this->pupils()->exists();
     }
 }

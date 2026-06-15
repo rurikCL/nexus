@@ -10,13 +10,14 @@ class Combat extends Model
 {
     protected $fillable = [
         'combatant_a_id', 'combatant_b_id', 'odds_a', 'odds_b',
-        'scheduled_at', 'event_name', 'round', 'live', 'resolved', 'winner',
+        'fecha_desafio', 'event_name', 'round', 'live', 'resolved', 'winner', 'score_data',
     ];
 
     protected $casts = [
-        'scheduled_at' => 'datetime',
+        'fecha_desafio' => 'datetime',
         'live'         => 'boolean',
         'resolved'     => 'boolean',
+        'score_data'   => 'array',
     ];
 
     public function combatantA(): BelongsTo

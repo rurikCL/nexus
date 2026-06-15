@@ -16,20 +16,22 @@ export function classIcon(clsId) {
 
 /* ===================== COMANDO ===================== */
 export function ComandoView({ S, go, user }) {
-  const me = NX.byId('you');
-  const myTier = user?.tier ?? me.tier;
+  const me = S.byId('you') ?? {};
+  const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const myTasks = S.tasks.filter(t => t.pupil === 'you' && t.status !== 'completada');
   const nextCombat = S.combats.find(m => m.a === 'you' || m.b === 'you');
   const loggedCount = Object.keys(S.training.logged).length;
-  const opp = nextCombat ? NX.byId(nextCombat.a === 'you' ? nextCombat.b : nextCombat.a) : null;
+  const opp = nextCombat
+    ? (nextCombat.a === 'you' ? (nextCombat._b ?? S.byId(nextCombat.b)) : (nextCombat._a ?? S.byId(nextCombat.a)))
+    : null;
 
   const KPIS = [
-    { k: 'Créditos', v: NX.fmtCLP(S.credits), icon: 'coin', tone: 'var(--pompeyo-oro)' },
-    { k: 'Victorias', v: me.wins, sub: `${me.winrate}% efectividad`, icon: 'trophy', tone: 'var(--pompeyo-naranja)' },
-    { k: 'Racha', v: `${me.streak} W`, sub: 'sin perder', icon: 'flame', tone: 'var(--holo)' },
-    { k: 'Asistencia', v: `${loggedCount} días`, sub: S.training.month, icon: 'calendar', tone: 'var(--green-500)' },
+    { k: 'Créditos',   v: NX.fmtCLP(S.credits),      icon: 'coin',     tone: 'var(--pompeyo-oro)' },
+    { k: 'Victorias',  v: me.wins ?? 0,               sub: `${me.winrate ?? 0}% efectividad`, icon: 'trophy', tone: 'var(--pompeyo-naranja)' },
+    { k: 'Racha',      v: `${me.streak ?? 0} W`,      sub: 'sin perder', icon: 'flame',    tone: 'var(--holo)' },
+    { k: 'Asistencia', v: `${loggedCount} días`,      icon: 'calendar', tone: 'var(--green-500)' },
   ];
 
   return (
@@ -39,7 +41,7 @@ export function ComandoView({ S, go, user }) {
         <div style={{ display: 'flex', gap: 22, padding: 22, flexWrap: 'wrap', alignItems: 'center' }}>
           <Avatar c={me} size={86} ring />
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div className="nx-kicker">Combatiente · {me.sector}</div>
+            <div className="nx-kicker">Combatiente{me.sector ? ` · ${me.sector}` : ''}</div>
             <h1 className="nx-display" style={{ fontSize: 30, margin: '4px 0 8px', color: 'var(--txt)' }}>{ch.name}</h1>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <TierBadge tier={myTier} />
@@ -164,7 +166,14 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => {
+    const next = { ...f, [k]: v };
+    if (k === 'side') {
+      if (v === 'oscuro') next.saber = 'rojo';
+      else if (f.saber === 'rojo') next.saber = 'cian';
+    }
+    return next;
+  });
 
   const submit = async (e) => {
     e.preventDefault();
@@ -273,18 +282,30 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
           </Panel>
 
           <Panel kicker="Cristal de poder" title="Color de Sable" icon="zap">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              {Object.keys(NX.SABERS).map((key) => {
-                const col = NX.SABERS[key]; const on = form.saber === key;
-                return (
-                  <button type="button" key={key} title={key} onClick={() => set('saber', key)}
-                    style={{ width: 38, height: 38, borderRadius: '50%', cursor: 'pointer', display: 'grid', placeItems: 'center', border: on ? `2px solid ${col}` : '1px solid var(--holo-line)', background: 'rgba(4,9,18,0.5)', boxShadow: on ? `0 0 14px -3px ${col}` : 'none', transition: 'all .15s' }}>
-                    <span style={{ width: 15, height: 15, borderRadius: '50%', background: col, boxShadow: `0 0 8px ${col}` }} />
-                  </button>
-                );
-              })}
-              <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: 4 }}>Cristal: {form.saber}</span>
-            </div>
+            {form.side === 'oscuro' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', border: `2px solid ${NX.SABERS.rojo}`, background: 'rgba(4,9,18,0.5)', boxShadow: `0 0 14px -3px ${NX.SABERS.rojo}` }}>
+                  <span style={{ width: 15, height: 15, borderRadius: '50%', background: NX.SABERS.rojo, boxShadow: `0 0 8px ${NX.SABERS.rojo}` }} />
+                </span>
+                <div>
+                  <div className="nx-data" style={{ fontSize: 11, color: NX.SABERS.rojo, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cristal Rojo · Kyber corrompido</div>
+                  <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 3 }}>El Lado Oscuro impone su cristal. No hay elección.</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                {Object.keys(NX.SABERS).filter(k => k !== 'rojo').map((key) => {
+                  const col = NX.SABERS[key]; const on = form.saber === key;
+                  return (
+                    <button type="button" key={key} title={key} onClick={() => set('saber', key)}
+                      style={{ width: 38, height: 38, borderRadius: '50%', cursor: 'pointer', display: 'grid', placeItems: 'center', border: on ? `2px solid ${col}` : '1px solid var(--holo-line)', background: 'rgba(4,9,18,0.5)', boxShadow: on ? `0 0 14px -3px ${col}` : 'none', transition: 'all .15s' }}>
+                      <span style={{ width: 15, height: 15, borderRadius: '50%', background: col, boxShadow: `0 0 8px ${col}` }} />
+                    </button>
+                  );
+                })}
+                <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: 4 }}>Cristal: {form.saber}</span>
+              </div>
+            )}
           </Panel>
 
           <button type="submit" disabled={saving} className="nx-btn nx-btn-accent" style={{ width: '100%', justifyContent: 'center', padding: '11px', fontSize: 12 }}>
@@ -300,8 +321,8 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
 
 /* ===================== MI PERSONAJE ===================== */
 export function PersonajeView({ S, user, onCharacterCreated }) {
-  const me = NX.byId('you');
-  const myTier = user?.tier ?? me.tier;
+  const me = S.byId('you') ?? {};
+  const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
   const pool = ch.pool;
   const STATS = ['fuerza', 'velocidad', 'tecnica', 'defensa', 'foco'];
@@ -347,8 +368,9 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
           <div className="nx-panel-body" style={{ display: 'grid', placeItems: 'center', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ position: 'relative', width: 200, height: 220 }}>
-                <ImageSlot id="nx-portrait" className="nx-hex" style={{ width: 200, height: 220, display: 'block' }}
-                  shape="rect" placeholder="Sube tu retrato"></ImageSlot>
+                <ImageSlot src={ch.photo} onUpload={(url) => S.setCharacter({ ...ch, photo: url })}
+                  className="nx-hex" style={{ width: 200, height: 220, display: 'block' }}
+                  shape="rect" placeholder="Sube tu retrato" />
                 <div className="nx-hex" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', border: `1.5px solid ${sab}`, boxShadow: `0 0 26px -8px ${sab} inset` }} />
               </div>
               <SaberBlade color={sab} />
@@ -370,25 +392,39 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         </Panel>
 
         <Panel kicker="Cristal de poder" title="Color de Sable" icon="zap">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            {Object.keys(NX.SABERS).map((key) => {
-              const col = NX.SABERS[key]; const on = ch.saber === key;
-              return (
-                <button key={key} title={key} onClick={() => S.setCharacter({ ...ch, saber: key })}
-                  style={{ width: 44, height: 44, borderRadius: '50%', cursor: 'pointer', display: 'grid', placeItems: 'center',
-                    border: on ? `2px solid ${col}` : '1px solid var(--holo-line)', background: 'rgba(4,9,18,0.5)',
-                    boxShadow: on ? `0 0 16px -3px ${col}` : 'none', transition: 'all .15s' }}>
-                  <span style={{ width: 18, height: 18, borderRadius: '50%', background: col, boxShadow: `0 0 12px ${col}` }} />
-                </button>
-              );
-            })}
-          </div>
-          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cristal: {ch.saber}</div>
+          {ch.side === 'oscuro' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <span style={{ width: 44, height: 44, borderRadius: '50%', display: 'grid', placeItems: 'center', border: `2px solid ${NX.SABERS.rojo}`, background: 'rgba(4,9,18,0.5)', boxShadow: `0 0 16px -3px ${NX.SABERS.rojo}` }}>
+                <span style={{ width: 18, height: 18, borderRadius: '50%', background: NX.SABERS.rojo, boxShadow: `0 0 12px ${NX.SABERS.rojo}` }} />
+              </span>
+              <div>
+                <div className="nx-data" style={{ fontSize: 11, color: NX.SABERS.rojo, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cristal Rojo · Kyber corrompido</div>
+                <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 3 }}>El Lado Oscuro impone su cristal. No hay elección.</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {Object.keys(NX.SABERS).filter(k => k !== 'rojo').map((key) => {
+                  const col = NX.SABERS[key]; const on = ch.saber === key;
+                  return (
+                    <button key={key} title={key} onClick={() => S.setCharacter({ ...ch, saber: key })}
+                      style={{ width: 44, height: 44, borderRadius: '50%', cursor: 'pointer', display: 'grid', placeItems: 'center',
+                        border: on ? `2px solid ${col}` : '1px solid var(--holo-line)', background: 'rgba(4,9,18,0.5)',
+                        boxShadow: on ? `0 0 16px -3px ${col}` : 'none', transition: 'all .15s' }}>
+                      <span style={{ width: 18, height: 18, borderRadius: '50%', background: col, boxShadow: `0 0 12px ${col}` }} />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Cristal: {ch.saber}</div>
+            </>
+          )}
         </Panel>
 
         <Panel kicker="Logros" title="Medallas" icon="medal">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {me.medals.map((m) => <MedalIcon key={m} id={m} size={40} />)}
+            {(me.medals ?? []).map((m) => <MedalIcon key={m} id={m} size={40} />)}
           </div>
         </Panel>
       </div>
@@ -416,7 +452,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
                 {Object.entries(SIDES).map(([key, s]) => {
                   const on = ch.side === key;
                   return (
-                    <button key={key} onClick={() => S.setCharacter({ ...ch, side: key })}
+                    <button key={key} onClick={() => S.setCharacter({ ...ch, side: key, ...(key === 'oscuro' ? { saber: 'rojo' } : ch.saber === 'rojo' ? { saber: 'azul' } : {}) })}
                       className="nx-panel solid" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'stretch', borderColor: on ? s.color : undefined, boxShadow: on ? `0 0 16px -6px ${s.color}` : undefined, background: on ? `color-mix(in srgb, ${s.color} 8%, var(--space-panel-solid))` : undefined, transition: 'all .2s' }}>
                       <div style={{ width: 56, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${s.color} 5%, rgba(4,9,18,0.9))`, borderRight: `1px solid ${on ? s.color + '55' : 'var(--holo-line)'}` }}>
                         <img src={s.img} alt={s.label} style={{ width: 38, height: 38, objectFit: 'contain', filter: on ? `drop-shadow(0 0 6px ${s.color})` : 'brightness(0.6) saturate(0.6)', transition: 'filter .2s' }} />

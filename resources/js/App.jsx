@@ -3,6 +3,107 @@ import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
 
+const HUD_COLORS = ['#FF6B00', '#38cdf0', '#8b5cf6', '#10b981', '#ec4899', '#f97316', '#E6B325', '#3aa0ff'];
+function hashColor(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+  return HUD_COLORS[Math.abs(h) % HUD_COLORS.length];
+}
+
+// Construye la lista de combatientes exclusivamente desde la API.
+function mergeApiCombatants(apiList, currentUserId) {
+  return apiList.map(api => {
+    const isMe     = api.id === currentUserId;
+    const color    = hashColor(api.handle);
+    const initials = api.name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+
+    return {
+      medals:    [],
+      id:        isMe ? 'you' : `u${api.id}`,
+      userId:    api.id,
+      handle:    api.handle,
+      name:      api.name,
+      bio:       api.bio        ?? '',
+      cls:       api.cls        ?? 'forma1',
+      side:      api.side       ?? 'luminoso',
+      saberName: api.saber_color ?? 'azul',
+      saber:     NX.SABERS[api.saber_color] ?? NX.SABERS.azul,
+      wins:      api.wins       ?? 0,
+      losses:    api.losses     ?? 0,
+      streak:    api.streak     ?? 0,
+      total:    (api.wins ?? 0) + (api.losses ?? 0),
+      credits:   api.credits    ?? 0,
+      stats:     api.stats      ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
+      gold:      api.gold       ?? false,
+      tier:      api.tier       ?? 'iniciado',
+      winrate:   api.winrate    ?? 0,
+      sector:    api.sector     ?? '',
+      sponsor:   api.sponsor    ?? '',
+      joined:    api.joined_year ? String(api.joined_year) : '',
+      photo_url: api.photo_url  ?? null,
+      initials, color,
+    };
+  });
+}
+
+// Convierte un combat de la API al shape que espera el frontend.
+// Embebe los objetos combatant resueltos en _a / _b para que CombatCard
+// y ScoringScreen puedan usarlos directamente sin necesitar buscar en el store.
+function normalizeApiCombat(c, combatants, currentUserId) {
+  const find = (userId) => {
+    if (!userId) return null;
+    return combatants.find(x => x.userId === userId)
+      ?? combatants.find(x => x.id === (userId === currentUserId ? 'you' : `u${userId}`))
+      ?? null;
+  };
+
+  const ca = find(c.combatant_a?.user_id);
+  const cb = find(c.combatant_b?.user_id);
+
+  // Si no hay match en combatants (usuario sin personaje), construimos un stub mínimo
+  const stub = (raw, userId) => raw ? {
+    id: userId === currentUserId ? 'you' : `u${userId}`,
+    userId,
+    name:     raw.name ?? 'Combatiente',
+    handle:   raw.handle ?? `u${userId}`,
+    initials: (raw.name ?? 'CB').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(),
+    color:    '#38cdf0',
+    cls:      raw.cls ?? 'forma1',
+    side:     raw.side ?? 'luminoso',
+    saber:    NX.SABERS[raw.saber_color] ?? NX.SABERS.azul,
+    saberName: raw.saber_color ?? 'azul',
+    tier:     raw.tier ?? 'iniciado',
+    wins:     raw.wins ?? 0,
+    losses:   raw.losses ?? 0,
+    winrate:  raw.winrate ?? 0,
+    streak:   raw.streak ?? 0,
+    credits:  raw.credits ?? 0,
+  } : null;
+
+  const fighterA = ca ?? stub(c.combatant_a, c.combatant_a?.user_id);
+  const fighterB = cb ?? stub(c.combatant_b, c.combatant_b?.user_id);
+
+  const when = c.scheduled_at
+    ? new Date(c.scheduled_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : 'Por agendar';
+
+  return {
+    id:       c.id,              // número — indica que es un combate real de la BD
+    a:        fighterA?.id ?? `u${c.combatant_a?.user_id}`,
+    b:        fighterB?.id ?? `u${c.combatant_b?.user_id}`,
+    _a:       fighterA,          // objeto completo pre-resuelto
+    _b:       fighterB,
+    oddsA:    c.odds_a,
+    oddsB:    c.odds_b,
+    when,
+    live:     c.live,
+    event:    c.event_name ?? 'Combate Oficial',
+    round:    c.round ?? '—',
+    resolved: c.resolved,
+    winner:   c.winner,
+  };
+}
+
 const SABER_THEME = {
   azul:    { holo: '#3aa0ff', dim: '#2575cc' },
   verde:   { holo: '#34d36a', dim: '#23a04e' },
@@ -39,7 +140,7 @@ const NAV = [
   { id: 'combatientes', label: 'Combatientes', icon: 'roster' },
 ];
 const TITLES = {
-  comando: ['Centro de Comando', 'Tu operación de un vistazo'],
+  comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
   entrenamiento: ['Entrenamiento', 'Asistencia y bitácora diaria'],
   tareas: ['Tareas', 'Plan de entrenamiento dirigido'],
@@ -53,13 +154,13 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const S = useStore();
   const [view, setView] = useState(() => location.hash.slice(1) || 'comando');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [testOpen, setTestOpen] = useState(false);
-  const me = NX.byId('you');
-  // Usa tier del usuario autenticado si está disponible, si no cae al de seed
-  const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? me.tier);
+  const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? '');
   const unread = notifications.filter(n => !n.read).length;
+  const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
 
   const go = (v) => {
     setView(v);
@@ -77,36 +178,62 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     applySaberTheme(S.character.saber);
   }, [S.character.saber]);
 
+  // Sincroniza photo_url del usuario autenticado al store (no persiste en localStorage)
+  useEffect(() => {
+    const photoUrl = user?.character?.photo_url;
+    if (photoUrl && !S.character.photo) {
+      S.setCharacter(ch => ({ ...ch, photo: photoUrl }));
+    }
+  }, [user?.character?.photo_url]);
+
   // Carga notificaciones y suscribe al canal privado de Pusher
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
     const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
     fetch('/api/notifications', { headers })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.data) setNotifications(data.data); })
-      .catch(() => {});
-  }, []);
-
-  // Sincroniza tiers reales desde la DB (sobrescribe los tiers calculados del seed)
-  useEffect(() => {
-    const token = localStorage.getItem('nx-token');
-    const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
-    fetch('/api/combatants', { headers })
-      .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (!data?.combatants) return;
-        const tierMap = Object.fromEntries(data.combatants.map(c => [c.handle, c.tier]));
-        S.setCombatants(prev => prev.map(c => tierMap[c.handle] ? { ...c, tier: tierMap[c.handle] } : c));
+        if (!data?.data) return;
+        setNotifications(data.data);
+        // Show transmissions for recent unread notifications (offline delivery)
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        data.data
+          .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
+          .forEach(n => onTransmision?.({ ...n.data, _notifId: n.id }));
       })
       .catch(() => {});
   }, []);
+
+  // Carga combatientes y combates reales; los fusiona con el seed
+  useEffect(() => {
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+    Promise.all([
+      fetch('/api/combatants', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/combats',    { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([cbData, cmData]) => {
+      let merged = S.combatants;
+      if (cbData?.combatants) {
+        merged = mergeApiCombatants(cbData.combatants, user?.id);
+        S.setCombatants(merged);
+      }
+      if (cmData?.combats?.length) {
+        const normalized = cmData.combats.map(c => normalizeApiCombat(c, merged, user?.id));
+        S.setCombats(prev => {
+          const local = prev.filter(c => typeof c.id === 'string');
+          return [...normalized, ...local];
+        });
+      }
+    });
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id || !window.Echo) return;
     window.Echo.private(`App.Models.User.${user.id}`)
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
-        onTransmision?.(notif);
+        onTransmision?.({ ...notif, _notifId: notif.id });
       });
     return () => window.Echo.leave(`App.Models.User.${user.id}`);
   }, [user?.id]);
@@ -139,10 +266,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     comando: <ComandoView S={S} go={go} user={user} />,
     personaje: <PersonajeView S={S} user={user} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     entrenamiento: <TrainingView S={S} />,
-    tareas: <TareasView S={S} />,
-    eventos: <EventosView S={S} go={go} />,
+    tareas: <TareasView S={S} user={user} />,
+    eventos: <EventosView S={S} go={go} user={user} />,
     ranking: <RankingView S={S} />,
-    combates: <CombatesView S={S} />,
+    combates: <CombatesView S={S} user={user} />,
     combatientes: <CombatientesView S={S} />,
   };
   const [title, sub] = TITLES[view];
@@ -156,10 +283,21 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       <div className={`nx-sidebar-overlay${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
 
       {/* Sidebar */}
-      <aside className={`nx-sidebar${sidebarOpen ? ' open' : ''}`} style={{ width: 210, flexShrink: 0, borderRight: '1px solid var(--holo-line)', background: 'rgba(4,7,15,0.6)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', zIndex: 5 }}>
-        <div style={{ padding: '14px 14px', borderBottom: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 9 }}>
-          <img src="/assets/isotipo.png" alt="" style={{ width: 28, height: 28, filter: 'drop-shadow(0 0 10px rgba(230,179,37,.4))' }} />
-          <div>
+      <aside
+        className={`nx-sidebar${sidebarOpen ? ' open' : ''}`}
+        style={{
+          width: sidebarCollapsed ? 52 : 210, flexShrink: 0,
+          borderRight: '1px solid var(--holo-line)',
+          background: 'rgba(4,7,15,0.6)', backdropFilter: 'blur(8px)',
+          position: 'sticky', top: 0, height: '100vh',
+          display: 'flex', flexDirection: 'column', zIndex: 5,
+          overflow: 'hidden', transition: 'width .22s cubic-bezier(.4,0,.2,1)',
+        }}
+      >
+        {/* Logo */}
+        <div style={{ padding: '14px', borderBottom: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 9, minHeight: 57, flexShrink: 0 }}>
+          <img src="/assets/isotipo.png" alt="" style={{ width: 28, height: 28, flexShrink: 0, filter: 'drop-shadow(0 0 10px rgba(230,179,37,.4))' }} />
+          <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity .15s' }}>
             <div className="nx-display" style={{ fontSize: 15, letterSpacing: '0.08em', color: 'var(--txt)' }}>NÉXUS</div>
             <div className="nx-data" style={{ fontSize: 8, color: 'var(--holo)', letterSpacing: '0.22em' }}>HOLOCRON DE COMBATE</div>
           </div>
@@ -169,54 +307,97 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           {NAV.map((n) => {
             const active = view === n.id;
             return (
-              <button key={n.id} onClick={() => go(n.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 'var(--radius-md)',
-                border: '1px solid', borderColor: active ? 'var(--holo-line)' : 'transparent', cursor: 'pointer', textAlign: 'left',
-                background: active ? 'color-mix(in srgb, var(--holo) 12%, transparent)' : 'transparent',
-                color: active ? 'var(--txt)' : 'var(--txt-dim)', fontFamily: 'var(--font-data)', fontSize: 12,
-                letterSpacing: '0.04em', transition: 'all .15s', position: 'relative' }}
+              <button
+                key={n.id}
+                onClick={() => go(n.id)}
+                title={sidebarCollapsed ? n.label : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center',
+                  gap: sidebarCollapsed ? 0 : 9,
+                  justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                  padding: sidebarCollapsed ? '8px' : '8px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid', borderColor: active ? 'var(--holo-line)' : 'transparent',
+                  cursor: 'pointer', textAlign: 'left',
+                  background: active ? 'color-mix(in srgb, var(--holo) 12%, transparent)' : 'transparent',
+                  color: active ? 'var(--txt)' : 'var(--txt-dim)',
+                  fontFamily: 'var(--font-data)', fontSize: 12, letterSpacing: '0.04em',
+                  transition: 'all .15s', position: 'relative',
+                }}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--txt)'; }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--txt-dim)'; }}>
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--txt-dim)'; }}
+              >
                 {active && <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 2, borderRadius: 2, background: 'var(--holo)', boxShadow: '0 0 8px var(--holo)' }} />}
-                <span style={{ color: active ? 'var(--holo)' : 'inherit' }}><Icon name={n.icon} size={15} /></span>
-                {n.label}
+                <span style={{ color: active ? 'var(--holo)' : 'inherit', flexShrink: 0 }}><Icon name={n.icon} size={15} /></span>
+                <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, maxWidth: sidebarCollapsed ? 0 : 200, transition: 'opacity .15s, max-width .22s' }}>
+                  {n.label}
+                </span>
               </button>
             );
           })}
         </nav>
 
+        {/* Botón colapsar */}
+        <div style={{ padding: '6px 8px', borderTop: '1px solid var(--holo-line)' }}>
+          <button
+            onClick={() => setSidebarCollapsed(c => !c)}
+            title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+            className="nx-sidebar-collapse-btn"
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center',
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-end',
+              gap: 6, padding: '6px 4px',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--txt-faint)', borderRadius: 'var(--radius-sm)',
+              transition: 'color .15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--txt)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--txt-faint)'; }}
+          >
+            {!sidebarCollapsed && <span className="nx-data" style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Colapsar</span>}
+            <span style={{ transform: sidebarCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform .22s', display: 'flex' }}>
+              <Icon name="chevron" size={14} />
+            </span>
+          </button>
+        </div>
+
         {/* Rol — solo visible para caballero, maestro y gran maestro */}
         {canTutor && (
-          <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)' }}>
-            <div className="nx-kicker" style={{ fontSize: 8, marginBottom: 5, paddingLeft: 2 }}>Modo de vista</div>
+          <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)', overflow: 'hidden' }}>
+            {!sidebarCollapsed && <div className="nx-kicker" style={{ fontSize: 8, marginBottom: 5, paddingLeft: 2, whiteSpace: 'nowrap' }}>Modo de vista</div>}
             <div style={{ display: 'flex', gap: 3, background: 'rgba(4,7,15,0.6)', padding: 3, borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)' }}>
               {['pupilo', 'tutor'].map(r => (
-                <button key={r} onClick={() => S.setRole(r)} style={{
+                <button key={r} onClick={() => S.setRole(r)} title={sidebarCollapsed ? r : undefined} style={{
                   flex: 1, padding: '5px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  background: S.role === r ? 'var(--pompeyo-naranja)' : 'transparent', color: S.role === r ? '#fff' : 'var(--txt-dim)', fontWeight: 700 }}>
-                  {r}
+                  background: S.role === r ? 'var(--pompeyo-naranja)' : 'transparent',
+                  color: S.role === r ? '#fff' : 'var(--txt-dim)', fontWeight: 700,
+                  whiteSpace: 'nowrap', overflow: 'hidden',
+                }}>
+                  {sidebarCollapsed ? r[0].toUpperCase() : r}
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Avatar c={me} size={30} ring />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name ?? S.character.name}</div>
+        <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+          <Avatar c={me} size={30} ring style={{ flexShrink: 0 }} />
+          <div style={{ minWidth: 0, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity .15s' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name ?? S.character.name}</div>
             <div className="nx-data" style={{ fontSize: 9, color: 'var(--holo)' }}>{S.role === 'tutor' ? 'Tutor' : '@' + S.character.handle}</div>
           </div>
-          <button
-            onClick={onLogout}
-            title="Cerrar sesión"
-            className="nx-btn nx-btn-ghost"
-            style={{ padding: 7, color: 'var(--txt-faint)', flexShrink: 0 }}
-            onMouseEnter={e => e.currentTarget.style.color = '#ff6b6b'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--txt-faint)'}>
-            <Icon name="logout" size={15} />
-          </button>
+          {!sidebarCollapsed && (
+            <button
+              onClick={onLogout}
+              title="Cerrar sesión"
+              className="nx-btn nx-btn-ghost"
+              style={{ padding: 7, color: 'var(--txt-faint)', flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.color = '#ff6b6b'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--txt-faint)'}>
+              <Icon name="logout" size={15} />
+            </button>
+          )}
         </div>
       </aside>
 

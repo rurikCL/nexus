@@ -114,15 +114,9 @@ class DatabaseSeeder extends Seeder
         }
 
         // ─── Tutor-Pupil relationships (Diego es tutor de todos los demás) ───
-        $diego->pupils()->attach([
-            $valentina->id,
-            $carlos->id,
-            $maria->id,
-            $javiera->id,
-            $tomas->id,
-            $ignacia->id,
-            $felipe->id,
-        ]);
+        foreach ([$valentina, $carlos, $maria, $javiera, $tomas, $ignacia, $felipe] as $pupil) {
+            $pupil->update(['tutor_id' => $diego->id]);
+        }
 
         // ─── Events ───────────────────────────────────────────────────
         $eventsData = [

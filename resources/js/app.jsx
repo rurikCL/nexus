@@ -27,6 +27,14 @@ function Root() {
   };
 
   const dismissTransmision = () => {
+    const notif = transmisionActive.current;
+    if (notif?._notifId) {
+      const token = localStorage.getItem('nx-token');
+      fetch(`/api/notifications/${notif._notifId}/read`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     const next = transmisionQueue.current.shift() ?? null;
     transmisionActive.current = next;
     setTransmision(next);

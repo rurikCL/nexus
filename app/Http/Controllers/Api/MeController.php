@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class MeController extends Controller
 {
@@ -37,6 +38,9 @@ class MeController extends Controller
                 'stats'       => $character->stats,
                 'gold'        => $character->gold,
                 'winrate'     => $character->winrate,
+                'photo_url'   => $character->photo
+                    ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
+                    : null,
             ] : null,
         ]);
     }

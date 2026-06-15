@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { Empty, classIcon } from './Comando.jsx';
+import { ChallengeModal } from './Combates.jsx';
 
 /* NÉXUS — Combatientes (roster) + perfil público compartible */
 
@@ -9,6 +11,7 @@ export function CombatientesView({ S }) {
   const [q, setQ] = useState('');
   const [tierF, setTierF] = useState('todos');
   const [profile, setProfile] = useState(null);
+  const [challengeTarget, setChallengeTarget] = useState(null);
 
   const list = S.combatants.filter(c => {
     if (tierF !== 'todos' && c.tier !== tierF) return false;
@@ -68,7 +71,19 @@ export function CombatientesView({ S }) {
         </div>
       </Panel>
 
-      {profile && <PublicProfile c={profile} S={S} onClose={() => setProfile(null)} />}
+      {profile && (
+        <PublicProfile
+          c={profile} S={S}
+          onClose={() => setProfile(null)}
+          onChallenge={(c) => { setProfile(null); setChallengeTarget(c.id); }}
+        />
+      )}
+      <ChallengeModal
+        open={!!challengeTarget}
+        initialOppId={challengeTarget}
+        onClose={() => setChallengeTarget(null)}
+        S={S}
+      />
     </div>
   );
 }
@@ -83,10 +98,10 @@ export function Mini({ label, value, tone }) {
 }
 
 /* ---- Perfil público (vista externa compartible) ---- */
-export function PublicProfile({ c, S, onClose }) {
-  const cls = NX.CLASSES.find(x => x.id === c.cls);
-  const tasks = NX.tasks.filter(t => t.pupil === c.id && t.status !== 'completada');
-  const recent = NX.combats.filter(m => m.a === c.id || m.b === c.id);
+export function PublicProfile({ c, S, onClose, onChallenge }) {
+  const cls    = NX.CLASSES.find(x => x.id === c.cls);
+  const tasks  = S.tasks.filter(t => (t.pupil === c.id || t.pupil_id === c.userId) && t.status !== 'completada');
+  const recent = S.combats.filter(m => m.a === c.id || m.b === c.id || m._a?.userId === c.userId || m._b?.userId === c.userId);
   const STAT_LABEL = { fuerza: 'Fuerza', velocidad: 'Velocidad', tecnica: 'Técnica', defensa: 'Defensa', foco: 'Foco' };
 
   useEffect(() => {
@@ -94,8 +109,8 @@ export function PublicProfile({ c, S, onClose }) {
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
-  return (
-    <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'start center', padding: 24, overflow: 'auto' }}>
+  return createPortal(
+    <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'start center', padding: '40px 24px 24px', overflowY: 'auto' }}>
       <div className="nx-panel solid nx-fade" onMouseDown={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: '100%', overflow: 'hidden' }}>
         {/* Banner vista pública */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'color-mix(in srgb, var(--holo) 12%, transparent)', borderBottom: '1px solid var(--holo-line)' }}>
@@ -107,13 +122,23 @@ export function PublicProfile({ c, S, onClose }) {
         </div>
 
         {/* Hero */}
-        <div style={{ padding: 24, display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'center', background: `radial-gradient(600px 200px at 80% -40%, ${c.color}22, transparent)` }}>
-          <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', padding: 24, display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'center', overflow: 'hidden', background: `radial-gradient(600px 200px at 80% -40%, ${c.color}22, transparent)` }}>
+          {/* Foto de fondo */}
+          {c.photo_url && (
+            <img src={c.photo_url} alt="" aria-hidden="true" style={{
+              position: 'absolute', top: 0, bottom: 0, right: 0, width: '55%',
+              objectFit: 'cover', objectPosition: 'center top',
+              maskImage: 'linear-gradient(to right, transparent 0%, black 45%)',
+              WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 45%)',
+              opacity: 0.28, pointerEvents: 'none', userSelect: 'none',
+            }} />
+          )}
+          <div style={{ position: 'relative', zIndex: 1 }}>
             <div className="nx-avatar nx-hex" style={{ width: 110, height: 122, background: `linear-gradient(135deg, ${c.color}, ${c.color}88)`, fontSize: 40, border: 'none' }}>{c.initials}</div>
             <div className="nx-hex" style={{ position: 'absolute', inset: -2, border: `1.5px solid ${c.saber}`, boxShadow: `0 0 22px -6px ${c.saber}`, pointerEvents: 'none' }} />
             {c.gold && <img src="/assets/isotipo.png" alt="" style={{ position: 'absolute', bottom: -6, right: -10, width: 40, height: 40, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }} />}
           </div>
-          <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ position: 'relative', zIndex: 1, flex: 1, minWidth: 220 }}>
             <div className="nx-kicker">{c.sector || 'Academia Orbital'}{c.sponsor ? ` · ${c.sponsor}` : ''}</div>
             <h1 className="nx-display" style={{ fontSize: 28, margin: '4px 0 8px' }}>{c.name}</h1>
             <p style={{ fontSize: 13, color: 'var(--txt-dim)', margin: '0 0 12px', maxWidth: 380, fontStyle: 'italic' }}>"{c.bio}"</p>
@@ -190,7 +215,7 @@ export function PublicProfile({ c, S, onClose }) {
               <div className="nx-kicker" style={{ marginBottom: 12 }}>Cartelera</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {recent.map(m => {
-                  const opp = NX.byId(m.a === c.id ? m.b : m.a);
+                  const opp = m.a === c.id ? (m._b ?? S.byId(m.b)) : (m._a ?? S.byId(m.a));
                   return (
                     <div key={m.id} className="nx-panel" style={{ padding: 11, display: 'flex', alignItems: 'center', gap: 11 }}>
                       <Avatar c={opp} size={30} />
@@ -204,11 +229,14 @@ export function PublicProfile({ c, S, onClose }) {
           )}
 
           {c.id !== 'you' && (
-            <Btn kind="accent" icon="swords" onClick={() => { onClose(); toast(`Reta a ${c.name} desde Combates`, { tone: 'info', icon: 'swords' }); }} style={{ justifyContent: 'center' }}>Retar a {c.name.split(' ')[0]}</Btn>
+            <Btn kind="accent" icon="swords" onClick={() => onChallenge?.(c)} style={{ justifyContent: 'center' }}>
+              Retar a {c.name.split(' ')[0]}
+            </Btn>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
