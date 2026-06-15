@@ -14,7 +14,58 @@ export function classIcon(clsId) {
   return c ? c.icon : 'shield';
 }
 
+/* ===================== GRIP HANDLE + COL TOGGLE ===================== */
+function GripHandle() {
+  return (
+    <div
+      title="Arrastrar widget"
+      style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 4px',
+        padding: '4px 6px', cursor: 'grab', opacity: 0.28,
+        userSelect: 'none', alignSelf: 'center', flexShrink: 0,
+      }}
+    >
+      {Array.from({ length: 6 }, (_, i) => (
+        <span key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--txt)', display: 'block' }} />
+      ))}
+    </div>
+  );
+}
+
+function ColToggle({ cols, onToggle }) {
+  const full = cols === 2;
+  return (
+    <button
+      title={full ? 'Dividir en media columna' : 'Expandir a columna completa'}
+      onClick={e => { e.stopPropagation(); onToggle(); }}
+      onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,.18)'; }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = '0.28'; e.currentTarget.style.borderColor = 'transparent'; }}
+      style={{
+        background: 'none', border: '1px solid transparent', padding: '3px 5px',
+        cursor: 'pointer', display: 'flex', gap: 2, alignItems: 'center',
+        opacity: 0.28, borderRadius: 4, flexShrink: 0,
+      }}
+    >
+      {/* izq siempre sólido; der sólido=2col, vacío=1col */}
+      <span style={{ display: 'block', width: 6, height: 9, borderRadius: 2, background: 'var(--txt)' }} />
+      <span style={{
+        display: 'block', width: 6, height: 9, borderRadius: 2,
+        background: full ? 'var(--txt)' : 'transparent',
+        border: full ? 'none' : '1.5px solid rgba(255,255,255,.45)',
+      }} />
+    </button>
+  );
+}
+
 /* ===================== COMANDO ===================== */
+const WIDGET_DEFAULT_ORDER = [
+  { id: 'kpis',    cols: 2 },
+  { id: 'combate', cols: 1 },
+  { id: 'tareas',  cols: 1 },
+  { id: 'eventos', cols: 1 },
+  { id: 'ranking', cols: 1 },
+];
+
 export function ComandoView({ S, go, user }) {
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
@@ -34,9 +85,56 @@ export function ComandoView({ S, go, user }) {
     { k: 'Asistencia', v: `${loggedCount} días`,      icon: 'calendar', tone: 'var(--green-500)' },
   ];
 
+  const [widgetOrder, setWidgetOrder] = useState(WIDGET_DEFAULT_ORDER);
+  const [draggingId,  setDraggingId]  = useState(null);
+  const [overIdx,     setOverIdx]     = useState(null);
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+    fetch('/api/layout/comando', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.widgets?.length) return;
+        // compatibilidad con formato antiguo (string[])
+        setWidgetOrder(d.widgets.map(w => typeof w === 'string' ? { id: w, cols: 2 } : w));
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveOrder = (order) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const token = localStorage.getItem('nx-token');
+      fetch('/api/layout/comando', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ widgets: order }),
+      }).catch(() => {});
+    }, 800);
+  };
+
+  const applyDrop = (toIdx) => {
+    const fromIdx = widgetOrder.findIndex(w => w.id === draggingId);
+    if (fromIdx < 0 || fromIdx === toIdx) return;
+    const next = [...widgetOrder];
+    const [item] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, item);
+    setWidgetOrder(next);
+    saveOrder(next);
+  };
+
+  const toggleCols = (id) => {
+    const next = widgetOrder.map(w => w.id === id ? { ...w, cols: w.cols === 2 ? 1 : 2 } : w);
+    setWidgetOrder(next);
+    saveOrder(next);
+  };
+
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
-      {/* Hero */}
+      {/* Hero — fijo, sin drag */}
       <section className="nx-panel" style={{ overflow: 'hidden' }}>
         <div style={{ display: 'flex', gap: 22, padding: 22, flexWrap: 'wrap', alignItems: 'center' }}>
           <Avatar c={me} size={86} ring />
@@ -50,93 +148,158 @@ export function ComandoView({ S, go, user }) {
               <span className="nx-chip dim" style={{ borderColor: `${sab}66` }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: sab, boxShadow: `0 0 8px ${sab}` }} />Sable {ch.saber}</span>
             </div>
           </div>
-          {nextCombat && (
-            <div className="nx-panel solid" style={{ padding: 16, minWidth: 230 }}>
-              <div className="nx-kicker" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {nextCombat.live && <span className="nx-live-dot" />} Tu próximo combate
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0' }}>
-                <Avatar c={opp} size={36} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>vs {opp.name}</div>
-                  <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)' }}>{nextCombat.round} · {nextCombat.when}</div>
-                </div>
-              </div>
-              <Btn kind="accent" icon="swords" sm onClick={() => go('combates')} style={{ width: '100%', justifyContent: 'center' }}>Ver combate</Btn>
-            </div>
-          )}
         </div>
       </section>
 
-      {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        {KPIS.map((k) => (
-          <div key={k.k} className="nx-panel" style={{ padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div className="nx-kicker">{k.k}</div>
-              <span style={{ color: k.tone }}><Icon name={k.icon} size={17} /></span>
+      {/* Widgets reordenables — grilla de 2 columnas */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' }}>
+        {widgetOrder.map(({ id, cols }, idx) => {
+          const isDragging = draggingId === id;
+          const isOver    = overIdx === idx && !isDragging;
+
+          const panelRight = (extra) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {extra}
+              <ColToggle cols={cols} onToggle={() => toggleCols(id)} />
+              <GripHandle />
             </div>
-            <div className="nx-num" style={{ fontSize: 30, color: k.tone, marginTop: 6, lineHeight: 1 }}>{k.v}</div>
-            {k.sub && <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>{k.sub}</div>}
-          </div>
-        ))}
-      </div>
+          );
 
-      <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, alignItems: 'start' }}>
-        {/* Tareas activas */}
-        <Panel title="Tareas Asignadas" kicker="Tutor · Diego Fuentes" icon="tasks"
-          right={<Btn sm icon="arrow" iconRight={null} onClick={() => go('tareas')}>Ver todas</Btn>}>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {myTasks.length === 0 && <Empty label="Sin Tareas" />}
-            {myTasks.map((t) => (
-              <div key={t.id} className="nx-panel solid" style={{ padding: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{t.title}</div>
-                  <Chip tone="dim" icon="clock">{t.due}</Chip>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9 }}>
-                  <div className="nx-bar" style={{ flex: 1 }}><i style={{ width: `${t.progress}%` }} /></div>
-                  <span className="nx-num" style={{ fontSize: 12, color: 'var(--holo)' }}>{t.progress}%</span>
-                  <Chip tone="gold" icon="coin">+{t.reward}</Chip>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <div style={{ display: 'grid', gap: 18 }}>
-          {/* Próximos eventos */}
-          <Panel title="Próximos Eventos" kicker="Presentaciones" icon="star"
-            right={<Btn sm onClick={() => go('eventos')}>Más</Btn>}>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {S.events.filter(e => e.status !== 'REALIZADO').slice(0, 3).map((e) => (
-                <div key={e.id} style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
-                  <span style={{ width: 4, alignSelf: 'stretch', borderRadius: 4, background: e.banner }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.name}</div>
-                    <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>{e.date}</div>
+          const content = ({
+            combate: (
+              <Panel title="Próximo Combate" kicker="Arena" icon="swords"
+                right={panelRight(<Btn sm onClick={() => go('combates')}>Arena</Btn>)}>
+                {nextCombat ? (
+                  <div style={{ display: 'grid', gap: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <Avatar c={opp} size={48} ring />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 16 }}>vs {opp?.name}</div>
+                        <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', marginTop: 3 }}>
+                          {nextCombat.round}
+                        </div>
+                        {nextCombat.when && (
+                          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 1 }}>
+                            {nextCombat.when}
+                          </div>
+                        )}
+                      </div>
+                      {nextCombat.live && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#ff2d45', fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.12em' }}>
+                          <span className="nx-live-dot" />EN VIVO
+                        </div>
+                      )}
+                    </div>
+                    <Btn kind="accent" icon="swords" onClick={() => go('combates')} style={{ width: '100%', justifyContent: 'center' }}>
+                      Ir al combate
+                    </Btn>
                   </div>
-                  <Chip tone={e.mine ? 'green' : e.status === 'ABIERTO' ? 'green' : 'dim'}>{e.mine ? 'Inscrito' : e.status}</Chip>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <Empty label="Sin combate agendado" />
+                    <Btn sm icon="target" onClick={() => go('combatientes')} style={{ width: '100%', justifyContent: 'center' }}>
+                      Buscar rival
+                    </Btn>
+                  </div>
+                )}
+              </Panel>
+            ),
+            kpis: (
+              <Panel title="Estadísticas" kicker="Temporada activa" icon="trending" right={panelRight(null)}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+                  {KPIS.map((k) => (
+                    <div key={k.k} style={{ padding: '12px 14px', background: 'rgba(255,255,255,.03)', borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div className="nx-kicker">{k.k}</div>
+                        <span style={{ color: k.tone }}><Icon name={k.icon} size={15} /></span>
+                      </div>
+                      <div className="nx-num" style={{ fontSize: 28, color: k.tone, marginTop: 6, lineHeight: 1 }}>{k.v}</div>
+                      {k.sub && <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>{k.sub}</div>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </Panel>
+              </Panel>
+            ),
+            tareas: (
+              <Panel title="Tareas Asignadas" kicker="Tutor · Diego Fuentes" icon="tasks"
+                right={panelRight(<Btn sm icon="arrow" iconRight={null} onClick={() => go('tareas')}>Ver todas</Btn>)}>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {myTasks.length === 0 && <Empty label="Sin Tareas" />}
+                  {myTasks.map((t) => (
+                    <div key={t.id} className="nx-panel solid" style={{ padding: 13 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{t.title}</div>
+                        <Chip tone="dim" icon="clock">{t.due}</Chip>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9 }}>
+                        <div className="nx-bar" style={{ flex: 1 }}><i style={{ width: `${t.progress}%` }} /></div>
+                        <span className="nx-num" style={{ fontSize: 12, color: 'var(--holo)' }}>{t.progress}%</span>
+                        <Chip tone="gold" icon="coin">+{t.reward}</Chip>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            ),
+            eventos: (
+              <Panel title="Próximos Eventos" kicker="Presentaciones" icon="star"
+                right={panelRight(<Btn sm onClick={() => go('eventos')}>Más</Btn>)}>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {S.events.filter(e => e.status !== 'REALIZADO').slice(0, 3).map((e) => (
+                    <div key={e.id} style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
+                      <span style={{ width: 4, alignSelf: 'stretch', borderRadius: 4, background: e.banner }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.name}</div>
+                        <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>{e.date}</div>
+                      </div>
+                      <Chip tone={e.mine ? 'green' : e.status === 'ABIERTO' ? 'green' : 'dim'}>{e.mine ? 'Inscrito' : e.status}</Chip>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            ),
+            ranking: (
+              <Panel title="Top Ranking" kicker="Temporada 3" icon="trophy"
+                right={panelRight(<Btn sm onClick={() => go('ranking')}>Ladder</Btn>)}>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {S.ranking.slice(0, 4).map((c, i) => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className="nx-num" style={{ fontSize: 15, width: 22, color: i === 0 ? 'var(--pompeyo-oro)' : 'var(--txt-faint)' }}>{i + 1}</span>
+                      <Avatar c={c} size={28} />
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: c.id === 'you' ? 700 : 500, color: c.id === 'you' ? 'var(--pompeyo-naranja)' : 'var(--txt)' }}>{c.name}</span>
+                      <span className="nx-num" style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{c.wins}W</span>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            ),
+          })[id];
 
-          {/* Mini ranking */}
-          <Panel title="Top Ranking" kicker="Temporada 3" icon="trophy"
-            right={<Btn sm onClick={() => go('ranking')}>Ladder</Btn>}>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {S.ranking.slice(0, 4).map((c, i) => (
-                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span className="nx-num" style={{ fontSize: 15, width: 22, color: i === 0 ? 'var(--pompeyo-oro)' : 'var(--txt-faint)' }}>{i + 1}</span>
-                  <Avatar c={c} size={28} />
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: c.id === 'you' ? 700 : 500, color: c.id === 'you' ? 'var(--pompeyo-naranja)' : 'var(--txt)' }}>{c.name}</span>
-                  <span className="nx-num" style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{c.wins}W</span>
-                </div>
-              ))}
+          return (
+            <div
+              key={id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', id);
+                setDraggingId(id);
+              }}
+              onDragEnd={() => { setDraggingId(null); setOverIdx(null); }}
+              onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
+              onDrop={(e) => { e.preventDefault(); applyDrop(idx); setOverIdx(null); }}
+              style={{
+                gridColumn: `span ${cols}`,
+                opacity: isDragging ? 0.4 : 1,
+                outline: isOver ? '2px dashed rgba(56,205,240,.45)' : '2px dashed transparent',
+                outlineOffset: 4,
+                borderRadius: 'var(--radius-lg)',
+                transition: 'opacity .15s',
+              }}
+            >
+              {content}
             </div>
-          </Panel>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
