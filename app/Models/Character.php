@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,8 +9,7 @@ class Character extends Model
 {
     protected $fillable = [
         'user_id', 'name', 'handle', 'bio', 'photo', 'cls', 'saber_color', 'side',
-        'sector', 'sponsor', 'joined_year', 'credits', 'wins', 'losses',
-        'streak', 'stats', 'gold',
+        'sector', 'sponsor', 'joined_year', 'credits', 'stats', 'gold',
     ];
 
     protected $casts = [
@@ -19,21 +17,13 @@ class Character extends Model
         'gold'  => 'boolean',
     ];
 
-    protected $appends = ['winrate'];
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    protected function winrate(): Attribute
+    public function statsTemporadas(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
     {
-        return Attribute::make(
-            get: function () {
-                $total = ($this->wins ?? 0) + ($this->losses ?? 0);
-                if ($total === 0) return 0;
-                return round($this->wins / $total * 100);
-            }
-        );
+        return $this->hasManyThrough(StatsTemporada::class, User::class, 'id', 'user_id', 'user_id', 'id');
     }
 }
