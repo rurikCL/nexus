@@ -624,17 +624,25 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
           </Chip>}
         >
           <div style={{ position: 'relative', minHeight: 420 }}>
-            {/* fondo tipo mapa */}
+            {/* fondo imagen del planeta */}
+            {planeta.imagen && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: `url(${planeta.imagen})`,
+                backgroundSize: 'cover', backgroundPosition: 'center',
+                borderRadius: 8, opacity: 0.28,
+              }} />
+            )}
+            {/* overlay tono azulado + rejilla */}
             <div style={{
-              position: 'absolute', inset: 0,
-              backgroundImage: planeta.imagen ? `url(${planeta.imagen})` : 'none',
-              backgroundSize: 'cover', backgroundPosition: 'center',
-              borderRadius: 8, opacity: planeta.imagen ? 0.35 : 0,
-            }} />
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: 'radial-gradient(ellipse at 60% 40%, rgba(56,205,240,0.06) 0%, transparent 70%)',
-              borderRadius: 8,
+              position: 'absolute', inset: 0, borderRadius: 8,
+              background: 'radial-gradient(ellipse at 60% 40%, rgba(56,205,240,0.10) 0%, rgba(4,10,30,0.45) 70%)',
+              backgroundImage: [
+                'radial-gradient(ellipse at 60% 40%, rgba(56,205,240,0.10) 0%, rgba(4,10,30,0.45) 70%)',
+                'linear-gradient(rgba(56,205,240,0.07) 1px, transparent 1px)',
+                'linear-gradient(90deg, rgba(56,205,240,0.07) 1px, transparent 1px)',
+              ].join(', '),
+              backgroundSize: 'auto, 48px 48px, 48px 48px',
             }} />
 
             {/* grid de zonas */}
@@ -665,7 +673,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                       borderRadius: 8, padding: '10px 8px', cursor: 'pointer',
                       display: 'flex', flexDirection: 'column', alignItems: 'center',
                       gap: 4, textAlign: 'center', transition: 'all 0.2s',
-                      color: 'var(--txt)',
+                      color: 'var(--txt)', position: 'relative', overflow: 'hidden',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.boxShadow = `0 0 16px 4px ${hs.border}55`;
@@ -676,11 +684,19 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                       e.currentTarget.style.transform = 'none';
                     }}
                   >
-                    <Icon name="target" size={16} style={{ color: hs.text }} />
-                    <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', lineHeight: 1.2 }}>
+                    {z.imagen && (
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        backgroundImage: `url(${z.imagen})`,
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        opacity: 0.30, borderRadius: 7,
+                      }} />
+                    )}
+                    <Icon name="target" size={16} style={{ color: hs.text, position: 'relative', zIndex: 1 }} />
+                    <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', lineHeight: 1.2, position: 'relative', zIndex: 1 }}>
                       {z.nombre}
                     </span>
-                    <span style={{ fontSize: 9, color: hs.text, fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
+                    <span style={{ fontSize: 9, color: hs.text, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', position: 'relative', zIndex: 1 }}>
                       {hs.label}
                     </span>
                   </button>
@@ -712,17 +728,38 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                     style={{
                       background: hs.bg, border: `1px solid ${hs.border}66`,
                       borderRadius: 'var(--radius-md)',
-                      padding: '10px 12px', cursor: 'pointer', textAlign: 'left',
+                      padding: '8px 10px', cursor: 'pointer', textAlign: 'left',
                       transition: 'all 0.2s', color: 'var(--txt)',
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = hs.border; }}
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = hs.border + '66'; }}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>{z.nombre}</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 10, color: hs.text, fontFamily: 'var(--font-data)' }}>{hs.label}</span>
-                      {z.faccion && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{z.faccion}</span>}
-                      {z.estrato_social && <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{z.estrato_social}</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {z.imagen ? (
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 6, flexShrink: 0,
+                          backgroundImage: `url(${z.imagen})`,
+                          backgroundSize: 'cover', backgroundPosition: 'center',
+                          border: `1px solid ${hs.border}55`,
+                        }} />
+                      ) : (
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 6, flexShrink: 0,
+                          background: hs.bg, border: `1px solid ${hs.border}44`,
+                          display: 'grid', placeItems: 'center',
+                        }}>
+                          <Icon name="target" size={18} style={{ color: hs.text, opacity: 0.5 }} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>{z.nombre}</div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10, color: hs.text, fontFamily: 'var(--font-data)' }}>{hs.label}</span>
+                          {z.faccion && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{z.faccion}</span>}
+                          {z.estrato_social && <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{z.estrato_social}</span>}
+                        </div>
+                      </div>
+                      <Icon name="arrow" size={14} style={{ color: 'var(--holo)', opacity: 0.6, flexShrink: 0 }} />
                     </div>
                   </button>
                 );
