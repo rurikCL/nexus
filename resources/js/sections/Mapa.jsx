@@ -1703,7 +1703,7 @@ function InfoRow({ label, value, color }) {
 }
 
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView({ setMapLocation }) {
+export default function MapaView({ setMapLocation, initialLocation }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
   const [sistema, setSistema]     = useState(null);
@@ -1716,6 +1716,19 @@ export default function MapaView({ setMapLocation }) {
     apiPost('/map/location', loc).catch(() => {});
   }, []);
 
+  /* restaura la última ubicación al volver al Mapa */
+  const hasRestored = useRef(false);
+  useEffect(() => {
+    if (hasRestored.current || !initialLocation?.nivel) return;
+    hasRestored.current = true;
+    const loc = initialLocation;
+    if (loc.sistema_id) setSistema({ id: loc.sistema_id, nombre: loc.sistema_nombre });
+    if (loc.planeta_id) setPlaneta({ id: loc.planeta_id, nombre: loc.planeta_nombre });
+    if (loc.zona_id)    setZona   ({ id: loc.zona_id,    nombre: loc.zona_nombre    });
+    if (loc.lugar_id)   setLugar  ({ id: loc.lugar_id });
+    setNivel(loc.nivel);
+  }, [initialLocation]);
+
   const goGalaxy  = () => {
     setNivel('galaxy'); setSistema(null); setPlaneta(null); setZona(null); setLugar(null);
     updateLocation({ sistema_id: null, planeta_id: null, zona_id: null, lugar_id: null });
@@ -1725,21 +1738,39 @@ export default function MapaView({ setMapLocation }) {
     setNivel('sistema'); setPlaneta(null); setZona(null); setLugar(null);
     if (tgt?.id) {
       updateLocation({ sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null });
-      setMapLocation?.({ nombre: tgt.nombre, nivel: 'sistema' });
+      setMapLocation?.({
+        nombre: tgt.nombre, nivel: 'sistema',
+        sistema_id: tgt.id, sistema_nombre: tgt.nombre,
+        planeta_id: null, planeta_nombre: null,
+        zona_id: null, zona_nombre: null,
+        lugar_id: null, lugar_nombre: null,
+      });
     }
   };
   const goPlaneta = (tgt) => {
     setNivel('planeta'); setZona(null); setLugar(null);
     if (tgt?.id) {
       updateLocation({ sistema_id: sistema?.id ?? null, planeta_id: tgt.id, zona_id: null, lugar_id: null });
-      setMapLocation?.({ nombre: tgt.nombre, nivel: 'planeta' });
+      setMapLocation?.({
+        nombre: tgt.nombre, nivel: 'planeta',
+        sistema_id: sistema?.id ?? null, sistema_nombre: sistema?.nombre ?? null,
+        planeta_id: tgt.id, planeta_nombre: tgt.nombre,
+        zona_id: null, zona_nombre: null,
+        lugar_id: null, lugar_nombre: null,
+      });
     }
   };
   const goZona = (tgt) => {
     setNivel('zona'); setLugar(null);
     if (tgt?.id) {
       updateLocation({ sistema_id: sistema?.id ?? null, planeta_id: planeta?.id ?? null, zona_id: tgt.id, lugar_id: null });
-      setMapLocation?.({ nombre: tgt.nombre, nivel: 'zona' });
+      setMapLocation?.({
+        nombre: tgt.nombre, nivel: 'zona',
+        sistema_id: sistema?.id ?? null, sistema_nombre: sistema?.nombre ?? null,
+        planeta_id: planeta?.id ?? null, planeta_nombre: planeta?.nombre ?? null,
+        zona_id: tgt.id, zona_nombre: tgt.nombre,
+        lugar_id: null, lugar_nombre: null,
+      });
     }
   };
 
@@ -1751,12 +1782,18 @@ export default function MapaView({ setMapLocation }) {
 
   const handleLugarChange = useCallback((lugarId, lugarNombre) => {
     updateLocation({
-      sistema_id: sistema?.id  ?? null,
-      planeta_id: planeta?.id  ?? null,
-      zona_id:    zona?.id     ?? null,
+      sistema_id: sistema?.id ?? null,
+      planeta_id: planeta?.id ?? null,
+      zona_id:    zona?.id    ?? null,
       lugar_id:   lugarId,
     });
-    setMapLocation?.({ nombre: lugarNombre, nivel: 'lugar' });
+    setMapLocation?.({
+      nombre: lugarNombre, nivel: 'lugar',
+      sistema_id: sistema?.id ?? null, sistema_nombre: sistema?.nombre ?? null,
+      planeta_id: planeta?.id ?? null, planeta_nombre: planeta?.nombre ?? null,
+      zona_id:    zona?.id    ?? null, zona_nombre:    zona?.nombre    ?? null,
+      lugar_id:   lugarId,             lugar_nombre:   lugarNombre,
+    });
   }, [sistema, planeta, zona, setMapLocation, updateLocation]);
 
   /* breadcrumbs dinámicos */

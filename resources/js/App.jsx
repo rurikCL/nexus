@@ -170,6 +170,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [testOpen, setTestOpen] = useState(false);
+  const [mapLocation, setMapLocation] = useState(null);
   const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? '');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
@@ -189,6 +190,12 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   useEffect(() => {
     applySaberTheme(S.character.saber);
   }, [S.character.saber]);
+
+  // Sincroniza la ubicación del mapa desde el perfil del usuario
+  useEffect(() => {
+    const loc = user?.character?.map_location;
+    if (loc?.nombre) setMapLocation(loc);
+  }, [user?.id]);
 
   // Sincroniza el personaje del usuario autenticado al store cuando cambia la sesión
   useEffect(() => {
@@ -301,7 +308,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
-    mapa: <MapaView />,
+    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} />,
     configuracion: <AdminView />,
   };
   const [title, sub] = TITLES[view] ?? ['', ''];
@@ -477,6 +484,24 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
             <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', margin: 0 }}>{title}</h1>
             <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.04em' }}>{sub}</div>
           </div>
+          {mapLocation?.nombre && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px',
+              background: 'rgba(56,205,240,0.06)',
+              border: '1px solid rgba(56,205,240,0.18)',
+              borderRadius: 8, flexShrink: 0, maxWidth: 180, overflow: 'hidden',
+            }}>
+              <Icon name="target" size={11} style={{ color: 'var(--holo)', opacity: 0.7, flexShrink: 0 }} />
+              <span style={{
+                fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
+                letterSpacing: '0.05em', whiteSpace: 'nowrap',
+                overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {mapLocation.nombre.toUpperCase()}
+              </span>
+            </div>
+          )}
           <div className="nx-panel" style={{ padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ color: 'var(--pompeyo-oro)' }}><Icon name="coin" size={14} /></span>
             <span className="nx-num" style={{ fontSize: 14, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(S.credits)}</span>
