@@ -12,6 +12,18 @@ const apiFetch = (path) =>
     return r.json();
   });
 
+const mediaUrl = (path) => {
+  if (!path) return null;
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
+
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/storage/')) return cleanPath;
+  if (cleanPath.startsWith('/admin/')) return `/storage${cleanPath}`;
+  if (cleanPath.startsWith('/public/')) return cleanPath.replace('/public/', '/storage/');
+
+  return `/storage${cleanPath}`;
+};
+
 const HOSTILIDAD_COLOR = {
   seguro:   { bg: 'rgba(16,185,129,0.18)',  border: '#10b981', text: '#10b981',  label: 'Seguro'   },
   bajo:     { bg: 'rgba(56,205,240,0.15)',   border: '#38cdf0', text: '#38cdf0',  label: 'Bajo'     },
@@ -596,6 +608,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
   if (!planeta) return null;
 
   const zonas = planeta.zonas ?? [];
+  const planetaImagen = mediaUrl(planeta.imagen);
 
   /* colores de zona para mapa */
   const getZonaStyle = (z) => hostilidadStyle(z.hostilidad);
@@ -625,10 +638,10 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
         >
           <div style={{ position: 'relative', minHeight: 420 }}>
             {/* fondo imagen del planeta */}
-            {planeta.imagen && (
+            {planetaImagen && (
               <div style={{
                 position: 'absolute', inset: 0,
-                backgroundImage: `url(${planeta.imagen})`,
+                backgroundImage: `url(${planetaImagen})`,
                 backgroundSize: 'cover', backgroundPosition: 'center',
                 borderRadius: 8, opacity: 0.28,
               }} />
@@ -663,6 +676,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
               {zonas.map((z, i) => {
                 const hs = getZonaStyle(z);
                 const pos = GRID_POS[i % GRID_POS.length];
+                const zonaImagen = mediaUrl(z.imagen);
                 return (
                   <button
                     key={z.id}
@@ -684,10 +698,10 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                       e.currentTarget.style.transform = 'none';
                     }}
                   >
-                    {z.imagen && (
+                    {zonaImagen && (
                       <div style={{
                         position: 'absolute', inset: 0,
-                        backgroundImage: `url(${z.imagen})`,
+                        backgroundImage: `url(${zonaImagen})`,
                         backgroundSize: 'cover', backgroundPosition: 'center',
                         opacity: 0.30, borderRadius: 7,
                       }} />
@@ -723,6 +737,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {zonas.map((z) => {
                 const hs = hostilidadStyle(z.hostilidad);
+                const zonaImagen = mediaUrl(z.imagen);
                 return (
                   <button key={z.id} onClick={() => onSelectZona(z)}
                     style={{
@@ -735,10 +750,10 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = hs.border + '66'; }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {z.imagen ? (
+                      {zonaImagen ? (
                         <div style={{
                           width: 44, height: 44, borderRadius: 6, flexShrink: 0,
-                          backgroundImage: `url(${z.imagen})`,
+                          backgroundImage: `url(${zonaImagen})`,
                           backgroundSize: 'cover', backgroundPosition: 'center',
                           border: `1px solid ${hs.border}55`,
                         }} />
@@ -797,12 +812,40 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 
   const hs = hostilidadStyle(zona.hostilidad);
   const lugares = zona.lugares ?? [];
+  const zonaImagen = mediaUrl(zona.imagen);
 
   return (
     <div className="nx-fade">
       <BreadcrumbNav crumbs={[...breadcrumbs, { label: zona.nombre }]} />
 
-      <div style={{ marginTop: 16 }}>
+      <div style={{
+        marginTop: 16,
+        position: 'relative',
+        borderRadius: 12,
+        overflow: 'hidden',
+      }}>
+        {zonaImagen && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: `url(${zonaImagen})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.22,
+          }} />
+        )}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse at 58% 38%, rgba(56,205,240,0.09) 0%, rgba(4,10,30,0.55) 70%)',
+          backgroundImage: [
+            'radial-gradient(ellipse at 58% 38%, rgba(56,205,240,0.09) 0%, rgba(4,10,30,0.55) 70%)',
+            'linear-gradient(rgba(56,205,240,0.06) 1px, transparent 1px)',
+            'linear-gradient(90deg, rgba(56,205,240,0.06) 1px, transparent 1px)',
+          ].join(', '),
+          backgroundSize: 'auto, 48px 48px, 48px 48px',
+          pointerEvents: 'none',
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, padding: 12 }}>
         {/* header de zona */}
         <div className="nx-panel solid" style={{
           padding: '20px 24px', marginBottom: 20,
@@ -810,8 +853,8 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
           background: hs.bg,
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-            {zona.imagen && (
-              <img src={zona.imagen} alt={zona.nombre} style={{
+            {zonaImagen && (
+              <img src={zonaImagen} alt={zona.nombre} style={{
                 width: 100, height: 100, objectFit: 'cover', borderRadius: 8,
                 border: `1px solid ${hs.border}55`, flexShrink: 0,
               }} />
@@ -848,6 +891,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
             <LugarCard key={l.id} lugar={l} onClick={() => onSelectLugar(l)} />
           ))}
         </div>
+        </div>
       </div>
     </div>
   );
@@ -856,6 +900,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 /* ─── CARD LUGAR ────────────────────────────────────────── */
 function LugarCard({ lugar, onClick }) {
   const rc = rarezaColor(lugar.rareza);
+  const lugarImagen = mediaUrl(lugar.imagen);
   return (
     <button onClick={onClick}
       style={{
@@ -876,12 +921,12 @@ function LugarCard({ lugar, onClick }) {
       }}
     >
       <div style={{
-        height: 120, background: lugar.imagen
-          ? `url(${lugar.imagen}) center/cover`
+        height: 120, background: lugarImagen
+          ? `url(${lugarImagen}) center/cover`
           : 'linear-gradient(135deg, rgba(56,205,240,0.08), rgba(4,7,15,0.8))',
         position: 'relative',
       }}>
-        {!lugar.imagen && (
+        {!lugarImagen && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.3 }}>
             <Icon name="target" size={40} style={{ color: 'var(--holo)' }} />
           </div>
@@ -937,19 +982,43 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
   if (!lugar) return null;
 
   const npcs = lugar.npcs ?? [];
+  const lugarImagen = mediaUrl(lugar.imagen);
 
   return (
     <div className="nx-fade">
       <BreadcrumbNav crumbs={[...breadcrumbs, { label: lugar.nombre }]} />
 
+      <div style={{
+        position: 'relative',
+        borderRadius: 12,
+        overflow: 'hidden',
+        marginTop: 16,
+        marginBottom: 24,
+      }}>
+        {lugarImagen && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: `url(${lugarImagen})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.24,
+          }} />
+        )}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, rgba(4,7,15,0.20) 0%, rgba(4,7,15,0.82) 100%)',
+          pointerEvents: 'none',
+        }} />
+
       {/* header */}
-      <div style={{ display: 'grid', gridTemplateColumns: lugar.imagen ? '280px 1fr' : '1fr', gap: 20, marginTop: 16, marginBottom: 24 }}>
-        {lugar.imagen && (
+      <div style={{ display: 'grid', gridTemplateColumns: lugarImagen ? '280px 1fr' : '1fr', gap: 20, position: 'relative', zIndex: 1, padding: 12 }}>
+        {lugarImagen && (
           <div style={{
             borderRadius: 12, overflow: 'hidden', height: 200,
             border: '1px solid var(--holo-line)',
           }}>
-            <img src={lugar.imagen} alt={lugar.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={lugarImagen} alt={lugar.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         )}
         <div className="nx-panel solid" style={{ padding: '20px 24px' }}>
@@ -980,6 +1049,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
           )}
         </div>
       </div>
+      </div>
 
       {/* NPCs */}
       <div className="nx-kicker" style={{ marginBottom: 12 }}>PERSONAJES EN ESTE LUGAR — {npcs.length}</div>
@@ -1001,6 +1071,8 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
 
 /* ─── CARD NPC ──────────────────────────────────────────── */
 function NpcCard({ npc, onClick }) {
+  const npcImagen = mediaUrl(npc.imagen);
+  const npcMiniImagen = mediaUrl(npc.imagen_mini);
   return (
     <button onClick={onClick}
       style={{
@@ -1023,16 +1095,16 @@ function NpcCard({ npc, onClick }) {
       {/* retrato */}
       <div style={{
         height: 140, position: 'relative',
-        background: npc.imagen
-          ? `url(${npc.imagen}) center top/cover`
+        background: npcImagen
+          ? `url(${npcImagen}) center top/cover`
           : 'linear-gradient(160deg, rgba(56,205,240,0.12), rgba(4,7,15,0.9))',
       }}>
-        {!npc.imagen && npc.imagen_mini && (
-          <img src={npc.imagen_mini} alt={npc.nombre} style={{
+        {!npcImagen && npcMiniImagen && (
+          <img src={npcMiniImagen} alt={npc.nombre} style={{
             width: '100%', height: '100%', objectFit: 'cover',
           }} />
         )}
-        {!npc.imagen && !npc.imagen_mini && (
+        {!npcImagen && !npcMiniImagen && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.3 }}>
             <Icon name="user" size={44} style={{ color: 'var(--holo)' }} />
           </div>
@@ -1202,7 +1274,7 @@ function DialogoRPG({ npc, onClose }) {
           background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
         }}>
           {npc.imagen_mini || npc.imagen
-            ? <img src={npc.imagen_mini || npc.imagen} alt={npc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <img src={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} alt={npc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />
           }
         </div>
