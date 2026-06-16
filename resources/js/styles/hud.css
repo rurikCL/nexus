@@ -206,6 +206,50 @@ select.nx-select option { background: var(--space-panel-solid); }
 
 a { color: var(--holo); }
 
+/* ── Mapa Galáctico — Starfield CSS ──────────────────────── */
+@keyframes nx-twinkle-slow { 0%,100% { opacity: 1; } 50% { opacity: 0.52; } }
+@keyframes nx-twinkle-mid  { 0%,100% { opacity: 1; } 30% { opacity: 0.48; } 70% { opacity: 0.82; } }
+@keyframes nx-twinkle-fast { 0%,100% { opacity: 0.9; } 50% { opacity: 0.42; } }
+@keyframes nx-star-glow    { 0%,100% { opacity: 0.82; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.2); } }
+
+.nx-starfield { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; overflow: hidden; }
+
+.nx-nebulae, .nx-stars-bg, .nx-stars-mid, .nx-stars-bright {
+  position: absolute; inset: 0;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.nx-stars-bg     { animation: nx-twinkle-slow 13s ease-in-out infinite; }
+.nx-stars-mid    { animation: nx-twinkle-mid   8s ease-in-out infinite; }
+.nx-stars-bright { animation: nx-twinkle-fast  5s ease-in-out infinite; }
+
+.nx-star-featured {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: nx-star-glow var(--dur, 5s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.nx-star-featured::before,
+.nx-star-featured::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  pointer-events: none;
+  border-radius: 1px;
+  opacity: 0.42;
+}
+.nx-star-featured::before {
+  width: 38px; height: 1px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, currentColor 38%, currentColor 62%, transparent);
+}
+.nx-star-featured::after {
+  width: 1px; height: 38px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(180deg, transparent, currentColor 38%, currentColor 62%, transparent);
+}
+
 /* ============================================================
    RESPONSIVE — Layout principal
    ============================================================ */

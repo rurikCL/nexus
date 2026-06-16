@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 
 /* ─── helpers ─────────────────────────────────────────── */
@@ -76,14 +76,101 @@ function buildPositions(sistemas) {
   });
 }
 
+/* ─── COMPONENTE STARFIELD REUTILIZABLE ────────────────── */
+function Starfield() {
+  const { nebulaeCSS, bgCSS, midCSS, brightCSS, featuredStars } = useMemo(() => {
+    /* 6 nebulosas radiales — azul / púrpura / naranja */
+    const nebulaeCSS = [
+      'radial-gradient(ellipse 64% 50% at 12% 25%, rgba(0,47,186,0.055) 0%, rgba(0,47,186,0.018) 55%, transparent 100%)',
+      'radial-gradient(ellipse 60% 46% at 80% 60%, rgba(80,0,180,0.040) 0%, rgba(80,0,180,0.013) 55%, transparent 100%)',
+      'radial-gradient(ellipse 76% 58% at 50% 15%, rgba(0,30,100,0.060) 0%, rgba(0,30,100,0.020) 55%, transparent 100%)',
+      'radial-gradient(ellipse 44% 38% at 90% 18%, rgba(160,40,0,0.028) 0%, rgba(160,40,0,0.009) 55%, transparent 100%)',
+      'radial-gradient(ellipse 56% 44% at 18% 82%, rgba(0,60,160,0.035) 0%, rgba(0,60,160,0.011) 55%, transparent 100%)',
+      'radial-gradient(ellipse 50% 40% at 60% 80%, rgba(60,0,140,0.030) 0%, rgba(60,0,140,0.010) 55%, transparent 100%)',
+    ].join(', ');
+
+    /* helper: radial-gradient para una estrella puntual */
+    const dot = (x, y, r, rgb, a, bloom = 0) => bloom > 0
+      ? `radial-gradient(circle at ${x}% ${y}%, rgba(${rgb},${a}) 0px, rgba(${rgb},${a}) ${r}px, rgba(${rgb},0.10) ${bloom}px, transparent calc(${bloom}px + 1px))`
+      : `radial-gradient(circle at ${x}% ${y}%, rgba(${rgb},${a}) 0px, rgba(${rgb},${a}) ${r}px, transparent calc(${r}px + 0.5px))`;
+
+    /* capa 0 — 500 estrellas de fondo, tiny */
+    const bgCSS = Array.from({ length: 500 }, (_, i) => {
+      const x = (hashf(i * 7   + 1)  * 100).toFixed(2);
+      const y = (hashf(i * 13  + 3)  * 100).toFixed(2);
+      const r = (hashf(i * 3   + 5)  * 0.50 + 0.15).toFixed(2);
+      const a = (hashf(i * 17  + 7)  * 0.27 + 0.08).toFixed(2);
+      return dot(x, y, r, '219,230,245', a);
+    }).join(', ');
+
+    /* capa 1 — 140 estrellas medias */
+    const midCSS = Array.from({ length: 140 }, (_, i) => {
+      const x = (hashf(i * 11  + 101) * 100).toFixed(2);
+      const y = (hashf(i * 19  + 103) * 100).toFixed(2);
+      const r = (hashf(i * 7   + 107) * 0.70 + 0.70).toFixed(2);
+      const a = (hashf(i * 29  + 109) * 0.30 + 0.30).toFixed(2);
+      return dot(x, y, r, '219,230,245', a);
+    }).join(', ');
+
+    /* capa 2 — 55 estrellas brillantes con tinte de color y bloom */
+    const BRIGHT_TINTS = ['219,230,245', '180,210,255', '255,220,160', '200,170,255'];
+    const brightCSS = Array.from({ length: 55 }, (_, i) => {
+      const x    = (hashf(i * 13  + 201) * 100).toFixed(2);
+      const y    = (hashf(i * 23  + 203) * 100).toFixed(2);
+      const r    = (hashf(i * 9   + 207) * 1.40 + 1.40).toFixed(2);
+      const a    = (hashf(i * 37  + 209) * 0.30 + 0.55).toFixed(2);
+      const rgb  = BRIGHT_TINTS[Math.floor(hashf(i * 41 + 211) * BRIGHT_TINTS.length)];
+      const bloom = (parseFloat(r) * 2.8).toFixed(1);
+      return dot(x, y, r, rgb, a, bloom);
+    }).join(', ');
+
+    /* capa 3 — 14 estrellas destacadas (DOM real → diffraction en CSS) */
+    const FEAT_TINTS = [
+      { rgb: '255,255,255', hex: '#ffffff' },
+      { rgb: '230,240,255', hex: '#e6f0ff' },
+      { rgb: '255,235,195', hex: '#ffebc3' },
+    ];
+    const featuredStars = Array.from({ length: 14 }, (_, i) => {
+      const x    = (hashf(i * 17  + 301) * 86 + 7).toFixed(2);
+      const y    = (hashf(i * 29  + 303) * 72 + 18).toFixed(2);
+      const r    = (hashf(i * 11  + 307) * 1.80 + 2.20).toFixed(1);
+      const tint = FEAT_TINTS[Math.floor(hashf(i * 47 + 311) * FEAT_TINTS.length)];
+      const dur  = (hashf(i * 53  + 313) * 3.0 + 3.5).toFixed(1);
+      const del  = (hashf(i * 59  + 317) * 4.0).toFixed(1);
+      const glow = (parseFloat(r) * 3.5).toFixed(0);
+      return { x, y, r, tint, dur, del, glow };
+    });
+
+    return { nebulaeCSS, bgCSS, midCSS, brightCSS, featuredStars };
+  }, []);
+
+  return (
+    <>
+      <div className="nx-nebulae"      style={{ backgroundImage: nebulaeCSS }} />
+      <div className="nx-stars-bg"     style={{ backgroundImage: bgCSS }} />
+      <div className="nx-stars-mid"    style={{ backgroundImage: midCSS,    animationDelay: '-3s' }} />
+      <div className="nx-stars-bright" style={{ backgroundImage: brightCSS, animationDelay: '-1.5s' }} />
+      {featuredStars.map((s, i) => (
+        <div key={i} className="nx-star-featured" style={{
+          left: `${s.x}%`, top: `${s.y}%`,
+          width: `${s.r * 2}px`, height: `${s.r * 2}px`,
+          background: `radial-gradient(circle at 40% 35%, #fff, rgba(${s.tint.rgb},0.85) 40%, rgba(${s.tint.rgb},0.2) 75%, transparent)`,
+          boxShadow: `0 0 ${s.glow}px ${Math.ceil(s.glow / 3)}px rgba(${s.tint.rgb},0.2)`,
+          color: s.tint.hex,
+          '--dur': `${s.dur}s`,
+          '--delay': `-${s.del}s`,
+        }} />
+      ))}
+    </>
+  );
+}
+
 /* ─── VISTA GALAXIA ────────────────────────────────────── */
 function GalaxiaView({ onSelectSistema }) {
   const [sistemas, setSistemas]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [traveling, setTraveling]   = useState(null);
   const [hovered, setHovered]       = useState(null);
-  const canvasRef                   = useRef(null);
-  const rafRef                      = useRef(null);
 
   useEffect(() => {
     apiFetch('/map/sistemas')
@@ -92,122 +179,7 @@ function GalaxiaView({ onSelectSistema }) {
       .finally(() => setLoading(false));
   }, []);
 
-  /* ── canvas: fondo espacial con nebulosas y estrellas en capas ── */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    let stars = [], nebulae = [], t = 0;
-
-    const init = () => {
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      if (!w || !h) return;
-      canvas.width  = w;
-      canvas.height = h;
-
-      /* nebulosas — gradientes radiales suaves */
-      nebulae = [
-        { x: w * 0.12, y: h * 0.25, r: w * 0.32, color: [0, 47, 186],  a: 0.055 },
-        { x: w * 0.80, y: h * 0.60, r: w * 0.30, color: [80, 0, 180],  a: 0.040 },
-        { x: w * 0.50, y: h * 0.15, r: w * 0.38, color: [0, 30, 100],  a: 0.060 },
-        { x: w * 0.90, y: h * 0.18, r: w * 0.22, color: [160, 40, 0],  a: 0.028 },
-        { x: w * 0.18, y: h * 0.82, r: w * 0.28, color: [0, 60, 160],  a: 0.035 },
-        { x: w * 0.60, y: h * 0.80, r: w * 0.25, color: [60, 0, 140],  a: 0.030 },
-      ];
-
-      /* capa 0 — estrellas de fondo, tiny, estáticas */
-      const bg = Array.from({ length: 500 }, () => ({
-        x: Math.random() * w, y: Math.random() * h,
-        r: Math.random() * 0.65 + 0.15,
-        a: Math.random() * 0.35 + 0.08,
-        sp: 0, ph: 0, layer: 0, col: null,
-      }));
-
-      /* capa 1 — estrellas medias, parpadeo suave */
-      const mid = Array.from({ length: 140 }, () => ({
-        x: Math.random() * w, y: Math.random() * h,
-        r: Math.random() * 0.9 + 0.7,
-        a: Math.random() * 0.4 + 0.3,
-        sp: Math.random() * 0.7 + 0.2, ph: Math.random() * Math.PI * 2,
-        layer: 1, col: null,
-      }));
-
-      /* capa 2 — estrellas brillantes, parpadeo fuerte, algunas con tinte */
-      const TINTS = ['219,230,245', '180,210,255', '255,220,160', '200,170,255'];
-      const bright = Array.from({ length: 55 }, () => ({
-        x: Math.random() * w, y: Math.random() * h,
-        r: Math.random() * 1.4 + 1.4,
-        a: Math.random() * 0.35 + 0.55,
-        sp: Math.random() * 1.4 + 0.6, ph: Math.random() * Math.PI * 2,
-        layer: 2,
-        col: TINTS[Math.floor(Math.random() * TINTS.length)],
-      }));
-
-      /* capa 3 — estrellas destacadas grandes con destellos en cruz */
-      const featured = Array.from({ length: 14 }, () => ({
-        x: Math.random() * w, y: Math.random() * h,
-        r: Math.random() * 1.8 + 2.2,
-        a: 0.85,
-        sp: Math.random() * 1.8 + 0.8, ph: Math.random() * Math.PI * 2,
-        layer: 3,
-        col: ['255,255,255', '230,240,255', '255,235,195'][Math.floor(Math.random() * 3)],
-      }));
-
-      stars = [...bg, ...mid, ...bright, ...featured];
-    };
-
-    const draw = () => {
-      const ctx = canvas.getContext('2d');
-      const { width: w, height: h } = canvas;
-      ctx.clearRect(0, 0, w, h);
-
-      /* nebulosas */
-      nebulae.forEach(({ x, y, r, color: [cr, cg, cb], a }) => {
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0,   `rgba(${cr},${cg},${cb},${a})`);
-        g.addColorStop(0.55,`rgba(${cr},${cg},${cb},${a * 0.35})`);
-        g.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
-        ctx.fillStyle = g;
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
-      });
-
-      /* estrellas */
-      stars.forEach((s) => {
-        const flicker = s.sp > 0 ? Math.sin(t * s.sp + s.ph) * 0.28 : 0;
-        const alpha = Math.max(0.04, Math.min(1, s.a + flicker));
-        const rgb = s.col ?? '219,230,245';
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${rgb},${alpha})`;
-        ctx.fill();
-
-        /* destellos en cruz para estrellas destacadas */
-        if (s.layer === 3 && alpha > 0.6) {
-          const spike = s.r * 5;
-          const sa = (alpha - 0.5) * 0.5;
-          ctx.strokeStyle = `rgba(${rgb},${sa})`;
-          ctx.lineWidth   = 0.6;
-          ctx.beginPath();
-          ctx.moveTo(s.x - spike, s.y); ctx.lineTo(s.x + spike, s.y);
-          ctx.moveTo(s.x, s.y - spike); ctx.lineTo(s.x, s.y + spike);
-          ctx.stroke();
-        }
-      });
-
-      t += 0.012;
-      rafRef.current = requestAnimationFrame(draw);
-    };
-
-    const ro = new ResizeObserver(() => { init(); });
-    ro.observe(canvas);
-    init();
-    draw();
-
-    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
-  }, []);
-
+  /* ── Starfield CSS — posiciones determinísticas via hashf ── */
   const handleTravel = (sistema) => {
     setTraveling(sistema.id);
     setTimeout(() => { setTraveling(null); onSelectSistema(sistema); }, 1800);
@@ -218,14 +190,13 @@ function GalaxiaView({ onSelectSistema }) {
   const positions = buildPositions(sistemas);
 
   return (
-    <div style={{ position: 'relative', minHeight: '82vh', overflow: 'hidden', borderRadius: 12 }}>
+    <div style={{ position: 'relative', minHeight: '82vh', overflow: 'hidden', borderRadius: 12,
+      background: 'radial-gradient(ellipse at 70% -5%, rgba(0,47,186,0.18) 0%, transparent 55%), linear-gradient(180deg,#07101f,#04070f)' }}>
 
-      {/* ── fondo canvas ── */}
-      <canvas ref={canvasRef} style={{
-        position: 'absolute', inset: 0, width: '100%', height: '100%',
-        pointerEvents: 'none', borderRadius: 12,
-        background: 'radial-gradient(ellipse at 70% -5%, rgba(0,47,186,0.18) 0%, transparent 55%), linear-gradient(180deg,#07101f,#04070f)',
-      }} />
+      {/* ── starfield CSS — 4 capas + 6 nebulosas + diffraction ── */}
+      <div className="nx-starfield">
+        <Starfield />
+      </div>
 
       {/* ── viñeta ── */}
       <div style={{
@@ -439,8 +410,14 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginTop: 16 }}>
         {/* ── visor del sistema ── */}
-        <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: 500 }}>
-          <div className="nx-panel-head">
+        <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: 500,
+          background: 'linear-gradient(180deg,#07101f,#04070f)' }}>
+          
+          <div className="nx-starfield">
+            <Starfield />
+          </div>
+
+          <div className="nx-panel-head" style={{ position: 'relative', zIndex: 5 }}>
             <span style={{ color: 'var(--holo)' }}><Icon name="star" size={15} /></span>
             <div style={{ flex: 1 }}>
               <div className="nx-kicker">SISTEMA SOLAR</div>
