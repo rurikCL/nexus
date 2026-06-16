@@ -30,6 +30,7 @@ const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 
 const CLASE_OPTS      = ['forma1', 'forma2', 'forma3', 'forma4', 'forma5', 'forma6', 'forma7'];
 const LADO_OPTS       = ['luminoso', 'oscuro', 'neutral'];
 const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'mercader', 'mision', 'jefe'];
+const TIPO_LUGAR_OPTS = ['exterior', 'interior'];
 
 const H_COLOR = {
   seguro: '#10b981', bajo: '#38cdf0', medio: '#E6B325',
@@ -123,13 +124,16 @@ const ENTITY_CONFIG = {
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
       { key: 'zona', label: 'Zona', resolve: r => r.zona?.nombre ?? '—', dim: true },
+      { key: 'tipo', label: 'Tipo', dim: true },
       { key: 'rareza', label: 'Rareza', type: 'rareza' },
       { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
     ],
     fields: [
       { key: 'ZonaID',        label: 'Zona',             type: 'relatedSelect', related: 'zonas', required: true, span: 2 },
       { key: 'nombre',        label: 'Nombre',           type: 'text', required: true, span: 2 },
+      { key: 'tipo',          label: 'Tipo',             type: 'select', options: TIPO_LUGAR_OPTS },
       { key: 'rareza',        label: 'Rareza',           type: 'select', options: RAREZA_OPTS },
+      { key: 'pase',          label: 'Pase requerido',   type: 'relatedSelect', related: 'rol_objetos' },
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'lugarNorteID',  label: 'Norte →',          type: 'relatedSelect', related: 'lugares' },
       { key: 'lugarSurID',    label: 'Sur →',            type: 'relatedSelect', related: 'lugares' },
@@ -138,7 +142,7 @@ const ENTITY_CONFIG = {
       { key: 'imagen',        label: 'Imagen',           type: 'file', span: 2 },
       { key: 'historia',      label: 'Historia',         type: 'textarea', span: 2 },
     ],
-    defaults: { visible: true },
+    defaults: { visible: true, tipo: 'exterior' },
   },
 
   npcs: {
@@ -244,6 +248,42 @@ const ENTITY_CONFIG = {
       { key: 'wins',       label: 'Victorias',   type: 'number', min: 0 },
       { key: 'losses',     label: 'Derrotas',    type: 'number', min: 0 },
       { key: 'bio',        label: 'Bio',         type: 'textarea', span: 2 },
+    ],
+    defaults: {},
+  },
+
+  rol_objetos: {
+    label: 'Objetos de Rol', icon: 'box', group: 'SISTEMA',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'tipo', label: 'Tipo', dim: true },
+      { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
+    ],
+    fields: [
+      { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
+      { key: 'tipo',        label: 'Tipo',        type: 'text' },
+      { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
+      { key: 'activo',      label: 'Activo',      type: 'toggle' },
+      { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
+      { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
+      { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
+    ],
+    defaults: { activo: true },
+  },
+
+  rol_character_objeto: {
+    label: 'Asignación Objetos', icon: 'link', group: 'SISTEMA',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'character', label: 'Personaje', resolve: r => r.character?.handle || r.character?.name || '—', bold: true },
+      { key: 'rol_objeto', label: 'Objeto', resolve: r => r.rol_objeto?.nombre ?? '—' },
+      { key: 'created_at', label: 'Asignado', resolve: r => r.created_at?.slice(0, 10), dim: true },
+    ],
+    fields: [
+      { key: 'character_id',  label: 'Personaje', type: 'relatedSelect', related: 'personajes', required: true },
+      { key: 'rol_objeto_id', label: 'Objeto',    type: 'relatedSelect', related: 'rol_objetos', required: true },
     ],
     defaults: {},
   },

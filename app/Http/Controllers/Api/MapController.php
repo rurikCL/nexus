@@ -11,6 +11,7 @@ use App\Models\MapZona;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class MapController extends Controller
 {
@@ -57,7 +58,7 @@ class MapController extends Controller
         return response()->json(['zona' => $zona]);
     }
 
-    public function lugar(int $id): JsonResponse
+    public function lugar(Request $request, int $id): JsonResponse
     {
         $lugar = MapLugar::where('visible', true)
             ->with([
@@ -69,6 +70,29 @@ class MapController extends Controller
                 'oeste:id,nombre',
             ])
             ->findOrFail($id);
+
+        $character = $request->user()?->character;
+        $requiredPassId = $lugar->pase;
+
+        if ($requiredPassId && $character) {
+            $hasPass = $character->rolObjetos()
+                ->where('rol_objetos.id', $requiredPassId)
+                ->exists();
+
+            if (! $hasPass) {
+                return response()->json([
+                    'message' => 'No posees el objeto requerido para entrar a este lugar.',
+                    'required_pass_id' => $requiredPassId,
+                ], 403);
+            }
+        }
+
+        if ($requiredPassId && ! $character) {
+            return response()->json([
+                'message' => 'No posees el objeto requerido para entrar a este lugar.',
+                'required_pass_id' => $requiredPassId,
+            ], 403);
+        }
 
         return response()->json(['lugar' => $lugar]);
     }

@@ -12,6 +12,8 @@ use App\Models\MapNpc;
 use App\Models\MapPlaneta;
 use App\Models\MapSistema;
 use App\Models\MapZona;
+use App\Models\RolCharacterObjeto;
+use App\Models\RolObjeto;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,14 +23,16 @@ class AdminController extends Controller
     private function model(string $entity): string
     {
         return match ($entity) {
-            'sistemas'   => MapSistema::class,
-            'planetas'   => MapPlaneta::class,
-            'zonas'      => MapZona::class,
-            'lugares'    => MapLugar::class,
-            'npcs'       => MapNpc::class,
-            'naves'      => MapNave::class,
-            'usuarios'   => User::class,
-            'personajes' => Character::class,
+            'sistemas'    => MapSistema::class,
+            'planetas'    => MapPlaneta::class,
+            'zonas'       => MapZona::class,
+            'lugares'     => MapLugar::class,
+            'npcs'        => MapNpc::class,
+            'naves'       => MapNave::class,
+            'usuarios'    => User::class,
+            'personajes'  => Character::class,
+            'rol_objetos' => RolObjeto::class,
+            'rol_character_objeto' => RolCharacterObjeto::class,
             default      => abort(404, "Entidad no reconocida: {$entity}"),
         };
     }
@@ -38,6 +42,7 @@ class AdminController extends Controller
         return match ($entity) {
             'usuarios'   => 'name',
             'personajes' => 'name',
+            'rol_character_objeto' => 'id',
             default      => 'nombre',
         };
     }
@@ -50,6 +55,7 @@ class AdminController extends Controller
             'lugares'    => ['zona:id,nombre'],
             'npcs'       => ['lugar:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
+            'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
             default      => [],
         };
     }

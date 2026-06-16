@@ -800,6 +800,20 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const handleSelectLugar = useCallback(async (lugar) => {
+    try {
+      await apiFetch(`/map/lugares/${lugar.id}`);
+      onSelectLugar(lugar);
+    } catch (error) {
+      if (`${error.message}` === '403') {
+        toast('No posees el pase requerido para entrar a este lugar.', { tone: 'warn', icon: 'shield' });
+        return;
+      }
+
+      toast('Error validando acceso al lugar', { tone: 'error', icon: 'x' });
+    }
+  }, [onSelectLugar]);
+
   useEffect(() => {
     apiFetch(`/map/zonas/${zonaId}`)
       .then((d) => setZona(d.zona))
@@ -812,6 +826,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 
   const hs = hostilidadStyle(zona.hostilidad);
   const lugares = zona.lugares ?? [];
+  const exteriores = lugares.filter((l) => !l.tipo || l.tipo === 'exterior');
   const zonaImagen = mediaUrl(zona.imagen);
 
   return (
@@ -877,18 +892,18 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
           </div>
         </div>
 
-        {/* grid de lugares */}
-        <div className="nx-kicker" style={{ marginBottom: 12 }}>LUGARES VISITABLES — {lugares.length}</div>
+        {/* grid de lugares exteriores */}
+        <div className="nx-kicker" style={{ marginBottom: 12 }}>LUGARES VISITABLES — {exteriores.length}</div>
 
-        {lugares.length === 0 && (
+        {exteriores.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
             Sin lugares registrados en esta zona
           </div>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
-          {lugares.map((l) => (
-            <LugarCard key={l.id} lugar={l} onClick={() => onSelectLugar(l)} />
+          {exteriores.map((l) => (
+            <LugarCard key={l.id} lugar={l} onClick={() => handleSelectLugar(l)} />
           ))}
         </div>
         </div>
@@ -901,6 +916,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 function LugarCard({ lugar, onClick }) {
   const rc = rarezaColor(lugar.rareza);
   const lugarImagen = mediaUrl(lugar.imagen);
+  const tipoLabel = lugar.tipo === 'interior' ? 'Interior' : 'Exterior';
   return (
     <button onClick={onClick}
       style={{
@@ -945,6 +961,10 @@ function LugarCard({ lugar, onClick }) {
       </div>
       <div style={{ padding: '12px 14px', flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)', marginBottom: 6 }}>{lugar.nombre}</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: lugar.historia ? 8 : 0 }}>
+          <Chip tone="dim">{tipoLabel}</Chip>
+          {lugar.pase ? <Chip tone="warning">Requiere pase</Chip> : null}
+        </div>
         {lugar.historia && (
           <p style={{
             fontSize: 11, color: 'var(--txt-dim)', lineHeight: 1.5, margin: 0,
@@ -968,40 +988,67 @@ function LugarCard({ lugar, onClick }) {
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
 function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
-  const [lugar, setLugar] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [navStack, setNavStack] = useState([lugarId]);
+  const [navNames, setNavNames] = useState({});
+  const [lugar, setLugar]       = useState(null);
+  const [loading, setLoading]   = useState(true);
 
+  const currentId = navStack[navStack.length - 1];
+
+  /* reset cuando el lugar raíz cambia desde fuera */
   useEffect(() => {
-    apiFetch(`/map/lugares/${lugarId}`)
-      .then((d) => setLugar(d.lugar))
-      .catch(() => toast('Error cargando lugar', { tone: 'error', icon: 'x' }))
-      .finally(() => setLoading(false));
+    setNavStack([lugarId]);
+    setNavNames({});
   }, [lugarId]);
 
-  if (loading) return <LoadingHUD text="EXPLORANDO UBICACIÓN..." />;
-  if (!lugar) return null;
+  /* carga el lugar actual; cancela si el efecto se limpia antes */
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLugar(null);
+    apiFetch(`/map/lugares/${currentId}`)
+      .then((d) => {
+        if (cancelled) return;
+        setLugar(d.lugar);
+        setNavNames((prev) => ({ ...prev, [currentId]: d.lugar.nombre }));
+      })
+      .catch(() => { if (!cancelled) toast('Error cargando lugar', { tone: 'error', icon: 'x' }); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [currentId]);
 
-  const npcs = lugar.npcs ?? [];
+  const navigateTo = (conn) => setNavStack((prev) => [...prev, conn.id]);
+
+  if (loading || !lugar) return <LoadingHUD text="EXPLORANDO UBICACIÓN..." />;
+
+  const npcs       = lugar.npcs ?? [];
   const lugarImagen = mediaUrl(lugar.imagen);
+
+  /* accesos: norte/sur/este/oeste con datos */
+  const DIRS = [
+    { key: 'norte', label: 'Norte', icon: '↑', data: lugar.norte },
+    { key: 'sur',   label: 'Sur',   icon: '↓', data: lugar.sur   },
+    { key: 'este',  label: 'Este',  icon: '→', data: lugar.este  },
+    { key: 'oeste', label: 'Oeste', icon: '←', data: lugar.oeste },
+  ].filter((d) => d.data);
+
+  /* breadcrumbs dinámicos: ruta base + pasos interiores visitados */
+  const stackCrumbs = navStack.slice(0, -1).map((id, idx) => ({
+    label: navNames[id] ?? '…',
+    onClick: () => setNavStack((prev) => prev.slice(0, idx + 1)),
+  }));
 
   return (
     <div className="nx-fade">
-      <BreadcrumbNav crumbs={[...breadcrumbs, { label: lugar.nombre }]} />
+      <BreadcrumbNav crumbs={[...breadcrumbs, ...stackCrumbs, { label: lugar.nombre }]} />
 
-      <div style={{
-        position: 'relative',
-        borderRadius: 12,
-        overflow: 'hidden',
-        marginTop: 16,
-        marginBottom: 24,
-      }}>
+      {/* fondo imagen del lugar */}
+      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginTop: 16, marginBottom: 24 }}>
         {lugarImagen && (
           <div style={{
-            position: 'absolute',
-            inset: 0,
+            position: 'absolute', inset: 0,
             backgroundImage: `url(${lugarImagen})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: 'cover', backgroundPosition: 'center',
             opacity: 0.24,
           }} />
         )}
@@ -1011,45 +1058,79 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
           pointerEvents: 'none',
         }} />
 
-      {/* header */}
-      <div style={{ display: 'grid', gridTemplateColumns: lugarImagen ? '280px 1fr' : '1fr', gap: 20, position: 'relative', zIndex: 1, padding: 12 }}>
-        {lugarImagen && (
-          <div style={{
-            borderRadius: 12, overflow: 'hidden', height: 200,
-            border: '1px solid var(--holo-line)',
-          }}>
-            <img src={lugarImagen} alt={lugar.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </div>
-        )}
-        <div className="nx-panel solid" style={{ padding: '20px 24px' }}>
-          <div className="nx-kicker" style={{ marginBottom: 4 }}>UBICACIÓN</div>
-          <div className="nx-display" style={{ fontSize: 22, color: 'var(--txt)', marginBottom: 8 }}>{lugar.nombre}</div>
-          {lugar.rareza && (
-            <Chip style={{ color: rarezaColor(lugar.rareza), marginBottom: 10 }}>{lugar.rareza}</Chip>
-          )}
-          {lugar.historia && (
-            <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>
-              {lugar.historia}
-            </p>
-          )}
-
-          {/* conexiones cardinales */}
-          {(lugar.norte || lugar.sur || lugar.este || lugar.oeste) && (
-            <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <div className="nx-kicker" style={{ width: '100%', marginBottom: 4 }}>SALIDAS</div>
-              {[
-                { dir: 'norte', label: '↑ Norte', data: lugar.norte },
-                { dir: 'sur',   label: '↓ Sur',   data: lugar.sur   },
-                { dir: 'este',  label: '→ Este',  data: lugar.este  },
-                { dir: 'oeste', label: '← Oeste', data: lugar.oeste },
-              ].filter(d => d.data).map(({ dir, label, data }) => (
-                <Chip key={dir} icon="arrow" tone="dim">{label}: {data.nombre}</Chip>
-              ))}
+        {/* header info */}
+        <div style={{ display: 'grid', gridTemplateColumns: lugarImagen ? '280px 1fr' : '1fr', gap: 20, position: 'relative', zIndex: 1, padding: 12 }}>
+          {lugarImagen && (
+            <div style={{ borderRadius: 12, overflow: 'hidden', height: 200, border: '1px solid var(--holo-line)' }}>
+              <img src={lugarImagen} alt={lugar.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           )}
+          <div className="nx-panel solid" style={{ padding: '20px 24px' }}>
+            <div className="nx-kicker" style={{ marginBottom: 4 }}>UBICACIÓN</div>
+            <div className="nx-display" style={{ fontSize: 22, color: 'var(--txt)', marginBottom: 8 }}>{lugar.nombre}</div>
+            {lugar.rareza && <Chip style={{ color: rarezaColor(lugar.rareza), marginBottom: 10 }}>{lugar.rareza}</Chip>}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: lugar.historia ? 10 : 0 }}>
+              {lugar.tipo && <Chip tone="dim">{lugar.tipo === 'interior' ? 'Interior' : 'Exterior'}</Chip>}
+              {lugar.pase ? <Chip tone="warning">Pase #{lugar.pase}</Chip> : null}
+            </div>
+            {lugar.historia && (
+              <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{lugar.historia}</p>
+            )}
+          </div>
         </div>
       </div>
-      </div>
+
+      {/* accesos interiores — árbol de recorridos */}
+      {DIRS.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="nx-kicker" style={{ marginBottom: 10 }}>ACCESOS — {DIRS.length}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
+            {DIRS.map(({ key, label, icon, data }) => (
+              <button key={key} onClick={() => navigateTo(data)}
+                style={{
+                  background: 'rgba(56,205,240,0.05)',
+                  border: '1px solid rgba(56,205,240,0.22)',
+                  borderRadius: 10, padding: '12px 14px',
+                  cursor: 'pointer', textAlign: 'left',
+                  transition: 'all 0.2s', color: 'var(--txt)',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(56,205,240,0.13)';
+                  e.currentTarget.style.borderColor = 'var(--holo)';
+                  e.currentTarget.style.boxShadow = '0 0 16px -4px var(--holo)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(56,205,240,0.05)';
+                  e.currentTarget.style.borderColor = 'rgba(56,205,240,0.22)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.transform = 'none';
+                }}
+              >
+                <div style={{
+                  width: 38, height: 38, borderRadius: 8, flexShrink: 0,
+                  background: 'rgba(56,205,240,0.10)',
+                  border: '1px solid rgba(56,205,240,0.30)',
+                  display: 'grid', placeItems: 'center',
+                  fontSize: 18, color: 'var(--holo)',
+                }}>
+                  {icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 2 }}>
+                    {label.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {data.nombre}
+                  </div>
+                </div>
+                <Icon name="arrow" size={12} style={{ color: 'var(--holo)', opacity: 0.6, flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* NPCs */}
       <div className="nx-kicker" style={{ marginBottom: 12 }}>PERSONAJES EN ESTE LUGAR — {npcs.length}</div>

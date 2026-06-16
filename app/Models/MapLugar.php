@@ -19,6 +19,8 @@ class MapLugar extends Model
         'ZonaID',
         'nombre',
         'rareza',
+        'tipo',
+        'pase',
         'lugarNorteID',
         'lugarSurID',
         'lugarEsteID',
@@ -30,6 +32,7 @@ class MapLugar extends Model
 
     protected $casts = [
         'visible' => 'boolean',
+        'pase' => 'integer',
     ];
 
     public function zona(): BelongsTo

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Character extends Model
 {
@@ -31,6 +32,12 @@ class Character extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function rolObjetos(): BelongsToMany
+    {
+        return $this->belongsToMany(RolObjeto::class, 'rol_character_objeto')
+            ->withTimestamps();
     }
 
     public function statsTemporadas(): \Illuminate\Database\Eloquent\Relations\HasManyThrough

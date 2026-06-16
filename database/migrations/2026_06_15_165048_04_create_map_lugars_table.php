@@ -18,6 +18,8 @@ return new class extends Migration
             $table->foreignId('ZonaID')->constrained('map_zonas')->onDelete('cascade');
             $table->string('nombre');
             $table->string('rareza')->nullable();
+            $table->string('tipo')->default('exterior');
+            $table->foreignId('pase')->nullable()->constrained('rol_objetos')->nullOnDelete();
             $table->foreignId('lugarNorteID')->nullable()->constrained('map_lugares')->onDelete('set null');
             $table->foreignId('lugarSurID')->nullable()->constrained('map_lugares')->onDelete('set null');
             $table->foreignId('lugarEsteID')->nullable()->constrained('map_lugares')->onDelete('set null');
