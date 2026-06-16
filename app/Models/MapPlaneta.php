@@ -40,4 +40,9 @@ class MapPlaneta extends Model
     {
         return $this->hasMany(MapZona::class, 'PlanetaID');
     }
+
+    public function presentesPersonajes(): HasMany
+    {
+        return $this->hasMany(Character::class, 'map_planeta_id');
+    }
 }

@@ -42,4 +42,9 @@ class MapZona extends Model
     {
         return $this->hasMany(MapLugar::class, 'ZonaID');
     }
+
+    public function presentesPersonajes(): HasMany
+    {
+        return $this->hasMany(Character::class, 'map_zona_id');
+    }
 }

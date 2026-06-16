@@ -15,6 +15,10 @@ class MeController extends Controller
         $user = $request->user()->load('character');
         $character = $user->character;
 
+        if ($character) {
+            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema']);
+        }
+
         $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
 
         return response()->json([
@@ -42,9 +46,23 @@ class MeController extends Controller
                 'winrate'     => $stats['winrate'],
                 'stats'       => $character->stats,
                 'gold'        => $character->gold,
-                'photo_url'   => $character->photo
+                'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
                     : null,
+                'map_location' => [
+                    'sistema_id' => $character->map_sistema_id,
+                    'planeta_id' => $character->map_planeta_id,
+                    'zona_id'    => $character->map_zona_id,
+                    'lugar_id'   => $character->map_lugar_id,
+                    'nombre'     => $character->mapLugar?->nombre
+                                 ?? $character->mapZona?->nombre
+                                 ?? $character->mapPlaneta?->nombre
+                                 ?? $character->mapSistema?->nombre,
+                    'nivel'      => $character->map_lugar_id  ? 'lugar'
+                                  : ($character->map_zona_id  ? 'zona'
+                                  : ($character->map_planeta_id ? 'planeta'
+                                  : ($character->map_sistema_id ? 'sistema' : null))),
+                ],
             ] : null,
         ]);
     }

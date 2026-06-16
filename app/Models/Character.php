@@ -5,17 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Character extends Model
 {
     protected $fillable = [
         'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'cls', 'saber_color', 'side',
         'sector', 'sponsor', 'joined_year', 'credits', 'stats', 'gold',
+        'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
     ];
 
     protected $casts = [
-        'stats' => 'array',
-        'gold'  => 'boolean',
+        'stats'          => 'array',
+        'gold'           => 'boolean',
+        'map_sistema_id' => 'integer',
+        'map_planeta_id' => 'integer',
+        'map_zona_id'    => 'integer',
+        'map_lugar_id'   => 'integer',
     ];
 
     public function getWinrateAttribute(): int
@@ -32,6 +38,26 @@ class Character extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function mapSistema(): BelongsTo
+    {
+        return $this->belongsTo(MapSistema::class, 'map_sistema_id');
+    }
+
+    public function mapPlaneta(): BelongsTo
+    {
+        return $this->belongsTo(MapPlaneta::class, 'map_planeta_id');
+    }
+
+    public function mapZona(): BelongsTo
+    {
+        return $this->belongsTo(MapZona::class, 'map_zona_id');
+    }
+
+    public function mapLugar(): BelongsTo
+    {
+        return $this->belongsTo(MapLugar::class, 'map_lugar_id');
     }
 
     public function rolObjetos(): BelongsToMany

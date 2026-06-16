@@ -98,6 +98,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/map/zonas/{id}',        [MapController::class, 'zona']);
     Route::get('/map/lugares/{id}',      [MapController::class, 'lugar']);
     Route::get('/map/npcs/{id}',         [MapController::class, 'npc']);
+    Route::post('/map/location',         [MapController::class, 'updateLocation']);
 
     // Admin CRUD
     Route::prefix('admin')->group(function () {
