@@ -64,4 +64,9 @@ class MapLugar extends Model
     {
         return $this->hasMany(MapNpc::class, 'LugarID');
     }
+
+    public function presentesPersonajes(): HasMany
+    {
+        return $this->hasMany(Character::class, 'map_lugar_id');
+    }
 }

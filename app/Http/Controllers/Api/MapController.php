@@ -15,10 +15,16 @@ use Illuminate\Http\Request;
 
 class MapController extends Controller
 {
+    private function presentes(string $fk): \Closure
+    {
+        return fn($q) => $q->select('id', $fk, 'handle', 'photo', 'saber_color');
+    }
+
     public function sistemas(): JsonResponse
     {
         $sistemas = MapSistema::where('visible', true)
             ->withCount('planetas')
+            ->with(['presentesPersonajes' => $this->presentes('map_sistema_id')])
             ->orderBy('nombre')
             ->get();
 
@@ -28,7 +34,10 @@ class MapController extends Controller
     public function sistema(int $id): JsonResponse
     {
         $sistema = MapSistema::where('visible', true)
-            ->with(['planetas' => fn($q) => $q->where('visible', true)])
+            ->with([
+                'planetas' => fn($q) => $q->where('visible', true)
+                    ->with(['presentesPersonajes' => $this->presentes('map_planeta_id')]),
+            ])
             ->findOrFail($id);
 
         return response()->json(['sistema' => $sistema]);
@@ -39,7 +48,8 @@ class MapController extends Controller
         $planeta = MapPlaneta::where('visible', true)
             ->with([
                 'sistema',
-                'zonas' => fn($q) => $q->where('visible', true),
+                'zonas' => fn($q) => $q->where('visible', true)
+                    ->with(['presentesPersonajes' => $this->presentes('map_zona_id')]),
             ])
             ->findOrFail($id);
 
@@ -51,7 +61,8 @@ class MapController extends Controller
         $zona = MapZona::where('visible', true)
             ->with([
                 'planeta.sistema',
-                'lugares' => fn($q) => $q->where('visible', true),
+                'lugares' => fn($q) => $q->where('visible', true)
+                    ->with(['presentesPersonajes' => $this->presentes('map_lugar_id')]),
             ])
             ->findOrFail($id);
 
@@ -63,11 +74,12 @@ class MapController extends Controller
         $lugar = MapLugar::where('visible', true)
             ->with([
                 'zona.planeta.sistema',
-                'npcs' => fn($q) => $q->where('visible', true),
+                'npcs'                => fn($q) => $q->where('visible', true),
                 'norte:id,nombre',
                 'sur:id,nombre',
                 'este:id,nombre',
                 'oeste:id,nombre',
+                'presentesPersonajes' => $this->presentes('map_lugar_id'),
             ])
             ->findOrFail($id);
 
@@ -95,6 +107,23 @@ class MapController extends Controller
         }
 
         return response()->json(['lugar' => $lugar]);
+    }
+
+    public function updateLocation(Request $request): JsonResponse
+    {
+        $character = $request->user()?->character;
+        if (! $character) {
+            return response()->json(['ok' => false], 404);
+        }
+
+        $character->update([
+            'map_sistema_id' => $request->input('sistema_id'),
+            'map_planeta_id' => $request->input('planeta_id'),
+            'map_zona_id'    => $request->input('zona_id'),
+            'map_lugar_id'   => $request->input('lugar_id'),
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function npc(int $id): JsonResponse

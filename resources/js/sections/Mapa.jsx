@@ -12,6 +12,16 @@ const apiFetch = (path) =>
     return r.json();
   });
 
+const apiPost = (path, data) =>
+  fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { ...AUTH(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then((r) => {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  });
+
 const mediaUrl = (path) => {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -86,6 +96,48 @@ function buildPositions(sistemas) {
       top:  `${Math.max(18, Math.min(90, top))}%`,
     };
   });
+}
+
+/* ─── PRESENTES ─────────────────────────────────────────── */
+const SABER_COLORS = {
+  azul: '#3aa0ff', verde: '#34d36a', ambar: '#ffb01f',
+  purpura: '#b15cff', cian: '#26e3e3', blanco: '#eaf2ff', rojo: '#ff2d45',
+};
+
+function PresentesAvatars({ presentes = [], max = 3 }) {
+  if (!presentes.length) return null;
+  const visible = presentes.slice(0, max);
+  const more = presentes.length - max;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      {visible.map((p, i) => {
+        const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
+        const photoUrl = mediaUrl(p.photo);
+        return (
+          <div key={p.id} title={`@${p.handle}`}
+            style={{
+              width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+              backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+              backgroundSize: 'cover', backgroundPosition: 'center',
+              background: photoUrl ? undefined : color,
+              border: '1.5px solid rgba(4,7,15,0.85)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 7, fontWeight: 800, color: '#fff',
+              marginLeft: i > 0 ? -5 : 0,
+              boxShadow: `0 0 5px ${color}55`,
+              textTransform: 'uppercase', letterSpacing: 0,
+            }}>
+            {!photoUrl && (p.handle?.[0] ?? '?')}
+          </div>
+        );
+      })}
+      {more > 0 && (
+        <span style={{ fontSize: 9, color: 'var(--txt-faint)', marginLeft: 5, fontFamily: 'var(--font-data)' }}>
+          +{more}
+        </span>
+      )}
+    </div>
+  );
 }
 
 /* ─── COMPONENTE STARFIELD REUTILIZABLE ────────────────── */
@@ -312,6 +364,9 @@ function GalaxiaView({ onSelectSistema }) {
                   }}>
                     {s.faccion}
                   </span>
+                )}
+                {(s.presentes_personajes ?? []).length > 0 && (
+                  <PresentesAvatars presentes={s.presentes_personajes} max={3} />
                 )}
               </div>
 
@@ -566,9 +621,12 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack }) {
                       }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', marginBottom: 2 }}>{p.nombre}</div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                           {p.clima && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{p.clima}</span>}
                           <span style={{ fontSize: 10, color: h.text, fontFamily: 'var(--font-data)' }}>{h.label}</span>
+                          {(p.presentes_personajes ?? []).length > 0 && (
+                            <PresentesAvatars presentes={p.presentes_personajes} max={3} />
+                          )}
                         </div>
                       </div>
                       <Icon name="arrow" size={14} style={{ color: 'var(--holo)', opacity: 0.6 }} />
@@ -713,6 +771,11 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                     <span style={{ fontSize: 9, color: hs.text, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', position: 'relative', zIndex: 1 }}>
                       {hs.label}
                     </span>
+                    {(z.presentes_personajes ?? []).length > 0 && (
+                      <div style={{ position: 'relative', zIndex: 1 }}>
+                        <PresentesAvatars presentes={z.presentes_personajes} max={2} />
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -768,10 +831,13 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>{z.nombre}</div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                           <span style={{ fontSize: 10, color: hs.text, fontFamily: 'var(--font-data)' }}>{hs.label}</span>
                           {z.faccion && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{z.faccion}</span>}
                           {z.estrato_social && <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{z.estrato_social}</span>}
+                          {(z.presentes_personajes ?? []).length > 0 && (
+                            <PresentesAvatars presentes={z.presentes_personajes} max={3} />
+                          )}
                         </div>
                       </div>
                       <Icon name="arrow" size={14} style={{ color: 'var(--holo)', opacity: 0.6, flexShrink: 0 }} />
@@ -800,18 +866,8 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const handleSelectLugar = useCallback(async (lugar) => {
-    try {
-      await apiFetch(`/map/lugares/${lugar.id}`);
-      onSelectLugar(lugar);
-    } catch (error) {
-      if (`${error.message}` === '403') {
-        toast('No posees el pase requerido para entrar a este lugar.', { tone: 'warn', icon: 'shield' });
-        return;
-      }
-
-      toast('Error validando acceso al lugar', { tone: 'error', icon: 'x' });
-    }
+  const handleSelectLugar = useCallback((lugar) => {
+    onSelectLugar(lugar);
   }, [onSelectLugar]);
 
   useEffect(() => {
@@ -903,7 +959,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
           {exteriores.map((l) => (
-            <LugarCard key={l.id} lugar={l} onClick={() => handleSelectLugar(l)} />
+            <LugarCard key={l.id} lugar={l} presentes={l.presentes_personajes ?? []} onClick={() => handleSelectLugar(l)} />
           ))}
         </div>
         </div>
@@ -913,7 +969,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 }
 
 /* ─── CARD LUGAR ────────────────────────────────────────── */
-function LugarCard({ lugar, onClick }) {
+function LugarCard({ lugar, presentes = [], onClick }) {
   const rc = rarezaColor(lugar.rareza);
   const lugarImagen = mediaUrl(lugar.imagen);
   const tipoLabel = lugar.tipo === 'interior' ? 'Interior' : 'Exterior';
@@ -976,8 +1032,12 @@ function LugarCard({ lugar, onClick }) {
       </div>
       <div style={{
         padding: '8px 14px', borderTop: '1px solid var(--holo-line)',
-        display: 'flex', justifyContent: 'flex-end',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
+        {presentes.length > 0
+          ? <PresentesAvatars presentes={presentes} max={4} />
+          : <span />
+        }
         <span style={{ fontSize: 10, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
           ENTRAR →
         </span>
@@ -987,11 +1047,12 @@ function LugarCard({ lugar, onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
-  const [navStack, setNavStack] = useState([lugarId]);
-  const [navNames, setNavNames] = useState({});
-  const [lugar, setLugar]       = useState(null);
-  const [loading, setLoading]   = useState(true);
+function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs, onLugarChange }) {
+  const [navStack, setNavStack]     = useState([lugarId]);
+  const [navNames, setNavNames]     = useState({});
+  const [lugar, setLugar]           = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   const currentId = navStack[navStack.length - 1];
 
@@ -1006,20 +1067,79 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
     let cancelled = false;
     setLoading(true);
     setLugar(null);
+    setAccessDenied(false);
     apiFetch(`/map/lugares/${currentId}`)
       .then((d) => {
         if (cancelled) return;
         setLugar(d.lugar);
         setNavNames((prev) => ({ ...prev, [currentId]: d.lugar.nombre }));
+        onLugarChange?.(currentId, d.lugar.nombre);
       })
-      .catch(() => { if (!cancelled) toast('Error cargando lugar', { tone: 'error', icon: 'x' }); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (String(err.message) === '403') {
+          setAccessDenied(true);
+        } else {
+          toast('Error cargando lugar', { tone: 'error', icon: 'x' });
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [currentId]);
 
   const navigateTo = (conn) => setNavStack((prev) => [...prev, conn.id]);
 
-  if (loading || !lugar) return <LoadingHUD text="EXPLORANDO UBICACIÓN..." />;
+  /* breadcrumbs dinámicos: ruta base + pasos interiores visitados */
+  const stackCrumbs = navStack.slice(0, -1).map((id, idx) => ({
+    label: navNames[id] ?? '…',
+    onClick: () => setNavStack((prev) => prev.slice(0, idx + 1)),
+  }));
+
+  const goBack = navStack.length > 1
+    ? () => setNavStack((prev) => prev.slice(0, -1))
+    : onBack;
+
+  if (loading) return <LoadingHUD text="EXPLORANDO UBICACIÓN..." />;
+
+  /* ── pantalla de acceso denegado ── */
+  if (accessDenied) return (
+    <div className="nx-fade">
+      <BreadcrumbNav crumbs={[...breadcrumbs, ...stackCrumbs, { label: 'Acceso restringido' }]} />
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', minHeight: 420, gap: 28, textAlign: 'center',
+        marginTop: 24,
+      }}>
+        {/* ícono puerta con brillo rojo */}
+        <div style={{
+          width: 100, height: 100, borderRadius: 20,
+          background: 'rgba(220,38,38,0.09)',
+          border: '2px solid rgba(220,38,38,0.42)',
+          boxShadow: '0 0 48px 14px rgba(220,38,38,0.12), inset 0 0 24px rgba(220,38,38,0.07)',
+          display: 'grid', placeItems: 'center',
+          animation: 'nx-pulse 2.5s ease-in-out infinite',
+        }}>
+          <Icon name="shield" size={44} style={{ color: '#ff2d45' }} />
+        </div>
+
+        <div>
+          <div className="nx-kicker" style={{ color: '#ff2d45', marginBottom: 10, fontSize: 10, letterSpacing: '0.24em' }}>
+            ACCESO DENEGADO
+          </div>
+          <div className="nx-display" style={{ fontSize: 26, color: 'var(--txt)', marginBottom: 14, letterSpacing: '0.04em' }}>
+            Puerta Cerrada
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--txt-dim)', maxWidth: 340, lineHeight: 1.7, margin: '0 auto' }}>
+            No posees el objeto de acceso requerido para entrar a este lugar.
+          </p>
+        </div>
+
+        <Btn kind="ghost" onClick={goBack}>← Volver</Btn>
+      </div>
+    </div>
+  );
+
+  if (!lugar) return null;
 
   const npcs       = lugar.npcs ?? [];
   const lugarImagen = mediaUrl(lugar.imagen);
@@ -1031,12 +1151,6 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
     { key: 'este',  label: 'Este',  icon: '→', data: lugar.este  },
     { key: 'oeste', label: 'Oeste', icon: '←', data: lugar.oeste },
   ].filter((d) => d.data);
-
-  /* breadcrumbs dinámicos: ruta base + pasos interiores visitados */
-  const stackCrumbs = navStack.slice(0, -1).map((id, idx) => ({
-    label: navNames[id] ?? '…',
-    onClick: () => setNavStack((prev) => prev.slice(0, idx + 1)),
-  }));
 
   return (
     <div className="nx-fade">
@@ -1079,6 +1193,40 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs }) {
           </div>
         </div>
       </div>
+
+      {/* presentes en este lugar */}
+      {(lugar.presentes_personajes ?? []).length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div className="nx-kicker" style={{ marginBottom: 8 }}>PRESENTES AQUÍ</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {lugar.presentes_personajes.map((p) => {
+              const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
+              const photoUrl = mediaUrl(p.photo);
+              return (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: `${color}11`, border: `1px solid ${color}33`,
+                  borderRadius: 8, padding: '5px 10px',
+                }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                    backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    background: photoUrl ? undefined : color,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+                  }}>
+                    {!photoUrl && (p.handle?.[0] ?? '?')}
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                    @{p.handle}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* accesos interiores — árbol de recorridos */}
       {DIRS.length > 0 && (
@@ -1555,7 +1703,7 @@ function InfoRow({ label, value, color }) {
 }
 
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView() {
+export default function MapaView({ setMapLocation, initialLocation }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
   const [sistema, setSistema]     = useState(null);
@@ -1564,27 +1712,100 @@ export default function MapaView() {
   const [lugar, setLugar]         = useState(null);
   const [dialogNpc, setDialogNpc] = useState(null);
 
-  const goGalaxy  = () => { setNivel('galaxy'); setSistema(null); setPlaneta(null); setZona(null); setLugar(null); };
-  const goSistema = () => { setNivel('sistema'); setPlaneta(null); setZona(null); setLugar(null); };
-  const goPlaneta = () => { setNivel('planeta'); setZona(null); setLugar(null); };
-  const goZona    = () => { setNivel('zona'); setLugar(null); };
+  const updateLocation = useCallback((loc) => {
+    apiPost('/map/location', loc).catch(() => {});
+  }, []);
 
-  const selectSistema = (s) => { setSistema(s); setNivel('sistema'); };
-  const selectPlaneta = (p) => { setPlaneta(p); setNivel('planeta'); };
-  const selectZona    = (z) => { setZona(z);    setNivel('zona');    };
-  const selectLugar   = (l) => { setLugar(l);   setNivel('lugar');   };
+  /* restaura la última ubicación al volver al Mapa */
+  const hasRestored = useRef(false);
+  useEffect(() => {
+    if (hasRestored.current || !initialLocation?.nivel) return;
+    hasRestored.current = true;
+    const loc = initialLocation;
+    if (loc.sistema_id) setSistema({ id: loc.sistema_id, nombre: loc.sistema_nombre });
+    if (loc.planeta_id) setPlaneta({ id: loc.planeta_id, nombre: loc.planeta_nombre });
+    if (loc.zona_id)    setZona   ({ id: loc.zona_id,    nombre: loc.zona_nombre    });
+    if (loc.lugar_id)   setLugar  ({ id: loc.lugar_id });
+    setNivel(loc.nivel);
+  }, [initialLocation]);
+
+  const goGalaxy  = () => {
+    setNivel('galaxy'); setSistema(null); setPlaneta(null); setZona(null); setLugar(null);
+    updateLocation({ sistema_id: null, planeta_id: null, zona_id: null, lugar_id: null });
+    setMapLocation?.(null);
+  };
+  const goSistema = (tgt) => {
+    setNivel('sistema'); setPlaneta(null); setZona(null); setLugar(null);
+    if (tgt?.id) {
+      updateLocation({ sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null });
+      setMapLocation?.({
+        nombre: tgt.nombre, nivel: 'sistema',
+        sistema_id: tgt.id, sistema_nombre: tgt.nombre,
+        planeta_id: null, planeta_nombre: null,
+        zona_id: null, zona_nombre: null,
+        lugar_id: null, lugar_nombre: null,
+      });
+    }
+  };
+  const goPlaneta = (tgt) => {
+    setNivel('planeta'); setZona(null); setLugar(null);
+    if (tgt?.id) {
+      updateLocation({ sistema_id: sistema?.id ?? null, planeta_id: tgt.id, zona_id: null, lugar_id: null });
+      setMapLocation?.({
+        nombre: tgt.nombre, nivel: 'planeta',
+        sistema_id: sistema?.id ?? null, sistema_nombre: sistema?.nombre ?? null,
+        planeta_id: tgt.id, planeta_nombre: tgt.nombre,
+        zona_id: null, zona_nombre: null,
+        lugar_id: null, lugar_nombre: null,
+      });
+    }
+  };
+  const goZona = (tgt) => {
+    setNivel('zona'); setLugar(null);
+    if (tgt?.id) {
+      updateLocation({ sistema_id: sistema?.id ?? null, planeta_id: planeta?.id ?? null, zona_id: tgt.id, lugar_id: null });
+      setMapLocation?.({
+        nombre: tgt.nombre, nivel: 'zona',
+        sistema_id: sistema?.id ?? null, sistema_nombre: sistema?.nombre ?? null,
+        planeta_id: planeta?.id ?? null, planeta_nombre: planeta?.nombre ?? null,
+        zona_id: tgt.id, zona_nombre: tgt.nombre,
+        lugar_id: null, lugar_nombre: null,
+      });
+    }
+  };
+
+  const selectSistema = (s) => { setSistema(s); goSistema(s); };
+  const selectPlaneta = (p) => { setPlaneta(p); goPlaneta(p); };
+  const selectZona    = (z) => { setZona(z);    goZona(z);    };
+  const selectLugar   = (l) => { setLugar(l);   setNivel('lugar'); };
   const selectNpc     = (n) => setDialogNpc(n);
+
+  const handleLugarChange = useCallback((lugarId, lugarNombre) => {
+    updateLocation({
+      sistema_id: sistema?.id ?? null,
+      planeta_id: planeta?.id ?? null,
+      zona_id:    zona?.id    ?? null,
+      lugar_id:   lugarId,
+    });
+    setMapLocation?.({
+      nombre: lugarNombre, nivel: 'lugar',
+      sistema_id: sistema?.id ?? null, sistema_nombre: sistema?.nombre ?? null,
+      planeta_id: planeta?.id ?? null, planeta_nombre: planeta?.nombre ?? null,
+      zona_id:    zona?.id    ?? null, zona_nombre:    zona?.nombre    ?? null,
+      lugar_id:   lugarId,             lugar_nombre:   lugarNombre,
+    });
+  }, [sistema, planeta, zona, setMapLocation, updateLocation]);
 
   /* breadcrumbs dinámicos */
   const crumbsZona = [
-    { label: 'Galaxia', onClick: goGalaxy },
-    { label: sistema?.nombre, onClick: goSistema },
-    { label: planeta?.nombre, onClick: goPlaneta },
+    { label: 'Galaxia',         onClick: () => goGalaxy() },
+    { label: sistema?.nombre,   onClick: () => goSistema(sistema) },
+    { label: planeta?.nombre,   onClick: () => goPlaneta(planeta) },
   ].filter(c => c.label);
 
   const crumbsLugar = [
     ...crumbsZona,
-    { label: zona?.nombre, onClick: goZona },
+    { label: zona?.nombre, onClick: () => goZona(zona) },
   ];
 
   return (
@@ -1594,22 +1815,22 @@ export default function MapaView() {
         <SistemaView
           sistemaId={sistema.id}
           onSelectPlaneta={selectPlaneta}
-          onBack={goGalaxy}
+          onBack={() => goGalaxy()}
         />
       )}
       {nivel === 'planeta' && planeta && (
         <PlanetaView
           planetaId={planeta.id}
           onSelectZona={selectZona}
-          onBack={goGalaxy}
-          onBackSistema={goSistema}
+          onBack={() => goGalaxy()}
+          onBackSistema={() => goSistema(sistema)}
         />
       )}
       {nivel === 'zona' && zona && (
         <ZonaView
           zonaId={zona.id}
           onSelectLugar={selectLugar}
-          onBack={goGalaxy}
+          onBack={() => goGalaxy()}
           breadcrumbs={crumbsZona}
         />
       )}
@@ -1617,8 +1838,9 @@ export default function MapaView() {
         <LugarView
           lugarId={lugar.id}
           onSelectNpc={selectNpc}
-          onBack={goGalaxy}
+          onBack={() => goZona(zona)}
           breadcrumbs={crumbsLugar}
+          onLugarChange={handleLugarChange}
         />
       )}
 

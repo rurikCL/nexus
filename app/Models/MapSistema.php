@@ -40,4 +40,9 @@ class MapSistema extends Model
     {
         return $this->hasMany(MapNpcEspacio::class, 'SistemaID');
     }
+
+    public function presentesPersonajes(): HasMany
+    {
+        return $this->hasMany(Character::class, 'map_sistema_id');
+    }
 }
