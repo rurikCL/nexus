@@ -22,6 +22,8 @@ class User extends Authenticatable
         'name',
         'email',
         'tier',
+        'grado',
+        'clase',
         'tutor_id',
         'password',
     ];

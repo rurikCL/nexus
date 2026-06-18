@@ -22,6 +22,8 @@ class MeController extends Controller
             'name'      => $user->name,
             'email'     => $user->email,
             'tier'      => $user->tier,
+            'grado'     => $user->grado,
+            'clase'     => $user->clase,
             'is_tutor'  => $user->isTutor(),
             'character' => $character ? [
                 'id'          => $character->id,

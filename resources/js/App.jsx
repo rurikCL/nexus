@@ -132,12 +132,14 @@ import MapaView from './sections/Mapa.jsx';
 import AdminView from './sections/Admin.jsx';
 import { TemporadasView } from './sections/Temporadas.jsx';
 import { MisionesView } from './sections/Misiones.jsx';
+import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
   { id: 'entrenamiento', label: 'Entrenamiento', icon: 'calendar' },
+  { id: 'modulos-entrenamiento', label: 'Módulos', icon: 'book' },
   { id: 'tareas',   label: 'Tareas',   icon: 'tasks' },
   { id: 'misiones', label: 'Misiones', icon: 'zap', guard: u => ADMIN_TIERS.includes(u?.tier ?? '') },
   { id: 'eventos',  label: 'Eventos',  icon: 'star' },
@@ -151,6 +153,7 @@ const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
   entrenamiento: ['Entrenamiento', 'Asistencia y bitácora diaria'],
+  'modulos-entrenamiento': ['Módulos de Entrenamiento', 'Técnicas, formas y currículum de combate'],
   tareas:   ['Tareas',    'Plan de entrenamiento dirigido'],
   misiones: ['Misiones', 'Administración y asignación de misiones'],
   eventos:  ['Eventos',  'Presentaciones y recompensas'],
@@ -294,6 +297,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     comando: <ComandoView S={S} go={go} user={user} />,
     personaje: <PersonajeView S={S} user={user} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     entrenamiento: <TrainingView S={S} />,
+    'modulos-entrenamiento': <ModulosEntrenamientoView user={user} />,
     tareas: <TareasView S={S} user={user} />,
     eventos: <EventosView S={S} go={go} user={user} />,
     ranking: <RankingView S={S} />,

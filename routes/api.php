@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\EmblemUploadController;
 use App\Http\Controllers\Api\MisionController;
 use App\Http\Controllers\Api\TemporadaController;
 use App\Http\Controllers\Api\WidgetLayoutController;
+use App\Http\Controllers\Api\ModuloEntrenamientoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -76,6 +77,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/temporadas/{temporada}', [TemporadaController::class, 'update']);
 
     Route::post('/upload/emblema', [EmblemUploadController::class, 'store']);
+
+    Route::get('/modulos-entrenamiento',                          [ModuloEntrenamientoController::class, 'index']);
+    Route::post('/modulos-entrenamiento',                         [ModuloEntrenamientoController::class, 'store']);
+    Route::get('/modulos-entrenamiento/revisores',                [ModuloEntrenamientoController::class, 'revisores']);
+    Route::get('/modulos-entrenamiento/{moduloEntrenamiento}',    [ModuloEntrenamientoController::class, 'show']);
+    Route::put('/modulos-entrenamiento/{moduloEntrenamiento}',    [ModuloEntrenamientoController::class, 'update']);
+    Route::delete('/modulos-entrenamiento/{moduloEntrenamiento}', [ModuloEntrenamientoController::class, 'destroy']);
 
     Route::get('/misiones', [MisionController::class, 'index']);
     Route::post('/misiones', [MisionController::class, 'store']);
