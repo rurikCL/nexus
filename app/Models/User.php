@@ -100,6 +100,11 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function instagramAccount(): HasOne
+    {
+        return $this->hasOne(InstagramAccount::class);
+    }
+
     public function isTutor(): bool
     {
         return in_array($this->tier, ['caballero', 'maestro', 'granmaestro'])

@@ -78,7 +78,7 @@ const TIER_COLOR = {
   maestro: '#FF6B00', granmaestro: '#E6B325',
 };
 
-export function ComandoView({ S, go, user }) {
+export function ComandoView({ S, go, user, onGoToCombat }) {
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
@@ -224,7 +224,7 @@ export function ComandoView({ S, go, user }) {
                         </div>
                       )}
                     </div>
-                    <Btn kind="accent" icon="swords" onClick={() => go('combates')} style={{ width: '100%', justifyContent: 'center' }}>
+                    <Btn kind="accent" icon="swords" onClick={() => onGoToCombat ? onGoToCombat(nextCombat) : go('combates')} style={{ width: '100%', justifyContent: 'center' }}>
                       Ir al combate
                     </Btn>
                   </div>

@@ -42,7 +42,8 @@ const ICON_PATHS = {
   dumbbell: 'M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12',
   trending: 'M3 17l6-6 4 4 8-8M15 7h6v6',
   logout:   'M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8M17 8l4 4-4 4M9 12h12',
-  menu:     'M3 6h18M3 12h18M3 18h18',
+  menu:      'M3 6h18M3 12h18M3 18h18',
+  instagram: 'M16 4H8a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4zM12 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM16.5 7.5h.01',
 };
 export function Icon({ name, size = 18, stroke = 1.8, fill = false, style, ...rest }) {
   const d = ICON_PATHS[name];

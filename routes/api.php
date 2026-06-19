@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\MisionController;
 use App\Http\Controllers\Api\TemporadaController;
 use App\Http\Controllers\Api\WidgetLayoutController;
 use App\Http\Controllers\Api\ModuloEntrenamientoController;
+use App\Http\Controllers\Api\InstagramController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,9 @@ use Illuminate\Support\Facades\Route;
 // Public auth routes
 Route::post('/login',    [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+
+// Instagram OAuth callback (pública — Meta redirige aquí sin Bearer token)
+Route::get('/instagram/callback', [InstagramController::class, 'callback']);
 
 // Broadcasting auth para SPAs con Sanctum (Bearer token en lugar de sesión web)
 Route::post('/broadcasting/auth', function (Request $request) {
@@ -98,6 +102,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // Instagram
+    Route::get('/instagram/redirect',    [InstagramController::class, 'redirect']);
+    Route::get('/instagram/status',      [InstagramController::class, 'status']);
+    Route::get('/instagram/posts',       [InstagramController::class, 'posts']);
+    Route::post('/instagram/publish',    [InstagramController::class, 'publish']);
+    Route::delete('/instagram/disconnect', [InstagramController::class, 'disconnect']);
 
     // Mapa galáctico
     Route::get('/map/sistemas',          [MapController::class, 'sistemas']);

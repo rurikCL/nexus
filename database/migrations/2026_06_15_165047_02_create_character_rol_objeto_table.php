@@ -13,6 +13,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('rol_character_objeto')) {
+            return;
+        }
+
         Schema::create('rol_character_objeto', function (Blueprint $table) {
             $table->id();
             $table->foreignId('character_id')->constrained('characters')->cascadeOnDelete();

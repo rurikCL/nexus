@@ -40,6 +40,8 @@ class CombatController extends Controller
         $data = $request->validate([
             'winner'     => 'required|in:a,b',
             'score_data' => 'nullable|array',
+            'feedback_a' => 'nullable|string',
+            'feedback_b' => 'nullable|string',
         ]);
 
         $winner = $data['winner'];
@@ -48,6 +50,8 @@ class CombatController extends Controller
             'live'       => false,
             'winner'     => $winner,
             'score_data' => $data['score_data'] ?? null,
+            'feedback_a' => $data['feedback_a'] ?? null,
+            'feedback_b' => $data['feedback_b'] ?? null,
         ]);
 
         $winnerUser = $winner === 'a' ? $combat->combatantA : $combat->combatantB;
@@ -117,6 +121,8 @@ class CombatController extends Controller
             'odds_a'       => (float) $combat->odds_a,
             'odds_b'       => (float) $combat->odds_b,
             'score_data'   => $combat->score_data,
+            'feedback_a'   => $combat->feedback_a,
+            'feedback_b'   => $combat->feedback_b,
             'combatant_a'  => $fmtChar($combat->combatant_a_id, $charA),
             'combatant_b'  => $fmtChar($combat->combatant_b_id, $charB),
         ];

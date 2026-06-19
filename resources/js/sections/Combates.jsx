@@ -1,4 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const fn = () => setW(window.innerWidth);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return w;
+}
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 
@@ -34,15 +44,16 @@ function sumPenalties(pens) {
 }
 const charImg = (c) => `/assets/${c.cls.charAt(0).toUpperCase() + c.cls.slice(1)}.png`;
 
-function ScorePicker({ value, onChange, labels, color }) {
+function ScorePicker({ value, onChange, labels, color, sm }) {
   return (
-    <div style={{ display: 'flex', gap: 3 }}>
+    <div style={{ display: 'flex', gap: sm ? 2 : 3 }}>
       {SCORE_VALS.map((v, i) => {
         const sel = value === v;
         return (
           <button key={v} onClick={() => onChange(sel ? null : v)} title={labels[i]}
             className="nx-btn"
-            style={{ padding: '5px 8px', minWidth: 34, fontSize: 11, justifyContent: 'center',
+            style={{ padding: sm ? '4px 5px' : '5px 8px', minWidth: sm ? 27 : 34,
+              fontSize: sm ? 10 : 11, justifyContent: 'center',
               fontFamily: 'var(--font-data)', letterSpacing: '0.02em',
               background: sel ? `color-mix(in srgb, ${color} 20%, transparent)` : undefined,
               borderColor: sel ? color : undefined,
@@ -56,13 +67,17 @@ function ScorePicker({ value, onChange, labels, color }) {
 }
 
 export function ScoringScreen({ combat, onClose, S }) {
-  const [scoresA, setScoresA] = useState(initScores);
-  const [scoresB, setScoresB] = useState(initScores);
-  const [pensA, setPensA] = useState([]);
-  const [pensB, setPensB] = useState([]);
+  const isMobile = useWindowWidth() < 640;
+  const [scoresA,   setScoresA]   = useState(initScores);
+  const [scoresB,   setScoresB]   = useState(initScores);
+  const [pensA,     setPensA]     = useState([]);
+  const [pensB,     setPensB]     = useState([]);
+  const [feedbackA, setFeedbackA] = useState('');
+  const [feedbackB, setFeedbackB] = useState('');
 
   useEffect(() => {
     setScoresA(initScores()); setScoresB(initScores()); setPensA([]); setPensB([]);
+    setFeedbackA(''); setFeedbackB('');
   }, [combat?.id]);
 
   if (!combat) return null;
@@ -94,7 +109,7 @@ export function ScoringScreen({ combat, onClose, S }) {
         await fetch(`/api/combats/${combat.id}/resolve`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ winner, score_data: scoreData }),
+          body: JSON.stringify({ winner, score_data: scoreData, feedback_a: feedbackA || null, feedback_b: feedbackB || null }),
         });
       } catch { /* optimistic update ya aplicado */ }
     }
@@ -117,11 +132,11 @@ export function ScoringScreen({ combat, onClose, S }) {
           <div className="nx-kicker" style={{ fontSize: 9 }}>{combat.event} · {combat.round}</div>
           <div className="nx-display" style={{ fontSize: 14 }}>Evaluación de Combate</div>
         </div>
-        <Btn kind="accent" icon="trophy" onClick={submit} disabled={!canSubmit}>Registrar resultado</Btn>
+        {!isMobile && <Btn kind="accent" icon="trophy" onClick={submit} disabled={!canSubmit}>Registrar resultado</Btn>}
       </div>
 
       {/* VS hero — cinematic */}
-      <div style={{ position: 'relative', height: 310, overflow: 'hidden',
+      <div style={{ position: 'relative', height: isMobile ? 210 : 310, overflow: 'hidden',
         borderRadius: 'var(--radius)', border: '1px solid var(--holo-line)' }}>
 
         {/* Base oscuro */}
@@ -136,10 +151,27 @@ export function ScoringScreen({ combat, onClose, S }) {
           {/* Glow radial desde la figura */}
           <div style={{ position: 'absolute', inset: 0,
             background: `radial-gradient(ellipse at 22% 90%, ${saberA}40 0%, transparent 55%)` }} />
-          <img src={charImg(a)} alt={a.name}
-            style={{ position: 'absolute', bottom: 0, left: '10%',
-              height: '97%', width: 'auto', objectFit: 'contain',
-              filter: `drop-shadow(-6px 0 22px ${saberA}80)` }} />
+          {a.photo_url ? (
+            <>
+              <img src={a.photo_url} alt={a.name}
+                style={{ position: 'absolute', bottom: 0, left: '4%',
+                  width: 'auto', height: '90%',
+                  objectFit: 'contain', objectPosition: 'left bottom',
+                  filter: `drop-shadow(0 0 16px ${saberA}60)` }} />
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
+                             linear-gradient(to right, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
+              <img src={charImg(a)} alt=""
+                style={{ position: 'absolute', bottom: 76, left: 12, height: 48, width: 'auto',
+                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
+                  filter: `drop-shadow(0 0 10px ${saberA}cc)` }} />
+            </>
+          ) : (
+            <img src={charImg(a)} alt={a.name}
+              style={{ position: 'absolute', bottom: 0, left: '10%',
+                height: '97%', width: 'auto', objectFit: 'contain',
+                filter: `drop-shadow(-6px 0 22px ${saberA}80)` }} />
+          )}
         </div>
 
         {/* ── LADO B (derecha) ── */}
@@ -149,11 +181,28 @@ export function ScoringScreen({ combat, onClose, S }) {
             background: `linear-gradient(to left, ${saberB}45 0%, ${saberB}18 55%, transparent 100%)` }} />
           <div style={{ position: 'absolute', inset: 0,
             background: `radial-gradient(ellipse at 78% 90%, ${saberB}40 0%, transparent 55%)` }} />
-          <img src={charImg(b)} alt={b.name}
-            style={{ position: 'absolute', bottom: 0, right: '10%',
-              height: '97%', width: 'auto', objectFit: 'contain',
-              transform: 'scaleX(-1)',
-              filter: `drop-shadow(6px 0 22px ${saberB}80)` }} />
+          {b.photo_url ? (
+            <>
+              <img src={b.photo_url} alt={b.name}
+                style={{ position: 'absolute', bottom: 0, right: '4%',
+                  width: 'auto', height: '90%',
+                  objectFit: 'contain', objectPosition: 'right bottom',
+                  filter: `drop-shadow(0 0 16px ${saberB}60)` }} />
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
+                             linear-gradient(to left, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
+              <img src={charImg(b)} alt=""
+                style={{ position: 'absolute', bottom: 76, right: 12, height: 48, width: 'auto',
+                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
+                  filter: `drop-shadow(0 0 10px ${saberB}cc)` }} />
+            </>
+          ) : (
+            <img src={charImg(b)} alt={b.name}
+              style={{ position: 'absolute', bottom: 0, right: '10%',
+                height: '97%', width: 'auto', objectFit: 'contain',
+                transform: 'scaleX(-1)',
+                filter: `drop-shadow(6px 0 22px ${saberB}80)` }} />
+          )}
         </div>
 
         {/* ── Línea diagonal de separación con glow ── */}
@@ -167,8 +216,8 @@ export function ScoringScreen({ combat, onClose, S }) {
           background: 'linear-gradient(to top, rgba(3,6,9,0.92) 0%, rgba(3,6,9,0.55) 60%, transparent 100%)' }} />
 
         {/* ── Puntaje A — arriba izquierda ── */}
-        <div style={{ position: 'absolute', top: 14, left: 18 }}>
-          <div className="nx-num" style={{ fontSize: 40, lineHeight: 1,
+        <div style={{ position: 'absolute', top: 12, left: 14 }}>
+          <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
             color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
             textShadow: `0 0 24px ${winner === 'a' ? 'var(--pompeyo-oro)' : saberA}66` }}>
             {dqA ? 'DQ' : (scoreA ?? '—')}
@@ -179,8 +228,8 @@ export function ScoringScreen({ combat, onClose, S }) {
         </div>
 
         {/* ── Puntaje B — arriba derecha ── */}
-        <div style={{ position: 'absolute', top: 14, right: 18, textAlign: 'right' }}>
-          <div className="nx-num" style={{ fontSize: 40, lineHeight: 1,
+        <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'right' }}>
+          <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
             color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
             textShadow: `0 0 24px ${winner === 'b' ? 'var(--pompeyo-oro)' : saberB}66` }}>
             {dqB ? 'DQ' : (scoreB ?? '—')}
@@ -191,29 +240,33 @@ export function ScoringScreen({ combat, onClose, S }) {
         </div>
 
         {/* ── Info A — abajo izquierda ── */}
-        <div style={{ position: 'absolute', bottom: 14, left: 18 }}>
+        <div style={{ position: 'absolute', bottom: 12, left: 14 }}>
           {winner === 'a' && (
             <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4 }}>GANADOR</div>
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
           )}
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{a.name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
-            <TierBadge tier={a.tier} sm />
-            <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{a.wins}W-{a.losses}L</span>
-          </div>
+          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{a.name}</div>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+              <TierBadge tier={a.tier} sm />
+              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{a.wins}W-{a.losses}L</span>
+            </div>
+          )}
         </div>
 
         {/* ── Info B — abajo derecha ── */}
-        <div style={{ position: 'absolute', bottom: 14, right: 18, textAlign: 'right' }}>
+        <div style={{ position: 'absolute', bottom: 12, right: 14, textAlign: 'right' }}>
           {winner === 'b' && (
             <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4 }}>GANADOR</div>
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
           )}
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>{b.name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 4 }}>
-            <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{b.wins}W-{b.losses}L</span>
-            <TierBadge tier={b.tier} sm />
-          </div>
+          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{b.name}</div>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 4 }}>
+              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{b.wins}W-{b.losses}L</span>
+              <TierBadge tier={b.tier} sm />
+            </div>
+          )}
         </div>
 
         {/* ── VS — centro ── */}
@@ -221,63 +274,95 @@ export function ScoringScreen({ combat, onClose, S }) {
           transform: 'translate(-50%, -50%)', zIndex: 20,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
           <div className="nx-display" style={{
-            fontSize: 76, lineHeight: 1, letterSpacing: '0.03em',
+            fontSize: isMobile ? 46 : 76, lineHeight: 1, letterSpacing: '0.03em',
             background: 'linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.65) 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             filter: 'drop-shadow(0 0 28px rgba(255,255,255,0.45))' }}>VS</div>
           {allFilled && winner === null && (
             <div className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)',
-              letterSpacing: '0.14em', WebkitTextFillColor: 'unset' }}>EMPATE TÉCNICO</div>
+              letterSpacing: '0.14em', WebkitTextFillColor: 'unset' }}>EMPATE</div>
           )}
         </div>
       </div>
 
       {/* Tabla de evaluación */}
       <Panel kicker="Tabla de evaluación" title="Criterios de Puntuación" icon="target">
-        {/* Cabecera de columnas */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '0 12px 8px', borderBottom: '1px solid var(--holo-line)' }}>
-          <span className="nx-kicker" style={{ fontSize: 9 }}>Criterio</span>
-          <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: a.color }}>{a.name}</span>
-          <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: b.color }}>{b.name}</span>
-        </div>
+        {/* Cabecera de columnas — solo desktop */}
+        {!isMobile && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '0 12px 8px', borderBottom: '1px solid var(--holo-line)' }}>
+            <span className="nx-kicker" style={{ fontSize: 9 }}>Criterio</span>
+            <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: a.color }}>{a.name}</span>
+            <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: b.color }}>{b.name}</span>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gap: 4, marginTop: 8 }}>
           {CRITERIA.map((cr) => (
             <div key={cr.key} className="nx-panel solid"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '12px', alignItems: 'center' }}>
+              style={{ padding: '12px', display: isMobile ? 'flex' : 'grid',
+                flexDirection: isMobile ? 'column' : undefined,
+                gridTemplateColumns: isMobile ? undefined : '1fr 210px 210px',
+                gap: 12, alignItems: isMobile ? 'stretch' : 'center' }}>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{cr.title}</div>
                 <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2, lineHeight: 1.4 }}>{cr.desc}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 8, rowGap: 2, marginTop: 8 }}>
-                  {SCORE_VALS.map((v, i) => (
-                    <>
-                      <span key={`v-${v}`} className="nx-num" style={{ fontSize: 9, color: 'var(--txt-dim)', textAlign: 'right' }}>{SCORE_LABELS[i]}</span>
-                      <span key={`l-${v}`} className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>{cr.labels[i]}</span>
-                    </>
-                  ))}
+                {!isMobile && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 8, rowGap: 2, marginTop: 8 }}>
+                    {SCORE_VALS.map((v, i) => (
+                      <>
+                        <span key={`v-${v}`} className="nx-num" style={{ fontSize: 9, color: 'var(--txt-dim)', textAlign: 'right' }}>{SCORE_LABELS[i]}</span>
+                        <span key={`l-${v}`} className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>{cr.labels[i]}</span>
+                      </>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {isMobile ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                  <div>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--font-data)', color: a.color, marginBottom: 5 }}>{a.name}</div>
+                    <ScorePicker sm value={scoresA[cr.key]} onChange={(v) => setScoresA(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={a.color} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--font-data)', color: b.color, marginBottom: 5 }}>{b.name}</div>
+                    <ScorePicker sm value={scoresB[cr.key]} onChange={(v) => setScoresB(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={b.color} />
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center' }}>
-                <ScorePicker value={scoresA[cr.key]} onChange={(v) => setScoresA(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={a.color} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center' }}>
-                <ScorePicker value={scoresB[cr.key]} onChange={(v) => setScoresB(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={b.color} />
-              </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center' }}>
+                    <ScorePicker value={scoresA[cr.key]} onChange={(v) => setScoresA(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={a.color} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center' }}>
+                    <ScorePicker value={scoresB[cr.key]} onChange={(v) => setScoresB(s => ({ ...s, [cr.key]: v }))} labels={cr.labels} color={b.color} />
+                  </div>
+                </>
+              )}
             </div>
           ))}
 
           {/* Fila totales */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '10px 12px', marginTop: 4 }}>
-            <div className="nx-kicker" style={{ fontSize: 9, alignSelf: 'center' }}>SUBTOTAL (máx. 10)</div>
-            <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: a.color }}>{sumScores(scoresA).toFixed(1)}</div>
-            <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: b.color }}>{sumScores(scoresB).toFixed(1)}</div>
-          </div>
+          {isMobile ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginTop: 4 }}>
+              <div className="nx-kicker" style={{ fontSize: 9 }}>SUBTOTAL (máx. 10)</div>
+              <div style={{ display: 'flex', gap: 18 }}>
+                <div className="nx-num" style={{ fontSize: 18, color: a.color }}>{sumScores(scoresA).toFixed(1)}</div>
+                <div className="nx-num" style={{ fontSize: 18, color: b.color }}>{sumScores(scoresB).toFixed(1)}</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '10px 12px', marginTop: 4 }}>
+              <div className="nx-kicker" style={{ fontSize: 9, alignSelf: 'center' }}>SUBTOTAL (máx. 10)</div>
+              <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: a.color }}>{sumScores(scoresA).toFixed(1)}</div>
+              <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: b.color }}>{sumScores(scoresB).toFixed(1)}</div>
+            </div>
+          )}
         </div>
       </Panel>
 
       {/* Penalizaciones */}
       <Panel kicker="Infracciones" title="Penalizaciones" icon="shield">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
           {[{ fighter: a, pens: pensA, setPens: setPensA }, { fighter: b, pens: pensB, setPens: setPensB }].map(({ fighter, pens, setPens }) => (
             <div key={fighter.id}>
               <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: fighter.color }}>{fighter.name}</div>
@@ -309,13 +394,341 @@ export function ScoringScreen({ combat, onClose, S }) {
         </div>
       </Panel>
 
+      {/* Feedback */}
+      <Panel kicker="Retroalimentación del árbitro" title="Feedback" icon="target">
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+          {[{ fighter: a, value: feedbackA, set: setFeedbackA }, { fighter: b, value: feedbackB, set: setFeedbackB }].map(({ fighter, value, set }) => (
+            <div key={fighter.id}>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8, color: fighter.color }}>{fighter.name}</div>
+              <textarea
+                className="nx-input"
+                value={value}
+                onChange={e => set(e.target.value)}
+                placeholder={`Retroalimentación para ${fighter.name}...`}
+                style={{ minHeight: 90, resize: 'vertical', fontSize: 12, lineHeight: 1.6, width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+          ))}
+        </div>
+      </Panel>
+
       {/* Footer acción */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingBottom: 8, flexWrap: 'wrap' }}>
         <Btn onClick={onClose}>Cancelar</Btn>
-        <Btn kind="accent" icon="trophy" onClick={submit} disabled={!canSubmit}>
-          {!allFilled ? 'Completa todos los criterios' : winner === null ? 'Resultado empatado' : `Registrar — gana ${(winner === 'a' ? a : b).name}`}
+        <Btn kind="accent" icon="trophy" onClick={submit} disabled={!canSubmit} style={isMobile ? { flex: 1, justifyContent: 'center' } : {}}>
+          {!allFilled ? 'Completa los criterios' : winner === null ? 'Resultado empatado' : `Registrar — gana ${(winner === 'a' ? a : b).name}`}
         </Btn>
       </div>
+    </div>
+  );
+}
+
+/* ===================== VISTA DEL COMBATE (read-only) ===================== */
+
+function ScoreDisplay({ value, color, sm }) {
+  return (
+    <div style={{ display: 'flex', gap: sm ? 2 : 3 }}>
+      {SCORE_VALS.map((v, i) => {
+        const sel = value === v;
+        return (
+          <div key={v} title={SCORE_LABELS[i]}
+            style={{ padding: sm ? '4px 5px' : '5px 8px', minWidth: sm ? 27 : 34,
+              fontSize: sm ? 10 : 11, textAlign: 'center',
+              fontFamily: 'var(--font-data)', letterSpacing: '0.02em',
+              borderRadius: 'var(--radius-sm)', border: `1px solid ${sel ? color : 'var(--holo-line)'}`,
+              background: sel ? `color-mix(in srgb, ${color} 20%, transparent)` : 'transparent',
+              color: sel ? color : 'var(--txt-faint)' }}>
+            {SCORE_LABELS[i]}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function CombatViewScreen({ combat, onClose, S }) {
+  const isMobile = useWindowWidth() < 640;
+  if (!combat) return null;
+  const a = combat._a ?? S.byId(combat.a);
+  const b = combat._b ?? S.byId(combat.b);
+
+  const sd = combat.score_data ?? {};
+  const scoresA = sd.scoresA ?? initScores();
+  const scoresB = sd.scoresB ?? initScores();
+  const pensA   = sd.pensA ?? [];
+  const pensB   = sd.pensB ?? [];
+
+  const rawA = sumScores(scoresA), rawB = sumScores(scoresB);
+  const penA = sumPenalties(pensA), penB = sumPenalties(pensB);
+  const dqA  = pensA.includes('descalificado'), dqB = pensB.includes('descalificado');
+  const scoreA = dqA ? null : Math.max(0, rawA - penA);
+  const scoreB = dqB ? null : Math.max(0, rawB - penB);
+  const winner  = combat.winner;
+  const saberA  = a.saber, saberB = b.saber;
+
+  return (
+    <div className="nx-fade" style={{ display: 'grid', gap: 16 }}>
+
+      {/* Topbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="nx-btn" onClick={onClose} style={{ gap: 7, padding: '7px 12px' }}>
+          <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} />
+          <span style={{ fontSize: 12 }}>Volver</span>
+        </button>
+        <div style={{ flex: 1 }}>
+          <div className="nx-kicker" style={{ fontSize: 9 }}>{combat.event} · {combat.round}</div>
+          <div className="nx-display" style={{ fontSize: 14 }}>Vista del Combate</div>
+        </div>
+        <Chip tone="green" icon="trophy">Resultado registrado</Chip>
+      </div>
+
+      {/* VS hero */}
+      <div style={{ position: 'relative', height: isMobile ? 210 : 310, overflow: 'hidden',
+        borderRadius: 'var(--radius)', border: '1px solid var(--holo-line)' }}>
+        <div style={{ position: 'absolute', inset: 0, background: '#030609' }} />
+
+        <div style={{ position: 'absolute', inset: 0,
+          clipPath: 'polygon(0 0, 57% 0, 43% 100%, 0 100%)' }}>
+          <div style={{ position: 'absolute', inset: 0,
+            background: `linear-gradient(to right, ${saberA}45 0%, ${saberA}18 55%, transparent 100%)` }} />
+          <div style={{ position: 'absolute', inset: 0,
+            background: `radial-gradient(ellipse at 22% 90%, ${saberA}40 0%, transparent 55%)` }} />
+          {a.photo_url ? (
+            <>
+              <img src={a.photo_url} alt={a.name}
+                style={{ position: 'absolute', bottom: 0, left: '4%',
+                  width: 'auto', height: '90%',
+                  objectFit: 'contain', objectPosition: 'left bottom',
+                  filter: `drop-shadow(0 0 16px ${saberA}60)` }} />
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
+                             linear-gradient(to right, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
+              <img src={charImg(a)} alt=""
+                style={{ position: 'absolute', bottom: 76, left: 12, height: 48, width: 'auto',
+                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
+                  filter: `drop-shadow(0 0 10px ${saberA}cc)` }} />
+            </>
+          ) : (
+            <img src={charImg(a)} alt={a.name}
+              style={{ position: 'absolute', bottom: 0, left: '10%', height: '97%', width: 'auto',
+                objectFit: 'contain', filter: `drop-shadow(-6px 0 22px ${saberA}80)` }} />
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', inset: 0,
+          clipPath: 'polygon(57% 0, 100% 0, 100% 100%, 43% 100%)' }}>
+          <div style={{ position: 'absolute', inset: 0,
+            background: `linear-gradient(to left, ${saberB}45 0%, ${saberB}18 55%, transparent 100%)` }} />
+          <div style={{ position: 'absolute', inset: 0,
+            background: `radial-gradient(ellipse at 78% 90%, ${saberB}40 0%, transparent 55%)` }} />
+          {b.photo_url ? (
+            <>
+              <img src={b.photo_url} alt={b.name}
+                style={{ position: 'absolute', bottom: 0, right: '4%',
+                  width: 'auto', height: '90%',
+                  objectFit: 'contain', objectPosition: 'right bottom',
+                  filter: `drop-shadow(0 0 16px ${saberB}60)` }} />
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
+                             linear-gradient(to left, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
+              <img src={charImg(b)} alt=""
+                style={{ position: 'absolute', bottom: 76, right: 12, height: 48, width: 'auto',
+                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
+                  filter: `drop-shadow(0 0 10px ${saberB}cc)` }} />
+            </>
+          ) : (
+            <img src={charImg(b)} alt={b.name}
+              style={{ position: 'absolute', bottom: 0, right: '10%', height: '97%', width: 'auto',
+                objectFit: 'contain', transform: 'scaleX(-1)',
+                filter: `drop-shadow(6px 0 22px ${saberB}80)` }} />
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', inset: 0,
+          clipPath: 'polygon(54% 0, 60% 0, 46% 100%, 40% 100%)',
+          background: `linear-gradient(to bottom, ${saberA}55, rgba(255,255,255,0.55) 50%, ${saberB}55)`,
+          filter: 'blur(5px)' }} />
+
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110,
+          background: 'linear-gradient(to top, rgba(3,6,9,0.92) 0%, rgba(3,6,9,0.55) 60%, transparent 100%)' }} />
+
+        <div style={{ position: 'absolute', top: 12, left: 14 }}>
+          <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
+            color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'a' ? 'var(--pompeyo-oro)' : saberA}66` }}>
+            {dqA ? 'DQ' : (scoreA ?? '—')}
+          </div>
+          {penA > 0 && !dqA && (
+            <div className="nx-data" style={{ fontSize: 9, color: '#ff6b6b', marginTop: 1 }}>−{penA.toFixed(1)} pen.</div>
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'right' }}>
+          <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
+            color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'b' ? 'var(--pompeyo-oro)' : saberB}66` }}>
+            {dqB ? 'DQ' : (scoreB ?? '—')}
+          </div>
+          {penB > 0 && !dqB && (
+            <div className="nx-data" style={{ fontSize: 9, color: '#ff6b6b', marginTop: 1 }}>−{penB.toFixed(1)} pen.</div>
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', bottom: 12, left: 14 }}>
+          {winner === 'a' && (
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
+          )}
+          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{a.name}</div>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+              <TierBadge tier={a.tier} sm />
+              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{a.wins}W-{a.losses}L</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', bottom: 12, right: 14, textAlign: 'right' }}>
+          {winner === 'b' && (
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
+          )}
+          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{b.name}</div>
+          {!isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 4 }}>
+              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{b.wins}W-{b.losses}L</span>
+              <TierBadge tier={b.tier} sm />
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)', zIndex: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div className="nx-display" style={{
+            fontSize: isMobile ? 46 : 76, lineHeight: 1, letterSpacing: '0.03em',
+            background: 'linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.65) 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 28px rgba(255,255,255,0.45))' }}>VS</div>
+        </div>
+      </div>
+
+      {/* Tabla de evaluación — read-only */}
+      <Panel kicker="Evaluación registrada" title="Criterios de Puntuación" icon="target">
+        {!isMobile && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '0 12px 8px', borderBottom: '1px solid var(--holo-line)' }}>
+            <span className="nx-kicker" style={{ fontSize: 9 }}>Criterio</span>
+            <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: a.color }}>{a.name}</span>
+            <span className="nx-kicker" style={{ fontSize: 9, textAlign: 'center', color: b.color }}>{b.name}</span>
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gap: 4, marginTop: 8 }}>
+          {CRITERIA.map((cr) => (
+            <div key={cr.key} className="nx-panel solid"
+              style={{ padding: '12px', display: isMobile ? 'flex' : 'grid',
+                flexDirection: isMobile ? 'column' : undefined,
+                gridTemplateColumns: isMobile ? undefined : '1fr 210px 210px',
+                gap: 12, alignItems: isMobile ? 'stretch' : 'center' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{cr.title}</div>
+                <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2, lineHeight: 1.4 }}>{cr.desc}</div>
+              </div>
+              {isMobile ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                  <div>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--font-data)', color: a.color, marginBottom: 5 }}>{a.name}</div>
+                    <ScoreDisplay sm value={scoresA[cr.key]} color={a.color} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--font-data)', color: b.color, marginBottom: 5 }}>{b.name}</div>
+                    <ScoreDisplay sm value={scoresB[cr.key]} color={b.color} />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <ScoreDisplay value={scoresA[cr.key]} color={a.color} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <ScoreDisplay value={scoresB[cr.key]} color={b.color} />
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+
+          {isMobile ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', marginTop: 4 }}>
+              <div className="nx-kicker" style={{ fontSize: 9 }}>SUBTOTAL (máx. 10)</div>
+              <div style={{ display: 'flex', gap: 18 }}>
+                <div className="nx-num" style={{ fontSize: 18, color: a.color }}>{rawA.toFixed(1)}</div>
+                <div className="nx-num" style={{ fontSize: 18, color: b.color }}>{rawB.toFixed(1)}</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px 210px', gap: 12, padding: '10px 12px', marginTop: 4 }}>
+              <div className="nx-kicker" style={{ fontSize: 9, alignSelf: 'center' }}>SUBTOTAL (máx. 10)</div>
+              <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: a.color }}>{rawA.toFixed(1)}</div>
+              <div className="nx-num" style={{ fontSize: 20, textAlign: 'center', color: b.color }}>{rawB.toFixed(1)}</div>
+            </div>
+          )}
+        </div>
+      </Panel>
+
+      {/* Penalizaciones — read-only */}
+      <Panel kicker="Infracciones" title="Penalizaciones" icon="shield">
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+          {[{ fighter: a, pens: pensA }, { fighter: b, pens: pensB }].map(({ fighter, pens }) => (
+            <div key={fighter.id}>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: fighter.color }}>{fighter.name}</div>
+              {pens.length === 0 ? (
+                <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin penalizaciones</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                  {pens.map((pk) => {
+                    const pt = PENALTY_TYPES.find(p => p.key === pk);
+                    return (
+                      <div key={pk} className="nx-chip"
+                        style={{ background: 'color-mix(in srgb, #ff6b6b 22%, transparent)', borderColor: '#ff6b6b', color: '#ff6b6b' }}>
+                        {pt?.key === 'descalificado' ? '⚠ Descalificado' : `${pt?.label} −${pt?.pts}`}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {pens.length > 0 && !pens.includes('descalificado') && (
+                <div className="nx-data" style={{ fontSize: 10, color: '#ff6b6b', marginTop: 8 }}>
+                  Total penalización: −{sumPenalties(pens).toFixed(1)} pts
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      {/* Feedback */}
+      <Panel kicker="Retroalimentación del árbitro" title="Feedback" icon="target">
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+          {[{ fighter: a, text: combat.feedback_a }, { fighter: b, text: combat.feedback_b }].map(({ fighter, text }) => (
+            <div key={fighter.id}>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8, color: fighter.color }}>{fighter.name}</div>
+              {text ? (
+                <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--txt-dim)',
+                  background: 'var(--space-panel-solid)', border: '1px solid var(--holo-line)',
+                  borderRadius: 'var(--radius-sm)', padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
+                  {text}
+                </div>
+              ) : (
+                <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', fontStyle: 'italic' }}>
+                  No hay feedback registrado
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Panel>
+
     </div>
   );
 }
@@ -384,12 +797,20 @@ export function RankingView({ S }) {
 }
 
 /* ===================== COMBATES ===================== */
-export function CombatesView({ S, user }) {
+export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) {
   const [bet,        setBet]        = useState(null);
   const [challenge,  setChallenge]  = useState(false);
   const [scoring,    setScoring]    = useState(null);
+  const [viewing,    setViewing]    = useState(null);
   const [pending,    setPending]    = useState([]);
   const [accepting,  setAccepting]  = useState(null); // challenge a aceptar
+
+  useEffect(() => {
+    if (initialViewCombat) {
+      setViewing(initialViewCombat);
+      onClearViewCombat?.();
+    }
+  }, [initialViewCombat]);
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -406,6 +827,10 @@ export function CombatesView({ S, user }) {
     setPending(p => p.filter(c => c.id !== id));
     toast('Desafío rechazado', { tone: 'dim', icon: 'x' });
   };
+
+  if (viewing) {
+    return <CombatViewScreen combat={viewing} onClose={() => setViewing(null)} S={S} />;
+  }
 
   if (scoring) {
     return <ScoringScreen combat={scoring} onClose={() => setScoring(null)} S={S} />;
@@ -483,7 +908,7 @@ export function CombatesView({ S, user }) {
         <div style={{ display: 'grid', gap: 14 }}>
           {S.combats.length === 0
             ? <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>No hay combates en cartelera</div>
-            : S.combats.map((m) => <CombatCard key={m.id} m={m} S={S} onBet={(pick) => setBet({ combat: m, pick })} onScore={() => setScoring(m)} />)}
+            : S.combats.map((m) => <CombatCard key={m.id} m={m} S={S} onBet={(pick) => setBet({ combat: m, pick })} onScore={() => setScoring(m)} onView={m.resolved ? () => setViewing(m) : undefined} />)}
         </div>
       </Panel>
 
@@ -529,7 +954,7 @@ export function CombatesView({ S, user }) {
   );
 }
 
-export function CombatCard({ m, S, onBet, onScore }) {
+export function CombatCard({ m, S, onBet, onScore, onView }) {
   const a = m._a ?? S.byId(m.a);
   const b = m._b ?? S.byId(m.b);
   const myBet = S.bets.find(x => x.combatId === m.id);
@@ -568,8 +993,9 @@ export function CombatCard({ m, S, onBet, onScore }) {
           <Btn sm kind="accent" icon="target" onClick={onScore}>Puntuar combate</Btn>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', marginTop: 14, color: 'var(--green-500)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           <Chip tone="green" icon="trophy">Ganó {(m.winner === 'a' ? a : b).name}</Chip>
+          {onView && <Btn sm onClick={onView}>Ver evaluación</Btn>}
         </div>
       )}
     </div>
