@@ -442,8 +442,155 @@ function HyperspaceLines() {
   );
 }
 
+/* ─── ANIMACIONES DE VIAJE ───────────────────────────────── */
+function SpaceshipAnim() {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      {Array.from({ length: 26 }, (_, i) => {
+        const top = 2 + i * 3.8;
+        const opBase = [0.18, 0.28, 0.14, 0.35, 0.22, 0.42][i % 6];
+        const dur = [0.48, 0.52, 0.44, 0.56, 0.50, 0.46][i % 6];
+        const delay = (i % 10) * 0.05;
+        const bright = i % 7 === 0;
+        return (
+          <div key={i} style={{
+            position: 'absolute', top: `${top}%`,
+            left: 0, right: 0, height: bright ? 2 : 1,
+            background: bright
+              ? `linear-gradient(90deg, transparent 0%, rgba(200,240,255,0.05) 15%, rgba(200,240,255,0.9) 52%, rgba(255,255,255,1) 58%, rgba(200,240,255,0.05) 80%, transparent 100%)`
+              : `linear-gradient(90deg, transparent 0%, rgba(56,205,240,${opBase * 0.4}) 15%, rgba(120,210,255,${opBase}) 50%, rgba(220,240,255,0.8) 58%, transparent 100%)`,
+            animation: `nx-sweep ${dur}s linear infinite`,
+            animationDelay: `${delay}s`,
+          }} />
+        );
+      })}
+      <svg width="200" height="88" viewBox="0 0 200 88" style={{ position: 'relative', zIndex: 2, filter: 'drop-shadow(0 0 16px rgba(56,205,240,0.85))' }}>
+        <defs>
+          <radialGradient id="eng1" cx="0%" cy="50%" r="100%">
+            <stop offset="0%" stopColor="rgba(56,205,240,0.9)" />
+            <stop offset="100%" stopColor="transparent" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="18" cy="46" rx="22" ry="7" fill="url(#eng1)" opacity="0.75" />
+        <path d="M38,46 L158,34 L182,46 L158,58 Z" fill="#0d2240" stroke="#38cdf0" strokeWidth="1.5" />
+        <path d="M80,34 L108,14 L118,26 L92,36 Z" fill="#0a1a30" stroke="#38cdf0" strokeWidth="1" />
+        <path d="M80,58 L108,74 L118,62 L92,54 Z" fill="#0a1a30" stroke="#38cdf0" strokeWidth="1" />
+        <ellipse cx="150" cy="46" rx="18" ry="10" fill="#091828" stroke="#38cdf0" strokeWidth="1.2" />
+        <ellipse cx="152" cy="45" rx="11" ry="6" fill="rgba(56,205,240,0.18)" />
+        <ellipse cx="154" cy="44" rx="5" ry="2.8" fill="rgba(56,205,240,0.38)" />
+        <path d="M178,42 L196,46 L178,50 Z" fill="rgba(56,205,240,0.75)" />
+        <circle cx="40" cy="42" r="5.5" fill="#152a50" stroke="rgba(56,205,240,0.55)" strokeWidth="1" />
+        <circle cx="40" cy="50" r="5.5" fill="#152a50" stroke="rgba(56,205,240,0.55)" strokeWidth="1" />
+        <circle cx="37" cy="42" r="3.5" fill="rgba(56,205,240,0.55)" style={{ animation: 'nx-pulse 0.35s infinite' }} />
+        <circle cx="37" cy="50" r="3.5" fill="rgba(120,230,255,0.65)" style={{ animation: 'nx-pulse 0.35s infinite', animationDelay: '0.17s' }} />
+      </svg>
+      <div className="nx-display" style={{ marginTop: 40, fontSize: 17, color: 'var(--holo)', letterSpacing: '0.14em', animation: 'nx-pulse 1.3s ease-in-out infinite' }}>
+        VIAJE ESPACIAL
+      </div>
+      <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 8, letterSpacing: '0.2em' }}>
+        CALCULANDO RUTA DE RETORNO...
+      </div>
+    </div>
+  );
+}
+
+function VehicleAnim() {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      {Array.from({ length: 20 }, (_, i) => {
+        const top = 53 + i * 2.3;
+        const opBase = [0.12, 0.22, 0.08, 0.30, 0.16, 0.35][i % 6];
+        const dur = [0.38, 0.44, 0.40, 0.50, 0.42, 0.36][i % 6];
+        const bright = i % 5 === 0;
+        return (
+          <div key={i} style={{
+            position: 'absolute', top: `${top}%`,
+            left: 0, right: 0, height: bright ? 2 : 1,
+            background: bright
+              ? `linear-gradient(90deg, transparent 0%, rgba(255,220,100,0.05) 15%, rgba(255,200,60,0.85) 52%, rgba(255,240,180,1) 58%, rgba(255,200,60,0.05) 82%, transparent 100%)`
+              : `linear-gradient(90deg, transparent 0%, rgba(255,160,50,${opBase * 0.4}) 15%, rgba(255,180,70,${opBase}) 50%, rgba(255,230,140,0.75) 58%, transparent 100%)`,
+            animation: `nx-sweep ${dur}s linear infinite`,
+            animationDelay: `${i * 0.045}s`,
+          }} />
+        );
+      })}
+      <div style={{ position: 'absolute', top: '57%', left: '5%', right: '5%', height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,160,50,0.35) 20%, rgba(255,180,60,0.55) 50%, rgba(255,160,50,0.35) 80%, transparent)' }} />
+      <svg width="240" height="82" viewBox="0 0 240 82" style={{ position: 'relative', zIndex: 2, filter: 'drop-shadow(0 0 14px rgba(255,160,50,0.75))', transform: 'translateY(10px)' }}>
+        <ellipse cx="120" cy="66" rx="72" ry="8" fill="rgba(255,140,20,0.10)" />
+        <ellipse cx="120" cy="64" rx="50" ry="4.5" fill="rgba(255,160,40,0.22)" style={{ animation: 'nx-pulse 0.7s infinite' }} />
+        <ellipse cx="120" cy="42" rx="82" ry="20" fill="#140e05" stroke="rgba(255,160,50,0.65)" strokeWidth="1.5" />
+        <path d="M74,42 Q90,22 118,24 Q148,22 166,42 Z" fill="#0c1620" stroke="rgba(56,205,240,0.45)" strokeWidth="1" />
+        <path d="M84,42 Q98,28 118,29 Q140,28 156,42 Z" fill="rgba(56,205,240,0.07)" />
+        <path d="M198,38 L226,42 L198,46 Z" fill="rgba(255,160,50,0.88)" />
+        <path d="M44,36 L16,26 L20,38 Z" fill="rgba(255,150,40,0.45)" />
+        <path d="M44,48 L16,58 L20,46 Z" fill="rgba(255,150,40,0.45)" />
+        <line x1="55" y1="39" x2="185" y2="37" stroke="rgba(255,155,45,0.28)" strokeWidth="0.8" />
+        <line x1="55" y1="45" x2="185" y2="47" stroke="rgba(255,155,45,0.28)" strokeWidth="0.8" />
+        <circle cx="216" cy="41" r="4.5" fill="rgba(255,235,160,0.92)" />
+        <circle cx="216" cy="41" r="8" fill="rgba(255,230,140,0.18)" />
+        <circle cx="47" cy="39" r="6.5" fill="#100a04" stroke="rgba(255,120,20,0.55)" strokeWidth="1" />
+        <circle cx="47" cy="47" r="6.5" fill="#100a04" stroke="rgba(255,120,20,0.55)" strokeWidth="1" />
+        <circle cx="44" cy="39" r="4" fill="rgba(255,120,20,0.55)" style={{ animation: 'nx-pulse 0.45s infinite' }} />
+        <circle cx="44" cy="47" r="4" fill="rgba(255,130,30,0.55)" style={{ animation: 'nx-pulse 0.45s infinite', animationDelay: '0.22s' }} />
+      </svg>
+      <div className="nx-display" style={{ marginTop: 30, fontSize: 17, color: '#ffb01f', letterSpacing: '0.14em', animation: 'nx-pulse 1.3s ease-in-out infinite' }}>
+        EN RUTA
+      </div>
+      <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 8, letterSpacing: '0.2em' }}>
+        DESPLAZÁNDOSE POR EL TERRITORIO...
+      </div>
+    </div>
+  );
+}
+
+function TravelOverlay({ kind, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 1750);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 300,
+      background: kind === 'espacio'
+        ? 'radial-gradient(ellipse at 50% 60%, #071428 0%, #04070f 100%)'
+        : 'radial-gradient(ellipse at 50% 75%, #1c1408 0%, #08080a 100%)',
+      animation: 'nx-fade-up 0.25s ease both',
+      overflow: 'hidden',
+    }}>
+      {kind === 'espacio' ? <SpaceshipAnim /> : <VehicleAnim />}
+    </div>
+  );
+}
+
+/* ─── CABECERA CON BOTÓN VOLVER ──────────────────────────── */
+function VolverHeader({ onVolver, crumbs }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+      <button
+        onClick={onVolver}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'rgba(56,205,240,0.07)',
+          border: '1px solid rgba(56,205,240,0.25)',
+          borderRadius: 8, padding: '6px 14px',
+          cursor: 'pointer', color: 'var(--holo)',
+          fontSize: 11, fontFamily: 'var(--font-data)',
+          letterSpacing: '0.1em', flexShrink: 0,
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.boxShadow = '0 0 12px -3px var(--holo)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.07)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; e.currentTarget.style.boxShadow = 'none'; }}
+      >
+        ← VOLVER
+      </button>
+      <BreadcrumbNav crumbs={crumbs} />
+    </div>
+  );
+}
+
 /* ─── VISTA SISTEMA SOLAR ───────────────────────────────── */
-function SistemaView({ sistemaId, onSelectPlaneta, onBack }) {
+function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, myUserId }) {
   const [sistema, setSistema] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePlaneta, setActivePlaneta] = useState(null);
@@ -470,12 +617,12 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack }) {
 
   return (
     <div className="nx-fade">
-      <BreadcrumbNav crumbs={[
-        { label: 'Galaxia', onClick: onBack },
-        { label: sistema.nombre },
-      ]} />
+      <VolverHeader
+        onVolver={() => onTravel('espacio', onBack)}
+        crumbs={[{ label: 'Galaxia' }, { label: sistema.nombre }]}
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px 220px', gap: 20, marginTop: 0 }}>
         {/* ── visor del sistema ── */}
         <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: 500,
           background: 'linear-gradient(180deg,#07101f,#04070f)' }}>
@@ -645,13 +792,20 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack }) {
             </Panel>
           )}
         </div>
+
+        {/* ── panel presentes ── */}
+        <PresentesPanel
+          presentes={sistema.presentes_personajes ?? []}
+          onChat={onChat}
+          myUserId={myUserId}
+        />
       </div>
     </div>
   );
 }
 
 /* ─── VISTA PLANETA ─────────────────────────────────────── */
-function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
+function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, myUserId }) {
   const [planeta, setPlaneta] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -681,13 +835,12 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
 
   return (
     <div className="nx-fade">
-      <BreadcrumbNav crumbs={[
-        { label: 'Galaxia', onClick: onBack },
-        { label: planeta.sistema?.nombre, onClick: onBackSistema },
-        { label: planeta.nombre },
-      ]} />
+      <VolverHeader
+        onVolver={() => onTravel('espacio', onBack)}
+        crumbs={[{ label: 'Galaxia' }, { label: planeta.sistema?.nombre }, { label: planeta.nombre }]}
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, marginTop: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px 220px', gap: 20, marginTop: 0 }}>
         {/* mapa del planeta */}
         <Panel title={planeta.nombre} kicker="MAPA PLANETARIO" icon="target"
           right={<Chip tone={hostilidadStyle(planeta.hostilidad).text !== '#8aa0c0' ? 'orange' : 'default'}>
@@ -856,13 +1009,20 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onBackSistema }) {
             </Panel>
           )}
         </div>
+
+        {/* ── panel presentes ── */}
+        <PresentesPanel
+          presentes={planeta.presentes_personajes ?? []}
+          onChat={onChat}
+          myUserId={myUserId}
+        />
       </div>
     </div>
   );
 }
 
 /* ─── VISTA ZONA ────────────────────────────────────────── */
-function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
+function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, myUserId }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -887,82 +1047,94 @@ function ZonaView({ zonaId, onSelectLugar, onBack, breadcrumbs }) {
 
   return (
     <div className="nx-fade">
-      <BreadcrumbNav crumbs={[...breadcrumbs, { label: zona.nombre }]} />
+      <VolverHeader
+        onVolver={() => onTravel('vehiculo', onBack)}
+        crumbs={[...breadcrumbs, { label: zona.nombre }]}
+      />
 
-      <div style={{
-        marginTop: 16,
-        position: 'relative',
-        borderRadius: 12,
-        overflow: 'hidden',
-      }}>
-        {zonaImagen && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: `url(${zonaImagen})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            opacity: 0.22,
-          }} />
-        )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 20, marginTop: 0, alignItems: 'start' }}>
+        {/* columna principal */}
         <div style={{
-          position: 'absolute', inset: 0,
-          background: 'radial-gradient(ellipse at 58% 38%, rgba(56,205,240,0.09) 0%, rgba(4,10,30,0.55) 70%)',
-          backgroundImage: [
-            'radial-gradient(ellipse at 58% 38%, rgba(56,205,240,0.09) 0%, rgba(4,10,30,0.55) 70%)',
-            'linear-gradient(rgba(56,205,240,0.06) 1px, transparent 1px)',
-            'linear-gradient(90deg, rgba(56,205,240,0.06) 1px, transparent 1px)',
-          ].join(', '),
-          backgroundSize: 'auto, 48px 48px, 48px 48px',
-          pointerEvents: 'none',
-        }} />
-        <div style={{ position: 'relative', zIndex: 1, padding: 12 }}>
-        {/* header de zona */}
-        <div className="nx-panel solid" style={{
-          padding: '20px 24px', marginBottom: 20,
-          borderLeft: `3px solid ${hs.border}`,
-          background: hs.bg,
+          position: 'relative',
+          borderRadius: 12,
+          overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-            {zonaImagen && (
-              <img src={zonaImagen} alt={zona.nombre} style={{
-                width: 100, height: 100, objectFit: 'cover', borderRadius: 8,
-                border: `1px solid ${hs.border}55`, flexShrink: 0,
-              }} />
-            )}
-            <div style={{ flex: 1 }}>
-              <div className="nx-kicker" style={{ marginBottom: 4 }}>ZONA</div>
-              <div className="nx-display" style={{ fontSize: 22, color: 'var(--txt)', marginBottom: 8 }}>{zona.nombre}</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: zona.historia ? 12 : 0 }}>
-                <Chip style={{ color: hs.text, borderColor: hs.border + '66', background: hs.bg }}>{hs.label}</Chip>
-                {zona.faccion && <Chip tone="dim">{zona.faccion}</Chip>}
-                {zona.estrato_social && <Chip tone="dim">{zona.estrato_social}</Chip>}
-                {zona.rareza && <Chip style={{ color: rarezaColor(zona.rareza) }}>{zona.rareza}</Chip>}
-              </div>
-              {zona.historia && (
-                <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>
-                  {zona.historia}
-                </p>
+          {zonaImagen && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: `url(${zonaImagen})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              opacity: 0.22,
+            }} />
+          )}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'radial-gradient(ellipse at 58% 38%, rgba(56,205,240,0.09) 0%, rgba(4,10,30,0.55) 70%)',
+            backgroundImage: [
+              'radial-gradient(ellipse at 58% 38%, rgba(56,205,240,0.09) 0%, rgba(4,10,30,0.55) 70%)',
+              'linear-gradient(rgba(56,205,240,0.06) 1px, transparent 1px)',
+              'linear-gradient(90deg, rgba(56,205,240,0.06) 1px, transparent 1px)',
+            ].join(', '),
+            backgroundSize: 'auto, 48px 48px, 48px 48px',
+            pointerEvents: 'none',
+          }} />
+          <div style={{ position: 'relative', zIndex: 1, padding: 12 }}>
+          {/* header de zona */}
+          <div className="nx-panel solid" style={{
+            padding: '20px 24px', marginBottom: 20,
+            borderLeft: `3px solid ${hs.border}`,
+            background: hs.bg,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+              {zonaImagen && (
+                <img src={zonaImagen} alt={zona.nombre} style={{
+                  width: 100, height: 100, objectFit: 'cover', borderRadius: 8,
+                  border: `1px solid ${hs.border}55`, flexShrink: 0,
+                }} />
               )}
+              <div style={{ flex: 1 }}>
+                <div className="nx-kicker" style={{ marginBottom: 4 }}>ZONA</div>
+                <div className="nx-display" style={{ fontSize: 22, color: 'var(--txt)', marginBottom: 8 }}>{zona.nombre}</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: zona.historia ? 12 : 0 }}>
+                  <Chip style={{ color: hs.text, borderColor: hs.border + '66', background: hs.bg }}>{hs.label}</Chip>
+                  {zona.faccion && <Chip tone="dim">{zona.faccion}</Chip>}
+                  {zona.estrato_social && <Chip tone="dim">{zona.estrato_social}</Chip>}
+                  {zona.rareza && <Chip style={{ color: rarezaColor(zona.rareza) }}>{zona.rareza}</Chip>}
+                </div>
+                {zona.historia && (
+                  <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>
+                    {zona.historia}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* grid de lugares exteriores */}
-        <div className="nx-kicker" style={{ marginBottom: 12 }}>LUGARES VISITABLES — {exteriores.length}</div>
+          {/* grid de lugares exteriores */}
+          <div className="nx-kicker" style={{ marginBottom: 12 }}>LUGARES VISITABLES — {exteriores.length}</div>
 
-        {exteriores.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
-            Sin lugares registrados en esta zona
+          {exteriores.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
+              Sin lugares registrados en esta zona
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+            {exteriores.map((l) => (
+              <LugarCard key={l.id} lugar={l} presentes={l.presentes_personajes ?? []} onClick={() => handleSelectLugar(l)} />
+            ))}
           </div>
-        )}
+          </div>
+        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
-          {exteriores.map((l) => (
-            <LugarCard key={l.id} lugar={l} presentes={l.presentes_personajes ?? []} onClick={() => handleSelectLugar(l)} />
-          ))}
-        </div>
-        </div>
+        {/* panel presentes */}
+        <PresentesPanel
+          presentes={zona.presentes_personajes ?? []}
+          onChat={onChat}
+          myUserId={myUserId}
+        />
       </div>
     </div>
   );
@@ -1047,7 +1219,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs, onLugarChange }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onChat, myUserId }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1087,24 +1259,26 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs, onLugarChange })
     return () => { cancelled = true; };
   }, [currentId]);
 
-  const navigateTo = (conn) => setNavStack((prev) => [...prev, conn.id]);
+  const navigateTo = (conn) => onTravel('vehiculo', () => setNavStack((prev) => [...prev, conn.id]));
 
   /* breadcrumbs dinámicos: ruta base + pasos interiores visitados */
-  const stackCrumbs = navStack.slice(0, -1).map((id, idx) => ({
+  const stackCrumbs = navStack.slice(0, -1).map((id) => ({
     label: navNames[id] ?? '…',
-    onClick: () => setNavStack((prev) => prev.slice(0, idx + 1)),
   }));
 
   const goBack = navStack.length > 1
-    ? () => setNavStack((prev) => prev.slice(0, -1))
-    : onBack;
+    ? () => onTravel('vehiculo', () => setNavStack((prev) => prev.slice(0, -1)))
+    : () => onTravel('vehiculo', onBack);
 
   if (loading) return <LoadingHUD text="EXPLORANDO UBICACIÓN..." />;
 
   /* ── pantalla de acceso denegado ── */
   if (accessDenied) return (
     <div className="nx-fade">
-      <BreadcrumbNav crumbs={[...breadcrumbs, ...stackCrumbs, { label: 'Acceso restringido' }]} />
+      <VolverHeader
+        onVolver={goBack}
+        crumbs={[...breadcrumbs, ...stackCrumbs, { label: 'Acceso restringido' }]}
+      />
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', minHeight: 420, gap: 28, textAlign: 'center',
@@ -1154,7 +1328,10 @@ function LugarView({ lugarId, onSelectNpc, onBack, breadcrumbs, onLugarChange })
 
   return (
     <div className="nx-fade">
-      <BreadcrumbNav crumbs={[...breadcrumbs, ...stackCrumbs, { label: lugar.nombre }]} />
+      <VolverHeader
+        onVolver={goBack}
+        crumbs={[...breadcrumbs, ...stackCrumbs, { label: lugar.nombre }]}
+      />
 
       {/* fondo imagen del lugar */}
       <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginTop: 16, marginBottom: 24 }}>
@@ -1338,6 +1515,18 @@ function NpcCard({ npc, onClick }) {
             <Icon name="user" size={44} style={{ color: 'var(--holo)' }} />
           </div>
         )}
+        {npc.MisionID && (
+          <div style={{
+            position: 'absolute', top: 8, right: 8, zIndex: 2,
+            width: 22, height: 22, borderRadius: '50%',
+            background: 'rgba(230,179,37,0.92)',
+            boxShadow: '0 0 10px 2px rgba(230,179,37,0.55)',
+            display: 'grid', placeItems: 'center',
+            fontSize: 13, fontWeight: 900, color: '#1a1000',
+            fontFamily: 'var(--font-data)',
+            animation: 'nx-pulse 2s ease-in-out infinite',
+          }}>!</div>
+        )}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           background: 'linear-gradient(transparent, rgba(4,7,15,0.95))',
@@ -1391,23 +1580,31 @@ function NpcCard({ npc, onClick }) {
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
 function DialogoRPG({ npc, onClose }) {
-  const [messages, setMessages]   = useState([]);
-  const [input, setInput]         = useState('');
-  const [phase, setPhase]         = useState('greeting'); // greeting | dialog | mission
-  const [typing, setTyping]       = useState(false);
-  const bottomRef                 = useRef(null);
+  const [messages, setMessages] = useState([]);
+  const [phase, setPhase]       = useState('greeting');
+  const [typing, setTyping]     = useState(false);
+  const bottomRef               = useRef(null);
 
-  /* opciones de diálogo basadas en la interacción del NPC */
-  const parseOptions = (texto) => {
-    if (!texto) return [];
-    const lines = texto.split('\n').filter(l => l.trim().startsWith('-'));
-    return lines.map(l => l.replace(/^-\s*/, '').trim()).slice(0, 4);
-  };
-
-  const npcOptions = parseOptions(npc.interaccion);
+  /* Parsea "- keyword[misionId]: respuesta" o "- keyword: respuesta" */
+  const npcOptions = useMemo(() => {
+    if (!npc.interaccion) return [];
+    return npc.interaccion.split('\n')
+      .filter(l => l.trim().startsWith('-'))
+      .map(l => {
+        const clean = l.replace(/^-\s*/, '').trim();
+        const match = clean.match(/^(.*?)(?:\[(\d+)\])?\s*:\s*(.*)$/);
+        if (!match) return null;
+        return {
+          keyword:  match[1].trim(),
+          misionId: match[2] ? parseInt(match[2]) : null,
+          response: match[3].trim(),
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 4);
+  }, [npc.interaccion]);
 
   useEffect(() => {
-    /* saludo inicial */
     if (npc.saludo) {
       setTyping(true);
       setTimeout(() => {
@@ -1422,57 +1619,24 @@ function DialogoRPG({ npc, onClose }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  const sendMessage = useCallback((text) => {
-    if (!text.trim()) return;
-    const playerMsg = { from: 'player', text: text.trim(), ts: Date.now() };
-    setMessages(prev => [...prev, playerMsg]);
-    setInput('');
+  const handleOption = useCallback(async (opt) => {
+    setMessages(prev => [...prev, { from: 'player', text: opt.keyword, ts: Date.now() }]);
     setTyping(true);
 
-    setTimeout(() => {
-      let response = '';
-      const lower = text.toLowerCase();
-
-      /* respuesta basada en palabras clave de la interacción */
-      if (npc.interaccion) {
-        const lines = npc.interaccion.split('\n');
-        for (const line of lines) {
-          const [keyword, ...rest] = line.split(':');
-          if (keyword && rest.length && lower.includes(keyword.toLowerCase().replace(/^-/, '').trim())) {
-            response = rest.join(':').trim();
-            break;
-          }
-        }
+    if (opt.misionId) {
+      try {
+        await apiPost(`/misiones/${opt.misionId}/accept`, {});
+        toast('¡Misión aceptada!', { tone: 'success', icon: 'star' });
+      } catch {
+        toast('Error al aceptar la misión', { tone: 'error', icon: 'x' });
       }
-
-      if (!response) {
-        const fallbacks = [
-          'No tengo más información sobre eso, viajero.',
-          'Eso está más allá de lo que puedo decirte.',
-          'Busca en otro lugar esa respuesta.',
-          'Interesting... pero no es algo que me incumba.',
-        ];
-        response = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-      }
-
-      if (npc.MisionID && lower.includes('misión')) {
-        response = `Tengo una misión para ti. ${response || 'Habla con el coordinador para más detalles.'}`;
-        setPhase('mission');
-      }
-
-      setMessages(prev => [...prev, { from: 'npc', text: response, ts: Date.now() }]);
-      setTyping(false);
-    }, 900 + Math.random() * 700);
-  }, [npc]);
-
-  const handleOption = (opt) => sendMessage(opt);
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
     }
-  };
+
+    setTimeout(() => {
+      setMessages(prev => [...prev, { from: 'npc', text: opt.response, ts: Date.now() }]);
+      setTyping(false);
+    }, 800);
+  }, []);
 
   const STATS = [
     { label: 'VID', val: npc.vida },
@@ -1547,103 +1711,119 @@ function DialogoRPG({ npc, onClose }) {
         </button>
       </div>
 
-      {/* área de mensajes */}
-      <div style={{
-        flex: 1, overflowY: 'auto', padding: '20px 24px',
-        display: 'flex', flexDirection: 'column', gap: 14,
-        backgroundImage: 'radial-gradient(ellipse at 60% 30%, rgba(0,71,186,0.08), transparent 60%)',
-      }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{
-            display: 'flex',
-            justifyContent: m.from === 'player' ? 'flex-end' : 'flex-start',
-            animation: 'nx-fade-up 0.25s ease both',
+      {/* cuerpo: mensajes + barra lateral de opciones */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* área de mensajes */}
+        <div style={{
+          flex: 1, overflowY: 'auto', padding: '20px 24px',
+          display: 'flex', flexDirection: 'column', gap: 14,
+          backgroundImage: 'radial-gradient(ellipse at 60% 30%, rgba(0,71,186,0.08), transparent 60%)',
+        }}>
+          {messages.map((m, i) => (
+            <div key={i} style={{
+              display: 'flex',
+              justifyContent: m.from === 'player' ? 'flex-end' : 'flex-start',
+              animation: 'nx-fade-up 0.25s ease both',
+            }}>
+              <div style={{
+                maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
+                fontSize: 13, lineHeight: 1.55,
+                ...(m.from === 'npc' ? {
+                  background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
+                  color: 'var(--txt)', borderBottomLeftRadius: 4,
+                } : {
+                  background: 'rgba(0,71,186,0.35)', border: '1px solid rgba(56,205,240,0.3)',
+                  color: 'var(--txt)', borderBottomRightRadius: 4,
+                }),
+              }}>
+                {m.from === 'npc' && (
+                  <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 5 }}>
+                    {npc.nombre.toUpperCase()}
+                  </div>
+                )}
+                {m.text}
+              </div>
+            </div>
+          ))}
+
+          {typing && (
+            <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'nx-fade-up 0.2s ease' }}>
+              <div style={{
+                background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
+                borderRadius: '12px 12px 12px 4px', padding: '12px 16px',
+                display: 'flex', gap: 5, alignItems: 'center',
+              }}>
+                {[0, 1, 2].map((d) => (
+                  <div key={d} style={{
+                    width: 6, height: 6, borderRadius: '50%', background: 'var(--holo)',
+                    animation: `nx-pulse 1s ${d * 0.2}s infinite`,
+                  }} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {/* barra lateral derecha de opciones */}
+        {npcOptions.length > 0 && phase === 'dialog' && (
+          <div style={{
+            width: 210, flexShrink: 0,
+            borderLeft: '1px solid var(--holo-line)',
+            background: 'rgba(5,12,26,0.96)',
+            overflowY: 'auto',
+            display: 'flex', flexDirection: 'column',
+            padding: '16px 10px', gap: 6,
           }}>
             <div style={{
-              maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
-              fontSize: 13, lineHeight: 1.55,
-              ...(m.from === 'npc' ? {
-                background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
-                color: 'var(--txt)', borderBottomLeftRadius: 4,
-              } : {
-                background: 'rgba(0,71,186,0.35)', border: '1px solid rgba(56,205,240,0.3)',
-                color: 'var(--txt)', borderBottomRightRadius: 4,
-              }),
+              fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
+              letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6,
+              paddingBottom: 8, borderBottom: '1px solid var(--holo-line)',
             }}>
-              {m.from === 'npc' && (
-                <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 5 }}>
-                  {npc.nombre.toUpperCase()}
-                </div>
-              )}
-              {m.text}
+              OPCIONES DE DIÁLOGO
             </div>
-          </div>
-        ))}
-
-        {typing && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'nx-fade-up 0.2s ease' }}>
-            <div style={{
-              background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
-              borderRadius: '12px 12px 12px 4px', padding: '12px 16px',
-              display: 'flex', gap: 5, alignItems: 'center',
-            }}>
-              {[0, 1, 2].map((d) => (
-                <div key={d} style={{
-                  width: 6, height: 6, borderRadius: '50%', background: 'var(--holo)',
-                  animation: `nx-pulse 1s ${d * 0.2}s infinite`,
-                }} />
-              ))}
-            </div>
+            {npcOptions.map((opt, i) => (
+              <button key={i} onClick={() => handleOption(opt)} disabled={typing}
+                style={{
+                  width: '100%', textAlign: 'left',
+                  background: opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)',
+                  border: `1px solid ${opt.misionId ? 'rgba(230,179,37,0.30)' : 'rgba(56,205,240,0.18)'}`,
+                  borderRadius: 8, padding: '9px 11px',
+                  cursor: typing ? 'wait' : 'pointer',
+                  fontSize: 12, color: 'var(--txt)', fontFamily: 'var(--font-body)',
+                  transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 8,
+                  opacity: typing ? 0.45 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (typing) return;
+                  e.currentTarget.style.borderColor = opt.misionId ? '#E6B325' : 'var(--holo)';
+                  e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.18)' : 'rgba(56,205,240,0.14)';
+                  e.currentTarget.style.boxShadow = opt.misionId ? '0 0 10px -3px rgba(230,179,37,0.4)' : '0 0 10px -3px rgba(56,205,240,0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = opt.misionId ? 'rgba(230,179,37,0.30)' : 'rgba(56,205,240,0.18)';
+                  e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: 4,
+                  background: opt.misionId ? 'rgba(230,179,37,0.20)' : 'rgba(56,205,240,0.12)',
+                  display: 'grid', placeItems: 'center',
+                  fontSize: opt.misionId ? 11 : 10,
+                  color: opt.misionId ? '#E6B325' : 'var(--holo)',
+                  fontWeight: 900,
+                }}>
+                  {opt.misionId ? '!' : '›'}
+                </span>
+                <span style={{ flex: 1, lineHeight: 1.35 }}>{opt.keyword}</span>
+              </button>
+            ))}
           </div>
         )}
 
-        <div ref={bottomRef} />
-      </div>
-
-      {/* opciones de diálogo rápido */}
-      {npcOptions.length > 0 && phase === 'dialog' && (
-        <div style={{
-          padding: '12px 20px', borderTop: '1px solid var(--holo-line)',
-          display: 'flex', gap: 8, flexWrap: 'wrap',
-          background: 'rgba(7,16,31,0.9)',
-        }}>
-          {npcOptions.map((opt, i) => (
-            <button key={i} onClick={() => handleOption(opt)}
-              style={{
-                background: 'rgba(56,205,240,0.08)', border: '1px solid var(--holo-line)',
-                borderRadius: 20, padding: '6px 14px', cursor: 'pointer',
-                fontSize: 12, color: 'var(--txt)', fontFamily: 'var(--font-body)',
-                transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 6,
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'rgba(56,205,240,0.15)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; }}
-            >
-              <Icon name="arrow" size={11} style={{ color: 'var(--holo)' }} />
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* input libre */}
-      <div style={{
-        padding: '12px 20px', borderTop: '1px solid var(--holo-line)',
-        display: 'flex', gap: 10,
-        background: 'rgba(4,7,15,0.95)',
-      }}>
-        <input
-          className="nx-input"
-          style={{ flex: 1, fontSize: 13 }}
-          placeholder="Escribe algo..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKey}
-          disabled={typing}
-          autoFocus
-        />
-        <Btn kind="accent" icon="arrow" onClick={() => sendMessage(input)} disabled={typing || !input.trim()}>
-          Enviar
-        </Btn>
       </div>
     </div>
   );
@@ -1667,22 +1847,15 @@ function LoadingHUD({ text }) {
 function BreadcrumbNav({ crumbs }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-      {crumbs.map((c, i) => (
+      {crumbs.filter(c => c.label).map((c, i) => (
         <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {i > 0 && <Icon name="chevron" size={12} style={{ color: 'var(--txt-faint)', flexShrink: 0 }} />}
-          {c.onClick ? (
-            <button onClick={c.onClick} style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, color: 'var(--holo)', fontFamily: 'var(--font-data)',
-              letterSpacing: '0.06em', padding: 0,
-            }}>
-              {c.label}
-            </button>
-          ) : (
-            <span style={{ fontSize: 12, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', letterSpacing: '0.06em' }}>
-              {c.label}
-            </span>
-          )}
+          <span style={{
+            fontSize: 12, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+            color: i === crumbs.filter(c => c.label).length - 1 ? 'var(--txt)' : 'var(--txt-dim)',
+          }}>
+            {c.label}
+          </span>
         </span>
       ))}
     </div>
@@ -1702,8 +1875,269 @@ function InfoRow({ label, value, color }) {
   );
 }
 
+/* ─── PANEL PRESENTES ───────────────────────────────────── */
+function PresentesPanel({ presentes = [], onChat, myUserId }) {
+  return (
+    <div style={{
+      width: 220, flexShrink: 0,
+      display: 'flex', flexDirection: 'column',
+      position: 'sticky', top: 0, alignSelf: 'flex-start',
+    }}>
+      <div className="nx-panel solid" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{
+          padding: '10px 14px', borderBottom: '1px solid var(--holo-line)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <Icon name="user" size={13} style={{ color: 'var(--holo)', opacity: 0.7 }} />
+          <span className="nx-kicker" style={{ fontSize: 9, letterSpacing: '0.14em' }}>PRESENTES</span>
+          {presentes.length > 0 && (
+            <span style={{
+              marginLeft: 'auto', fontSize: 9, fontFamily: 'var(--font-data)',
+              color: 'var(--holo)', background: 'rgba(56,205,240,0.12)',
+              border: '1px solid rgba(56,205,240,0.25)', borderRadius: 10,
+              padding: '1px 7px',
+            }}>{presentes.length}</span>
+          )}
+        </div>
+
+        {presentes.length === 0 ? (
+          <div style={{
+            padding: '24px 14px', textAlign: 'center',
+            color: 'var(--txt-faint)', fontSize: 11,
+            fontFamily: 'var(--font-data)', lineHeight: 1.6,
+          }}>
+            Nadie en<br />este lugar
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {presentes.map((p) => {
+              const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
+              const photoUrl = mediaUrl(p.photo);
+              const isMe = p.user_id === myUserId;
+              return (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px',
+                  borderBottom: '1px solid rgba(56,205,240,0.06)',
+                }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    background: photoUrl ? undefined : color,
+                    border: `2px solid ${color}55`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+                    boxShadow: `0 0 8px ${color}44`,
+                  }}>
+                    {!photoUrl && (p.handle?.[0] ?? '?')}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 11, color: 'var(--txt)', fontFamily: 'var(--font-data)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      fontWeight: 600,
+                    }}>
+                      @{p.handle}
+                    </div>
+                    {isMe && (
+                      <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
+                        (tú)
+                      </div>
+                    )}
+                  </div>
+                  {!isMe && (
+                    <button onClick={() => onChat?.(p)} style={{
+                      background: 'rgba(56,205,240,0.08)',
+                      border: '1px solid rgba(56,205,240,0.25)',
+                      borderRadius: 6, padding: '4px 7px',
+                      cursor: 'pointer', color: 'var(--holo)',
+                      fontSize: 9, fontFamily: 'var(--font-data)',
+                      letterSpacing: '0.06em', flexShrink: 0,
+                      transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.18)'; e.currentTarget.style.borderColor = 'var(--holo)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; }}
+                    >
+                      MSG
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── CHAT MODAL ────────────────────────────────────────── */
+function ChatModal({ target, myUserId, onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput]       = useState('');
+  const [sending, setSending]   = useState(false);
+  const [other, setOther]       = useState(null);
+  const bottomRef               = useRef(null);
+  const intervalRef             = useRef(null);
+
+  const loadMessages = useCallback(() => {
+    if (!target?.user_id) return;
+    apiFetch(`/messages/${target.user_id}`)
+      .then((d) => {
+        setMessages(d.messages ?? []);
+        setOther(d.other);
+      })
+      .catch(() => {});
+  }, [target?.user_id]);
+
+  useEffect(() => {
+    loadMessages();
+    intervalRef.current = setInterval(loadMessages, 5000);
+    return () => clearInterval(intervalRef.current);
+  }, [loadMessages]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const send = useCallback(() => {
+    const body = input.trim();
+    if (!body || sending || !target?.user_id) return;
+    setSending(true);
+    apiPost('/messages', { receiver_id: target.user_id, body })
+      .then(() => { setInput(''); loadMessages(); })
+      .catch(() => toast('Error enviando mensaje', { tone: 'error', icon: 'x' }))
+      .finally(() => setSending(false));
+  }, [input, sending, target?.user_id, loadMessages]);
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const color = SABER_COLORS[(other?.saber_color ?? target?.saber_color)] ?? '#38cdf0';
+  const photoUrl = mediaUrl(other?.photo ?? target?.photo);
+  const displayName = other?.handle ?? target?.handle ?? '?';
+
+  return (
+    <div style={{
+      position: 'fixed', right: 0, top: 0, bottom: 0,
+      width: 360, zIndex: 1100,
+      display: 'flex', flexDirection: 'column',
+      background: 'rgba(4,7,15,0.97)',
+      borderLeft: '1px solid var(--holo-line)',
+      backdropFilter: 'blur(12px)',
+      animation: 'nx-fade-up 0.22s ease both',
+    }}>
+      {/* header */}
+      <div style={{
+        padding: '12px 16px', borderBottom: '1px solid var(--holo-line)',
+        display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+        background: 'rgba(7,16,31,0.9)',
+      }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+          backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          background: photoUrl ? undefined : color,
+          border: `2px solid ${color}66`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+          boxShadow: `0 0 12px ${color}44`,
+        }}>
+          {!photoUrl && displayName[0]}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)', fontFamily: 'var(--font-data)' }}>
+            @{displayName}
+          </div>
+          <div className="nx-kicker" style={{ fontSize: 8, letterSpacing: '0.12em' }}>TRANSMISIÓN DIRECTA</div>
+        </div>
+        <button onClick={onClose} style={{
+          background: 'transparent', border: '1px solid var(--holo-line)',
+          borderRadius: 6, padding: 7, cursor: 'pointer', color: 'var(--txt-dim)',
+          transition: 'all 0.15s', flexShrink: 0,
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.color = 'var(--txt)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+        >
+          <Icon name="x" size={14} />
+        </button>
+      </div>
+
+      {/* messages */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '16px',
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        {messages.length === 0 && (
+          <div style={{
+            textAlign: 'center', color: 'var(--txt-faint)', fontSize: 12,
+            marginTop: 'auto', marginBottom: 'auto', lineHeight: 1.7,
+          }}>
+            Sin mensajes aún.<br />
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>Inicia la transmisión.</span>
+          </div>
+        )}
+        {messages.map((m) => {
+          const isMe = m.sender_id === myUserId;
+          return (
+            <div key={m.id} style={{
+              display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start',
+              animation: 'nx-fade-up 0.2s ease both',
+            }}>
+              <div style={{
+                maxWidth: '80%', padding: '9px 13px', borderRadius: 10,
+                fontSize: 12, lineHeight: 1.55,
+                ...(isMe ? {
+                  background: 'rgba(0,71,186,0.35)', border: '1px solid rgba(56,205,240,0.3)',
+                  color: 'var(--txt)', borderBottomRightRadius: 3,
+                } : {
+                  background: 'rgba(12,30,64,0.8)', border: '1px solid var(--holo-line)',
+                  color: 'var(--txt)', borderBottomLeftRadius: 3,
+                }),
+              }}>
+                {!isMe && (
+                  <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', marginBottom: 4 }}>
+                    @{displayName}
+                  </div>
+                )}
+                {m.body}
+                <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 4, textAlign: isMe ? 'right' : 'left', fontFamily: 'var(--font-data)' }}>
+                  {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {isMe && m.read_at && <span style={{ marginLeft: 4, color: 'var(--holo)' }}>✓</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* input */}
+      <div style={{
+        padding: '10px 12px', borderTop: '1px solid var(--holo-line)',
+        display: 'flex', gap: 8,
+        background: 'rgba(4,7,15,0.95)', flexShrink: 0,
+      }}>
+        <input
+          className="nx-input"
+          style={{ flex: 1, fontSize: 12 }}
+          placeholder="Transmitir mensaje..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKey}
+          disabled={sending}
+          autoFocus
+        />
+        <Btn kind="accent" icon="arrow" onClick={send} disabled={sending || !input.trim()} />
+      </div>
+    </div>
+  );
+}
+
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView({ setMapLocation, initialLocation }) {
+export default function MapaView({ setMapLocation, initialLocation, userId }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
   const [sistema, setSistema]     = useState(null);
@@ -1711,6 +2145,12 @@ export default function MapaView({ setMapLocation, initialLocation }) {
   const [zona, setZona]           = useState(null);
   const [lugar, setLugar]         = useState(null);
   const [dialogNpc, setDialogNpc] = useState(null);
+  const [chatTarget, setChatTarget]     = useState(null);
+  const [pendingTravel, setPendingTravel] = useState(null);
+
+  const triggerTravel = useCallback((kind, fn) => {
+    setPendingTravel({ kind, fn });
+  }, []);
 
   const updateLocation = useCallback((loc) => {
     apiPost('/map/location', loc).catch(() => {});
@@ -1796,17 +2236,17 @@ export default function MapaView({ setMapLocation, initialLocation }) {
     });
   }, [sistema, planeta, zona, setMapLocation, updateLocation]);
 
-  /* breadcrumbs dinámicos */
+  /* breadcrumbs — sólo etiquetas, sin onClick (los links se quitaron) */
   const crumbsZona = [
-    { label: 'Galaxia',         onClick: () => goGalaxy() },
-    { label: sistema?.nombre,   onClick: () => goSistema(sistema) },
-    { label: planeta?.nombre,   onClick: () => goPlaneta(planeta) },
+    { label: 'Galaxia' },
+    { label: sistema?.nombre },
+    { label: planeta?.nombre },
   ].filter(c => c.label);
 
   const crumbsLugar = [
     ...crumbsZona,
-    { label: zona?.nombre, onClick: () => goZona(zona) },
-  ];
+    { label: zona?.nombre },
+  ].filter(c => c.label);
 
   return (
     <div className="nx-fade" style={{ paddingBottom: 40 }}>
@@ -1815,23 +2255,31 @@ export default function MapaView({ setMapLocation, initialLocation }) {
         <SistemaView
           sistemaId={sistema.id}
           onSelectPlaneta={selectPlaneta}
-          onBack={() => goGalaxy()}
+          onBack={goGalaxy}
+          onTravel={triggerTravel}
+          onChat={setChatTarget}
+          myUserId={userId}
         />
       )}
       {nivel === 'planeta' && planeta && (
         <PlanetaView
           planetaId={planeta.id}
           onSelectZona={selectZona}
-          onBack={() => goGalaxy()}
-          onBackSistema={() => goSistema(sistema)}
+          onBack={() => goSistema(sistema)}
+          onTravel={triggerTravel}
+          onChat={setChatTarget}
+          myUserId={userId}
         />
       )}
       {nivel === 'zona' && zona && (
         <ZonaView
           zonaId={zona.id}
           onSelectLugar={selectLugar}
-          onBack={() => goGalaxy()}
+          onBack={() => goPlaneta(planeta)}
+          onTravel={triggerTravel}
           breadcrumbs={crumbsZona}
+          onChat={setChatTarget}
+          myUserId={userId}
         />
       )}
       {nivel === 'lugar' && lugar && (
@@ -1839,13 +2287,37 @@ export default function MapaView({ setMapLocation, initialLocation }) {
           lugarId={lugar.id}
           onSelectNpc={selectNpc}
           onBack={() => goZona(zona)}
+          onTravel={triggerTravel}
           breadcrumbs={crumbsLugar}
           onLugarChange={handleLugarChange}
+          onChat={setChatTarget}
+          myUserId={userId}
         />
       )}
 
       {/* Diálogo RPG */}
       {dialogNpc && <DialogoRPG npc={dialogNpc} onClose={() => setDialogNpc(null)} />}
+
+      {/* Chat con jugador */}
+      {chatTarget && (
+        <ChatModal
+          target={chatTarget}
+          myUserId={userId}
+          onClose={() => setChatTarget(null)}
+        />
+      )}
+
+      {/* Animación de viaje */}
+      {pendingTravel && (
+        <TravelOverlay
+          kind={pendingTravel.kind}
+          onDone={() => {
+            const fn = pendingTravel.fn;
+            setPendingTravel(null);
+            fn();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\TrainingController;
 use App\Http\Controllers\Api\EmblemUploadController;
 use App\Http\Controllers\Api\MisionController;
 use App\Http\Controllers\Api\TemporadaController;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\WidgetLayoutController;
 use App\Http\Controllers\Api\ModuloEntrenamientoController;
 use App\Http\Controllers\Api\InstagramController;
@@ -94,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/misiones/{mision}', [MisionController::class, 'update']);
     Route::delete('/misiones/{mision}', [MisionController::class, 'destroy']);
     Route::post('/misiones/{mision}/assign', [MisionController::class, 'assign']);
+    Route::post('/misiones/{mision}/accept', [MisionController::class, 'accept']);
     Route::delete('/misiones/{mision}/users/{userId}', [MisionController::class, 'unassign']);
     Route::patch('/misiones/{mision}/progress', [MisionController::class, 'updateProgress']);
 
@@ -102,6 +104,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // Mensajes directos
+    Route::get('/messages/{userId}',     [MessageController::class, 'conversation']);
+    Route::post('/messages',             [MessageController::class, 'send']);
 
     // Instagram
     Route::get('/instagram/redirect',    [InstagramController::class, 'redirect']);
