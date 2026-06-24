@@ -6,6 +6,7 @@ import './styles/tokens.css';
 import './styles/hud.css';
 import App from './App.jsx';
 import Login from './Login.jsx';
+import TutorialWizard from './components/TutorialWizard.jsx';
 import { TransmisionOverlay } from './components/TransmisionOverlay.jsx';
 
 function Root() {
@@ -103,6 +104,15 @@ function Root() {
   }
 
   if (!user) return <Login onLogin={handleLogin} />;
+
+  if (!user.character) {
+    return (
+      <TutorialWizard
+        user={user}
+        onComplete={(char) => handleUserUpdate({ ...user, character: char })}
+      />
+    );
+  }
 
   return (
     <>

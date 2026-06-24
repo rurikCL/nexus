@@ -30,11 +30,14 @@ class CharacterController extends Controller
             'gold'        => 'nullable|boolean',
             'grado'       => 'nullable|integer|min:1|max:5',
             'clase'       => 'nullable|string|in:Sentinela,Guardian,Consul',
+            'tier'        => 'nullable|string|in:iniciado,padawan,caballero,maestro,granmaestro',
         ]);
 
         $user = $request->user();
 
-        // Guardar grado y clase en el usuario (no en el personaje)
+        $canEditRango = in_array($user->tier, ['caballero', 'maestro', 'granmaestro']);
+
+        // Guardar grado, clase y tier en el usuario (no en el personaje)
         $userUpdate = [];
         if (array_key_exists('grado', $data)) {
             $userUpdate['grado'] = ($user->tier === 'caballero') ? $data['grado'] : null;
@@ -42,10 +45,13 @@ class CharacterController extends Controller
         if (array_key_exists('clase', $data)) {
             $userUpdate['clase'] = $data['clase'];
         }
+        if (array_key_exists('tier', $data) && $canEditRango) {
+            $userUpdate['tier'] = $data['tier'];
+        }
         if (!empty($userUpdate)) {
             $user->update($userUpdate);
         }
-        unset($data['grado'], $data['clase']);
+        unset($data['grado'], $data['clase'], $data['tier']);
 
         // Validate handle uniqueness excluding current user's character
         $handleQuery = \App\Models\Character::where('handle', $data['handle']);

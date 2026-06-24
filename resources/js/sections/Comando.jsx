@@ -645,10 +645,18 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
 
 /* ===================== MI PERSONAJE ===================== */
 const CLASES_JEDI = [
-  { id: 'Sentinela', label: 'Centinela',  desc: 'Equilibrio entre combate y sabiduría', color: '#38cdf0' },
-  { id: 'Guardian',  label: 'Guardián',   desc: 'Maestros del combate con sable de luz', color: '#10b981' },
-  { id: 'Consul',    label: 'Cónsul',     desc: 'Fuerza y diplomacia sobre la acción',   color: '#E6B325' },
+  { id: 'Sentinela', label: 'Centinela', desc: 'Equilibrio entre combate y sabiduría', color: '#E6B325', img: '/assets/CENTINELA.png' },
+  { id: 'Guardian',  label: 'Guardián',  desc: 'Maestros del combate con sable de luz', color: '#38cdf0', img: '/assets/GUARDIAN.png'  },
+  { id: 'Consul',    label: 'Cónsul',    desc: 'Fuerza y diplomacia sobre la acción',   color: '#10b981', img: '/assets/CONSUL.png'    },
 ];
+
+const RANGOS_JEDI = [
+  { id: 'iniciado',  label: 'Iniciado',  img: '/assets/INITIATE.png'  },
+  { id: 'padawan',   label: 'Padawan',   img: '/assets/PADAWAN.png'   },
+  { id: 'caballero', label: 'Caballero', img: '/assets/KNIGHT.png'    },
+  { id: 'maestro',   label: 'Maestro',   img: '/assets/MASTER.png'    },
+];
+
 
 export function PersonajeView({ S, user, onCharacterCreated }) {
   const me = S.byId('you') ?? {};
@@ -659,8 +667,6 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   const STAT_LABEL = { fuerza: 'Fuerza', velocidad: 'Velocidad', tecnica: 'Técnica', defensa: 'Defensa', foco: 'Foco' };
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
-  const [clase, setClase]   = useState(user?.clase ?? null);
-  const [grado, setGrado]   = useState(user?.grado ?? null);
 
   if (!user?.character) {
     return <CharacterCreation user={user} S={S} onCharacterCreated={onCharacterCreated} />;
@@ -683,8 +689,6 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         body: JSON.stringify({
           name: ch.name, handle: ch.handle, bio: ch.bio || '', lore: ch.lore || '',
           cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats,
-          clase: clase ?? null,
-          grado: myTier === 'caballero' ? (grado ? Number(grado) : null) : null,
         }),
       });
       const data = await res.json();
@@ -764,6 +768,82 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
             {(me.medals ?? []).map((m) => <MedalIcon key={m} id={m} size={40} />)}
           </div>
         </Panel>
+
+        {/* Rango — read-only */}
+        <Panel kicker="Orden Jedi" title="Rango" icon="shield">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+            {RANGOS_JEDI.map(r => {
+              const on = myTier === r.id;
+              return (
+                <div key={r.id} style={{
+                  padding: '10px 6px 8px', borderRadius: 'var(--radius-md)', textAlign: 'center',
+                  border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  background: on ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'rgba(255,255,255,.02)',
+                  boxShadow: on ? '0 0 14px -6px var(--holo)' : 'none',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                }}>
+                  <img src={r.img} alt={r.label} style={{
+                    width: 42, height: 42, objectFit: 'contain',
+                    filter: on ? 'drop-shadow(0 0 6px var(--holo))' : 'brightness(0.45) saturate(0.3)',
+                  }} />
+                  <div className="nx-display" style={{ fontSize: 9, color: on ? 'var(--holo)' : 'var(--txt-faint)', lineHeight: 1.2 }}>{r.label}</div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+
+        {/* Clase y Grado — read-only */}
+        <Panel kicker="Orden Jedi" title="Clase y Grado" icon="star">
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+              {CLASES_JEDI.map(c => {
+                const on = user?.clase === c.id;
+                return (
+                  <div key={c.id} style={{
+                    padding: '10px 6px 8px', borderRadius: 'var(--radius-md)', textAlign: 'center',
+                    border: `1px solid ${on ? c.color : 'var(--holo-line)'}`,
+                    background: on ? `color-mix(in srgb, ${c.color} 10%, transparent)` : 'rgba(255,255,255,.02)',
+                    boxShadow: on ? `0 0 14px -6px ${c.color}` : 'none',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                  }}>
+                    <img src={c.img} alt={c.label} style={{
+                      width: 42, height: 42, objectFit: 'contain',
+                      filter: on ? `drop-shadow(0 0 6px ${c.color})` : 'brightness(0.45) saturate(0.3)',
+                    }} />
+                    <div className="nx-display" style={{ fontSize: 9, color: on ? c.color : 'var(--txt-faint)', lineHeight: 1.2 }}>{c.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {myTier === 'caballero' && (
+              <div>
+                <div className="nx-kicker" style={{ marginBottom: 6 }}>Grado</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[1, 2, 3, 4, 5].map(n => {
+                    const on = Number(user?.grado) === n;
+                    return (
+                      <div key={n} style={{
+                        width: 36, height: 36, borderRadius: 'var(--radius-md)',
+                        border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                        background: on ? 'color-mix(in srgb, var(--holo) 18%, transparent)' : 'rgba(255,255,255,.02)',
+                        color: on ? 'var(--holo)' : 'var(--txt-faint)',
+                        fontFamily: 'var(--font-data)', fontSize: 13, fontWeight: 700,
+                        display: 'grid', placeItems: 'center',
+                        boxShadow: on ? '0 0 10px -4px var(--holo)' : 'none',
+                      }}>{n}</div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {!user?.clase && (
+              <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontStyle: 'italic', fontFamily: 'var(--font-data)' }}>
+                Sin clase asignada.
+              </div>
+            )}
+          </div>
+        </Panel>
       </div>
 
       {/* Editor */}
@@ -807,57 +887,6 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
                 })}
               </div>
             </div>
-          </div>
-        </Panel>
-
-        <Panel kicker="Orden Jedi" title="Clase y Grado" icon="star"
-          right={<Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>{saving ? 'Guardando...' : 'Guardar'}</Btn>}>
-          <div style={{ display: 'grid', gap: 14 }}>
-            {/* Clase */}
-            <div>
-              <div className="nx-kicker" style={{ marginBottom: 8 }}>Clase</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-                {CLASES_JEDI.map(c => {
-                  const on = clase === c.id;
-                  return (
-                    <button key={c.id} onClick={() => setClase(on ? null : c.id)}
-                      style={{
-                        padding: '10px 8px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                        textAlign: 'center', border: `1px solid ${on ? c.color : 'var(--holo-line)'}`,
-                        background: on ? `color-mix(in srgb, ${c.color} 12%, transparent)` : 'rgba(255,255,255,.02)',
-                        boxShadow: on ? `0 0 16px -6px ${c.color}` : 'none', transition: 'all .15s',
-                      }}>
-                      <div className="nx-display" style={{ fontSize: 12, color: on ? c.color : 'var(--txt)', marginBottom: 3 }}>{c.label}</div>
-                      <div style={{ fontSize: 9, color: 'var(--txt-faint)', lineHeight: 1.3 }}>{c.desc}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {/* Grado — solo caballeros */}
-            {myTier === 'caballero' && (
-              <div>
-                <div className="nx-kicker" style={{ marginBottom: 8 }}>Grado (Caballero)</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {[1, 2, 3, 4, 5].map(n => {
-                    const on = Number(grado) === n;
-                    return (
-                      <button key={n} onClick={() => setGrado(on ? null : n)}
-                        style={{
-                          width: 44, height: 44, borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                          border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
-                          background: on ? 'color-mix(in srgb, var(--holo) 18%, transparent)' : 'rgba(255,255,255,.02)',
-                          color: on ? 'var(--holo)' : 'var(--txt-dim)',
-                          fontFamily: 'var(--font-data)', fontSize: 15, fontWeight: 700,
-                          boxShadow: on ? '0 0 12px -4px var(--holo)' : 'none', transition: 'all .15s',
-                        }}>
-                        {n}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </Panel>
 
