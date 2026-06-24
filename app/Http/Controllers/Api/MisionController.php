@@ -108,6 +108,15 @@ class MisionController extends Controller
         return response()->json(['mision' => $this->formatAdmin($mision->load('users.character'))]);
     }
 
+    public function accept(Request $request, Mision $mision): JsonResponse
+    {
+        $user = $request->user();
+        $mision->users()->syncWithoutDetaching([
+            $user->id => ['status' => 'pendiente', 'progreso' => 0],
+        ]);
+        return response()->json(['message' => 'Misión aceptada.']);
+    }
+
     public function unassign(Request $request, Mision $mision, int $userId): JsonResponse
     {
         if (!$this->isAdmin($request->user())) {

@@ -17,7 +17,7 @@ class MapController extends Controller
 {
     private function presentes(string $fk): \Closure
     {
-        return fn($q) => $q->select('id', $fk, 'handle', 'photo', 'saber_color');
+        return fn($q) => $q->select('id', $fk, 'user_id', 'handle', 'photo', 'saber_color');
     }
 
     public function sistemas(): JsonResponse
@@ -35,6 +35,7 @@ class MapController extends Controller
     {
         $sistema = MapSistema::where('visible', true)
             ->with([
+                'presentesPersonajes' => $this->presentes('map_sistema_id'),
                 'planetas' => fn($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_planeta_id')]),
             ])
@@ -48,6 +49,7 @@ class MapController extends Controller
         $planeta = MapPlaneta::where('visible', true)
             ->with([
                 'sistema',
+                'presentesPersonajes' => $this->presentes('map_planeta_id'),
                 'zonas' => fn($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_zona_id')]),
             ])
@@ -61,6 +63,7 @@ class MapController extends Controller
         $zona = MapZona::where('visible', true)
             ->with([
                 'planeta.sistema',
+                'presentesPersonajes' => $this->presentes('map_zona_id'),
                 'lugares' => fn($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_lugar_id')]),
             ])

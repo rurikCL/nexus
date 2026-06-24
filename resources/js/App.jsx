@@ -308,7 +308,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
-    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} />,
+    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} />,
     configuracion: <AdminView />,
   };
   const [title, sub] = TITLES[view] ?? ['', ''];
