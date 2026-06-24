@@ -78,7 +78,7 @@ const TIER_COLOR = {
   maestro: '#FF6B00', granmaestro: '#E6B325',
 };
 
-export function ComandoView({ S, go, user }) {
+export function ComandoView({ S, go, user, onGoToCombat }) {
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
@@ -224,7 +224,7 @@ export function ComandoView({ S, go, user }) {
                         </div>
                       )}
                     </div>
-                    <Btn kind="accent" icon="swords" onClick={() => go('combates')} style={{ width: '100%', justifyContent: 'center' }}>
+                    <Btn kind="accent" icon="swords" onClick={() => onGoToCombat ? onGoToCombat(nextCombat) : go('combates')} style={{ width: '100%', justifyContent: 'center' }}>
                       Ir al combate
                     </Btn>
                   </div>
@@ -321,36 +321,53 @@ export function ComandoView({ S, go, user }) {
                         </div>
                       )}
                       {t.divide_por_rango ? (
-                        /* Podio por rango — 1er lugar de cada tier */
+                        /* Podio por rango — top 3 en 3 columnas */
                         <div style={{ display: 'grid', gap: 6 }}>
-                          {(t.podios ?? []).filter(p => p.primer_lugar).map(p => {
-                            const color = TIER_COLOR[p.rango] ?? '#38cdf0';
-                            const w     = p.primer_lugar;
-                            const avatarC = { initials: w.initials || (w.handle || '?').substring(0, 2).toUpperCase(), color };
+                          <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 4, paddingLeft: 10, paddingRight: 8 }}>
+                            <div />
+                            {[{ n: '1°', c: 'var(--pompeyo-oro)' }, { n: '2°', c: '#a0a0b0' }, { n: '3°', c: '#cd7f32' }].map(({ n, c }) => (
+                              <div key={n} style={{ textAlign: 'center', fontSize: 8, color: c, fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>{n}</div>
+                            ))}
+                          </div>
+                          {(t.podios ?? []).filter(p => p.primer_lugar || p.segundo_lugar || p.tercer_lugar).map(p => {
+                            const tierColor = TIER_COLOR[p.rango] ?? '#38cdf0';
+                            const LUGARES = [
+                              { key: 'primer_lugar',  mc: 'var(--pompeyo-oro)' },
+                              { key: 'segundo_lugar', mc: '#a0a0b0' },
+                              { key: 'tercer_lugar',  mc: '#cd7f32' },
+                            ];
                             return (
                               <div key={p.rango} style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
+                                display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr',
+                                gap: 4, alignItems: 'center',
                                 padding: '5px 8px', borderRadius: 'var(--radius-sm)',
                                 background: 'rgba(255,255,255,.025)',
-                                borderLeft: `2px solid ${color}`,
+                                borderLeft: `2px solid ${tierColor}`,
                               }}>
-                                <div style={{
-                                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                                  display: 'grid', placeItems: 'center',
-                                  background: `color-mix(in srgb, var(--pompeyo-oro) 15%, rgba(4,7,15,.8))`,
-                                  border: '1px solid color-mix(in srgb, var(--pompeyo-oro) 45%, transparent)',
-                                }}>
-                                  <span className="nx-num" style={{ fontSize: 8, color: 'var(--pompeyo-oro)' }}>1</span>
-                                </div>
-                                <Avatar c={avatarC} size={22} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.name}</div>
-                                </div>
-                                <span className="nx-data" style={{ fontSize: 9, color, whiteSpace: 'nowrap' }}>{p.rango}</span>
+                                <span className="nx-data" style={{ fontSize: 8, color: tierColor, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {p.rango}
+                                </span>
+                                {LUGARES.map(({ key, mc }) => {
+                                  const w = p[key];
+                                  if (!w) return (
+                                    <div key={key} style={{ display: 'flex', justifyContent: 'center', opacity: 0.3 }}>
+                                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,.06)', border: '1px dashed rgba(255,255,255,.15)' }} />
+                                    </div>
+                                  );
+                                  const avatarC = { initials: w.initials || (w.handle || '?').substring(0, 2).toUpperCase(), color: mc };
+                                  return (
+                                    <div key={key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                      <Avatar c={avatarC} size={20} />
+                                      <span style={{ fontSize: 8, color: 'var(--txt-dim)', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', display: 'block' }}>
+                                        {(w.name ?? w.handle ?? '').split(' ')[0]}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })}
-                          {(t.podios ?? []).filter(p => p.primer_lugar).length === 0 && (
+                          {(t.podios ?? []).filter(p => p.primer_lugar || p.segundo_lugar || p.tercer_lugar).length === 0 && (
                             <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin campeones asignados aún</span>
                           )}
                         </div>
@@ -627,6 +644,12 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
 }
 
 /* ===================== MI PERSONAJE ===================== */
+const CLASES_JEDI = [
+  { id: 'Sentinela', label: 'Centinela',  desc: 'Equilibrio entre combate y sabiduría', color: '#38cdf0' },
+  { id: 'Guardian',  label: 'Guardián',   desc: 'Maestros del combate con sable de luz', color: '#10b981' },
+  { id: 'Consul',    label: 'Cónsul',     desc: 'Fuerza y diplomacia sobre la acción',   color: '#E6B325' },
+];
+
 export function PersonajeView({ S, user, onCharacterCreated }) {
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
@@ -636,6 +659,8 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   const STAT_LABEL = { fuerza: 'Fuerza', velocidad: 'Velocidad', tecnica: 'Técnica', defensa: 'Defensa', foco: 'Foco' };
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
+  const [clase, setClase]   = useState(user?.clase ?? null);
+  const [grado, setGrado]   = useState(user?.grado ?? null);
 
   if (!user?.character) {
     return <CharacterCreation user={user} S={S} onCharacterCreated={onCharacterCreated} />;
@@ -655,7 +680,12 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
       const res = await fetch('/api/character', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: ch.name, handle: ch.handle, bio: ch.bio || '', lore: ch.lore || '', cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats }),
+        body: JSON.stringify({
+          name: ch.name, handle: ch.handle, bio: ch.bio || '', lore: ch.lore || '',
+          cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats,
+          clase: clase ?? null,
+          grado: myTier === 'caballero' ? (grado ? Number(grado) : null) : null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) { toast(data.message ?? 'Error al guardar', { tone: 'error', icon: 'x' }); return; }
@@ -777,6 +807,57 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
                 })}
               </div>
             </div>
+          </div>
+        </Panel>
+
+        <Panel kicker="Orden Jedi" title="Clase y Grado" icon="star"
+          right={<Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>{saving ? 'Guardando...' : 'Guardar'}</Btn>}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            {/* Clase */}
+            <div>
+              <div className="nx-kicker" style={{ marginBottom: 8 }}>Clase</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                {CLASES_JEDI.map(c => {
+                  const on = clase === c.id;
+                  return (
+                    <button key={c.id} onClick={() => setClase(on ? null : c.id)}
+                      style={{
+                        padding: '10px 8px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                        textAlign: 'center', border: `1px solid ${on ? c.color : 'var(--holo-line)'}`,
+                        background: on ? `color-mix(in srgb, ${c.color} 12%, transparent)` : 'rgba(255,255,255,.02)',
+                        boxShadow: on ? `0 0 16px -6px ${c.color}` : 'none', transition: 'all .15s',
+                      }}>
+                      <div className="nx-display" style={{ fontSize: 12, color: on ? c.color : 'var(--txt)', marginBottom: 3 }}>{c.label}</div>
+                      <div style={{ fontSize: 9, color: 'var(--txt-faint)', lineHeight: 1.3 }}>{c.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Grado — solo caballeros */}
+            {myTier === 'caballero' && (
+              <div>
+                <div className="nx-kicker" style={{ marginBottom: 8 }}>Grado (Caballero)</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[1, 2, 3, 4, 5].map(n => {
+                    const on = Number(grado) === n;
+                    return (
+                      <button key={n} onClick={() => setGrado(on ? null : n)}
+                        style={{
+                          width: 44, height: 44, borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                          border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                          background: on ? 'color-mix(in srgb, var(--holo) 18%, transparent)' : 'rgba(255,255,255,.02)',
+                          color: on ? 'var(--holo)' : 'var(--txt-dim)',
+                          fontFamily: 'var(--font-data)', fontSize: 15, fontWeight: 700,
+                          boxShadow: on ? '0 0 12px -4px var(--holo)' : 'none', transition: 'all .15s',
+                        }}>
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </Panel>
 

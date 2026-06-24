@@ -28,9 +28,24 @@ class CharacterController extends Controller
             'stats.defensa'   => 'nullable|integer|min:0|max:100',
             'stats.foco'      => 'nullable|integer|min:0|max:100',
             'gold'        => 'nullable|boolean',
+            'grado'       => 'nullable|integer|min:1|max:5',
+            'clase'       => 'nullable|string|in:Sentinela,Guardian,Consul',
         ]);
 
         $user = $request->user();
+
+        // Guardar grado y clase en el usuario (no en el personaje)
+        $userUpdate = [];
+        if (array_key_exists('grado', $data)) {
+            $userUpdate['grado'] = ($user->tier === 'caballero') ? $data['grado'] : null;
+        }
+        if (array_key_exists('clase', $data)) {
+            $userUpdate['clase'] = $data['clase'];
+        }
+        if (!empty($userUpdate)) {
+            $user->update($userUpdate);
+        }
+        unset($data['grado'], $data['clase']);
 
         // Validate handle uniqueness excluding current user's character
         $handleQuery = \App\Models\Character::where('handle', $data['handle']);

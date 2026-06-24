@@ -99,8 +99,11 @@ function normalizeApiCombat(c, combatants, currentUserId) {
     live:     c.live,
     event:    c.event_name ?? 'Combate Oficial',
     round:    c.round ?? '—',
-    resolved: c.resolved,
-    winner:   c.winner,
+    resolved:   c.resolved,
+    winner:     c.winner,
+    score_data: c.score_data ?? null,
+    feedback_a: c.feedback_a ?? null,
+    feedback_b: c.feedback_b ?? null,
   };
 }
 
@@ -132,12 +135,15 @@ import MapaView from './sections/Mapa.jsx';
 import AdminView from './sections/Admin.jsx';
 import { TemporadasView } from './sections/Temporadas.jsx';
 import { MisionesView } from './sections/Misiones.jsx';
+import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
+import InstagramView from './sections/Instagram.jsx';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
   { id: 'entrenamiento', label: 'Entrenamiento', icon: 'calendar' },
+  { id: 'modulos-entrenamiento', label: 'Módulos', icon: 'target' },
   { id: 'tareas',   label: 'Tareas',   icon: 'tasks' },
   { id: 'misiones', label: 'Misiones', icon: 'zap', guard: u => ADMIN_TIERS.includes(u?.tier ?? '') },
   { id: 'eventos',  label: 'Eventos',  icon: 'star' },
@@ -146,11 +152,13 @@ const NAV = [
   { id: 'combatientes', label: 'Combatientes', icon: 'roster' },
   { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
+  { id: 'instagram', label: 'Instagram', icon: 'instagram' },
 ];
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
   entrenamiento: ['Entrenamiento', 'Asistencia y bitácora diaria'],
+  'modulos-entrenamiento': ['Módulos de Entrenamiento', 'Técnicas, formas y currículum de combate'],
   tareas:   ['Tareas',    'Plan de entrenamiento dirigido'],
   misiones: ['Misiones', 'Administración y asignación de misiones'],
   eventos:  ['Eventos',  'Presentaciones y recompensas'],
@@ -159,6 +167,7 @@ const TITLES = {
   combatientes: ['Combatientes', 'Directorio y perfiles públicos'],
   temporadas:    ['Temporadas',         'Historial de campeones y recompensas'],
   mapa: ['Mapa Galáctico', 'Navegación entre sistemas y planetas'],
+  instagram: ['Instagram', 'Publicaciones y feed de tu cuenta'],
   configuracion: ['Configuración', 'Gestión de tablas del sistema'],
 };
 
@@ -171,6 +180,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [notifications, setNotifications] = useState([]);
   const [testOpen, setTestOpen] = useState(false);
   const [mapLocation, setMapLocation] = useState(null);
+  const [combatToView, setCombatToView] = useState(null);
   const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? '');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
@@ -298,17 +308,19 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   };
 
   const VIEWS = {
-    comando: <ComandoView S={S} go={go} user={user} />,
+    comando: <ComandoView S={S} go={go} user={user} onGoToCombat={(combat) => { setCombatToView(combat); go('combates'); }} />,
     personaje: <PersonajeView S={S} user={user} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     entrenamiento: <TrainingView S={S} />,
+    'modulos-entrenamiento': <ModulosEntrenamientoView user={user} />,
     tareas: <TareasView S={S} user={user} />,
     eventos: <EventosView S={S} go={go} user={user} />,
     ranking: <RankingView S={S} />,
-    combates: <CombatesView S={S} user={user} />,
+    combates: <CombatesView S={S} user={user} initialViewCombat={combatToView} onClearViewCombat={() => setCombatToView(null)} />,
     combatientes: <CombatientesView S={S} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
-    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} />,
+    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} />,
+    instagram: <InstagramView />,
     configuracion: <AdminView />,
   };
   const [title, sub] = TITLES[view] ?? ['', ''];

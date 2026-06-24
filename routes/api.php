@@ -19,6 +19,8 @@ use App\Http\Controllers\Api\MisionController;
 use App\Http\Controllers\Api\TemporadaController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\WidgetLayoutController;
+use App\Http\Controllers\Api\ModuloEntrenamientoController;
+use App\Http\Controllers\Api\InstagramController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +28,9 @@ use Illuminate\Support\Facades\Route;
 // Public auth routes
 Route::post('/login',    [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+
+// Instagram OAuth callback (pública — Meta redirige aquí sin Bearer token)
+Route::get('/instagram/callback', [InstagramController::class, 'callback']);
 
 // Broadcasting auth para SPAs con Sanctum (Bearer token en lugar de sesión web)
 Route::post('/broadcasting/auth', function (Request $request) {
@@ -78,6 +83,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/upload/emblema', [EmblemUploadController::class, 'store']);
 
+    Route::get('/modulos-entrenamiento',                          [ModuloEntrenamientoController::class, 'index']);
+    Route::post('/modulos-entrenamiento',                         [ModuloEntrenamientoController::class, 'store']);
+    Route::get('/modulos-entrenamiento/revisores',                [ModuloEntrenamientoController::class, 'revisores']);
+    Route::get('/modulos-entrenamiento/{moduloEntrenamiento}',    [ModuloEntrenamientoController::class, 'show']);
+    Route::put('/modulos-entrenamiento/{moduloEntrenamiento}',    [ModuloEntrenamientoController::class, 'update']);
+    Route::delete('/modulos-entrenamiento/{moduloEntrenamiento}', [ModuloEntrenamientoController::class, 'destroy']);
+
     Route::get('/misiones', [MisionController::class, 'index']);
     Route::post('/misiones', [MisionController::class, 'store']);
     Route::patch('/misiones/{mision}', [MisionController::class, 'update']);
@@ -96,6 +108,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Mensajes directos
     Route::get('/messages/{userId}',     [MessageController::class, 'conversation']);
     Route::post('/messages',             [MessageController::class, 'send']);
+
+    // Instagram
+    Route::get('/instagram/redirect',    [InstagramController::class, 'redirect']);
+    Route::get('/instagram/status',      [InstagramController::class, 'status']);
+    Route::get('/instagram/posts',       [InstagramController::class, 'posts']);
+    Route::post('/instagram/publish',    [InstagramController::class, 'publish']);
+    Route::delete('/instagram/disconnect', [InstagramController::class, 'disconnect']);
 
     // Mapa galáctico
     Route::get('/map/sistemas',          [MapController::class, 'sistemas']);

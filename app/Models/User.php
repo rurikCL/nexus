@@ -22,6 +22,8 @@ class User extends Authenticatable
         'name',
         'email',
         'tier',
+        'grado',
+        'clase',
         'tutor_id',
         'password',
     ];
@@ -96,6 +98,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Mision::class, 'mision_user')
             ->withPivot(['status', 'progreso'])
             ->withTimestamps();
+    }
+
+    public function instagramAccount(): HasOne
+    {
+        return $this->hasOne(InstagramAccount::class);
     }
 
     public function isTutor(): bool
