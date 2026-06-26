@@ -14,7 +14,7 @@ class CombatantController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $characters = Character::with('user')
+        $characters = Character::with('user.tutor.character')
             ->get()
             ->map(fn($c) => $this->formatCombatant($c))
             ->sortByDesc('wins')
@@ -25,7 +25,7 @@ class CombatantController extends Controller
 
     public function show(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user')
+        $character = Character::with('user.tutor.character')
             ->where('handle', $handle)
             ->firstOrFail();
 
@@ -57,6 +57,14 @@ class CombatantController extends Controller
             'tier'        => $character->user->tier ?? 'iniciado',
             'photo_url'   => $character->photo
                 ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
+                : null,
+            'tutor'       => $character->user->tutor
+                ? [
+                    'id'     => $character->user->tutor->id,
+                    'name'   => $character->user->tutor->character?->name ?? $character->user->tutor->name,
+                    'handle' => $character->user->tutor->character?->handle,
+                    'tier'   => $character->user->tutor->tier,
+                ]
                 : null,
         ];
     }

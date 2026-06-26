@@ -30,7 +30,7 @@ class AuthController extends Controller
 
         $token = $user->createToken('nexus-api')->plainTextToken;
 
-        $user->load('character');
+        $user->load('character', 'roles');
         $character = $user->character;
 
         return response()->json([
@@ -41,6 +41,7 @@ class AuthController extends Controller
                 'email'     => $user->email,
                 'tier'      => $user->tier,
                 'is_tutor'  => $user->isTutor(),
+                'roles'     => $user->roles->pluck('name'),
                 'character' => $character ? array_merge([
                     'handle'      => $character->handle,
                     'cls'         => $character->cls,

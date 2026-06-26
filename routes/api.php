@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\WidgetLayoutController;
 use App\Http\Controllers\Api\ModuloEntrenamientoController;
 use App\Http\Controllers\Api\InstagramController;
+use App\Http\Controllers\Api\SesionEntrenamientoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -124,6 +125,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/map/lugares/{id}',      [MapController::class, 'lugar']);
     Route::get('/map/npcs/{id}',         [MapController::class, 'npc']);
     Route::post('/map/location',         [MapController::class, 'updateLocation']);
+
+    // Sesiones de entrenamiento
+    Route::get('/sesiones/disponibles',       [SesionEntrenamientoController::class, 'disponibles']);
+    Route::get('/sesiones',                   [SesionEntrenamientoController::class, 'index']);
+    Route::post('/sesiones',                  [SesionEntrenamientoController::class, 'store']);
+    Route::get('/sesiones/{id}',              [SesionEntrenamientoController::class, 'show']);
+    Route::post('/sesiones/{id}/plan',        [SesionEntrenamientoController::class, 'savePlan']);
+    Route::post('/sesiones/{id}/attend',      [SesionEntrenamientoController::class, 'attend']);
+    Route::delete('/sesiones/{id}/attend',    [SesionEntrenamientoController::class, 'unattend']);
+    Route::post('/sesiones/{id}/close',       [SesionEntrenamientoController::class, 'close']);
 
     // Admin CRUD
     Route::prefix('admin')->group(function () {

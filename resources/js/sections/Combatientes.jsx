@@ -168,6 +168,23 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
             ))}
           </div>
 
+          {/* Tutor asignado */}
+          {c.tutor && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)', background: 'rgba(56,205,240,0.04)' }}>
+              <span style={{ color: 'var(--holo)' }}><Icon name="user" size={15} /></span>
+              <div style={{ flex: 1 }}>
+                <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2 }}>Tutor asignado</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)' }}>
+                  {c.tutor.name}
+                  {c.tutor.handle && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--txt-dim)', fontWeight: 400 }}>@{c.tutor.handle}</span>}
+                </div>
+              </div>
+              {c.tutor.tier && (
+                <TierBadge tier={c.tutor.tier} />
+              )}
+            </div>
+          )}
+
           <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             {/* Atributos */}
             <div>

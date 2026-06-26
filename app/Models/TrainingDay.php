@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TrainingDay extends Model
 {
-    protected $fillable = ['user_id', 'date', 'focus', 'effort', 'note', 'tags'];
+    protected $fillable = ['user_id', 'training_id', 'type', 'date', 'focus', 'effort', 'note', 'tags'];
 
     protected $casts = [
         'tags' => 'array',

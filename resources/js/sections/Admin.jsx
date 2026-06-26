@@ -22,6 +22,9 @@ const api = async (method, path, body) => {
   return json;
 };
 
+/* ─── GRUPOS para el sidebar ────────────────────────────── */
+const GROUPS = ['MAPA GALÁCTICO', 'SISTEMA'];
+
 /* ─── OPCIONES ESTÁTICAS ─────────────────────────────────── */
 const RAREZA_OPTS     = ['comun', 'poco_comun', 'raro', 'epico', 'legendario'];
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
@@ -216,15 +219,35 @@ const ENTITY_CONFIG = {
       { key: 'name', label: 'Nombre', bold: true },
       { key: 'email', label: 'Email', dim: true },
       { key: 'tier', label: 'Tier', type: 'tier' },
+      { key: 'tutor', label: 'Tutor', resolve: r => r.tutor?.name ?? '—', dim: true },
+      { key: 'roles', label: 'Roles', resolve: r => r.roles?.map(ro => ro.label).join(', ') || '—', dim: true },
       { key: 'created_at', label: 'Registro', resolve: r => r.created_at?.slice(0, 10), dim: true },
     ],
     noDelete: true,
     fields: [
-      { key: 'name',  label: 'Nombre', type: 'text', required: true },
-      { key: 'email', label: 'Email',  type: 'text', required: true },
-      { key: 'tier',  label: 'Tier',   type: 'select', options: TIER_OPTS },
+      { key: 'name',     label: 'Nombre', type: 'text',          required: true },
+      { key: 'email',    label: 'Email',  type: 'text',          required: true },
+      { key: 'tier',     label: 'Tier',   type: 'select',        options: TIER_OPTS },
+      { key: 'tutor_id', label: 'Tutor',  type: 'relatedSelect', related: 'usuarios' },
+      { key: 'roles',    label: 'Roles',  type: 'multiCheckbox', related: 'roles',    span: 2 },
     ],
-    defaults: { tier: 'iniciado' },
+    defaults: { tier: 'iniciado', roles: [] },
+  },
+
+  roles: {
+    label: 'Roles', icon: 'shield', group: 'SISTEMA',
+    columns: [
+      { key: 'id',          label: 'ID',          w: 52 },
+      { key: 'name',        label: 'Slug',         bold: true },
+      { key: 'label',       label: 'Nombre',       dim: false },
+      { key: 'description', label: 'Descripción',  dim: true },
+    ],
+    fields: [
+      { key: 'name',        label: 'Slug (único)',  type: 'text',     required: true, hint: 'Sin espacios, ej: rpg_master' },
+      { key: 'label',       label: 'Nombre visible', type: 'text',   required: true },
+      { key: 'description', label: 'Descripción',   type: 'textarea', span: 2 },
+    ],
+    defaults: {},
   },
 
   personajes: {
@@ -288,9 +311,6 @@ const ENTITY_CONFIG = {
     defaults: {},
   },
 };
-
-/* ─── GRUPOS para el sidebar ────────────────────────────── */
-const GROUPS = ['MAPA GALÁCTICO', 'SISTEMA'];
 
 /* ─── FIELD INPUT ────────────────────────────────────────── */
 function FieldInput({ field, value, onChange, relatedOptions }) {
@@ -411,6 +431,39 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     );
   }
 
+  if (field.type === 'multiCheckbox') {
+    const opts = relatedOptions?.[field.related] ?? [];
+    const vals = Array.isArray(value) ? value : [];
+    const toggle = (id) => {
+      const next = vals.includes(id) ? vals.filter(v => v !== id) : [...vals, id];
+      onChange(next);
+    };
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {opts.length === 0 && (
+          <span style={{ fontSize: 11, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>Cargando opciones...</span>
+        )}
+        {opts.map(o => {
+          const on = vals.includes(o.id);
+          return (
+            <button key={o.id} type="button" onClick={() => toggle(o.id)}
+              style={{
+                padding: '5px 13px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.06em',
+                transition: 'all 0.15s',
+                background: on ? 'color-mix(in srgb, var(--holo) 18%, transparent)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                color: on ? 'var(--holo)' : 'var(--txt-dim)',
+              }}
+            >
+              {on && <span style={{ marginRight: 5 }}>✓</span>}{o.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <input type="text" {...base}
       value={value ?? ''} onChange={e => onChange(e.target.value)}
@@ -421,10 +474,16 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
 /* ─── CRUD MODAL ─────────────────────────────────────────── */
 function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose }) {
   const isEdit = !!record?.id;
-  const [form, setForm]       = useState(() => ({
-    ...(config.defaults ?? {}),
-    ...(record ?? {}),
-  }));
+  const [form, setForm]       = useState(() => {
+    const base = { ...(config.defaults ?? {}), ...(record ?? {}) };
+    // Normalizar campos multiCheckbox: convertir array de objetos a array de IDs
+    config.fields.forEach(f => {
+      if (f.type === 'multiCheckbox' && Array.isArray(base[f.key])) {
+        base[f.key] = base[f.key].map(v => (typeof v === 'object' ? v.id : v));
+      }
+    });
+    return base;
+  });
   const [saving, setSaving]   = useState(false);
 
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
@@ -822,7 +881,7 @@ export default function AdminView() {
   useEffect(() => {
     const needed = new Set(
       (config?.fields ?? [])
-        .filter(f => f.type === 'relatedSelect')
+        .filter(f => f.type === 'relatedSelect' || f.type === 'multiCheckbox')
         .map(f => f.related)
     );
     needed.forEach(async (entity) => {

@@ -46,17 +46,25 @@ class TrainingController extends Controller
 
         $user = $request->user();
 
-        $existing = $user->trainingDays()->where('date', $data['day'])->first();
+        $existing = $user->trainingDays()->where('date', $data['day'])->where('type', 'personal')->first();
         if ($existing) {
             return response()->json(['message' => 'Ya tienes un registro para este día.'], 409);
         }
 
+        // Verify a training session exists for this date
+        $training = \App\Models\Training::where('fecha', $data['day'])->whereNull('closed_at')->first();
+        if (!$training) {
+            return response()->json(['message' => 'No hay una sesión de entrenamiento programada para este día.'], 422);
+        }
+
         $day = $user->trainingDays()->create([
-            'date'   => $data['day'],
-            'focus'  => $data['focus'] ?? null,
-            'effort' => $data['effort'] ?? 5,
-            'note'   => $data['note'] ?? null,
-            'tags'   => $data['tags'] ?? null,
+            'date'        => $data['day'],
+            'training_id' => $training->id,
+            'type'        => 'personal',
+            'focus'       => $data['focus'] ?? null,
+            'effort'      => $data['effort'] ?? 5,
+            'note'        => $data['note'] ?? null,
+            'tags'        => $data['tags'] ?? null,
         ]);
 
         // Award 75 credits

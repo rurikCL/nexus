@@ -4,12 +4,43 @@ import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toas
 
 /* NÉXUS — Entrenamiento: calendario de asistencia + bitácora del día */
 
-const NX_TODAY = 11; // 11 de Junio 2026
 const NX_FOCUS = ['Técnica', 'Cardio', 'Sparring', 'Footwork', 'Fuerza', 'Estudio', 'Recuperación'];
-const NX_TAGS = ['técnica', 'cardio', 'sparring', 'defensa', 'estudio', 'fuerza', 'flexibilidad'];
+const NX_TAGS  = ['técnica', 'cardio', 'sparring', 'defensa', 'estudio', 'fuerza', 'flexibilidad'];
 
-export function TrainingView({ S }) {
+function getNxToday() {
+  const today = new Date();
+  return today.getDate();
+}
+function getCurrentMonth() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function apiGet(path) {
+  const res = await fetch(`/api${path}`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` },
+  });
+  return res.ok ? res.json() : Promise.reject();
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message ?? `Error ${res.status}`);
+  return json;
+}
+
+export function TrainingView({ S, user }) {
+  const NX_TODAY = getNxToday();
+  const month = getCurrentMonth();
+
   const [sel, setSel] = useState(NX_TODAY);
+  const [sesionesDisp, setSesionesDisp] = useState([]); // [{id, fecha, titulo, closed}]
+  const [miAsistencia, setMiAsistencia] = useState({}); // {sesionId: true}
   const logged = S.training.logged;
   const days = Object.keys(logged).map(Number);
   const creditsEarned = days.length * S.training.creditsPerSession;
@@ -22,21 +53,50 @@ export function TrainingView({ S }) {
     return s;
   })();
 
+  // Cargar sesiones disponibles del mes
+  useEffect(() => {
+    apiGet(`/sesiones/disponibles?month=${month}`)
+      .then(r => setSesionesDisp(r.sesiones ?? []))
+      .catch(() => {});
+  }, [month]);
+
+  // Map día → sesion
+  const sesionPorDia = {};
+  sesionesDisp.forEach(s => {
+    const d = parseInt(s.fecha.split('-')[2], 10);
+    sesionPorDia[d] = s;
+  });
+
   // grid del mes
-  const firstDow = new Date(2026, 5, 1).getDay(); // 0=Dom
-  const daysInMonth = 30;
-  const offset = (firstDow + 6) % 7; // semana inicia lunes
+  const [yr, mo] = month.split('-').map(Number);
+  const firstDow  = new Date(yr, mo - 1, 1).getDay();
+  const daysInMonth = new Date(yr, mo, 0).getDate();
+  const offset = (firstDow + 6) % 7;
   const cells = [];
   for (let i = 0; i < offset; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   const entry = logged[sel];
+  const sesionSel = sesionPorDia[sel];
+  const iAttendedSel = sesionSel ? miAsistencia[sesionSel.id] : false;
+
+  const markAttendance = async () => {
+    if (!sesionSel) return;
+    try {
+      await apiPost(`/sesiones/${sesionSel.id}/attend`, {});
+      setMiAsistencia(prev => ({ ...prev, [sesionSel.id]: true }));
+      S.logDay(sel);
+      toast('Asistencia marcada', { tone: 'success', icon: 'check', desc: `+${S.training.creditsPerSession} créditos · bitácora desbloqueada` });
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    }
+  };
 
   return (
     <div className="nx-fade nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr', gap: 18, alignItems: 'start' }}>
       {/* Calendario */}
       <div style={{ display: 'grid', gap: 18 }}>
-        <Panel kicker={S.training.month} title="Registro de Asistencia" icon="calendar"
+        <Panel kicker={month} title="Registro de Asistencia" icon="calendar"
           right={<Chip tone="green" icon="flame">{streak} días seguidos</Chip>}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
             {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
@@ -44,23 +104,31 @@ export function TrainingView({ S }) {
             ))}
             {cells.map((d, i) => {
               if (!d) return <div key={i} />;
-              const isLogged = !!logged[d];
-              const isToday = d === NX_TODAY;
-              const isFuture = d > NX_TODAY;
-              const isSel = d === sel;
+              const isLogged   = !!logged[d];
+              const isToday    = d === NX_TODAY;
+              const isFuture   = d > NX_TODAY;
+              const isSel      = d === sel;
+              const hasSesion  = !!sesionPorDia[d];
+              const sesion     = sesionPorDia[d];
+              const isClosed   = sesion?.closed;
+              const disabled   = isFuture || (!hasSesion);
               return (
-                <button key={i} disabled={isFuture} onClick={() => setSel(d)}
+                <button key={i} disabled={disabled} onClick={() => setSel(d)}
+                  title={hasSesion ? sesion.titulo : undefined}
                   style={{
-                    aspectRatio: '1', borderRadius: 'var(--radius-md)', cursor: isFuture ? 'not-allowed' : 'pointer',
-                    border: isSel ? '1.5px solid var(--holo)' : '1px solid var(--holo-line)',
-                    background: isLogged ? 'color-mix(in srgb, var(--green-500) 22%, transparent)' : 'rgba(255,255,255,0.02)',
-                    color: isFuture ? 'var(--txt-faint)' : 'var(--txt)', position: 'relative',
-                    display: 'grid', placeItems: 'center', opacity: isFuture ? 0.35 : 1,
+                    aspectRatio: '1', borderRadius: 'var(--radius-md)', cursor: disabled ? 'not-allowed' : 'pointer',
+                    border: isSel ? '1.5px solid var(--holo)' : `1px solid ${hasSesion ? 'color-mix(in srgb, var(--holo) 35%, transparent)' : 'var(--holo-line)'}`,
+                    background: isLogged
+                      ? 'color-mix(in srgb, var(--green-500) 22%, transparent)'
+                      : hasSesion ? 'rgba(56,205,240,0.06)' : 'rgba(255,255,255,0.02)',
+                    color: disabled ? 'var(--txt-faint)' : 'var(--txt)', position: 'relative',
+                    display: 'grid', placeItems: 'center', opacity: disabled ? 0.3 : 1,
                     boxShadow: isSel ? '0 0 16px -6px var(--holo)' : 'none', transition: 'all .15s',
                   }}>
                   <span className="nx-num" style={{ fontSize: 14 }}>{d}</span>
                   {isLogged && <span style={{ position: 'absolute', bottom: 5, width: 5, height: 5, borderRadius: '50%', background: 'var(--green-500)', boxShadow: '0 0 6px var(--green-500)' }} />}
-                  {isToday && !isLogged && <span style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', border: '1.5px solid var(--pompeyo-naranja)' }} />}
+                  {hasSesion && !isLogged && <span style={{ position: 'absolute', bottom: 5, width: 5, height: 5, borderRadius: '50%', background: 'var(--holo)', boxShadow: '0 0 6px var(--holo)', opacity: isClosed ? 0.4 : 1 }} />}
+                  {isToday && !isLogged && <span style={{ position: 'absolute', top: 3, right: 3, width: 5, height: 5, borderRadius: '50%', border: '1.5px solid var(--pompeyo-naranja)' }} />}
                 </button>
               );
             })}
@@ -84,24 +152,34 @@ export function TrainingView({ S }) {
         <div className="nx-panel" style={{ padding: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ color: 'var(--holo)' }}><Icon name="zap" size={18} /></span>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)' }}>
-            Marca un día para ganar <b style={{ color: 'var(--pompeyo-oro)' }}>+{S.training.creditsPerSession} créditos</b> y desbloquear su bitácora.
+            Solo los días con <b style={{ color: 'var(--holo)' }}>sesión programada</b> están disponibles para marcar asistencia.
           </div>
         </div>
       </div>
 
       {/* Bitácora del día */}
-      <Panel icon="edit" kicker={`Día ${sel} · ${S.training.month}`} title="Bitácora de Entrenamiento"
-        right={entry ? <Chip tone="green" icon="check">Asistencia registrada</Chip> : null}>
-        {!entry ? (
+      <Panel icon="edit" kicker={`Día ${sel} · ${month}`} title={sesionSel ? sesionSel.titulo : 'Bitácora de Entrenamiento'}
+        right={entry ? <Chip tone="green" icon="check">Asistencia registrada</Chip> : sesionSel ? <Chip tone="dim">Sesión programada</Chip> : null}>
+        {!sesionSel ? (
           <div style={{ textAlign: 'center', padding: '34px 18px' }}>
             <div style={{ color: 'var(--txt-faint)', display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Icon name="calendar" size={36} /></div>
-            <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>Día sin marcar</div>
-            <p style={{ fontSize: 13, color: 'var(--txt-dim)', maxWidth: 320, margin: '0 auto 18px' }}>
-              {sel > NX_TODAY ? 'Este día aún no llega.' : 'Marca tu asistencia para abrir la bitácora y registrar lo que hiciste.'}
+            <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>Sin sesión programada</div>
+            <p style={{ fontSize: 13, color: 'var(--txt-dim)', maxWidth: 320, margin: '0 auto' }}>
+              Este día no tiene sesión de entrenamiento. Los encargados publicarán el calendario de sesiones.
             </p>
-            {sel <= NX_TODAY && (
-              <Btn kind="accent" icon="check" onClick={() => { S.logDay(sel); toast('Asistencia registrada', { tone: 'success', icon: 'check', desc: `+${S.training.creditsPerSession} créditos · bitácora desbloqueada` }); }} style={{ margin: '0 auto' }}>
-                Marcar asistencia
+          </div>
+        ) : !entry ? (
+          <div style={{ textAlign: 'center', padding: '34px 18px' }}>
+            <div style={{ color: 'var(--txt-faint)', display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Icon name="calendar" size={36} /></div>
+            <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>Sesión disponible</div>
+            <p style={{ fontSize: 13, color: 'var(--txt-dim)', maxWidth: 320, margin: '0 auto 18px' }}>
+              {sesionSel.closed
+                ? 'Esta sesión ya está cerrada.'
+                : 'Marca tu asistencia para registrar este día y ganar créditos.'}
+            </p>
+            {!sesionSel.closed && (
+              <Btn kind="accent" icon="check" onClick={markAttendance} style={{ margin: '0 auto' }}>
+                Marcar asistencia (+{S.training.creditsPerSession} cr)
               </Btn>
             )}
           </div>

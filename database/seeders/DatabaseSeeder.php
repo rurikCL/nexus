@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Character;
 use App\Models\Combat;
 use App\Models\Event;
+use App\Models\Role;
 use App\Models\Task;
 use App\Models\TrainingDay;
 use App\Models\User;
@@ -18,6 +19,18 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
+        // ─── Roles ────────────────────────────────────────────────────
+        $rolesData = [
+            ['name' => 'administrador', 'label' => 'Administrador',  'description' => 'Acceso completo al panel de administración y configuración del sistema.'],
+            ['name' => 'rpg_master',    'label' => 'RPG Master',     'description' => 'Gestión de módulos de rol: mapa galáctico, misiones, NPCs y objetos.'],
+            ['name' => 'juez',          'label' => 'Juez',           'description' => 'Puede resolver combates, gestionar temporadas y asignar resultados.'],
+            ['name' => 'entrenador',    'label' => 'Entrenador',     'description' => 'Acceso a módulos de entrenamiento y seguimiento de pupilos.'],
+        ];
+
+        foreach ($rolesData as $rd) {
+            Role::firstOrCreate(['name' => $rd['name']], $rd);
+        }
+
         // ─── Users ────────────────────────────────────────────────────
         $usersData = [
             ['name' => 'Valentina Soto',  'email' => 'valentina@nexus.cl'],
@@ -117,6 +130,13 @@ class DatabaseSeeder extends Seeder
         foreach ([$valentina, $carlos, $maria, $javiera, $tomas, $ignacia, $felipe] as $pupil) {
             $pupil->update(['tutor_id' => $diego->id]);
         }
+
+        // ─── Roles de sistema ─────────────────────────────────────────
+        $adminRole = Role::where('name', 'administrador')->first();
+        $rpgRole   = Role::where('name', 'rpg_master')->first();
+        $juezRole  = Role::where('name', 'juez')->first();
+
+        $diego->roles()->sync([$adminRole->id, $rpgRole->id, $juezRole->id]);
 
         // ─── Events ───────────────────────────────────────────────────
         $eventsData = [

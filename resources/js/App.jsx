@@ -136,12 +136,14 @@ import AdminView from './sections/Admin.jsx';
 import { TemporadasView } from './sections/Temporadas.jsx';
 import { MisionesView } from './sections/Misiones.jsx';
 import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
+import SesionesView from './sections/Sesiones.jsx';
 import InstagramView from './sections/Instagram.jsx';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
+  { id: 'sesiones', label: 'Sesiones', icon: 'calendar' },
   { id: 'entrenamiento', label: 'Entrenamiento', icon: 'calendar' },
   { id: 'modulos-entrenamiento', label: 'Módulos', icon: 'target' },
   { id: 'tareas',   label: 'Tareas',   icon: 'tasks' },
@@ -157,6 +159,7 @@ const NAV = [
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
+  sesiones: ['Sesiones de Entrenamiento', 'Gestión de sesiones, plan y asistencia'],
   entrenamiento: ['Entrenamiento', 'Asistencia y bitácora diaria'],
   'modulos-entrenamiento': ['Módulos de Entrenamiento', 'Técnicas, formas y currículum de combate'],
   tareas:   ['Tareas',    'Plan de entrenamiento dirigido'],
@@ -310,7 +313,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const VIEWS = {
     comando: <ComandoView S={S} go={go} user={user} onGoToCombat={(combat) => { setCombatToView(combat); go('combates'); }} />,
     personaje: <PersonajeView S={S} user={user} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
-    entrenamiento: <TrainingView S={S} />,
+    sesiones: <SesionesView user={user} />,
+    entrenamiento: <TrainingView S={S} user={user} />,
     'modulos-entrenamiento': <ModulosEntrenamientoView user={user} />,
     tareas: <TareasView S={S} user={user} />,
     eventos: <EventosView S={S} go={go} user={user} />,

@@ -12,6 +12,7 @@ use App\Models\MapNpc;
 use App\Models\MapPlaneta;
 use App\Models\MapSistema;
 use App\Models\MapZona;
+use App\Models\Role;
 use App\Models\RolCharacterObjeto;
 use App\Models\RolObjeto;
 use App\Models\User;
@@ -31,6 +32,7 @@ class AdminController extends Controller
             'naves'       => MapNave::class,
             'usuarios'    => User::class,
             'personajes'  => Character::class,
+            'roles'       => Role::class,
             'rol_objetos' => RolObjeto::class,
             'rol_character_objeto' => RolCharacterObjeto::class,
             default      => abort(404, "Entidad no reconocida: {$entity}"),
@@ -42,6 +44,7 @@ class AdminController extends Controller
         return match ($entity) {
             'usuarios'   => 'name',
             'personajes' => 'name',
+            'roles'      => 'label',
             'rol_character_objeto' => 'id',
             default      => 'nombre',
         };
@@ -54,6 +57,7 @@ class AdminController extends Controller
             'zonas'      => ['planeta:id,nombre'],
             'lugares'    => ['zona:id,nombre'],
             'npcs'       => ['lugar:id,nombre'],
+            'usuarios'   => ['tutor:id,name', 'roles:id,name,label'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
             default      => [],
@@ -95,9 +99,19 @@ class AdminController extends Controller
             $data['password'] = '1234';
         }
 
+        $roles = null;
+        if ($entity === 'usuarios' && array_key_exists('roles', $data)) {
+            $roles = $data['roles'];
+            unset($data['roles']);
+        }
+
         $record = $model::create($data);
 
-        return response()->json(['record' => $record], 201);
+        if ($roles !== null && method_exists($record, 'roles')) {
+            $record->roles()->sync($roles);
+        }
+
+        return response()->json(['record' => $record->load('roles:id,name,label')], 201);
     }
 
     public function update(Request $request, string $entity, int $id): JsonResponse
@@ -107,7 +121,6 @@ class AdminController extends Controller
         $data   = $request->all();
 
         foreach ($request->allFiles() as $key => $file) {
-            // Borrar anterior si existe
             if ($record->{$key}) {
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($record->{$key});
             }
@@ -115,9 +128,19 @@ class AdminController extends Controller
             $data[$key] = $path;
         }
 
+        $roles = null;
+        if ($entity === 'usuarios' && array_key_exists('roles', $data)) {
+            $roles = $data['roles'];
+            unset($data['roles']);
+        }
+
         $record->update($data);
 
-        return response()->json(['record' => $record->fresh()]);
+        if ($roles !== null && method_exists($record, 'roles')) {
+            $record->roles()->sync($roles);
+        }
+
+        return response()->json(['record' => $record->fresh()->load(['tutor:id,name', 'roles:id,name,label'])]);
     }
 
     public function destroy(string $entity, int $id): JsonResponse

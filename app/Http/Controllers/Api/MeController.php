@@ -12,7 +12,7 @@ class MeController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user()->load('character');
+        $user = $request->user()->load('character', 'roles');
         $character = $user->character;
 
         if ($character) {
@@ -29,6 +29,7 @@ class MeController extends Controller
             'grado'     => $user->grado,
             'clase'     => $user->clase,
             'is_tutor'  => $user->isTutor(),
+            'roles'     => $user->roles->pluck('name'),
             'character' => $character ? [
                 'id'          => $character->id,
                 'handle'      => $character->handle,
