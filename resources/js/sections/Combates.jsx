@@ -66,6 +66,89 @@ function ScorePicker({ value, onChange, labels, color, sm }) {
   );
 }
 
+/* ── Centro VS cinematográfico con chispas ── */
+function VsCenter({ saberA, saberB, isMobile, children }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const cvs = canvasRef.current;
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    const W = cvs.width, H = cvs.height;
+    const CX = W / 2, CY = H / 2;
+    const COLS = [saberA, saberB, '#E8B83A', '#FFFFFF'];
+
+    function mkP() {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 0.9 + Math.random() * 2.4;
+      return {
+        x: CX, y: CY,
+        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 0.7,
+        life: 0, max: 26 + Math.random() * 34,
+        r: 0.7 + Math.random() * 1.5,
+        c: COLS[Math.floor(Math.random() * COLS.length)],
+      };
+    }
+
+    let ps = Array.from({ length: 16 }, mkP);
+    let raf;
+
+    function tick() {
+      ctx.clearRect(0, 0, W, H);
+      ps.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        p.vy += 0.045; p.vx *= 0.986; p.life++;
+        if (p.life > p.max) Object.assign(p, mkP());
+        const t   = p.life / p.max;
+        const alpha = (1 - t) * 0.88;
+        const r   = p.r * (1 - t * 0.45);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(0.1, r), 0, Math.PI * 2);
+        ctx.fillStyle = p.c + Math.round(alpha * 255).toString(16).padStart(2, '0');
+        ctx.fill();
+      });
+      raf = requestAnimationFrame(tick);
+    }
+
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [saberA, saberB]);
+
+  const cvW = isMobile ? 80 : 110;
+  const cvH = isMobile ? 130 : 200;
+
+  return (
+    <div style={{ position: 'absolute', top: '50%', left: '50%',
+      transform: 'translate(-50%, -50%)', zIndex: 20,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      pointerEvents: 'none' }}>
+
+      {/* Conduit energético superior */}
+      <div style={{ width: 1, height: isMobile ? 28 : 44, marginBottom: -1,
+        background: `linear-gradient(to top, transparent, ${saberA}CC)` }} />
+
+      {/* Glifo VS */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <canvas ref={canvasRef} width={cvW} height={cvH}
+          style={{ position: 'absolute', left: '50%', top: '50%',
+            transform: 'translate(-50%, -50%)', width: cvW, height: cvH }} />
+        <div className="nx-display" style={{
+          fontSize: isMobile ? 46 : 72, lineHeight: 1, letterSpacing: '0.03em',
+          background: `linear-gradient(180deg, ${saberA} 0%, #E8B83A 45%, ${saberB} 100%)`,
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          animation: 'nx-vs-pulse 2.8s ease-in-out infinite',
+          position: 'relative', zIndex: 1, userSelect: 'none' }}>VS</div>
+      </div>
+
+      {/* Conduit energético inferior */}
+      <div style={{ width: 1, height: isMobile ? 28 : 44, marginTop: -1,
+        background: `linear-gradient(to bottom, transparent, ${saberB}CC)` }} />
+
+      {children}
+    </div>
+  );
+}
+
 export function ScoringScreen({ combat, onClose, S }) {
   const isMobile = useWindowWidth() < 640;
   const [scoresA,   setScoresA]   = useState(initScores);
@@ -142,78 +225,82 @@ export function ScoringScreen({ combat, onClose, S }) {
         {/* Base oscuro */}
         <div style={{ position: 'absolute', inset: 0, background: '#030609' }} />
 
-        {/* ── LADO A (izquierda) ── */}
-        <div style={{ position: 'absolute', inset: 0,
-          clipPath: 'polygon(0 0, 57% 0, 43% 100%, 0 100%)' }}>
-          {/* Degradé sable desde el borde */}
-          <div style={{ position: 'absolute', inset: 0,
-            background: `linear-gradient(to right, ${saberA}45 0%, ${saberA}18 55%, transparent 100%)` }} />
-          {/* Glow radial desde la figura */}
-          <div style={{ position: 'absolute', inset: 0,
-            background: `radial-gradient(ellipse at 22% 90%, ${saberA}40 0%, transparent 55%)` }} />
-          {a.photo_url ? (
-            <>
-              <img src={a.photo_url} alt={a.name}
-                style={{ position: 'absolute', bottom: 0, left: '4%',
-                  width: 'auto', height: '90%',
-                  objectFit: 'contain', objectPosition: 'left bottom',
-                  filter: `drop-shadow(0 0 16px ${saberA}60)` }} />
-              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
-                             linear-gradient(to right, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
-              <img src={charImg(a)} alt=""
-                style={{ position: 'absolute', bottom: 76, left: 12, height: 48, width: 'auto',
-                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
-                  filter: `drop-shadow(0 0 10px ${saberA}cc)` }} />
-            </>
-          ) : (
-            <img src={charImg(a)} alt={a.name}
-              style={{ position: 'absolute', bottom: 0, left: '10%',
-                height: '97%', width: 'auto', objectFit: 'contain',
-                filter: `drop-shadow(-6px 0 22px ${saberA}80)` }} />
-          )}
-        </div>
+        {/* ── Fondo sable A: negro al borde izq → saberA al centro → transparente ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `linear-gradient(to right, #030609 0%, ${saberA}88 46%, transparent 58%)` }} />
 
-        {/* ── LADO B (derecha) ── */}
-        <div style={{ position: 'absolute', inset: 0,
-          clipPath: 'polygon(57% 0, 100% 0, 100% 100%, 43% 100%)' }}>
-          <div style={{ position: 'absolute', inset: 0,
-            background: `linear-gradient(to left, ${saberB}45 0%, ${saberB}18 55%, transparent 100%)` }} />
-          <div style={{ position: 'absolute', inset: 0,
-            background: `radial-gradient(ellipse at 78% 90%, ${saberB}40 0%, transparent 55%)` }} />
-          {b.photo_url ? (
-            <>
-              <img src={b.photo_url} alt={b.name}
-                style={{ position: 'absolute', bottom: 0, right: '4%',
-                  width: 'auto', height: '90%',
-                  objectFit: 'contain', objectPosition: 'right bottom',
-                  filter: `drop-shadow(0 0 16px ${saberB}60)` }} />
-              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
-                             linear-gradient(to left, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
-              <img src={charImg(b)} alt=""
-                style={{ position: 'absolute', bottom: 76, right: 12, height: 48, width: 'auto',
-                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
-                  filter: `drop-shadow(0 0 10px ${saberB}cc)` }} />
-            </>
-          ) : (
-            <img src={charImg(b)} alt={b.name}
-              style={{ position: 'absolute', bottom: 0, right: '10%',
-                height: '97%', width: 'auto', objectFit: 'contain',
-                transform: 'scaleX(-1)',
-                filter: `drop-shadow(6px 0 22px ${saberB}80)` }} />
-          )}
-        </div>
+        {/* ── Fondo sable B: negro al borde der → saberB al centro → transparente ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `linear-gradient(to left, #030609 0%, ${saberB}88 46%, transparent 58%)` }} />
+
+        {/* ── Glow radial A desde la figura ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `radial-gradient(ellipse at 15% 100%, ${saberA}40 0%, transparent 50%)` }} />
+
+        {/* ── Glow radial B desde la figura ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `radial-gradient(ellipse at 85% 100%, ${saberB}40 0%, transparent 50%)` }} />
+
+        {/* ── FOTO A — encima del fondo coloreado, alto completo ── */}
+        {a.photo_url ? (
+          <img src={a.photo_url} alt={a.name}
+            style={{ position: 'absolute', bottom: 0, left: 0,
+              height: '100%', width: 'auto',
+              objectFit: 'contain', objectPosition: 'left bottom',
+              filter: `drop-shadow(0 0 22px ${saberA}80)`,
+              WebkitMaskImage: 'linear-gradient(to right, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to right, black 45%, transparent 88%)' }} />
+        ) : (
+          <img src={charImg(a)} alt={a.name}
+            style={{ position: 'absolute', bottom: 0, left: '8%',
+              height: '97%', width: 'auto', objectFit: 'contain',
+              filter: `drop-shadow(-6px 0 22px ${saberA}80)`,
+              WebkitMaskImage: 'linear-gradient(to right, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to right, black 45%, transparent 88%)' }} />
+        )}
+
+        {/* ── FOTO B — encima del fondo coloreado, alto completo ── */}
+        {b.photo_url ? (
+          <img src={b.photo_url} alt={b.name}
+            style={{ position: 'absolute', bottom: 0, right: 0,
+              height: '100%', width: 'auto',
+              objectFit: 'contain', objectPosition: 'right bottom',
+              filter: `drop-shadow(0 0 22px ${saberB}80)`,
+              WebkitMaskImage: 'linear-gradient(to left, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to left, black 45%, transparent 88%)' }} />
+        ) : (
+          <img src={charImg(b)} alt={b.name}
+            style={{ position: 'absolute', bottom: 0, right: '8%',
+              height: '97%', width: 'auto', objectFit: 'contain',
+              transform: 'scaleX(-1)',
+              filter: `drop-shadow(6px 0 22px ${saberB}80)`,
+              WebkitMaskImage: 'linear-gradient(to left, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to left, black 45%, transparent 88%)' }} />
+        )}
 
         {/* ── Línea diagonal de separación con glow ── */}
         <div style={{ position: 'absolute', inset: 0,
           clipPath: 'polygon(54% 0, 60% 0, 46% 100%, 40% 100%)',
-          background: `linear-gradient(to bottom, ${saberA}55, rgba(255,255,255,0.55) 50%, ${saberB}55)`,
+          background: `linear-gradient(to bottom, ${saberB}55, rgba(255,255,255,0.55) 50%, ${saberA}55)`,
           filter: 'blur(5px)' }} />
 
         {/* Fade inferior para legibilidad del texto */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110,
           background: 'linear-gradient(to top, rgba(3,6,9,0.92) 0%, rgba(3,6,9,0.55) 60%, transparent 100%)' }} />
+
+        {/* ── Badges de clase (sólo con photo_url) ── */}
+        {a.photo_url && (
+          <img src={charImg(a)} alt=""
+            style={{ position: 'absolute', bottom: 76, left: 12, height: 48, width: 'auto',
+              objectFit: 'contain', opacity: 0.82, zIndex: 2,
+              filter: `drop-shadow(0 0 10px ${saberA}cc)` }} />
+        )}
+        {b.photo_url && (
+          <img src={charImg(b)} alt=""
+            style={{ position: 'absolute', bottom: 76, right: 12, height: 48, width: 'auto',
+              objectFit: 'contain', opacity: 0.82, zIndex: 2,
+              filter: `drop-shadow(0 0 10px ${saberB}cc)` }} />
+        )}
 
         {/* ── Puntaje A — arriba izquierda ── */}
         <div style={{ position: 'absolute', top: 12, left: 14 }}>
@@ -242,14 +329,18 @@ export function ScoringScreen({ combat, onClose, S }) {
         {/* ── Info A — abajo izquierda ── */}
         <div style={{ position: 'absolute', bottom: 12, left: 14 }}>
           {winner === 'a' && (
-            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--pompeyo-oro)' }}>◆ GANADOR</div>
           )}
-          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{a.name}</div>
+          <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: '#fff', textShadow: `0 0 18px ${saberA}88` }}>{a.name}</div>
           {!isMobile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
               <TierBadge tier={a.tier} sm />
-              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{a.wins}W-{a.losses}L</span>
+              <span className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)',
+                letterSpacing: '0.08em' }}>{a.wins}W·{a.losses}L</span>
             </div>
           )}
         </div>
@@ -257,32 +348,29 @@ export function ScoringScreen({ combat, onClose, S }) {
         {/* ── Info B — abajo derecha ── */}
         <div style={{ position: 'absolute', bottom: 12, right: 14, textAlign: 'right' }}>
           {winner === 'b' && (
-            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--pompeyo-oro)' }}>GANADOR ◆</div>
           )}
-          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{b.name}</div>
+          <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: '#fff', textShadow: `0 0 18px ${saberB}88` }}>{b.name}</div>
           {!isMobile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 4 }}>
-              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{b.wins}W-{b.losses}L</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 5 }}>
+              <span className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)',
+                letterSpacing: '0.08em' }}>{b.wins}W·{b.losses}L</span>
               <TierBadge tier={b.tier} sm />
             </div>
           )}
         </div>
 
-        {/* ── VS — centro ── */}
-        <div style={{ position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)', zIndex: 20,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <div className="nx-display" style={{
-            fontSize: isMobile ? 46 : 76, lineHeight: 1, letterSpacing: '0.03em',
-            background: 'linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.65) 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            filter: 'drop-shadow(0 0 28px rgba(255,255,255,0.45))' }}>VS</div>
+        {/* ── VS — centro cinematográfico ── */}
+        <VsCenter saberA={saberA} saberB={saberB} isMobile={isMobile}>
           {allFilled && winner === null && (
-            <div className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)',
-              letterSpacing: '0.14em', WebkitTextFillColor: 'unset' }}>EMPATE</div>
+            <div className="nx-data" style={{ fontSize: 8, color: 'rgba(255,255,255,0.5)',
+              letterSpacing: '0.22em', marginTop: 2 }}>EMPATE</div>
           )}
-        </div>
+        </VsCenter>
       </div>
 
       {/* Tabla de evaluación */}
@@ -487,70 +575,80 @@ export function CombatViewScreen({ combat, onClose, S }) {
         borderRadius: 'var(--radius)', border: '1px solid var(--holo-line)' }}>
         <div style={{ position: 'absolute', inset: 0, background: '#030609' }} />
 
-        <div style={{ position: 'absolute', inset: 0,
-          clipPath: 'polygon(0 0, 57% 0, 43% 100%, 0 100%)' }}>
-          <div style={{ position: 'absolute', inset: 0,
-            background: `linear-gradient(to right, ${saberA}45 0%, ${saberA}18 55%, transparent 100%)` }} />
-          <div style={{ position: 'absolute', inset: 0,
-            background: `radial-gradient(ellipse at 22% 90%, ${saberA}40 0%, transparent 55%)` }} />
-          {a.photo_url ? (
-            <>
-              <img src={a.photo_url} alt={a.name}
-                style={{ position: 'absolute', bottom: 0, left: '4%',
-                  width: 'auto', height: '90%',
-                  objectFit: 'contain', objectPosition: 'left bottom',
-                  filter: `drop-shadow(0 0 16px ${saberA}60)` }} />
-              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
-                             linear-gradient(to right, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
-              <img src={charImg(a)} alt=""
-                style={{ position: 'absolute', bottom: 76, left: 12, height: 48, width: 'auto',
-                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
-                  filter: `drop-shadow(0 0 10px ${saberA}cc)` }} />
-            </>
-          ) : (
-            <img src={charImg(a)} alt={a.name}
-              style={{ position: 'absolute', bottom: 0, left: '10%', height: '97%', width: 'auto',
-                objectFit: 'contain', filter: `drop-shadow(-6px 0 22px ${saberA}80)` }} />
-          )}
-        </div>
+        {/* ── Fondo sable A: negro al borde izq → saberA al centro → transparente ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `linear-gradient(to right, #030609 0%, ${saberA}88 46%, transparent 58%)` }} />
 
-        <div style={{ position: 'absolute', inset: 0,
-          clipPath: 'polygon(57% 0, 100% 0, 100% 100%, 43% 100%)' }}>
-          <div style={{ position: 'absolute', inset: 0,
-            background: `linear-gradient(to left, ${saberB}45 0%, ${saberB}18 55%, transparent 100%)` }} />
-          <div style={{ position: 'absolute', inset: 0,
-            background: `radial-gradient(ellipse at 78% 90%, ${saberB}40 0%, transparent 55%)` }} />
-          {b.photo_url ? (
-            <>
-              <img src={b.photo_url} alt={b.name}
-                style={{ position: 'absolute', bottom: 0, right: '4%',
-                  width: 'auto', height: '90%',
-                  objectFit: 'contain', objectPosition: 'right bottom',
-                  filter: `drop-shadow(0 0 16px ${saberB}60)` }} />
-              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: `linear-gradient(to top, #030609 0%, rgba(3,6,9,0.45) 16%, transparent 36%),
-                             linear-gradient(to left, transparent 42%, rgba(3,6,9,0.88) 82%)` }} />
-              <img src={charImg(b)} alt=""
-                style={{ position: 'absolute', bottom: 76, right: 12, height: 48, width: 'auto',
-                  objectFit: 'contain', opacity: 0.82, zIndex: 2,
-                  filter: `drop-shadow(0 0 10px ${saberB}cc)` }} />
-            </>
-          ) : (
-            <img src={charImg(b)} alt={b.name}
-              style={{ position: 'absolute', bottom: 0, right: '10%', height: '97%', width: 'auto',
-                objectFit: 'contain', transform: 'scaleX(-1)',
-                filter: `drop-shadow(6px 0 22px ${saberB}80)` }} />
-          )}
-        </div>
+        {/* ── Fondo sable B: negro al borde der → saberB al centro → transparente ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `linear-gradient(to left, #030609 0%, ${saberB}88 46%, transparent 58%)` }} />
+
+        {/* ── Glow radial A desde la figura ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `radial-gradient(ellipse at 15% 100%, ${saberA}40 0%, transparent 50%)` }} />
+
+        {/* ── Glow radial B desde la figura ── */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `radial-gradient(ellipse at 85% 100%, ${saberB}40 0%, transparent 50%)` }} />
+
+        {/* ── FOTO A — encima del fondo coloreado, alto completo ── */}
+        {a.photo_url ? (
+          <img src={a.photo_url} alt={a.name}
+            style={{ position: 'absolute', bottom: 0, left: 0,
+              height: '100%', width: 'auto',
+              objectFit: 'contain', objectPosition: 'left bottom',
+              filter: `drop-shadow(0 0 22px ${saberA}80)`,
+              WebkitMaskImage: 'linear-gradient(to right, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to right, black 45%, transparent 88%)' }} />
+        ) : (
+          <img src={charImg(a)} alt={a.name}
+            style={{ position: 'absolute', bottom: 0, left: '8%',
+              height: '97%', width: 'auto', objectFit: 'contain',
+              filter: `drop-shadow(-6px 0 22px ${saberA}80)`,
+              WebkitMaskImage: 'linear-gradient(to right, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to right, black 45%, transparent 88%)' }} />
+        )}
+
+        {/* ── FOTO B — encima del fondo coloreado, alto completo ── */}
+        {b.photo_url ? (
+          <img src={b.photo_url} alt={b.name}
+            style={{ position: 'absolute', bottom: 0, right: 0,
+              height: '100%', width: 'auto',
+              objectFit: 'contain', objectPosition: 'right bottom',
+              filter: `drop-shadow(0 0 22px ${saberB}80)`,
+              WebkitMaskImage: 'linear-gradient(to left, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to left, black 45%, transparent 88%)' }} />
+        ) : (
+          <img src={charImg(b)} alt={b.name}
+            style={{ position: 'absolute', bottom: 0, right: '8%',
+              height: '97%', width: 'auto', objectFit: 'contain',
+              transform: 'scaleX(-1)',
+              filter: `drop-shadow(6px 0 22px ${saberB}80)`,
+              WebkitMaskImage: 'linear-gradient(to left, black 45%, transparent 88%)',
+              maskImage: 'linear-gradient(to left, black 45%, transparent 88%)' }} />
+        )}
 
         <div style={{ position: 'absolute', inset: 0,
           clipPath: 'polygon(54% 0, 60% 0, 46% 100%, 40% 100%)',
-          background: `linear-gradient(to bottom, ${saberA}55, rgba(255,255,255,0.55) 50%, ${saberB}55)`,
+          background: `linear-gradient(to bottom, ${saberB}55, rgba(255,255,255,0.55) 50%, ${saberA}55)`,
           filter: 'blur(5px)' }} />
 
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110,
           background: 'linear-gradient(to top, rgba(3,6,9,0.92) 0%, rgba(3,6,9,0.55) 60%, transparent 100%)' }} />
+
+        {/* ── Badges de clase (sólo con photo_url) ── */}
+        {a.photo_url && (
+          <img src={charImg(a)} alt=""
+            style={{ position: 'absolute', bottom: 76, left: 12, height: 48, width: 'auto',
+              objectFit: 'contain', opacity: 0.82, zIndex: 2,
+              filter: `drop-shadow(0 0 10px ${saberA}cc)` }} />
+        )}
+        {b.photo_url && (
+          <img src={charImg(b)} alt=""
+            style={{ position: 'absolute', bottom: 76, right: 12, height: 48, width: 'auto',
+              objectFit: 'contain', opacity: 0.82, zIndex: 2,
+              filter: `drop-shadow(0 0 10px ${saberB}cc)` }} />
+        )}
 
         <div style={{ position: 'absolute', top: 12, left: 14 }}>
           <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
@@ -576,41 +674,42 @@ export function CombatViewScreen({ combat, onClose, S }) {
 
         <div style={{ position: 'absolute', bottom: 12, left: 14 }}>
           {winner === 'a' && (
-            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--pompeyo-oro)' }}>◆ GANADOR</div>
           )}
-          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{a.name}</div>
+          <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: '#fff', textShadow: `0 0 18px ${saberA}88` }}>{a.name}</div>
           {!isMobile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
               <TierBadge tier={a.tier} sm />
-              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{a.wins}W-{a.losses}L</span>
+              <span className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)',
+                letterSpacing: '0.08em' }}>{a.wins}W·{a.losses}L</span>
             </div>
           )}
         </div>
 
         <div style={{ position: 'absolute', bottom: 12, right: 14, textAlign: 'right' }}>
           {winner === 'b' && (
-            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 3 }}>GANADOR</div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
+              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--pompeyo-oro)' }}>GANADOR ◆</div>
           )}
-          <div style={{ fontWeight: 700, fontSize: isMobile ? 12 : 14, color: '#fff' }}>{b.name}</div>
+          <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: '#fff', textShadow: `0 0 18px ${saberB}88` }}>{b.name}</div>
           {!isMobile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 4 }}>
-              <span className="nx-data" style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{b.wins}W-{b.losses}L</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'flex-end', marginTop: 5 }}>
+              <span className="nx-data" style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)',
+                letterSpacing: '0.08em' }}>{b.wins}W·{b.losses}L</span>
               <TierBadge tier={b.tier} sm />
             </div>
           )}
         </div>
 
-        <div style={{ position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)', zIndex: 20,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <div className="nx-display" style={{
-            fontSize: isMobile ? 46 : 76, lineHeight: 1, letterSpacing: '0.03em',
-            background: 'linear-gradient(180deg, #ffffff 0%, rgba(255,255,255,0.65) 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            filter: 'drop-shadow(0 0 28px rgba(255,255,255,0.45))' }}>VS</div>
-        </div>
+        {/* ── VS — centro cinematográfico ── */}
+        <VsCenter saberA={saberA} saberB={saberB} isMobile={isMobile} />
       </div>
 
       {/* Tabla de evaluación — read-only */}

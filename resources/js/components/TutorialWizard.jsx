@@ -22,7 +22,7 @@ const SABERS_LIST = [
   { id: 'rojo',    label: 'Rojo',    color: '#ff2d45' },
 ];
 
-const STEPS = ['bienvenida', 'identidad', 'lado', 'clase', 'sable', 'listo'];
+const STEPS = ['bienvenida', 'identidad', 'lado', 'clase', 'sable', 'tutor', 'listo'];
 
 export default function TutorialWizard({ user, onComplete }) {
   const [step, setStep]     = useState(0);
@@ -37,6 +37,8 @@ export default function TutorialWizard({ user, onComplete }) {
     side:        '',
     cls:         '',
     saber_color: 'azul',
+    tutor_id:    null,
+    tutor_name:  '',
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -92,6 +94,7 @@ export default function TutorialWizard({ user, onComplete }) {
           side:        form.side,
           cls:         form.cls,
           saber_color: form.saber_color,
+          tutor_id:    form.tutor_id,
         }),
       });
       const data = await res.json();
@@ -180,7 +183,8 @@ export default function TutorialWizard({ user, onComplete }) {
           {step === 2 && <StepLado form={form} setSide={setSide} />}
           {step === 3 && <StepClase form={form} set={set} />}
           {step === 4 && <StepSable form={form} set={set} />}
-          {step === 5 && <StepListo form={form} error={error} />}
+          {step === 5 && <StepTutor form={form} set={set} token={localStorage.getItem('nx-token')} />}
+          {step === 6 && <StepListo form={form} error={error} />}
         </div>
       </div>
 
@@ -575,7 +579,125 @@ function StepSable({ form, set }) {
   );
 }
 
-/* ─── Step 5: Listo ─── */
+/* ─── Step 5: Tutor ─── */
+const TIER_LABEL = { caballero: 'Caballero', maestro: 'Maestro', granmaestro: 'Gran Maestro' };
+const TIER_COLOR = { caballero: '#3aa0ff', maestro: '#b15cff', granmaestro: '#ffb01f' };
+
+function StepTutor({ form, set, token }) {
+  const [tutors, setTutors]   = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/tutors', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => { setTutors(d.tutors ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const select = (t) => {
+    if (form.tutor_id === t.id) {
+      set('tutor_id', null);
+      set('tutor_name', '');
+    } else {
+      set('tutor_id', t.id);
+      set('tutor_name', t.name);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+      <div>
+        <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
+          PASO 5 · MENTOR · OPCIONAL
+        </div>
+        <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>¿Tienes un tutor?</h2>
+        <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
+          Un maestro puede guiarte en tus primeros pasos. Esta elección es opcional y puede cambiarse más tarde.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="nx-data" style={{ textAlign: 'center', color: 'var(--txt-faint)', fontSize: 11, padding: '40px 0' }}>
+          CARGANDO MENTORES...
+        </div>
+      ) : tutors.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '32px 20px',
+          border: '1px dashed var(--holo-line)', borderRadius: 8,
+        }}>
+          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', letterSpacing: '0.15em' }}>
+            NO HAY MENTORES DISPONIBLES EN ESTE MOMENTO
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {tutors.map(t => {
+            const active = form.tutor_id === t.id;
+            const tc = TIER_COLOR[t.tier] ?? 'var(--holo)';
+            const initials = t.name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+            return (
+              <button
+                key={t.id}
+                onClick={() => select(t)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 18px', textAlign: 'left', cursor: 'pointer',
+                  border: `2px solid ${active ? tc : 'var(--holo-line)'}`,
+                  borderRadius: 8,
+                  background: active
+                    ? `color-mix(in srgb, ${tc} 8%, transparent)`
+                    : 'rgba(255,255,255,0.02)',
+                  boxShadow: active ? `0 0 18px color-mix(in srgb, ${tc} 22%, transparent)` : 'none',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = `${tc}55`; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--holo-line)'; }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: 6, flexShrink: 0,
+                  background: `color-mix(in srgb, ${tc} 14%, transparent)`,
+                  border: `1px solid ${tc}`,
+                  display: 'grid', placeItems: 'center',
+                  fontFamily: 'var(--font-hud)', fontSize: 15, fontWeight: 700, color: tc,
+                }}>
+                  {initials}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--txt)' : 'var(--txt-dim)' }}>
+                    {t.name}
+                  </div>
+                  <div className="nx-data" style={{ fontSize: 10, color: tc, letterSpacing: '0.08em', marginTop: 2 }}>
+                    @{t.handle} · {TIER_LABEL[t.tier] ?? t.tier}
+                  </div>
+                </div>
+                {active && (
+                  <div className="nx-data" style={{ fontSize: 10, color: tc, letterSpacing: '0.15em', flexShrink: 0 }}>
+                    ✓ ELEGIDO
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{
+        padding: '10px 16px', border: '1px solid var(--holo-line)', borderRadius: 6,
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.1em' }}>
+          {form.tutor_id
+            ? 'TUTOR SELECCIONADO · Puedes cambiar esto más adelante desde tu perfil'
+            : 'OPCIONAL · Puedes continuar sin seleccionar un tutor'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Step 6: Listo ─── */
 function StepListo({ form, error }) {
   const cls        = NX.CLASSES.find(c => c.id === form.cls);
   const side       = SIDES.find(s => s.id === form.side);
@@ -643,6 +765,21 @@ function StepListo({ form, error }) {
             </div>
           ))}
         </div>
+
+        {/* Tutor row (optional) */}
+        {form.tutor_id && (
+          <div style={{
+            padding: '12px 20px', borderTop: '1px solid var(--holo-line)',
+            background: 'rgba(255,255,255,0.02)',
+          }}>
+            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', letterSpacing: '0.2em', marginBottom: 5 }}>
+              TUTOR ASIGNADO
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--holo)' }}>
+              {form.tutor_name}
+            </div>
+          </div>
+        )}
 
         {form.bio && (
           <div style={{

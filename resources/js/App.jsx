@@ -144,7 +144,7 @@ const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
   { id: 'sesiones', label: 'Sesiones', icon: 'calendar' },
-  { id: 'entrenamiento', label: 'Entrenamiento', icon: 'calendar' },
+  { id: 'entrenamiento', label: 'Bitácora', icon: 'calendar' },
   { id: 'modulos-entrenamiento', label: 'Módulos', icon: 'target' },
   { id: 'tareas',   label: 'Tareas',   icon: 'tasks' },
   { id: 'misiones', label: 'Misiones', icon: 'zap', guard: u => ADMIN_TIERS.includes(u?.tier ?? '') },
@@ -154,13 +154,13 @@ const NAV = [
   { id: 'combatientes', label: 'Combatientes', icon: 'roster' },
   { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
-  { id: 'instagram', label: 'Instagram', icon: 'instagram' },
+  { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
 ];
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
   sesiones: ['Sesiones de Entrenamiento', 'Gestión de sesiones, plan y asistencia'],
-  entrenamiento: ['Entrenamiento', 'Asistencia y bitácora diaria'],
+  entrenamiento: ['Bitácora', 'Asistencia y bitácora diaria'],
   'modulos-entrenamiento': ['Módulos de Entrenamiento', 'Técnicas, formas y currículum de combate'],
   tareas:   ['Tareas',    'Plan de entrenamiento dirigido'],
   misiones: ['Misiones', 'Administración y asignación de misiones'],
@@ -185,6 +185,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [mapLocation, setMapLocation] = useState(null);
   const [combatToView, setCombatToView] = useState(null);
   const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? '');
+  const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
 
@@ -252,7 +253,14 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       .catch(() => {});
   }, []);
 
-  // Carga combatientes y combates reales; los fusiona con el seed
+  // Sincroniza créditos desde el servidor al iniciar
+  useEffect(() => {
+    if (user?.character?.credits !== undefined) {
+      S.setCredits(user.character.credits);
+    }
+  }, [user?.id]);
+
+  // Carga combatientes, combates y apuestas reales
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
     if (!token) return;
@@ -260,7 +268,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     Promise.all([
       fetch('/api/combatants', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/combats',    { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([cbData, cmData]) => {
+      fetch('/api/bets',       { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([cbData, cmData, betData]) => {
       let merged = S.combatants;
       if (cbData?.combatants) {
         merged = mergeApiCombatants(cbData.combatants, user?.id);
@@ -272,6 +281,16 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           const local = prev.filter(c => typeof c.id === 'string');
           return [...normalized, ...local];
         });
+      }
+      if (betData?.bets) {
+        S.setBets(betData.bets.map(b => ({
+          id:       b.id,
+          combatId: b.combat_id,
+          pick:     b.pick,
+          amount:   b.amount,
+          odds:     parseFloat(b.odds),
+          status:   b.status,
+        })));
       }
     });
   }, [user?.id]);
@@ -436,8 +455,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           </div>
         )}
 
-        {/* Botón Configuración */}
-        <div style={{ padding: '4px 8px', borderTop: '1px solid var(--holo-line)' }}>
+        {/* Botón Configuración — solo administradores */}
+        {isAdmin && <div style={{ padding: '4px 8px', borderTop: '1px solid var(--holo-line)' }}>
           <button
             onClick={() => go('configuracion')}
             title={sidebarCollapsed ? 'Configuración' : undefined}
@@ -467,7 +486,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
               Configuración
             </span>
           </button>
-        </div>
+        </div>}
 
         {/* Usuario + logout */}
         <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>

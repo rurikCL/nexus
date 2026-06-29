@@ -45,7 +45,7 @@ export function useStore() {
 
   const S = {
     credits, character, training, tasks, bets, combats, role, ranking, events, combatants,
-    setCombatants, setCombats, setRole, setCredits, setCharacter,
+    setCombatants, setCombats, setRole, setCredits, setCharacter, setBets,
 
     byId: (id) => combatants.find(c => c.id === id) ?? null,
 

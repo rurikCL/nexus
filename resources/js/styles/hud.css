@@ -188,6 +188,12 @@ select.nx-select option { background: var(--space-panel-solid); }
 @keyframes nx-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .nx-fade { animation: nx-fade-up var(--dur-base) var(--ease-out) both; }
 
+@keyframes nx-vs-pulse {
+  0%,100% { filter: drop-shadow(0 0 8px rgba(232,184,58,0.4)); }
+  50%      { filter: drop-shadow(0 0 22px rgba(232,184,58,0.9)) drop-shadow(0 0 38px rgba(255,100,0,0.4)); }
+}
+@keyframes nx-vs-ring { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+
 @keyframes nx-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 @keyframes nx-signal-bar { from { opacity: .25; } to { opacity: 1; } }

@@ -4,12 +4,30 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\StatsTemporada;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class MeController extends Controller
 {
+    public function tutors(): JsonResponse
+    {
+        $tutors = User::whereIn('tier', ['caballero', 'maestro', 'granmaestro'])
+            ->with('character')
+            ->get()
+            ->filter(fn($u) => $u->character !== null)
+            ->map(fn($u) => [
+                'id'     => $u->id,
+                'name'   => $u->name,
+                'handle' => $u->character->handle,
+                'tier'   => $u->tier,
+            ])
+            ->values();
+
+        return response()->json(['tutors' => $tutors]);
+    }
+
     public function show(Request $request): JsonResponse
     {
         $user = $request->user()->load('character', 'roles');
