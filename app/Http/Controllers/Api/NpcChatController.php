@@ -78,7 +78,14 @@ class NpcChatController extends Controller
             ]);
 
         if ($response->failed()) {
-            return response()->json(['error' => 'api_error', 'message' => 'Error al contactar al NPC.'], 502);
+            $status  = $response->status();
+            $body    = $response->json('message') ?? $response->body();
+            \Illuminate\Support\Facades\Log::error('Mistral API error', ['status' => $status, 'body' => $body]);
+            return response()->json([
+                'error'   => 'api_error',
+                'message' => "Error al contactar al NPC. (HTTP {$status})",
+                'detail'  => app()->isLocal() ? $body : null,
+            ], 502);
         }
 
         $reply = $response->json('choices.0.message.content', '...');
