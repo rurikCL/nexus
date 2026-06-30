@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/character', [CharacterController::class, 'upsert']);
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
+    Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
 
     Route::get('/combatants', [CombatantController::class, 'index']);
     Route::get('/combatants/{handle}', [CombatantController::class, 'show']);

@@ -11,13 +11,14 @@ class Character extends Model
 {
     protected $fillable = [
         'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'cls', 'saber_color', 'side',
-        'sector', 'sponsor', 'joined_year', 'credits', 'stats', 'gold',
+        'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'stats', 'gold',
         'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
     ];
 
     protected $casts = [
         'stats'          => 'array',
         'gold'           => 'boolean',
+        'reputation'     => 'integer',
         'map_sistema_id' => 'integer',
         'map_planeta_id' => 'integer',
         'map_zona_id'    => 'integer',

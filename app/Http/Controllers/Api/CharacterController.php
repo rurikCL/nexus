@@ -81,4 +81,21 @@ class CharacterController extends Controller
             'character' => $character->append(['winrate']),
         ], $character->wasRecentlyCreated ? 201 : 200);
     }
+
+    public function updateReputation(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'delta' => 'required|integer|min:-1000|max:1000',
+        ]);
+
+        $character = $request->user()->character;
+        if (!$character) {
+            return response()->json(['error' => 'Sin personaje'], 404);
+        }
+
+        $character->reputation = ($character->reputation ?? 0) + $data['delta'];
+        $character->save();
+
+        return response()->json(['reputation' => $character->reputation]);
+    }
 }
