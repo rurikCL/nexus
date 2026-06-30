@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ConvertsToWebp;
 use App\Models\Character;
 use App\Models\Configuracion;
 use App\Models\MapLugar;
@@ -22,6 +23,8 @@ use Illuminate\Http\Request;
 
 class AdminController extends Controller
 {
+    use ConvertsToWebp;
+
     private function model(string $entity): string
     {
         return match ($entity) {
@@ -93,8 +96,7 @@ class AdminController extends Controller
         $data  = $request->all();
 
         foreach ($request->allFiles() as $key => $file) {
-            $path = $file->store("admin/{$entity}", 'public');
-            $data[$key] = $path;
+            $data[$key] = $this->saveAsWebp($file, "admin/{$entity}");
         }
 
         if ($entity === 'usuarios' && empty($data['password'])) {
@@ -130,8 +132,7 @@ class AdminController extends Controller
             if ($record->{$key}) {
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($record->{$key});
             }
-            $path = $file->store("admin/{$entity}", 'public');
-            $data[$key] = $path;
+            $data[$key] = $this->saveAsWebp($file, "admin/{$entity}");
         }
 
         $roles = null;

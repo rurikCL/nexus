@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ConvertsToWebp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class CharacterPhotoController extends Controller
 {
+    use ConvertsToWebp;
+
     public function store(Request $request): JsonResponse
     {
         $request->validate([
@@ -27,10 +30,7 @@ class CharacterPhotoController extends Controller
             Storage::disk('public')->delete($character->photo);
         }
 
-        $path = $request->file('photo')->store(
-            'portraits',
-            'public'
-        );
+        $path = $this->saveAsWebp($request->file('photo'), 'portraits');
 
         $character->update(['photo' => $path]);
 
