@@ -169,6 +169,7 @@ const ENTITY_CONFIG = {
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto.' },
       { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea.' },
+      { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Si se rellena, el NPC usará IA en lugar del diálogo estático.' },
       { key: 'urlInteraccion',label: 'URL interacción',  type: 'text', span: 2 },
       { key: 'MisionID',      label: 'ID de misión',     type: 'number', min: 0 },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
