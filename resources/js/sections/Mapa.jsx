@@ -1695,6 +1695,34 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
   const [remaining, setRemaining] = useState(null);
   const bottomRef                 = useRef(null);
   const [combat, setCombat]       = useState(false);
+  const [typingInMsg, setTypingInMsg] = useState(null); // { text, visibleChars }
+  const [npcTextDelay, setNpcTextDelay] = useState(30); // ms por carácter
+
+  /* Carga el retraso_texto_npc desde configuraciones */
+  useEffect(() => {
+    apiFetch('/admin/configuraciones?q=retraso_texto_npc')
+      .then(d => {
+        const row = (d.data ?? d.items ?? []).find(r => r.nombre === 'retraso_texto_npc');
+        if (row && row.valor_numerico > 0) setNpcTextDelay(row.valor_numerico);
+      })
+      .catch(() => {});
+  }, []);
+
+  /* Typewriter: avanza un carácter por tick */
+  useEffect(() => {
+    if (!typingInMsg) return;
+    if (typingInMsg.visibleChars >= typingInMsg.text.length) {
+      setMessages(prev => [...prev, { from: 'npc', text: typingInMsg.text, ts: Date.now() }]);
+      setTypingInMsg(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      setTypingInMsg(prev => prev ? { ...prev, visibleChars: prev.visibleChars + 1 } : null);
+    }, npcTextDelay);
+    return () => clearTimeout(t);
+  }, [typingInMsg, npcTextDelay]);
+
+  const showNpcMsg = (text) => setTypingInMsg({ text, visibleChars: 0 });
 
   const npcTipo  = (npc.tipo ?? '').toLowerCase();
   const isAliado = npcTipo === 'aliado';
@@ -1713,7 +1741,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
     if (!isHostil) return;
     if (Math.floor(Math.random() * 6) + 1 >= 4) {
       setTimeout(() => {
-        setMessages(prev => [...prev, { from: 'npc', text: `*${npc.nombre} adopta una postura amenazante y ataca*`, ts: Date.now() }]);
+        showNpcMsg(`*${npc.nombre} adopta una postura amenazante y ataca*`);
         setTimeout(() => setCombat(true), 900);
       }, 1100);
     }
@@ -1743,7 +1771,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
     if (npc.saludo) {
       setTyping(true);
       setTimeout(() => {
-        setMessages([{ from: 'npc', text: npc.saludo, ts: Date.now() }]);
+        showNpcMsg(npc.saludo);
         setTyping(false);
         if (npcOptions.length > 0) setPhase('dialog');
       }, 800);
@@ -1766,7 +1794,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
         if (d.show_greeting && npc.saludo) {
           setTyping(true);
           setTimeout(() => {
-            setMessages(prev => [...prev, { from: 'npc', text: npc.saludo, ts: Date.now() }]);
+            showNpcMsg(npc.saludo);
             setTyping(false);
           }, 800);
         }
@@ -1794,7 +1822,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
       } else if (!resp.ok) {
         toast('Error al contactar al NPC.', { tone: 'error', icon: 'x' });
       } else {
-        setMessages(prev => [...prev, { from: 'npc', text: data.reply, ts: Date.now() }]);
+        showNpcMsg(data.reply);
         setRemaining(data.remaining);
         checkHostileAttack();
       }
@@ -1807,7 +1835,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, typing]);
+  }, [messages, typing, typingInMsg]);
 
   const handleOption = useCallback(async (opt) => {
     setMessages(prev => [...prev, { from: 'player', text: opt.keyword, ts: Date.now() }]);
@@ -1823,7 +1851,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
     }
 
     setTimeout(() => {
-      setMessages(prev => [...prev, { from: 'npc', text: opt.response, ts: Date.now() }]);
+      showNpcMsg(opt.response);
       setTyping(false);
       checkHostileAttack();
     }, 800);
@@ -1966,6 +1994,23 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
               </div>
             </div>
           ))}
+
+          {typingInMsg && (
+            <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'nx-fade-up 0.2s ease both' }}>
+              <div style={{
+                maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
+                fontSize: 13, lineHeight: 1.55,
+                background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
+                color: 'var(--txt)', borderBottomLeftRadius: 4,
+              }}>
+                <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 5 }}>
+                  {npc.nombre.toUpperCase()}
+                </div>
+                {typingInMsg.text.slice(0, typingInMsg.visibleChars)}
+                <span style={{ display: 'inline-block', width: 2, height: '1em', background: 'var(--holo)', marginLeft: 2, verticalAlign: 'text-bottom', animation: 'nx-pulse 0.7s infinite' }} />
+              </div>
+            </div>
+          )}
 
           {typing && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'nx-fade-up 0.2s ease' }}>

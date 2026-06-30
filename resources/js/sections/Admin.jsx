@@ -23,15 +23,10 @@ const api = async (method, path, body) => {
 };
 
 /* ─── GRUPOS para el sidebar ────────────────────────────── */
-const GROUPS = ['MAPA GALÁCTICO', 'ROL', 'SISTEMA'];
+const GROUPS = ['MAPA GALÁCTICO', 'SISTEMA'];
 
 /* ─── OPCIONES ESTÁTICAS ─────────────────────────────────── */
 const RAREZA_OPTS     = ['comun', 'poco_comun', 'raro', 'epico', 'legendario'];
-const HABILIDAD_TIPO_OPTS  = ['melee', 'distancia'];
-const HABILIDAD_OBJETIVO_OPTS = ['target', 'self'];
-const BUFF_STATS  = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
-const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
-const BUFF_COLOR  = { ataque: '#ff7043', defensa: '#38cdf0', punteria: '#10b981', movimiento: '#a78bfa', iniciativa: '#E6B325' };
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
 const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 'rojo'];
@@ -95,8 +90,7 @@ const ENTITY_CONFIG = {
       { key: 'faccion',   label: 'Facción',     type: 'text' },
       { key: 'visible',   label: 'Visible',     type: 'toggle' },
       { key: 'imagen',    label: 'Imagen',      type: 'file', span: 2 },
-      { key: 'historia',            label: 'Historia',           type: 'textarea', span: 2 },
-      { key: 'eventos_importantes', label: 'Eventos importantes', type: 'textarea', span: 2, hint: 'Un evento por línea. Los NPCs pueden agregar entradas automáticamente vía IA.' },
+      { key: 'historia',  label: 'Historia',    type: 'textarea', span: 2 },
     ],
     defaults: { visible: true },
   },
@@ -175,7 +169,6 @@ const ENTITY_CONFIG = {
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto.' },
       { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea.' },
-      { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Personalidad del NPC para Mistral AI. Si se define, activa el modo conversación libre.' },
       { key: 'urlInteraccion',label: 'URL interacción',  type: 'text', span: 2 },
       { key: 'MisionID',      label: 'ID de misión',     type: 'number', min: 0 },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
@@ -216,60 +209,6 @@ const ENTITY_CONFIG = {
       { key: 'imagen',           label: 'Imagen de la nave',    type: 'file', span: 2 },
     ],
     defaults: {},
-  },
-
-  /* ── ROL ── */
-  rol_habilidades: {
-    label: 'Habilidades de Rol', icon: 'zap', group: 'ROL',
-    filters: [
-      { key: 'tipo',  label: 'Tipo',  options: [{ value: 'melee', label: 'Melee' }, { value: 'distancia', label: 'Distancia' }] },
-      { key: 'forma', label: 'Forma', options: [0,1,2,3,4,5,6,7].map(n => ({ value: String(n), label: n === 0 ? 'Universal (0)' : `Forma ${n}` })) },
-    ],
-    columns: [
-      { key: 'id',           label: 'ID',      w: 52 },
-      { key: 'icono',        label: 'Icono',   type: 'image', w: 52 },
-      { key: 'nombre',       label: 'Nombre',  bold: true },
-      { key: 'tipo',         label: 'Tipo',    dim: true, w: 80 },
-      { key: 'forma',        label: 'Forma',   dim: true, w: 56 },
-      { key: 'objetivo',     label: 'Obj',     dim: true, w: 60 },
-      { key: 'damage',       label: 'Daño',    dim: true, w: 56 },
-      { key: 'cooldown',     label: 'CD',      dim: true, w: 48 },
-    ],
-    fields: [
-      { key: 'nombre',       label: 'Nombre',                type: 'text',      required: true },
-      { key: 'icono',        label: 'Icono',                 type: 'file' },
-      { key: 'tipo',         label: 'Tipo',                  type: 'select',    options: HABILIDAD_TIPO_OPTS, required: true, hint: 'melee = cuerpo a cuerpo · distancia = ataque a distancia' },
-      { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
-      { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
-      { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
-      { key: 'damage',       label: 'Daño base',             type: 'number',    min: 0 },
-      { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
-      { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
-      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario durante el turno' },
-      { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
-    ],
-    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, cooldown: 0 },
-  },
-
-  rol_objetos: {
-    label: 'Objetos de Rol', icon: 'box', group: 'ROL',
-    columns: [
-      { key: 'id', label: 'ID', w: 52 },
-      { key: 'nombre', label: 'Nombre', bold: true },
-      { key: 'tipo', label: 'Tipo', dim: true },
-      { key: 'rareza', label: 'Rareza', type: 'rareza' },
-      { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
-    ],
-    fields: [
-      { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'text' },
-      { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
-      { key: 'activo',      label: 'Activo',      type: 'toggle' },
-      { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
-      { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
-      { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
-    ],
-    defaults: { activo: true },
   },
 
   /* ── SISTEMA ── */
@@ -336,6 +275,27 @@ const ENTITY_CONFIG = {
     defaults: {},
   },
 
+  rol_objetos: {
+    label: 'Objetos de Rol', icon: 'box', group: 'SISTEMA',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'tipo', label: 'Tipo', dim: true },
+      { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
+    ],
+    fields: [
+      { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
+      { key: 'tipo',        label: 'Tipo',        type: 'text' },
+      { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
+      { key: 'activo',      label: 'Activo',      type: 'toggle' },
+      { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
+      { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
+      { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
+    ],
+    defaults: { activo: true },
+  },
+
   rol_character_objeto: {
     label: 'Asignación Objetos', icon: 'link', group: 'SISTEMA',
     columns: [
@@ -353,20 +313,21 @@ const ENTITY_CONFIG = {
 
   configuraciones: {
     label: 'Configuraciones', icon: 'settings', group: 'SISTEMA',
+    noDelete: true,
     columns: [
-      { key: 'id',              label: 'ID',       w: 52 },
-      { key: 'nombre',          label: 'Nombre',   bold: true },
-      { key: 'tipo_valor',      label: 'Tipo',     dim: true },
-      { key: 'valor_numerico',  label: 'Numérico', dim: true },
-      { key: 'valor_texto',     label: 'Texto',    dim: true },
-      { key: 'activo',          label: 'Activo',   type: 'bool', w: 62 },
+      { key: 'id',             label: 'ID',      w: 52 },
+      { key: 'nombre',         label: 'Nombre',  bold: true },
+      { key: 'tipo_valor',     label: 'Tipo',    dim: true },
+      { key: 'valor_numerico', label: 'Número',  w: 80 },
+      { key: 'valor_texto',    label: 'Texto',   dim: true },
+      { key: 'activo',         label: 'Activo',  type: 'bool', w: 68 },
     ],
     fields: [
-      { key: 'nombre',          label: 'Nombre',         type: 'text',   required: true },
-      { key: 'tipo_valor',      label: 'Tipo de valor',  type: 'select', options: ['numerico', 'texto'] },
-      { key: 'valor_numerico',  label: 'Valor numérico', type: 'number' },
-      { key: 'valor_texto',     label: 'Valor texto',    type: 'text',   hint: 'Usar solo cuando tipo_valor = texto' },
-      { key: 'activo',          label: 'Activo',         type: 'toggle' },
+      { key: 'nombre',         label: 'Nombre (clave)',  type: 'text',   required: true, hint: 'Identificador único, ej: retraso_texto_npc' },
+      { key: 'tipo_valor',     label: 'Tipo de valor',   type: 'select', options: [{ value: 'numerico', label: 'Numérico' }, { value: 'texto', label: 'Texto' }] },
+      { key: 'valor_numerico', label: 'Valor numérico',  type: 'number', min: 0 },
+      { key: 'valor_texto',    label: 'Valor texto',     type: 'textarea', span: 2 },
+      { key: 'activo',         label: 'Activo',          type: 'toggle' },
     ],
     defaults: { tipo_valor: 'numerico', activo: true },
   },
@@ -393,7 +354,7 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
 
   if (field.type === 'number') {
     return (
-      <input type="number" {...base} min={field.min ?? 0} {...(field.max != null ? { max: field.max } : {})}
+      <input type="number" {...base} min={field.min ?? 0}
         value={value ?? 0} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
       />
     );
@@ -524,52 +485,6 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     );
   }
 
-  if (field.type === 'statStack') {
-    const arr = Array.isArray(value) ? value : [];
-    const counts = Object.fromEntries(BUFF_STATS.map(s => [s, 0]));
-    arr.forEach(s => { if (s in counts) counts[s]++; });
-
-    const update = (stat, delta) => {
-      const newCount = Math.max(0, counts[stat] + delta);
-      const newArr = BUFF_STATS.flatMap(s => Array(s === stat ? newCount : counts[s]).fill(s));
-      onChange(newArr);
-    };
-
-    return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {BUFF_STATS.map(stat => {
-          const count = counts[stat];
-          const c = BUFF_COLOR[stat];
-          const active = count > 0;
-          const btnBase = {
-            width: 20, height: 20, borderRadius: 4, border: '1px solid rgba(255,255,255,0.12)',
-            background: 'rgba(255,255,255,0.06)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, lineHeight: 1, color: 'var(--txt)', padding: 0,
-          };
-          return (
-            <div key={stat} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              background: active ? `${c}18` : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${active ? `${c}55` : 'var(--holo-line)'}`,
-              borderRadius: 8, padding: '5px 9px', transition: 'all 0.15s',
-            }}>
-              <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', color: active ? c : 'var(--txt-dim)', minWidth: 30 }}>
-                {BUFF_LABEL[stat]}
-              </span>
-              <button type="button" onClick={() => update(stat, -1)} disabled={!active}
-                style={{ ...btnBase, opacity: active ? 1 : 0.25, cursor: active ? 'pointer' : 'not-allowed' }}>−</button>
-              <span style={{ fontSize: 13, fontFamily: 'var(--font-data)', minWidth: 14, textAlign: 'center', color: active ? c : 'var(--txt-faint)', fontWeight: active ? 700 : 400 }}>
-                {count}
-              </span>
-              <button type="button" onClick={() => update(stat, 1)} style={btnBase}>+</button>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <input type="text" {...base}
       value={value ?? ''} onChange={e => onChange(e.target.value)}
@@ -608,8 +523,6 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
           if (val !== null && val !== undefined) {
             if (typeof val === 'boolean') {
               payload.append(key, val ? '1' : '0');
-            } else if (Array.isArray(val)) {
-              payload.append(key, JSON.stringify(val));
             } else {
               payload.append(key, val);
             }
@@ -654,9 +567,6 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
               onChange={val => setField(field.key, val)}
               relatedOptions={relatedOptions}
             />
-            {field.hint && field.type !== 'textarea' && (
-              <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{field.hint}</span>
-            )}
           </div>
         ))}
       </div>
@@ -706,13 +616,6 @@ function CellValue({ col, record }) {
     ) : <span style={{ color: 'var(--txt-faint)' }}>—</span>;
   }
 
-  if (col.type === 'image') {
-    const src = raw ? (raw.startsWith('http') ? raw : `/storage/${raw}`) : null;
-    return src
-      ? <img src={src} alt="" style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }} />
-      : <span style={{ color: 'var(--txt-faint)' }}>—</span>;
-  }
-
   if (raw == null || raw === '') return <span style={{ color: 'var(--txt-faint)' }}>—</span>;
 
   return (
@@ -737,14 +640,12 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [loading, setLoading]   = useState(false);
   const [editRecord, setEditRecord]   = useState(null);  // null=closed, {}=new, {id,...}=edit
   const [deleteId, setDeleteId] = useState(null);
-  const [activeFilters, setActiveFilters] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, per_page: 25 });
       if (search) params.set('q', search);
-      Object.entries(activeFilters).forEach(([k, v]) => { if (v !== '') params.set(k, v); });
       const res = await api('GET', `/admin/${entityKey}?${params}`);
       setData(res);
     } catch (err) {
@@ -752,9 +653,9 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
     } finally {
       setLoading(false);
     }
-  }, [entityKey, page, search, activeFilters]);
+  }, [entityKey, page, search]);
 
-  useEffect(() => { setPage(1); setSearch(''); setSearchInput(''); setActiveFilters({}); }, [entityKey]);
+  useEffect(() => { setPage(1); setSearch(''); setSearchInput(''); }, [entityKey]);
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id) => {
@@ -813,28 +714,7 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
           )}
         </form>
 
-        {/* Filtros específicos de entidad */}
-        {(config.filters ?? []).map(f => (
-          <select
-            key={f.key}
-            className="nx-select"
-            value={activeFilters[f.key] ?? ''}
-            onChange={e => { setActiveFilters(prev => ({ ...prev, [f.key]: e.target.value })); setPage(1); }}
-            style={{ fontSize: 11, minWidth: 110, height: 32, padding: '0 8px' }}
-          >
-            <option value="">— {f.label} —</option>
-            {f.options.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        ))}
-
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {Object.values(activeFilters).some(v => v !== '') && (
-            <Btn kind="ghost" sm onClick={() => { setActiveFilters({}); setPage(1); }}>
-              <Icon name="x" size={11} /> Limpiar
-            </Btn>
-          )}
           <Btn kind="ghost" sm onClick={load} disabled={loading}>
             <Icon name="zap" size={11} />
           </Btn>
