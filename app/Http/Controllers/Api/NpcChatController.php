@@ -128,18 +128,31 @@ class NpcChatController extends Controller
         }
 
         // Si Mistral quiere ejecutar tools: ejecutar y segunda llamada
-        $choice = $response->json('choices.0');
-        if (($choice['finish_reason'] ?? '') === 'tool_calls') {
-            $messages[] = $choice['message'];  // turno del asistente con tool_calls
+        $choice      = $response->json('choices.0');
+        $toolsCalled = [];
 
-            foreach ($choice['message']['tool_calls'] as $call) {
-                $args   = json_decode($call['function']['arguments'], true) ?? [];
-                $result = $this->executeTool($call['function']['name'], $args);
+        if (($choice['finish_reason'] ?? '') === 'tool_calls') {
+            $toolCalls  = $choice['message']['tool_calls'] ?? [];
+            $messages[] = $choice['message'];
+
+            Log::info('NPC tools invoked', [
+                'npc_id'  => $id,
+                'user_id' => $user->id,
+                'tools'   => array_column(array_column($toolCalls, 'function'), 'name'),
+            ]);
+
+            foreach ($toolCalls as $call) {
+                $toolName   = $call['function']['name'];
+                $args       = json_decode($call['function']['arguments'], true) ?? [];
+                $result     = $this->executeTool($toolName, $args);
+                $toolsCalled[] = ['tool' => $toolName, 'args' => $args, 'result' => $result];
+
+                Log::info("Tool result: {$toolName}", ['args' => $args, 'result' => $result]);
 
                 $messages[] = [
                     'role'         => 'tool',
                     'tool_call_id' => $call['id'],
-                    'name'         => $call['function']['name'],
+                    'name'         => $toolName,
                     'content'      => json_encode($result, JSON_UNESCAPED_UNICODE),
                 ];
             }
@@ -158,6 +171,11 @@ class NpcChatController extends Controller
                 Log::error('Mistral tool-response error', ['status' => $status]);
                 return response()->json(['error' => 'api_error', 'message' => "Error al procesar respuesta. (HTTP {$status})"], 502);
             }
+        } else {
+            Log::info('NPC no tools used', [
+                'npc_id'        => $id,
+                'finish_reason' => $choice['finish_reason'] ?? 'unknown',
+            ]);
         }
 
         $reply = $response->json('choices.0.message.content', '...');
@@ -166,8 +184,9 @@ class NpcChatController extends Controller
         NpcChatLog::create(['user_id' => $user->id, 'npc_id' => $id, 'role' => 'assistant', 'content' => $reply]);
 
         return response()->json([
-            'reply'     => $reply,
-            'remaining' => max(0, $remaining - 1),
+            'reply'        => $reply,
+            'remaining'    => max(0, $remaining - 1),
+            'tools_called' => $toolsCalled,
         ]);
     }
 
@@ -267,7 +286,7 @@ class NpcChatController extends Controller
                 'type' => 'function',
                 'function' => [
                     'name'        => 'registrar_evento_planeta',
-                    'description' => 'Registra un nuevo evento importante en un planeta. Úsalo cuando un personaje te cuente algo relevante que ocurrió en un planeta y quieras dejarlo anotado.',
+                    'description' => 'SIEMPRE que el jugador mencione algo que pasó, vio, escuchó o sospecha en relación a un planeta específico (avistamientos, conflictos, movimientos de naves, rumores), llama esta función para registrarlo. No esperes confirmación del usuario.',
                     'parameters'  => [
                         'type'       => 'object',
                         'properties' => [
