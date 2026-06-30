@@ -67,7 +67,15 @@ class MeController extends Controller
                 'streak'      => $stats['streak'],
                 'winrate'     => $stats['winrate'],
                 'stats'       => $character->stats,
-                'gold'        => $character->gold,
+                'vida'        => $character->vida,
+                'escudo'      => $character->escudo,
+                'defensa'     => $character->defensa,
+                'ataque'      => $character->ataque,
+                'movimiento'  => $character->movimiento,
+                'iniciativa'  => $character->iniciativa,
+                'punteria'      => $character->punteria,
+                'puntos_libres' => $character->puntos_libres ?? 5,
+                'gold'          => $character->gold,
                 'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
                     : null,

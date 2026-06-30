@@ -32,6 +32,14 @@ class CharacterController extends Controller
             'clase'       => 'nullable|string|in:Sentinela,Guardian,Consul',
             'tier'        => 'nullable|string|in:iniciado,padawan,caballero,maestro,granmaestro',
             'tutor_id'    => 'nullable|exists:users,id',
+            'vida'        => 'nullable|integer|min:0|max:9999',
+            'escudo'      => 'nullable|integer|min:0|max:9999',
+            'defensa'     => 'nullable|integer|min:0|max:9999',
+            'ataque'      => 'nullable|integer|min:0|max:9999',
+            'movimiento'  => 'nullable|integer|min:0|max:9999',
+            'iniciativa'  => 'nullable|integer|min:0|max:9999',
+            'punteria'      => 'nullable|integer|min:0|max:9999',
+            'puntos_libres' => 'nullable|integer|min:0|max:9999',
         ]);
 
         $user = $request->user();
@@ -71,9 +79,17 @@ class CharacterController extends Controller
         $character = $user->character()->updateOrCreate(
             ['user_id' => $user->id],
             array_merge([
-                'saber_color' => 'azul',
-                'gold'        => false,
-                'stats'       => $defaultStats,
+                'saber_color'   => 'azul',
+                'gold'          => false,
+                'stats'         => $defaultStats,
+                'vida'          => 8,
+                'escudo'        => 4,
+                'defensa'       => 2,
+                'ataque'        => 2,
+                'movimiento'    => 2,
+                'iniciativa'    => 2,
+                'punteria'      => 2,
+                'puntos_libres' => 5,
             ], $data)
         );
 

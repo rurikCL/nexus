@@ -662,9 +662,10 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
-  const pool = ch.pool;
-  const STATS = ['fuerza', 'velocidad', 'tecnica', 'defensa', 'foco'];
-  const STAT_LABEL = { fuerza: 'Fuerza', velocidad: 'Velocidad', tecnica: 'Técnica', defensa: 'Defensa', foco: 'Foco' };
+  const puntos_libres = ch.puntos_libres ?? 5;
+  const COMBAT_STATS = ['vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
+  const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Movimiento', iniciativa: 'Iniciativa', punteria: 'Puntería' };
+  const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
 
@@ -672,11 +673,13 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
     return <CharacterCreation user={user} S={S} onCharacterCreated={onCharacterCreated} />;
   }
 
-  const bump = (stat, d) => {
-    if (d > 0 && pool <= 0) return;
-    const nv = ch.stats[stat] + d;
-    if (nv < 0 || nv > 99) return;
-    S.setCharacter({ ...ch, stats: { ...ch.stats, [stat]: nv }, pool: pool - d });
+  const combatBump = (stat, d) => {
+    const pts = ch.puntos_libres ?? 5;
+    if (d > 0 && pts <= 0) return;
+    const cur = ch[stat] ?? COMBAT_DEFAULTS[stat];
+    const nv = cur + d;
+    if (nv < 0) return;
+    S.setCharacter({ ...ch, [stat]: nv, puntos_libres: pts - d });
   };
 
   const handleSave = async () => {
@@ -689,6 +692,10 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         body: JSON.stringify({
           name: ch.name, handle: ch.handle, bio: ch.bio || '', lore: ch.lore || '',
           cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats,
+          vida: ch.vida ?? 8, escudo: ch.escudo ?? 4, defensa: ch.defensa ?? 2,
+          ataque: ch.ataque ?? 2, movimiento: ch.movimiento ?? 2,
+          iniciativa: ch.iniciativa ?? 2, punteria: ch.punteria ?? 2,
+          puntos_libres: ch.puntos_libres ?? 5,
         }),
       });
       const data = await res.json();
@@ -912,19 +919,31 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         </Panel>
 
         <Panel kicker="Atributos" title="Distribución de Stats" icon="trending"
-          right={<Chip tone={pool > 0 ? 'green' : 'dim'} icon="zap">{pool} pts libres</Chip>}>
-          <div style={{ display: 'grid', gap: 14 }}>
-            {STATS.map((s) => (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span className="nx-data" style={{ width: 86, fontSize: 12, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{STAT_LABEL[s]}</span>
-                <div className="nx-bar" style={{ flex: 1 }}><i style={{ width: `${ch.stats[s]}%` }} /></div>
-                <span className="nx-num" style={{ width: 30, textAlign: 'right', fontSize: 15 }}>{ch.stats[s]}</span>
-                <div style={{ display: 'flex', gap: 5 }}>
-                  <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }} onClick={() => bump(s, -1)} disabled={ch.stats[s] <= 0}><Icon name="x" size={11} /></button>
-                  <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }} onClick={() => bump(s, +1)} disabled={pool <= 0 || ch.stats[s] >= 99}><Icon name="plus" size={11} /></button>
+          right={<Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip>}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {COMBAT_STATS.map((s) => {
+              const val = ch[s] ?? COMBAT_DEFAULTS[s];
+              return (
+                <div key={s} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  padding: '10px 12px', borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.02)',
+                }}>
+                  <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{COMBAT_LABEL[s]}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
+                      onClick={() => combatBump(s, -1)} disabled={val <= 0}>
+                      <Icon name="x" size={11} />
+                    </button>
+                    <span className="nx-num" style={{ width: 28, textAlign: 'center', fontSize: 15 }}>{val}</span>
+                    <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
+                      onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0}>
+                      <Icon name="plus" size={11} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Panel>
       </div>

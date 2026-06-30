@@ -13,6 +13,7 @@ class Character extends Model
         'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'cls', 'saber_color', 'side',
         'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'stats', 'gold',
         'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
+        'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria', 'puntos_libres',
     ];
 
     protected $casts = [
@@ -23,6 +24,14 @@ class Character extends Model
         'map_planeta_id' => 'integer',
         'map_zona_id'    => 'integer',
         'map_lugar_id'   => 'integer',
+        'vida'           => 'integer',
+        'escudo'         => 'integer',
+        'defensa'        => 'integer',
+        'ataque'         => 'integer',
+        'movimiento'     => 'integer',
+        'iniciativa'     => 'integer',
+        'punteria'       => 'integer',
+        'puntos_libres'  => 'integer',
     ];
 
     public function getWinrateAttribute(): int
