@@ -2862,50 +2862,83 @@ function ChatModal({ target, myUserId, onClose }) {
 
 /* ─── CONFIRMACIÓN DE ATAQUE PVP ────────────────────────── */
 function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
-  const color = SABER_COLORS[target?.saber_color] ?? '#38cdf0';
+  const color    = SABER_COLORS[target?.saber_color] ?? '#38cdf0';
   const photoUrl = mediaUrl(target?.photo);
-  const panelBg = lugarImagen
-    ? `linear-gradient(rgba(4,7,15,0.78), rgba(4,7,15,0.78)), url(${lugarImagen}) center/cover no-repeat`
-    : undefined;
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
-      background: 'rgba(4,7,15,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <div className="nx-panel" style={{
-        width: 340, padding: '28px 28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
-        border: '1px solid rgba(220,38,38,0.4)', boxShadow: '0 0 40px -10px rgba(220,38,38,0.3)',
-        ...(panelBg ? { background: panelBg } : {}),
+      {/* Fondo: imagen del lugar + gradiente oscuro */}
+      {lugarImagen
+        ? <img src={lugarImagen} alt="" style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'center',
+          }} />
+        : null
+      }
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: lugarImagen
+          ? 'linear-gradient(to bottom, rgba(4,7,15,0.55) 0%, rgba(4,7,15,0.82) 60%, rgba(4,7,15,0.97) 100%)'
+          : 'rgba(4,7,15,0.92)',
+      }} />
+
+      {/* Contenido centrado */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        width: '100%', maxWidth: 380, padding: '0 24px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
       }}>
-        <div className="nx-display" style={{ fontSize: 13, color: '#ef4444', letterSpacing: '0.12em' }}>
-          ¿INICIAR COMBATE?
+        {/* Etiqueta alerta */}
+        <div className="nx-display" style={{
+          fontSize: 11, color: '#ef4444', letterSpacing: '0.18em',
+          border: '1px solid rgba(220,38,38,0.4)', padding: '4px 14px', borderRadius: 2,
+        }}>
+          ALERTA DE COMBATE
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+        {/* Avatar del objetivo */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+            width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
             backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
             backgroundSize: 'cover', backgroundPosition: 'center',
-            background: photoUrl ? undefined : color,
-            border: `2px solid ${color}66`, boxShadow: `0 0 14px ${color}44`,
+            backgroundColor: photoUrl ? undefined : color,
+            border: `3px solid ${color}88`, boxShadow: `0 0 28px ${color}55, 0 0 60px ${color}22`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+            fontSize: 28, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
           }}>
             {!photoUrl && (target?.handle?.[0] ?? '?')}
           </div>
-          <div>
-            <div className="nx-display" style={{ fontSize: 14 }}>{target?.name ?? target?.handle}</div>
-            <div className="nx-data" style={{ fontSize: 11, color: 'var(--holo)', marginTop: 2 }}>@{target?.handle}</div>
+          <div style={{ textAlign: 'center' }}>
+            <div className="nx-display" style={{ fontSize: 18 }}>{target?.name ?? target?.handle}</div>
+            <div className="nx-data" style={{ fontSize: 12, color: 'var(--holo)', marginTop: 4 }}>@{target?.handle}</div>
           </div>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', textAlign: 'center', margin: 0, lineHeight: 1.6 }}>
-          El combate se resolverá por turnos.<br />Deberás resolverlo antes de viajar.
+
+        {/* Línea divisoria */}
+        <div style={{ width: '100%', height: 1, background: 'linear-gradient(to right, transparent, rgba(220,38,38,0.4), transparent)' }} />
+
+        <p style={{
+          fontSize: 12, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
+          textAlign: 'center', margin: 0, lineHeight: 1.7,
+        }}>
+          ¿Iniciar combate por turnos contra este objetivo?<br />
+          Deberás resolverlo antes de poder viajar.
         </p>
-        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+
+        {/* Botones */}
+        <div style={{ display: 'flex', gap: 12, width: '100%' }}>
           <button className="nx-btn nx-btn-ghost" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>
             Cancelar
           </button>
-          <button className="nx-btn nx-btn-accent" style={{ flex: 1, background: '#dc2626', borderColor: '#dc2626' }}
-            onClick={onConfirm} disabled={busy}>
+          <button
+            className="nx-btn nx-btn-accent"
+            style={{ flex: 1, background: '#dc2626', borderColor: '#dc2626', fontWeight: 700 }}
+            onClick={onConfirm}
+            disabled={busy}
+          >
             {busy ? 'Iniciando...' : '⚔ ATACAR'}
           </button>
         </div>
