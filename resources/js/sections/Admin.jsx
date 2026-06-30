@@ -23,10 +23,11 @@ const api = async (method, path, body) => {
 };
 
 /* ─── GRUPOS para el sidebar ────────────────────────────── */
-const GROUPS = ['MAPA GALÁCTICO', 'SISTEMA'];
+const GROUPS = ['MAPA GALÁCTICO', 'ROL', 'SISTEMA'];
 
 /* ─── OPCIONES ESTÁTICAS ─────────────────────────────────── */
 const RAREZA_OPTS     = ['comun', 'poco_comun', 'raro', 'epico', 'legendario'];
+const HABILIDAD_TIPO_OPTS = ['melee', 'distancia'];
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
 const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 'rojo'];
@@ -213,6 +214,28 @@ const ENTITY_CONFIG = {
     defaults: {},
   },
 
+  /* ── ROL ── */
+  rol_habilidades: {
+    label: 'Habilidades de Rol', icon: 'zap', group: 'ROL',
+    columns: [
+      { key: 'id',           label: 'ID',     w: 52 },
+      { key: 'nombre',       label: 'Nombre', bold: true },
+      { key: 'tipo',         label: 'Tipo',   dim: true },
+      { key: 'forma',        label: 'Forma',  dim: true, w: 70 },
+      { key: 'costo_fuerza', label: 'Coste',  dim: true, w: 70 },
+      { key: 'damage',       label: 'Daño',   dim: true, w: 70 },
+    ],
+    fields: [
+      { key: 'nombre',       label: 'Nombre',       type: 'text',   required: true, span: 2 },
+      { key: 'tipo',         label: 'Tipo',         type: 'select', options: HABILIDAD_TIPO_OPTS, required: true },
+      { key: 'forma',        label: 'Forma (0–7)',   type: 'number', min: 0, max: 7 },
+      { key: 'costo_fuerza', label: 'Costo Fuerza', type: 'number', min: 0 },
+      { key: 'damage',       label: 'Daño',         type: 'number', min: 0 },
+      { key: 'efecto',       label: 'Efecto',       type: 'textarea', span: 2 },
+    ],
+    defaults: { tipo: 'melee', forma: 0, costo_fuerza: 0, damage: 0 },
+  },
+
   /* ── SISTEMA ── */
   usuarios: {
     label: 'Usuarios', icon: 'roster', group: 'SISTEMA',
@@ -355,7 +378,7 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
 
   if (field.type === 'number') {
     return (
-      <input type="number" {...base} min={field.min ?? 0}
+      <input type="number" {...base} min={field.min ?? 0} {...(field.max != null ? { max: field.max } : {})}
         value={value ?? 0} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
       />
     );

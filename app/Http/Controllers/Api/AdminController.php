@@ -16,6 +16,7 @@ use App\Models\MapSistema;
 use App\Models\MapZona;
 use App\Models\Role;
 use App\Models\RolCharacterObjeto;
+use App\Models\RolHabilidad;
 use App\Models\RolObjeto;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -37,9 +38,10 @@ class AdminController extends Controller
             'usuarios'    => User::class,
             'personajes'  => Character::class,
             'roles'       => Role::class,
-            'rol_objetos'      => RolObjeto::class,
+            'rol_objetos'        => RolObjeto::class,
             'rol_character_objeto' => RolCharacterObjeto::class,
-            'configuraciones'  => Configuracion::class,
+            'rol_habilidades'    => RolHabilidad::class,
+            'configuraciones'    => Configuracion::class,
             default            => abort(404, "Entidad no reconocida: {$entity}"),
         };
     }
