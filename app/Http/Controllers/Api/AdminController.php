@@ -140,7 +140,11 @@ class AdminController extends Controller
             $record->roles()->sync($roles);
         }
 
-        return response()->json(['record' => $record->fresh()->load(['tutor:id,name', 'roles:id,name,label'])]);
+        $fresh = $record->fresh();
+        if ($withs = $this->withs($entity)) {
+            $fresh->load($withs);
+        }
+        return response()->json(['record' => $fresh]);
     }
 
     public function destroy(string $entity, int $id): JsonResponse
