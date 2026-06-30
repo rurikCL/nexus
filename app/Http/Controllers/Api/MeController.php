@@ -61,6 +61,7 @@ class MeController extends Controller
                 'sponsor'     => $character->sponsor,
                 'joined_year' => $character->joined_year,
                 'credits'     => $character->credits,
+                'reputation'  => $character->reputation ?? 0,
                 'wins'        => $stats['wins'],
                 'losses'      => $stats['losses'],
                 'streak'      => $stats['streak'],

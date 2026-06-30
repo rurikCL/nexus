@@ -389,7 +389,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
-    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
+    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,
   };
