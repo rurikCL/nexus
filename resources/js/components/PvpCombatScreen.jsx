@@ -182,16 +182,28 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   ];
 
   const screen = (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9500 }}>
-      {/* Fondo: imagen del lugar vía <img> para evitar conflictos CSS */}
-      {bgImg
-        ? <img src={bgImg} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
-        : <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, #0c1e42, #020810)' }} />
-      }
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 9500,
+      background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 12,
+    }}>
+      <div style={{
+        position: 'relative',
+        width: '100%', maxWidth: 900,
+        height: '100%', maxHeight: 640,
+        borderRadius: 18, overflow: 'hidden',
+        boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(56,205,240,0.18)',
+      }}>
+        {/* Fondo: imagen del lugar vía <img> */}
+        {bgImg
+          ? <img src={bgImg} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+          : <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, #0c1e42, #020810)' }} />
+        }
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
-      {/* Contenido sobre el fondo */}
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        {/* Contenido sobre el fondo */}
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
         {/* Oponente HUD — arriba derecha */}
         <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 10, width: 'clamp(200px, 36%, 320px)' }}>
@@ -323,9 +335,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             </>
           )}
         </div>
+        </div>
       </div>
     </div>
   );
 
-  return createPortal(screen, document.body);
+  const container = document.getElementById('nx-content') ?? document.body;
+  return createPortal(screen, container);
 }

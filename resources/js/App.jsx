@@ -565,7 +565,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       </aside>
 
       {/* Main */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <div id="nx-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <header className="nx-header" style={{ position: 'sticky', top: 0, zIndex: 4, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 57, flexShrink: 0, borderBottom: '1px solid var(--holo-line)', background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(8px)' }}>
           <button className="nx-hamburger" onClick={() => setSidebarOpen(o => !o)} aria-label="Abrir menú">
             <Icon name="menu" size={18} />
