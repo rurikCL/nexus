@@ -1580,10 +1580,13 @@ function NpcCard({ npc, onClick }) {
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
 function DialogoRPG({ npc, onClose }) {
-  const [messages, setMessages] = useState([]);
-  const [phase, setPhase]       = useState('greeting');
-  const [typing, setTyping]     = useState(false);
-  const bottomRef               = useRef(null);
+  const isAI = Boolean(npc.prompt);
+  const [messages, setMessages]   = useState([]);
+  const [phase, setPhase]         = useState('greeting');
+  const [typing, setTyping]       = useState(false);
+  const [aiInput, setAiInput]     = useState('');
+  const [remaining, setRemaining] = useState(null);
+  const bottomRef                 = useRef(null);
 
   /* Parsea "- keyword[misionId]: respuesta" o "- keyword: respuesta" */
   const npcOptions = useMemo(() => {
@@ -1610,10 +1613,47 @@ function DialogoRPG({ npc, onClose }) {
       setTimeout(() => {
         setMessages([{ from: 'npc', text: npc.saludo, ts: Date.now() }]);
         setTyping(false);
-        if (npcOptions.length > 0) setPhase('dialog');
+        if (!isAI && npcOptions.length > 0) setPhase('dialog');
       }, 800);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isAI) return;
+    apiFetch(`/npcs/${npc.id}/chat/status`)
+      .then(d => setRemaining(d.remaining))
+      .catch(() => setRemaining(5));
+  }, []);
+
+  const handleAiSend = useCallback(async () => {
+    const msg = aiInput.trim();
+    if (!msg || typing || remaining === 0) return;
+    setAiInput('');
+    setMessages(prev => [...prev, { from: 'player', text: msg, ts: Date.now() }]);
+    setTyping(true);
+    try {
+      const token = localStorage.getItem('nx-token');
+      const resp = await fetch(`/api/npcs/${npc.id}/chat`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg }),
+      });
+      const data = await resp.json();
+      if (resp.status === 429) {
+        setRemaining(0);
+        toast('Límite alcanzado. Vuelve en 30 min.', { tone: 'error', icon: 'x' });
+      } else if (!resp.ok) {
+        toast('Error al contactar al NPC.', { tone: 'error', icon: 'x' });
+      } else {
+        setMessages(prev => [...prev, { from: 'npc', text: data.reply, ts: Date.now() }]);
+        setRemaining(data.remaining);
+      }
+    } catch {
+      toast('Error de conexión.', { tone: 'error', icon: 'x' });
+    } finally {
+      setTyping(false);
+    }
+  }, [aiInput, typing, remaining, npc.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1699,6 +1739,22 @@ function DialogoRPG({ npc, onClose }) {
           </div>
         )}
 
+        {isAI && remaining !== null && (
+          <div style={{
+            flexShrink: 0, padding: '5px 10px',
+            background: remaining === 0 ? 'rgba(255,100,100,0.10)' : 'rgba(56,205,240,0.07)',
+            border: `1px solid ${remaining === 0 ? 'rgba(255,100,100,0.35)' : 'var(--holo-line)'}`,
+            borderRadius: 6, textAlign: 'center',
+          }}>
+            <div className="nx-num" style={{ fontSize: 18, lineHeight: 1, color: remaining === 0 ? '#ff6b6b' : 'var(--holo)' }}>
+              {remaining}
+            </div>
+            <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+              {remaining === 1 ? 'RESP.' : 'RESP.'}
+            </div>
+          </div>
+        )}
+
         <button onClick={onClose} style={{
           background: 'transparent', border: '1px solid var(--holo-line)',
           borderRadius: 6, padding: 8, cursor: 'pointer', color: 'var(--txt-dim)',
@@ -1767,61 +1823,126 @@ function DialogoRPG({ npc, onClose }) {
           <div ref={bottomRef} />
         </div>
 
-        {/* barra lateral derecha de opciones */}
-        {npcOptions.length > 0 && phase === 'dialog' && (
+        {/* panel lateral: modo AI o diálogo estático */}
+        {isAI ? (
           <div style={{
-            width: 210, flexShrink: 0,
+            width: 230, flexShrink: 0,
             borderLeft: '1px solid var(--holo-line)',
-            background: 'rgba(5,12,26,0.96)',
-            overflowY: 'auto',
+            background: 'rgba(5,12,26,0.97)',
             display: 'flex', flexDirection: 'column',
-            padding: '16px 10px', gap: 6,
           }}>
             <div style={{
+              padding: '10px 12px 8px',
               fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
-              letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6,
-              paddingBottom: 8, borderBottom: '1px solid var(--holo-line)',
+              letterSpacing: '0.18em', textTransform: 'uppercase',
+              borderBottom: '1px solid var(--holo-line)',
             }}>
-              OPCIONES DE DIÁLOGO
+              IA · {npc.nombre.toUpperCase()}
             </div>
-            {npcOptions.map((opt, i) => (
-              <button key={i} onClick={() => handleOption(opt)} disabled={typing}
-                style={{
-                  width: '100%', textAlign: 'left',
-                  background: opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)',
-                  border: `1px solid ${opt.misionId ? 'rgba(230,179,37,0.30)' : 'rgba(56,205,240,0.18)'}`,
-                  borderRadius: 8, padding: '9px 11px',
-                  cursor: typing ? 'wait' : 'pointer',
-                  fontSize: 12, color: 'var(--txt)', fontFamily: 'var(--font-body)',
-                  transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 8,
-                  opacity: typing ? 0.45 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (typing) return;
-                  e.currentTarget.style.borderColor = opt.misionId ? '#E6B325' : 'var(--holo)';
-                  e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.18)' : 'rgba(56,205,240,0.14)';
-                  e.currentTarget.style.boxShadow = opt.misionId ? '0 0 10px -3px rgba(230,179,37,0.4)' : '0 0 10px -3px rgba(56,205,240,0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = opt.misionId ? 'rgba(230,179,37,0.30)' : 'rgba(56,205,240,0.18)';
-                  e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <span style={{
-                  flexShrink: 0, width: 18, height: 18, borderRadius: 4,
-                  background: opt.misionId ? 'rgba(230,179,37,0.20)' : 'rgba(56,205,240,0.12)',
-                  display: 'grid', placeItems: 'center',
-                  fontSize: opt.misionId ? 11 : 10,
-                  color: opt.misionId ? '#E6B325' : 'var(--holo)',
-                  fontWeight: 900,
+            <div style={{ flex: 1 }} />
+            <div style={{ padding: '12px 12px', borderTop: '1px solid var(--holo-line)' }}>
+              {remaining === 0 ? (
+                <div style={{
+                  fontSize: 11, color: 'var(--txt-dim)', textAlign: 'center',
+                  padding: '16px 8px', lineHeight: 1.6,
                 }}>
-                  {opt.misionId ? '!' : '›'}
-                </span>
-                <span style={{ flex: 1, lineHeight: 1.35 }}>{opt.keyword}</span>
-              </button>
-            ))}
+                  Límite alcanzado.<br />
+                  <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>Vuelve en 30 min.</span>
+                </div>
+              ) : (
+                <>
+                  <textarea
+                    value={aiInput}
+                    onChange={e => setAiInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAiSend(); } }}
+                    disabled={typing}
+                    placeholder={`Hablar con ${npc.nombre}…`}
+                    rows={3}
+                    style={{
+                      width: '100%', resize: 'none', boxSizing: 'border-box',
+                      background: 'rgba(56,205,240,0.05)', border: '1px solid var(--holo-line)',
+                      borderRadius: 8, padding: '8px 10px', fontSize: 12,
+                      color: 'var(--txt)', fontFamily: 'var(--font-body)',
+                      outline: 'none', lineHeight: 1.45, opacity: typing ? 0.5 : 1,
+                    }}
+                  />
+                  <button
+                    onClick={handleAiSend}
+                    disabled={typing || !aiInput.trim()}
+                    style={{
+                      marginTop: 6, width: '100%',
+                      background: 'rgba(56,205,240,0.10)', border: '1px solid var(--holo-line)',
+                      borderRadius: 8, padding: '8px', cursor: (typing || !aiInput.trim()) ? 'not-allowed' : 'pointer',
+                      fontSize: 11, color: 'var(--holo)', fontFamily: 'var(--font-data)',
+                      letterSpacing: '0.14em', textTransform: 'uppercase',
+                      opacity: (typing || !aiInput.trim()) ? 0.4 : 1,
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { if (!typing && aiInput.trim()) { e.currentTarget.style.background = 'rgba(56,205,240,0.20)'; e.currentTarget.style.borderColor = 'var(--holo)'; } }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(56,205,240,0.10)'; e.currentTarget.style.borderColor = 'var(--holo-line)'; }}
+                  >
+                    {typing ? 'PROCESANDO…' : 'ENVIAR · ENTER'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+        ) : (
+          npcOptions.length > 0 && phase === 'dialog' && (
+            <div style={{
+              width: 210, flexShrink: 0,
+              borderLeft: '1px solid var(--holo-line)',
+              background: 'rgba(5,12,26,0.96)',
+              overflowY: 'auto',
+              display: 'flex', flexDirection: 'column',
+              padding: '16px 10px', gap: 6,
+            }}>
+              <div style={{
+                fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
+                letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6,
+                paddingBottom: 8, borderBottom: '1px solid var(--holo-line)',
+              }}>
+                OPCIONES DE DIÁLOGO
+              </div>
+              {npcOptions.map((opt, i) => (
+                <button key={i} onClick={() => handleOption(opt)} disabled={typing}
+                  style={{
+                    width: '100%', textAlign: 'left',
+                    background: opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)',
+                    border: `1px solid ${opt.misionId ? 'rgba(230,179,37,0.30)' : 'rgba(56,205,240,0.18)'}`,
+                    borderRadius: 8, padding: '9px 11px',
+                    cursor: typing ? 'wait' : 'pointer',
+                    fontSize: 12, color: 'var(--txt)', fontFamily: 'var(--font-body)',
+                    transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 8,
+                    opacity: typing ? 0.45 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (typing) return;
+                    e.currentTarget.style.borderColor = opt.misionId ? '#E6B325' : 'var(--holo)';
+                    e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.18)' : 'rgba(56,205,240,0.14)';
+                    e.currentTarget.style.boxShadow = opt.misionId ? '0 0 10px -3px rgba(230,179,37,0.4)' : '0 0 10px -3px rgba(56,205,240,0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = opt.misionId ? 'rgba(230,179,37,0.30)' : 'rgba(56,205,240,0.18)';
+                    e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  <span style={{
+                    flexShrink: 0, width: 18, height: 18, borderRadius: 4,
+                    background: opt.misionId ? 'rgba(230,179,37,0.20)' : 'rgba(56,205,240,0.12)',
+                    display: 'grid', placeItems: 'center',
+                    fontSize: opt.misionId ? 11 : 10,
+                    color: opt.misionId ? '#E6B325' : 'var(--holo)',
+                    fontWeight: 900,
+                  }}>
+                    {opt.misionId ? '!' : '›'}
+                  </span>
+                  <span style={{ flex: 1, lineHeight: 1.35 }}>{opt.keyword}</span>
+                </button>
+              ))}
+            </div>
+          )
         )}
 
       </div>

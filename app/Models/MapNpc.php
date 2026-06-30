@@ -24,6 +24,7 @@ class MapNpc extends Model
         'imagen',
         'saludo',
         'interaccion',
+        'prompt',
         'MisionID',
         'urlInteraccion',
         'visible',

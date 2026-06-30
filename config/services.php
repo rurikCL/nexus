@@ -41,4 +41,8 @@ return [
         'redirect_uri' => env('INSTAGRAM_REDIRECT_URI'),
     ],
 
+    'mistral' => [
+        'api_key' => env('MISTRAL_API_KEY'),
+    ],
+
 ];
