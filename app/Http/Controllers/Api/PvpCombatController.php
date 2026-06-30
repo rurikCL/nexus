@@ -49,7 +49,7 @@ class PvpCombatController extends Controller
         $combat = PvpCombat::create([
             'attacker_id'        => $attacker->id,
             'defender_id'        => $defender->id,
-            'lugar_id'           => $attacker->character->map_lugar_id,
+            'lugar_id'           => $defender->character->map_lugar_id,
             'attacker_hp'        => $attackerStats['vida'],
             'defender_hp'        => $defenderStats['vida'],
             'attacker_escudo'    => $attackerStats['escudo'],

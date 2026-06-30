@@ -2906,18 +2906,21 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy }) {
 
 /* ─── PANTALLA DE COMBATE PVP ────────────────────────────── */
 function PvpCombatScreen({ combat: initialCombat, userId, onClose }) {
-  const [combat, setCombat]           = useState(initialCombat);
-  const [busy, setBusy]               = useState(false);
-  const [logCollapsed, setLogCollapsed] = useState(true);
-  const [bgImg, setBgImg]             = useState(null);
-  const pollRef                       = useRef(null);
+  const [combat, setCombat]             = useState(initialCombat);
+  const [busy, setBusy]                 = useState(false);
+  const [logCollapsed, setLogCollapsed] = useState(false);
+  const [bgImg, setBgImg]               = useState(null);
+  const pollRef                         = useRef(null);
+  const logRef                          = useRef(null);
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
-  const myHp      = combat.i_am_attacker ? combat.attacker_hp     : combat.defender_hp;
-  const myEscudo  = combat.i_am_attacker ? combat.attacker_escudo : combat.defender_escudo;
-  const oppHp     = combat.i_am_attacker ? combat.defender_hp     : combat.attacker_hp;
-  const oppEscudo = combat.i_am_attacker ? combat.defender_escudo : combat.attacker_escudo;
+  const myHp       = combat.i_am_attacker ? combat.attacker_hp        : combat.defender_hp;
+  const myEscudo   = combat.i_am_attacker ? combat.attacker_escudo    : combat.defender_escudo;
+  const myDefBonus = combat.i_am_attacker ? combat.attacker_def_bonus : combat.defender_def_bonus;
+  const oppHp      = combat.i_am_attacker ? combat.defender_hp        : combat.attacker_hp;
+  const oppEscudo  = combat.i_am_attacker ? combat.defender_escudo    : combat.attacker_escudo;
+  const oppDefBonus= combat.i_am_attacker ? combat.defender_def_bonus : combat.attacker_def_bonus;
 
   /* fondo del lugar */
   useEffect(() => {
@@ -2939,6 +2942,8 @@ function PvpCombatScreen({ combat: initialCombat, userId, onClose }) {
     return () => clearInterval(pollRef.current);
   }, [combat.is_my_turn, combat.status, combat.id]);
 
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [combat.log]);
+
   const doAction = async (skill) => {
     if (busy || !combat.is_my_turn || combat.status !== 'active') return;
     setBusy(true);
@@ -2949,180 +2954,251 @@ function PvpCombatScreen({ combat: initialCombat, userId, onClose }) {
     finally { setBusy(false); }
   };
 
-  const isOver  = combat.status !== 'active';
-  const iWon    = (combat.status === 'attacker_won' && combat.i_am_attacker)
-               || (combat.status === 'defender_won' && !combat.i_am_attacker);
-  const iFled   = (combat.status === 'fled_attacker' && combat.i_am_attacker)
-               || (combat.status === 'fled_defender' && !combat.i_am_attacker);
+  const isOver = combat.status !== 'active';
+  const iWon   = (combat.status === 'attacker_won' && combat.i_am_attacker)
+              || (combat.status === 'defender_won' && !combat.i_am_attacker);
+  const iFled  = (combat.status === 'fled_attacker' && combat.i_am_attacker)
+              || (combat.status === 'fled_defender' && !combat.i_am_attacker);
 
-  const HUD = ({ player, hp, escudo, isOpp }) => {
-    const maxHp  = player.stats.vida;
-    const maxEsc = player.stats.escudo;
-    const photoUrl = player.photo_url;
+  const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
+  const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
+
+  const myBadges = [
+    { l: 'ATQ', v: me.stats.ataque,                    c: '#ff7043' },
+    { l: 'DEF', v: me.stats.defensa + (myDefBonus||0), c: '#38cdf0', bonus: myDefBonus > 0 },
+    { l: 'PNT', v: me.stats.punteria,                  c: '#10b981' },
+    { l: 'INI', v: me.stats.iniciativa,                c: '#E6B325' },
+  ];
+  const oppBadges = [
+    { l: 'ATQ', v: opp.stats.ataque,                     c: '#ff7043' },
+    { l: 'DEF', v: opp.stats.defensa + (oppDefBonus||0), c: '#38cdf0', bonus: oppDefBonus > 0 },
+    { l: 'PNT', v: opp.stats.punteria,                   c: '#10b981' },
+    { l: 'INI', v: opp.stats.iniciativa,                 c: '#E6B325' },
+  ];
+
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, align }) => {
+    const vPct = pct(hp, maxHp);
+    const ePct = pct(escudo, maxEscudo);
+    const vc   = vcol(vPct);
+    const rev  = align === 'right';
     return (
       <div style={{
-        width: 'clamp(180px,34%,250px)', display: 'flex', flexDirection: 'column', gap: 6,
-        ...(isOpp ? {} : { alignItems: 'flex-start' }),
+        background: 'rgba(6,12,26,0.92)', backdropFilter: 'blur(16px)',
+        border: `1px solid ${borderColor}`, borderRadius: 14,
+        padding: 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
+        gap: 14, alignItems: 'flex-start',
       }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', ...(isOpp ? { flexDirection: 'row-reverse' } : {}) }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 8, flexShrink: 0,
-            backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
-            backgroundSize: 'cover', backgroundPosition: 'center',
-            background: photoUrl ? undefined : 'rgba(56,205,240,0.2)',
-            border: '2px solid var(--holo)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 800, color: 'var(--holo)',
-          }}>{!photoUrl && player.handle?.[0]?.toUpperCase()}</div>
-          <div>
-            <div className="nx-display" style={{ fontSize: 11, color: 'var(--holo)' }}>{player.name}</div>
-            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{player.handle}</div>
-          </div>
+        <div style={{
+          width: 64, height: 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
+        }}>
+          {photoUrl
+            ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
+          }
         </div>
-        {maxEsc > 0 && (
-          <div>
-            <div className="nx-data" style={{ fontSize: 8, color: '#60a5fa', marginBottom: 2 }}>ESCUDO {escudo}/{maxEsc}</div>
-            <div style={{ height: 5, background: 'rgba(96,165,250,0.15)', borderRadius: 3 }}>
-              <div style={{ height: '100%', background: '#60a5fa', borderRadius: 3, width: `${Math.max(0, escudo / maxEsc * 100)}%`, transition: 'width .4s' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 2, textAlign: rev ? 'right' : 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+          <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', textAlign: rev ? 'right' : 'left', marginBottom: 8 }}>@{handle}</div>
+          {maxEscudo > 0 && (
+            <div style={{ marginBottom: 5 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>ESC</span>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>{escudo}/{maxEscudo}</span>
+              </div>
+              <div style={{ height: 4, background: 'rgba(56,205,240,0.12)', borderRadius: 2 }}>
+                <div style={{ height: '100%', width: `${ePct}%`, background: '#38cdf0', borderRadius: 2, transition: 'width 0.4s ease' }} />
+              </div>
+            </div>
+          )}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+              <span style={{ fontSize: 8, color: vc, fontFamily: 'var(--font-data)' }}>VID</span>
+              <span style={{ fontSize: 8, color: vc, fontFamily: 'var(--font-data)' }}>{hp}/{maxHp}</span>
+            </div>
+            <div style={{ height: 9, background: 'rgba(16,185,129,0.12)', borderRadius: 5 }}>
+              <div style={{ height: '100%', width: `${vPct}%`, background: vc, borderRadius: 5, transition: 'width 0.4s ease' }} />
             </div>
           </div>
-        )}
-        <div>
-          <div className="nx-data" style={{ fontSize: 8, color: '#4ade80', marginBottom: 2 }}>VIDA {hp}/{maxHp}</div>
-          <div style={{ height: 7, background: 'rgba(74,222,128,0.15)', borderRadius: 3 }}>
-            <div style={{ height: '100%', borderRadius: 3, transition: 'width .4s',
-              background: hp / maxHp > 0.5 ? '#4ade80' : hp / maxHp > 0.25 ? '#facc15' : '#ef4444',
-              width: `${Math.max(0, hp / maxHp * 100)}%` }} />
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: rev ? 'flex-end' : 'flex-start' }}>
+            {badges.map(b => (
+              <span key={b.l} style={{
+                fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
+                background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
+                ...(b.bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
+              }}>{b.l} {b.v}{b.bonus ? ' ▲' : ''}</span>
+            ))}
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {[['⚔', player.stats.ataque], ['🛡', player.stats.defensa], ['👁', player.stats.punteria]].map(([ic, v]) => (
-            <span key={ic} className="nx-data" style={{ fontSize: 9, color: 'var(--txt-dim)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '2px 5px' }}>{ic} {v}</span>
-          ))}
         </div>
       </div>
     );
   };
 
+  const ActionBtn = ({ onClick, disabled, bg, border, hoverBg, hoverBorder, children, minW = 56 }) => (
+    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{
+      minWidth: minW, borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+      background: bg, border: `1px solid ${border}`,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 3, padding: '6px 8px', opacity: disabled ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+    }}
+      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = hoverBg; e.currentTarget.style.borderColor = hoverBorder; } }}
+      onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; }}
+    >{children}</button>
+  );
+
   const SKILLS = [
-    { id: 'melee',    label: 'Cuerpo a cuerpo', icon: 'swords',  desc: '1d6 + ATK' },
-    { id: 'distancia',label: 'A distancia',     icon: 'crosshair',desc: '1d6 + PNT' },
-    { id: 'postura',  label: 'Postura defensiva',icon: 'shield',  desc: '+4 DEF este turno' },
-    { id: 'potente',  label: 'Golpe potente',   icon: 'zap',     desc: 'ATK × 1.5' },
+    { id: 'melee',    icon: '⚔', name: 'Melee',         desc: `ATQ ${me.stats?.ataque ?? 0}` },
+    { id: 'distancia',icon: '◎', name: 'Distancia',      desc: `PNT ${me.stats?.punteria ?? 0}` },
+    { id: 'postura',  icon: '🛡', name: 'Postura',        desc: '+4 DEF 1 turno' },
+    { id: 'potente',  icon: '⚡', name: 'Golpe Potente',  desc: 'ATQ ×1.5' },
   ];
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 8000,
-      background: bgImg ? `linear-gradient(rgba(4,7,15,0.72),rgba(4,7,15,0.72)) center/cover, url(${bgImg}) center/cover no-repeat` : 'rgba(4,7,15,0.98)',
-      display: 'flex', alignItems: 'stretch',
+      position: 'fixed', inset: 0, zIndex: 1300,
+      background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '12px',
     }}>
       <div style={{
-        margin: 'auto', width: '100%', maxWidth: 900, maxHeight: '96vh',
-        background: 'rgba(4,7,15,0.6)', backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(56,205,240,0.15)', borderRadius: 18,
-        display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
+        position: 'relative',
+        width: '100%', maxWidth: 900,
+        height: '100%', maxHeight: 640,
+        borderRadius: 18, overflow: 'hidden',
+        boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(56,205,240,0.18)',
       }}>
-        {/* Header */}
-        <div style={{ padding: '10px 18px', borderBottom: '1px solid rgba(56,205,240,0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Icon name="swords" size={14} style={{ color: '#ef4444' }} />
-          <span className="nx-display" style={{ fontSize: 13, color: '#ef4444', letterSpacing: '0.1em', flex: 1 }}>COMBATE PVP</span>
-          {!isOver && !combat.is_my_turn && (
-            <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', animation: 'nx-pulse 1.5s infinite' }}>
-              Esperando a {opp.name}...
-            </span>
-          )}
-          {!isOver && combat.is_my_turn && (
-            <span className="nx-data" style={{ fontSize: 10, color: '#4ade80' }}>Tu turno</span>
-          )}
-        </div>
-
-        {/* Área de combate */}
-        <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0 }}>
-          {/* Log colapsable a la izquierda */}
-          <div style={{
-            width: logCollapsed ? 40 : 'clamp(160px,26%,240px)', flexShrink: 0, transition: 'width .2s',
-            borderRight: '1px solid rgba(56,205,240,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          }}>
-            <button onClick={() => setLogCollapsed(v => !v)} style={{
-              padding: '8px 10px', background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--holo)', display: 'flex', alignItems: 'center', gap: 6,
-              borderBottom: '1px solid rgba(56,205,240,0.1)',
-            }}>
-              <Icon name={logCollapsed ? 'chevronRight' : 'chevronLeft'} size={12} />
-              {!logCollapsed && <span className="nx-kicker" style={{ fontSize: 8 }}>REGISTRO</span>}
-            </button>
-            {!logCollapsed && (
-              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {(combat.log ?? []).map((entry, i) => (
-                  <div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', lineHeight: 1.5 }}>
-                    {(entry.messages ?? []).map((m, j) => <div key={j}>{m}</div>)}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Centro: HUDs */}
-          <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-            {/* Oponente — arriba a la derecha */}
-            <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}>
-              <HUD player={opp} hp={oppHp} escudo={oppEscudo} isOpp />
-            </div>
-            {/* Yo — abajo a la izquierda */}
-            <div style={{ position: 'absolute', bottom: 86, left: 14, zIndex: 2 }}>
-              <HUD player={me} hp={myHp} escudo={myEscudo} isOpp={false} />
-            </div>
-          </div>
-        </div>
-
-        {/* Barra de acciones */}
+        {/* Fondo: imagen del lugar */}
         <div style={{
-          borderTop: '1px solid rgba(56,205,240,0.1)', padding: '10px 14px',
-          display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(4,7,15,0.7)',
+          position: 'absolute', inset: 0,
+          backgroundImage: bgImg ? `url(${bgImg})` : undefined,
+          background: bgImg ? undefined : 'radial-gradient(ellipse at 50% 30%, #0c1e42, #020810)',
+          backgroundSize: 'cover', backgroundPosition: 'center',
+        }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
+
+        {/* Oponente HUD — arriba derecha */}
+        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 10, width: 'clamp(190px, 36%, 260px)' }}>
+          <HUD
+            hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
+            nombre={opp.name} handle={opp.handle} photoUrl={opp.photo_url}
+            borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
+          />
+        </div>
+
+        {/* Mi HUD — abajo izquierda, sobre la action bar */}
+        <div style={{ position: 'absolute', bottom: 82, left: 14, zIndex: 10, width: 'clamp(190px, 36%, 260px)' }}>
+          <HUD
+            hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
+            nombre={me.name} handle={me.handle} photoUrl={me.photo_url}
+            borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
+          />
+        </div>
+
+        {/* Log de combate — izquierda, colapsable */}
+        <div style={{
+          position: 'absolute', left: 14, top: 14, zIndex: 10,
+          width: logCollapsed ? 40 : 'clamp(150px, 26%, 240px)',
+          maxHeight: 'calc(100% - 250px)',
+          background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
+          borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
+          display: 'flex', flexDirection: 'column',
+          transition: 'width 0.20s ease', overflow: 'hidden',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 9px',
+            cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+            borderBottom: logCollapsed ? 'none' : '1px solid rgba(56,205,240,0.10)',
+          }} onClick={() => setLogCollapsed(p => !p)}>
+            <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1 }}>📋</span>
+            {!logCollapsed && (
+              <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)', letterSpacing: '0.16em', flex: 1, whiteSpace: 'nowrap' }}>REGISTRO</span>
+            )}
+            <span style={{ fontSize: 11, color: 'rgba(150,200,255,0.4)', flexShrink: 0 }}>{logCollapsed ? '›' : '‹'}</span>
+          </div>
+          {!logCollapsed && (
+            <div ref={logRef} style={{ overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+              {(combat.log ?? []).map((entry, i) =>
+                (entry.messages ?? []).map((m, j) => (
+                  <div key={`${i}-${j}`} style={{
+                    fontSize: 10, color: 'rgba(200,225,255,0.78)',
+                    fontFamily: 'var(--font-data)', letterSpacing: '0.03em', lineHeight: 1.45,
+                    animation: 'nx-fade-up 0.2s ease both',
+                  }}>{m}</div>
+                ))
+              )}
+              {!combat.is_my_turn && combat.status === 'active' && (
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 3 }}>
+                  <span style={{ fontSize: 9, color: '#ff9999', fontFamily: 'var(--font-data)' }}>{opp.name}…</span>
+                  {[0,1,2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: '#ff9999', animation: `nx-pulse 0.8s ${i*0.2}s infinite` }} />)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Barra de acciones — fija al fondo del modal */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
+          background: 'rgba(3,7,16,0.96)', backdropFilter: 'blur(16px)',
+          borderTop: '1px solid rgba(56,205,240,0.13)',
+          padding: '8px 12px', display: 'flex', gap: 6, alignItems: 'stretch',
           minHeight: 76,
         }}>
-          {!isOver ? (
-            <>
-              {SKILLS.map(sk => (
-                <button key={sk.id} onClick={() => doAction(sk.id)}
-                  disabled={busy || !combat.is_my_turn}
-                  style={{
-                    flex: 1, minWidth: 0, padding: '8px 6px', cursor: 'pointer',
-                    background: combat.is_my_turn ? 'rgba(56,205,240,0.08)' : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${combat.is_my_turn ? 'rgba(56,205,240,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                    borderRadius: 8, color: combat.is_my_turn ? 'var(--holo)' : 'var(--txt-faint)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                    transition: 'all .15s', opacity: busy ? 0.5 : 1,
-                  }}>
-                  <Icon name={sk.icon} size={14} />
-                  <span className="nx-display" style={{ fontSize: 9 }}>{sk.label}</span>
-                  <span style={{ fontSize: 8, fontFamily: 'var(--font-data)', color: 'var(--txt-faint)' }}>{sk.desc}</span>
-                </button>
-              ))}
-              <div style={{ width: 1, background: 'rgba(56,205,240,0.12)', alignSelf: 'stretch', margin: '0 4px' }} />
-              <button onClick={() => doAction('flee')} disabled={busy || !combat.is_my_turn}
-                style={{
-                  padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
-                  background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)',
-                  color: '#ef4444', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                  opacity: (busy || !combat.is_my_turn) ? 0.4 : 1,
-                }}>
-                <Icon name="arrowLeft" size={14} />
-                <span className="nx-display" style={{ fontSize: 9 }}>Huir</span>
-              </button>
-            </>
-          ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div className="nx-display" style={{
-                fontSize: 22, letterSpacing: '0.14em',
-                color: iFled ? 'var(--txt-dim)' : iWon ? '#4ade80' : '#ef4444',
-              }}>
-                {iFled ? 'HUISTE' : iWon ? '¡VICTORIA!' : 'DERROTA'}
-              </div>
-              <button className="nx-btn nx-btn-ghost" onClick={() => onClose({ won: iWon, fled: iFled })}>
-                Continuar
-              </button>
+          {isOver ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+              {iWon ? (
+                <>
+                  <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>⚡ VICTORIA</span>
+                  <button onClick={() => onClose({ won: true })} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
+                </>
+              ) : iFled ? (
+                <>
+                  <span style={{ fontSize: 16, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>🏃 HUISTE</span>
+                  <button onClick={() => onClose({ fled: true })} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
+                  <button onClick={() => onClose({ won: false })} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
+                </>
+              )}
             </div>
+          ) : !combat.is_my_turn ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: 'rgba(150,200,255,0.4)', fontSize: 11, fontFamily: 'var(--font-data)', letterSpacing: '0.15em', animation: 'nx-pulse 1.5s infinite' }}>
+                ESPERANDO A {(opp.name ?? '').toUpperCase()}…
+              </span>
+            </div>
+          ) : (
+            <>
+              {SKILLS.map(sk => {
+                const active = !busy;
+                return (
+                  <button key={sk.id} onClick={() => active && doAction(sk.id)} disabled={!active} style={{
+                    flex: 1, minWidth: 0, borderRadius: 8, cursor: active ? 'pointer' : 'not-allowed',
+                    background: active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)',
+                    border: `1px solid ${active ? 'rgba(56,205,240,0.26)' : 'rgba(56,205,240,0.09)'}`,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: 3, padding: '6px 4px', opacity: active ? 1 : 0.36, transition: 'all 0.13s',
+                  }}
+                    onMouseEnter={e => { if (active) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; e.currentTarget.style.boxShadow = '0 0 14px -5px rgba(56,205,240,0.4)'; } }}
+                    onMouseLeave={e => { e.currentTarget.style.background = active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)'; e.currentTarget.style.borderColor = active ? 'rgba(56,205,240,0.26)' : 'rgba(56,205,240,0.09)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <span style={{ fontSize: 18, lineHeight: 1 }}>{sk.icon}</span>
+                    <span style={{ fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{sk.name}</span>
+                    <span style={{ fontSize: 7, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{sk.desc}</span>
+                  </button>
+                );
+              })}
+              <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '4px 0' }} />
+              <ActionBtn onClick={() => doAction('flee')} disabled={busy}
+                bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
+                hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
+              >
+                <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
+                <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
+              </ActionBtn>
+            </>
           )}
         </div>
       </div>
