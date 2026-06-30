@@ -590,7 +590,7 @@ function VolverHeader({ onVolver, crumbs }) {
 }
 
 /* ─── VISTA SISTEMA SOLAR ───────────────────────────────── */
-function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, myUserId }) {
+function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onAttack, myUserId }) {
   const [sistema, setSistema] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePlaneta, setActivePlaneta] = useState(null);
@@ -797,6 +797,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, myU
         <PresentesPanel
           presentes={sistema.presentes_personajes ?? []}
           onChat={onChat}
+          onAttack={onAttack}
           myUserId={myUserId}
         />
       </div>
@@ -805,7 +806,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, myU
 }
 
 /* ─── VISTA PLANETA ─────────────────────────────────────── */
-function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, myUserId }) {
+function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, myUserId }) {
   const [planeta, setPlaneta] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1014,6 +1015,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, myUser
         <PresentesPanel
           presentes={planeta.presentes_personajes ?? []}
           onChat={onChat}
+          onAttack={onAttack}
           myUserId={myUserId}
         />
       </div>
@@ -1022,7 +1024,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, myUser
 }
 
 /* ─── VISTA ZONA ────────────────────────────────────────── */
-function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, myUserId }) {
+function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, onAttack, myUserId }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1133,6 +1135,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
         <PresentesPanel
           presentes={zona.presentes_personajes ?? []}
           onChat={onChat}
+          onAttack={onAttack}
           myUserId={myUserId}
         />
       </div>
@@ -1219,7 +1222,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, myUserId }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1380,6 +1383,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
             {lugar.presentes_personajes.map((p) => {
               const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
               const photoUrl = mediaUrl(p.photo);
+              const isMe = p.user_id === myUserId;
               return (
                 <div key={p.id} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
@@ -1396,9 +1400,16 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
                   }}>
                     {!photoUrl && (p.handle?.[0] ?? '?')}
                   </div>
-                  <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', flex: 1 }}>
                     @{p.handle}
                   </span>
+                  {!isMe && (
+                    <button onClick={() => onAttack?.(p)} style={{
+                      background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
+                      borderRadius: 5, padding: '3px 7px', cursor: 'pointer', color: '#ef4444',
+                      fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+                    }}>ATK</button>
+                  )}
                 </div>
               );
             })}
@@ -2574,7 +2585,7 @@ function InfoRow({ label, value, color }) {
 }
 
 /* ─── PANEL PRESENTES ───────────────────────────────────── */
-function PresentesPanel({ presentes = [], onChat, myUserId }) {
+function PresentesPanel({ presentes = [], onChat, onAttack, myUserId }) {
   return (
     <div style={{
       width: 220, flexShrink: 0,
@@ -2645,20 +2656,24 @@ function PresentesPanel({ presentes = [], onChat, myUserId }) {
                     )}
                   </div>
                   {!isMe && (
-                    <button onClick={() => onChat?.(p)} style={{
-                      background: 'rgba(56,205,240,0.08)',
-                      border: '1px solid rgba(56,205,240,0.25)',
-                      borderRadius: 6, padding: '4px 7px',
-                      cursor: 'pointer', color: 'var(--holo)',
-                      fontSize: 9, fontFamily: 'var(--font-data)',
-                      letterSpacing: '0.06em', flexShrink: 0,
-                      transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.18)'; e.currentTarget.style.borderColor = 'var(--holo)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; }}
-                    >
-                      MSG
-                    </button>
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      <button onClick={() => onChat?.(p)} style={{
+                        background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.25)',
+                        borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: 'var(--holo)',
+                        fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
+                      }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.18)'; e.currentTarget.style.borderColor = 'var(--holo)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; }}
+                      >MSG</button>
+                      <button onClick={() => onAttack?.(p)} style={{
+                        background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
+                        borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: '#ef4444',
+                        fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
+                      }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.2)'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.08)'; e.currentTarget.style.borderColor = 'rgba(220,38,38,0.3)'; }}
+                      >ATK</button>
+                    </div>
                   )}
                 </div>
               );
@@ -2839,6 +2854,282 @@ function ChatModal({ target, myUserId, onClose }) {
   );
 }
 
+/* ─── CONFIRMACIÓN DE ATAQUE PVP ────────────────────────── */
+function PvpAttackConfirm({ target, onConfirm, onCancel, busy }) {
+  const color = SABER_COLORS[target?.saber_color] ?? '#38cdf0';
+  const photoUrl = mediaUrl(target?.photo);
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9000,
+      background: 'rgba(4,7,15,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div className="nx-panel" style={{
+        width: 340, padding: '28px 28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
+        border: '1px solid rgba(220,38,38,0.4)', boxShadow: '0 0 40px -10px rgba(220,38,38,0.3)',
+      }}>
+        <div className="nx-display" style={{ fontSize: 13, color: '#ef4444', letterSpacing: '0.12em' }}>
+          ¿INICIAR COMBATE?
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
+            backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            background: photoUrl ? undefined : color,
+            border: `2px solid ${color}66`, boxShadow: `0 0 14px ${color}44`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+          }}>
+            {!photoUrl && (target?.handle?.[0] ?? '?')}
+          </div>
+          <div>
+            <div className="nx-display" style={{ fontSize: 14 }}>{target?.name ?? target?.handle}</div>
+            <div className="nx-data" style={{ fontSize: 11, color: 'var(--holo)', marginTop: 2 }}>@{target?.handle}</div>
+          </div>
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', textAlign: 'center', margin: 0, lineHeight: 1.6 }}>
+          El combate se resolverá por turnos.<br />Deberás resolverlo antes de viajar.
+        </p>
+        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+          <button className="nx-btn nx-btn-ghost" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>
+            Cancelar
+          </button>
+          <button className="nx-btn nx-btn-accent" style={{ flex: 1, background: '#dc2626', borderColor: '#dc2626' }}
+            onClick={onConfirm} disabled={busy}>
+            {busy ? 'Iniciando...' : '⚔ ATACAR'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── PANTALLA DE COMBATE PVP ────────────────────────────── */
+function PvpCombatScreen({ combat: initialCombat, userId, onClose }) {
+  const [combat, setCombat]           = useState(initialCombat);
+  const [busy, setBusy]               = useState(false);
+  const [logCollapsed, setLogCollapsed] = useState(true);
+  const [bgImg, setBgImg]             = useState(null);
+  const pollRef                       = useRef(null);
+
+  const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
+  const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
+  const myHp      = combat.i_am_attacker ? combat.attacker_hp     : combat.defender_hp;
+  const myEscudo  = combat.i_am_attacker ? combat.attacker_escudo : combat.defender_escudo;
+  const oppHp     = combat.i_am_attacker ? combat.defender_hp     : combat.attacker_hp;
+  const oppEscudo = combat.i_am_attacker ? combat.defender_escudo : combat.attacker_escudo;
+
+  /* fondo del lugar */
+  useEffect(() => {
+    if (!combat.lugar_id) return;
+    apiFetch(`/map/lugares/${combat.lugar_id}`)
+      .then(d => d?.lugar?.imagen && setBgImg(mediaUrl(d.lugar.imagen)))
+      .catch(() => {});
+  }, [combat.lugar_id]);
+
+  /* polling cuando no es mi turno */
+  useEffect(() => {
+    clearInterval(pollRef.current);
+    if (combat.status !== 'active' || combat.is_my_turn) return;
+    pollRef.current = setInterval(() => {
+      apiFetch(`/pvp/${combat.id}`)
+        .then(d => { if (d?.combat) setCombat(d.combat); })
+        .catch(() => {});
+    }, 4000);
+    return () => clearInterval(pollRef.current);
+  }, [combat.is_my_turn, combat.status, combat.id]);
+
+  const doAction = async (skill) => {
+    if (busy || !combat.is_my_turn || combat.status !== 'active') return;
+    setBusy(true);
+    try {
+      const d = await apiPost(`/pvp/${combat.id}/action`, { skill });
+      if (d?.combat) setCombat(d.combat);
+    } catch { /* toast shown by apiPost */ }
+    finally { setBusy(false); }
+  };
+
+  const isOver  = combat.status !== 'active';
+  const iWon    = (combat.status === 'attacker_won' && combat.i_am_attacker)
+               || (combat.status === 'defender_won' && !combat.i_am_attacker);
+  const iFled   = (combat.status === 'fled_attacker' && combat.i_am_attacker)
+               || (combat.status === 'fled_defender' && !combat.i_am_attacker);
+
+  const HUD = ({ player, hp, escudo, isOpp }) => {
+    const maxHp  = player.stats.vida;
+    const maxEsc = player.stats.escudo;
+    const photoUrl = player.photo_url;
+    return (
+      <div style={{
+        width: 'clamp(180px,34%,250px)', display: 'flex', flexDirection: 'column', gap: 6,
+        ...(isOpp ? {} : { alignItems: 'flex-start' }),
+      }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', ...(isOpp ? { flexDirection: 'row-reverse' } : {}) }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 8, flexShrink: 0,
+            backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            background: photoUrl ? undefined : 'rgba(56,205,240,0.2)',
+            border: '2px solid var(--holo)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 800, color: 'var(--holo)',
+          }}>{!photoUrl && player.handle?.[0]?.toUpperCase()}</div>
+          <div>
+            <div className="nx-display" style={{ fontSize: 11, color: 'var(--holo)' }}>{player.name}</div>
+            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{player.handle}</div>
+          </div>
+        </div>
+        {maxEsc > 0 && (
+          <div>
+            <div className="nx-data" style={{ fontSize: 8, color: '#60a5fa', marginBottom: 2 }}>ESCUDO {escudo}/{maxEsc}</div>
+            <div style={{ height: 5, background: 'rgba(96,165,250,0.15)', borderRadius: 3 }}>
+              <div style={{ height: '100%', background: '#60a5fa', borderRadius: 3, width: `${Math.max(0, escudo / maxEsc * 100)}%`, transition: 'width .4s' }} />
+            </div>
+          </div>
+        )}
+        <div>
+          <div className="nx-data" style={{ fontSize: 8, color: '#4ade80', marginBottom: 2 }}>VIDA {hp}/{maxHp}</div>
+          <div style={{ height: 7, background: 'rgba(74,222,128,0.15)', borderRadius: 3 }}>
+            <div style={{ height: '100%', borderRadius: 3, transition: 'width .4s',
+              background: hp / maxHp > 0.5 ? '#4ade80' : hp / maxHp > 0.25 ? '#facc15' : '#ef4444',
+              width: `${Math.max(0, hp / maxHp * 100)}%` }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {[['⚔', player.stats.ataque], ['🛡', player.stats.defensa], ['👁', player.stats.punteria]].map(([ic, v]) => (
+            <span key={ic} className="nx-data" style={{ fontSize: 9, color: 'var(--txt-dim)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, padding: '2px 5px' }}>{ic} {v}</span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const SKILLS = [
+    { id: 'melee',    label: 'Cuerpo a cuerpo', icon: 'swords',  desc: '1d6 + ATK' },
+    { id: 'distancia',label: 'A distancia',     icon: 'crosshair',desc: '1d6 + PNT' },
+    { id: 'postura',  label: 'Postura defensiva',icon: 'shield',  desc: '+4 DEF este turno' },
+    { id: 'potente',  label: 'Golpe potente',   icon: 'zap',     desc: 'ATK × 1.5' },
+  ];
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 8000,
+      background: bgImg ? `linear-gradient(rgba(4,7,15,0.72),rgba(4,7,15,0.72)) center/cover, url(${bgImg}) center/cover no-repeat` : 'rgba(4,7,15,0.98)',
+      display: 'flex', alignItems: 'stretch',
+    }}>
+      <div style={{
+        margin: 'auto', width: '100%', maxWidth: 900, maxHeight: '96vh',
+        background: 'rgba(4,7,15,0.6)', backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(56,205,240,0.15)', borderRadius: 18,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '10px 18px', borderBottom: '1px solid rgba(56,205,240,0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Icon name="swords" size={14} style={{ color: '#ef4444' }} />
+          <span className="nx-display" style={{ fontSize: 13, color: '#ef4444', letterSpacing: '0.1em', flex: 1 }}>COMBATE PVP</span>
+          {!isOver && !combat.is_my_turn && (
+            <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', animation: 'nx-pulse 1.5s infinite' }}>
+              Esperando a {opp.name}...
+            </span>
+          )}
+          {!isOver && combat.is_my_turn && (
+            <span className="nx-data" style={{ fontSize: 10, color: '#4ade80' }}>Tu turno</span>
+          )}
+        </div>
+
+        {/* Área de combate */}
+        <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0 }}>
+          {/* Log colapsable a la izquierda */}
+          <div style={{
+            width: logCollapsed ? 40 : 'clamp(160px,26%,240px)', flexShrink: 0, transition: 'width .2s',
+            borderRight: '1px solid rgba(56,205,240,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          }}>
+            <button onClick={() => setLogCollapsed(v => !v)} style={{
+              padding: '8px 10px', background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--holo)', display: 'flex', alignItems: 'center', gap: 6,
+              borderBottom: '1px solid rgba(56,205,240,0.1)',
+            }}>
+              <Icon name={logCollapsed ? 'chevronRight' : 'chevronLeft'} size={12} />
+              {!logCollapsed && <span className="nx-kicker" style={{ fontSize: 8 }}>REGISTRO</span>}
+            </button>
+            {!logCollapsed && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(combat.log ?? []).map((entry, i) => (
+                  <div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', lineHeight: 1.5 }}>
+                    {(entry.messages ?? []).map((m, j) => <div key={j}>{m}</div>)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Centro: HUDs */}
+          <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+            {/* Oponente — arriba a la derecha */}
+            <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 2 }}>
+              <HUD player={opp} hp={oppHp} escudo={oppEscudo} isOpp />
+            </div>
+            {/* Yo — abajo a la izquierda */}
+            <div style={{ position: 'absolute', bottom: 86, left: 14, zIndex: 2 }}>
+              <HUD player={me} hp={myHp} escudo={myEscudo} isOpp={false} />
+            </div>
+          </div>
+        </div>
+
+        {/* Barra de acciones */}
+        <div style={{
+          borderTop: '1px solid rgba(56,205,240,0.1)', padding: '10px 14px',
+          display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(4,7,15,0.7)',
+          minHeight: 76,
+        }}>
+          {!isOver ? (
+            <>
+              {SKILLS.map(sk => (
+                <button key={sk.id} onClick={() => doAction(sk.id)}
+                  disabled={busy || !combat.is_my_turn}
+                  style={{
+                    flex: 1, minWidth: 0, padding: '8px 6px', cursor: 'pointer',
+                    background: combat.is_my_turn ? 'rgba(56,205,240,0.08)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${combat.is_my_turn ? 'rgba(56,205,240,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                    borderRadius: 8, color: combat.is_my_turn ? 'var(--holo)' : 'var(--txt-faint)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    transition: 'all .15s', opacity: busy ? 0.5 : 1,
+                  }}>
+                  <Icon name={sk.icon} size={14} />
+                  <span className="nx-display" style={{ fontSize: 9 }}>{sk.label}</span>
+                  <span style={{ fontSize: 8, fontFamily: 'var(--font-data)', color: 'var(--txt-faint)' }}>{sk.desc}</span>
+                </button>
+              ))}
+              <div style={{ width: 1, background: 'rgba(56,205,240,0.12)', alignSelf: 'stretch', margin: '0 4px' }} />
+              <button onClick={() => doAction('flee')} disabled={busy || !combat.is_my_turn}
+                style={{
+                  padding: '8px 12px', cursor: 'pointer', borderRadius: 8,
+                  background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)',
+                  color: '#ef4444', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                  opacity: (busy || !combat.is_my_turn) ? 0.4 : 1,
+                }}>
+                <Icon name="arrowLeft" size={14} />
+                <span className="nx-display" style={{ fontSize: 9 }}>Huir</span>
+              </button>
+            </>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div className="nx-display" style={{
+                fontSize: 22, letterSpacing: '0.14em',
+                color: iFled ? 'var(--txt-dim)' : iWon ? '#4ade80' : '#ef4444',
+              }}>
+                {iFled ? 'HUISTE' : iWon ? '¡VICTORIA!' : 'DERROTA'}
+              </div>
+              <button className="nx-btn nx-btn-ghost" onClick={() => onClose({ won: iWon, fled: iFled })}>
+                Continuar
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
 export default function MapaView({ setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
@@ -2851,6 +3142,35 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [lugarImagen, setLugarImagen]   = useState(null);
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
+  const [activePvpCombat, setActivePvpCombat] = useState(null);
+  const [pvpAttackTarget, setPvpAttackTarget]  = useState(null);
+  const [pvpChallenging, setPvpChallenging]    = useState(false);
+
+  // Comprueba si hay un combate PvP activo al entrar al mapa
+  useEffect(() => {
+    apiFetch('/pvp/active')
+      .then(d => { if (d?.combat) setActivePvpCombat(d.combat); })
+      .catch(() => {});
+  }, []);
+
+  const handleAttackUser = (character) => setPvpAttackTarget(character);
+
+  const handleStartPvp = async () => {
+    if (!pvpAttackTarget || pvpChallenging) return;
+    setPvpChallenging(true);
+    try {
+      const d = await apiPost('/pvp/challenge', { defender_id: pvpAttackTarget.user_id });
+      if (d?.combat) {
+        setActivePvpCombat(d.combat);
+        setPvpAttackTarget(null);
+      }
+    } catch {
+      toast('No se pudo iniciar el combate', { tone: 'error', icon: 'x' });
+      setPvpAttackTarget(null);
+    } finally {
+      setPvpChallenging(false);
+    }
+  };
 
   // Abre automáticamente el chat cuando llega un target externo (desde notificación)
   useEffect(() => {
@@ -2860,8 +3180,12 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   }, [externalChatTarget]);
 
   const triggerTravel = useCallback((kind, fn) => {
+    if (activePvpCombat) {
+      toast('Debes resolver tu combate PvP antes de viajar', { tone: 'error', icon: 'swords' });
+      return;
+    }
     setPendingTravel({ kind, fn });
-  }, []);
+  }, [activePvpCombat]);
 
   const updateLocation = useCallback((loc) => {
     apiPost('/map/location', loc).catch(() => {});
@@ -2969,6 +3293,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onBack={goGalaxy}
           onTravel={triggerTravel}
           onChat={setChatTarget}
+          onAttack={handleAttackUser}
           myUserId={userId}
         />
       )}
@@ -2979,6 +3304,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onBack={() => goSistema(sistema)}
           onTravel={triggerTravel}
           onChat={setChatTarget}
+          onAttack={handleAttackUser}
           myUserId={userId}
         />
       )}
@@ -2990,6 +3316,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onTravel={triggerTravel}
           breadcrumbs={crumbsZona}
           onChat={setChatTarget}
+          onAttack={handleAttackUser}
           myUserId={userId}
         />
       )}
@@ -3003,6 +3330,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onLugarChange={handleLugarChange}
           onLugarImagen={setLugarImagen}
           onChat={setChatTarget}
+          onAttack={handleAttackUser}
           myUserId={userId}
         />
       )}
@@ -3016,6 +3344,25 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           target={chatTarget}
           myUserId={userId}
           onClose={() => setChatTarget(null)}
+        />
+      )}
+
+      {/* Combate PvP activo — overlay bloqueante */}
+      {activePvpCombat && (
+        <PvpCombatScreen
+          combat={activePvpCombat}
+          userId={userId}
+          onClose={() => setActivePvpCombat(null)}
+        />
+      )}
+
+      {/* Confirmación de ataque */}
+      {pvpAttackTarget && (
+        <PvpAttackConfirm
+          target={pvpAttackTarget}
+          busy={pvpChallenging}
+          onConfirm={handleStartPvp}
+          onCancel={() => setPvpAttackTarget(null)}
         />
       )}
 

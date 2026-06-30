@@ -919,7 +919,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         </Panel>
 
         <Panel kicker="Atributos" title="Distribución de Stats" icon="trending"
-          right={<Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip>}>
+          right={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip><Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>Asignar</Btn></div>}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {COMBAT_STATS.map((s) => {
               const val = ch[s] ?? COMBAT_DEFAULTS[s];

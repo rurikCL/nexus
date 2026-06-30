@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PvpCombatController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\NpcChatController;
@@ -138,6 +139,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sesiones/{id}/attend',      [SesionEntrenamientoController::class, 'attend']);
     Route::delete('/sesiones/{id}/attend',    [SesionEntrenamientoController::class, 'unattend']);
     Route::post('/sesiones/{id}/close',       [SesionEntrenamientoController::class, 'close']);
+
+    // Combate PvP
+    Route::post('/pvp/challenge',      [PvpCombatController::class, 'challenge']);
+    Route::get('/pvp/active',          [PvpCombatController::class, 'active']);
+    Route::get('/pvp/{id}',            [PvpCombatController::class, 'show']);
+    Route::post('/pvp/{id}/action',    [PvpCombatController::class, 'action']);
 
     // NPC AI chat
     Route::get('/npcs/{id}/chat/status', [NpcChatController::class, 'status']);
