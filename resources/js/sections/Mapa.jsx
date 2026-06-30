@@ -2855,7 +2855,7 @@ function ChatModal({ target, myUserId, onClose }) {
 }
 
 /* ─── CONFIRMACIÓN DE ATAQUE PVP ────────────────────────── */
-function PvpAttackConfirm({ target, onConfirm, onCancel, busy }) {
+function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
   const color = SABER_COLORS[target?.saber_color] ?? '#38cdf0';
   const photoUrl = mediaUrl(target?.photo);
   return (
@@ -2866,11 +2866,22 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy }) {
       <div className="nx-panel" style={{
         width: 340, padding: '28px 28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
         border: '1px solid rgba(220,38,38,0.4)', boxShadow: '0 0 40px -10px rgba(220,38,38,0.3)',
+        position: 'relative', overflow: 'hidden',
       }}>
-        <div className="nx-display" style={{ fontSize: 13, color: '#ef4444', letterSpacing: '0.12em' }}>
+        {lugarImagen && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+            <div style={{
+              position: 'absolute', inset: 0,
+              backgroundImage: `url(${lugarImagen})`,
+              backgroundSize: 'cover', backgroundPosition: 'center',
+            }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(4,7,15,0.72)' }} />
+          </div>
+        )}
+        <div className="nx-display" style={{ fontSize: 13, color: '#ef4444', letterSpacing: '0.12em', position: 'relative', zIndex: 1 }}>
           ¿INICIAR COMBATE?
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
           <div style={{
             width: 48, height: 48, borderRadius: '50%', flexShrink: 0,
             backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
@@ -2887,10 +2898,10 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy }) {
             <div className="nx-data" style={{ fontSize: 11, color: 'var(--holo)', marginTop: 2 }}>@{target?.handle}</div>
           </div>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', textAlign: 'center', margin: 0, lineHeight: 1.6 }}>
+        <p style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', textAlign: 'center', margin: 0, lineHeight: 1.6, position: 'relative', zIndex: 1 }}>
           El combate se resolverá por turnos.<br />Deberás resolverlo antes de viajar.
         </p>
-        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+        <div style={{ display: 'flex', gap: 10, width: '100%', position: 'relative', zIndex: 1 }}>
           <button className="nx-btn nx-btn-ghost" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>
             Cancelar
           </button>
@@ -3449,6 +3460,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           busy={pvpChallenging}
           onConfirm={handleStartPvp}
           onCancel={() => setPvpAttackTarget(null)}
+          lugarImagen={lugarImagen}
         />
       )}
 
