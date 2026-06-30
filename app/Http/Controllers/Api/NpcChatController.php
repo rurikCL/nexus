@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Character;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
+use App\Models\MapPlaneta;
 use App\Models\NpcChatLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\Log;
 class NpcChatController extends Controller
 {
     private const MAX_RESPONSES  = 5;
-    private const WINDOW_MINUTES = 30;
+    private const WINDOW_MINUTES = 5;
     private const HISTORY_LIMIT  = 8;
     private const MAX_TOKENS     = 220;
     private const MODEL          = 'open-mistral-nemo';
@@ -195,6 +196,44 @@ class NpcChatController extends Controller
                     ],
                 ],
             ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name'        => 'consultar_eventos_planeta',
+                    'description' => 'Consulta los eventos importantes registrados en un planeta. Úsalo cuando alguien pregunte qué ha pasado en un planeta o quiera saber su historia reciente.',
+                    'parameters'  => [
+                        'type'       => 'object',
+                        'properties' => [
+                            'planeta' => [
+                                'type'        => 'string',
+                                'description' => 'Nombre del planeta a consultar.',
+                            ],
+                        ],
+                        'required' => ['planeta'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name'        => 'registrar_evento_planeta',
+                    'description' => 'Registra un nuevo evento importante en un planeta. Úsalo cuando un personaje te cuente algo relevante que ocurrió en un planeta y quieras dejarlo anotado.',
+                    'parameters'  => [
+                        'type'       => 'object',
+                        'properties' => [
+                            'planeta' => [
+                                'type'        => 'string',
+                                'description' => 'Nombre del planeta donde ocurrió el evento.',
+                            ],
+                            'descripcion' => [
+                                'type'        => 'string',
+                                'description' => 'Descripción breve del evento a registrar (máx. 200 caracteres).',
+                            ],
+                        ],
+                        'required' => ['planeta', 'descripcion'],
+                    ],
+                ],
+            ],
         ];
     }
 
@@ -205,10 +244,12 @@ class NpcChatController extends Controller
     private function executeTool(string $name, array $args): array
     {
         return match ($name) {
-            'buscar_personaje'    => $this->buscarPersonaje($args['nombre'] ?? ''),
-            'personajes_en_lugar' => $this->personajesEnLugar($args['lugar'] ?? ''),
-            'info_ubicacion'      => $this->infoUbicacion($args['lugar'] ?? ''),
-            default               => ['error' => "Herramienta '{$name}' no disponible."],
+            'buscar_personaje'        => $this->buscarPersonaje($args['nombre'] ?? ''),
+            'personajes_en_lugar'     => $this->personajesEnLugar($args['lugar'] ?? ''),
+            'info_ubicacion'          => $this->infoUbicacion($args['lugar'] ?? ''),
+            'consultar_eventos_planeta'=> $this->consultarEventosPlaneta($args['planeta'] ?? ''),
+            'registrar_evento_planeta' => $this->registrarEventoPlaneta($args['planeta'] ?? '', $args['descripcion'] ?? ''),
+            default                   => ['error' => "Herramienta '{$name}' no disponible."],
         };
     }
 
@@ -305,6 +346,51 @@ class NpcChatController extends Controller
             'npcs_presentes'  => $lugarRecord->npcs->pluck('nombre')->toArray(),
             'personajes_presentes' => $presentes->map(fn($c) => "{$c->name} ({$c->cls})")->toArray(),
         ], fn($v) => $v !== null && $v !== '' && $v !== []);
+    }
+
+    private function consultarEventosPlaneta(string $planeta): array
+    {
+        if (! $planeta) return ['error' => 'Se requiere un nombre de planeta.'];
+
+        $record = MapPlaneta::where('nombre', 'like', "%{$planeta}%")->first();
+
+        if (! $record) {
+            return ['error' => "No se encontró el planeta '{$planeta}' en el mapa galáctico."];
+        }
+
+        $eventos = trim($record->eventos_importantes ?? '');
+
+        return [
+            'planeta'  => $record->nombre,
+            'eventos'  => $eventos ?: 'No hay eventos registrados para este planeta.',
+        ];
+    }
+
+    private function registrarEventoPlaneta(string $planeta, string $descripcion): array
+    {
+        if (! $planeta)     return ['error' => 'Se requiere un nombre de planeta.'];
+        if (! $descripcion) return ['error' => 'Se requiere una descripción del evento.'];
+
+        $record = MapPlaneta::where('nombre', 'like', "%{$planeta}%")->first();
+
+        if (! $record) {
+            return ['error' => "No se encontró el planeta '{$planeta}' en el mapa galáctico."];
+        }
+
+        $descripcion = mb_substr(trim($descripcion), 0, 200);
+        $fecha       = now()->format('Y-m-d');
+        $linea       = "[{$fecha}] {$descripcion}";
+
+        $actual   = trim($record->eventos_importantes ?? '');
+        $nuevo    = $actual ? "{$actual}\n{$linea}" : $linea;
+
+        $record->update(['eventos_importantes' => $nuevo]);
+
+        return [
+            'ok'      => true,
+            'planeta' => $record->nombre,
+            'evento_registrado' => $linea,
+        ];
     }
 
     // ──────────────────────────────────────────────────────────────────────

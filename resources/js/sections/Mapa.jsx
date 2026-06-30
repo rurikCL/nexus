@@ -1847,7 +1847,7 @@ function DialogoRPG({ npc, onClose }) {
                   padding: '16px 8px', lineHeight: 1.6,
                 }}>
                   Límite alcanzado.<br />
-                  <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>Vuelve en 30 min.</span>
+                  <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>Vuelve en 5 min.</span>
                 </div>
               ) : (
                 <>
@@ -2101,7 +2101,6 @@ function ChatModal({ target, myUserId, onClose }) {
   const [other, setOther]       = useState(null);
   const bottomRef               = useRef(null);
   const intervalRef             = useRef(null);
-  const inputRef                = useRef(null);
 
   const loadMessages = useCallback(() => {
     if (!target?.user_id) return;
@@ -2130,10 +2129,7 @@ function ChatModal({ target, myUserId, onClose }) {
     apiPost('/messages', { receiver_id: target.user_id, body })
       .then(() => { setInput(''); loadMessages(); })
       .catch(() => toast('Error enviando mensaje', { tone: 'error', icon: 'x' }))
-      .finally(() => {
-        setSending(false);
-        requestAnimationFrame(() => inputRef.current?.focus());
-      });
+      .finally(() => setSending(false));
   }, [input, sending, target?.user_id, loadMessages]);
 
   const handleKey = (e) => {
@@ -2205,7 +2201,7 @@ function ChatModal({ target, myUserId, onClose }) {
           </div>
         )}
         {messages.map((m) => {
-          const isMe = Number(m.sender_id) === Number(myUserId);
+          const isMe = m.sender_id === myUserId;
           return (
             <div key={m.id} style={{
               display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start',
@@ -2246,7 +2242,6 @@ function ChatModal({ target, myUserId, onClose }) {
         background: 'rgba(4,7,15,0.95)', flexShrink: 0,
       }}>
         <input
-          ref={inputRef}
           className="nx-input"
           style={{ flex: 1, fontSize: 12 }}
           placeholder="Transmitir mensaje..."
@@ -2263,7 +2258,7 @@ function ChatModal({ target, myUserId, onClose }) {
 }
 
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView({ setMapLocation, initialLocation, userId, externalChatTarget, onExternalChatConsumed }) {
+export default function MapaView({ setMapLocation, initialLocation, userId }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
   const [sistema, setSistema]     = useState(null);
@@ -2273,13 +2268,6 @@ export default function MapaView({ setMapLocation, initialLocation, userId, exte
   const [dialogNpc, setDialogNpc] = useState(null);
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
-
-  // Abre automáticamente el chat cuando llega un target externo (desde notificación)
-  useEffect(() => {
-    if (!externalChatTarget) return;
-    setChatTarget(externalChatTarget);
-    onExternalChatConsumed?.();
-  }, [externalChatTarget]);
 
   const triggerTravel = useCallback((kind, fn) => {
     setPendingTravel({ kind, fn });

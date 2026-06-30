@@ -24,6 +24,7 @@ class MapPlaneta extends Model
         'faccion',
         'imagen',
         'historia',
+        'eventos_importantes',
         'visible',
     ];
 
