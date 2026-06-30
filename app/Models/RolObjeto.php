@@ -18,6 +18,7 @@ class RolObjeto extends Model
         'descripcion',
         'efecto',
         'imagen',
+        'costo',
         'activo',
     ];
 

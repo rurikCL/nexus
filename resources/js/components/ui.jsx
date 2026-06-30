@@ -44,6 +44,7 @@ const ICON_PATHS = {
   logout:   'M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8M17 8l4 4-4 4M9 12h12',
   menu:      'M3 6h18M3 12h18M3 18h18',
   instagram: 'M16 4H8a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4zM12 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM16.5 7.5h.01',
+  message:   'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
 };
 export function Icon({ name, size = 18, stroke = 1.8, fill = false, style, ...rest }) {
   const d = ICON_PATHS[name];

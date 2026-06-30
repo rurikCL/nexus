@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
@@ -184,6 +184,9 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [testOpen, setTestOpen] = useState(false);
   const [mapLocation, setMapLocation] = useState(null);
   const [combatToView, setCombatToView] = useState(null);
+  const [unreadMsgs, setUnreadMsgs] = useState([]);
+  const [externalChatTarget, setExternalChatTarget] = useState(null);
+  const prevUnreadIds = useRef(new Set());
   const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? '');
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
@@ -305,6 +308,50 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     return () => window.Echo.leave(`App.Models.User.${user.id}`);
   }, [user?.id]);
 
+  // Polling de mensajes no leídos
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('nx-token');
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+    let isFirst = true;
+
+    const poll = () => {
+      fetch('/api/messages/unread', { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data?.senders) return;
+          setUnreadMsgs(data.senders);
+
+          if (!isFirst) {
+            // Detecta remitentes nuevos y dispara notificación
+            data.senders.forEach(sender => {
+              if (!prevUnreadIds.current.has(sender.user_id)) {
+                onTransmision?.({
+                  tone: 'holo',
+                  icon: 'message',
+                  title: 'Mensaje recibido',
+                  body: `@${sender.handle} te ha enviado un mensaje`,
+                  action_label: 'VER',
+                  action_fn: () => {
+                    setExternalChatTarget(sender);
+                    go('mapa');
+                  },
+                });
+              }
+            });
+          }
+
+          isFirst = false;
+          prevUnreadIds.current = new Set(data.senders.map(s => s.user_id));
+        })
+        .catch(() => {});
+    };
+
+    poll();
+    const id = setInterval(poll, 20000);
+    return () => clearInterval(id);
+  }, [user?.id]);
+
   const authHeaders = () => {
     const token = localStorage.getItem('nx-token');
     return { Accept: 'application/json', Authorization: `Bearer ${token}` };
@@ -342,7 +389,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
-    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} />,
+    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,
   };
@@ -541,6 +588,19 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
             <span style={{ color: 'var(--pompeyo-oro)' }}><Icon name="coin" size={14} /></span>
             <span className="nx-num" style={{ fontSize: 14, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(S.credits)}</span>
           </div>
+          {unreadMsgs.length > 0 && (
+            <button
+              className="nx-btn nx-btn-ghost"
+              title="Mensajes no leídos"
+              style={{ padding: 7, position: 'relative', color: 'var(--holo)' }}
+              onClick={() => { setExternalChatTarget(unreadMsgs[0]); go('mapa'); }}
+            >
+              <Icon name="message" size={15} />
+              <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holo)', boxShadow: '0 0 6px var(--holo)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
+                {unreadMsgs.length > 9 ? '9+' : unreadMsgs.length}
+              </span>
+            </button>
+          )}
           <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={() => setNotifOpen(o => !o)}>
             <Icon name="bell" size={15} />
             {unread > 0 && (

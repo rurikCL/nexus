@@ -13,6 +13,33 @@ use Illuminate\Support\Facades\Storage;
 
 class MessageController extends Controller
 {
+    public function unread(Request $request): JsonResponse
+    {
+        $me = $request->user()->id;
+
+        $senders = Message::where('receiver_id', $me)
+            ->whereNull('read_at')
+            ->with('sender.character')
+            ->latest()
+            ->get()
+            ->groupBy('sender_id')
+            ->map(function ($msgs, $senderId) {
+                $sender = $msgs->first()->sender;
+                return [
+                    'user_id'     => (int) $senderId,
+                    'handle'      => $sender->character?->handle ?? $sender->name,
+                    'photo'       => $sender->character?->photo
+                        ? Storage::disk('public')->url($sender->character->photo)
+                        : null,
+                    'saber_color' => $sender->character?->saber_color ?? 'azul',
+                    'count'       => $msgs->count(),
+                ];
+            })
+            ->values();
+
+        return response()->json(['senders' => $senders]);
+    }
+
     public function conversation(Request $request, int $userId): JsonResponse
     {
         $me = $request->user()->id;

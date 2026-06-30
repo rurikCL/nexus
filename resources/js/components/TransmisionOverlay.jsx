@@ -164,7 +164,7 @@ export function TransmisionOverlay({ notification, onDismiss }) {
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 16 }}>
           {notification.action_label && (
             <button
-              onClick={handleDismiss}
+              onClick={() => { notification.action_fn?.(); handleDismiss(); }}
               style={{
                 padding: '8px 22px', border: 'none', cursor: 'pointer',
                 background: tone.color, color: '#000',

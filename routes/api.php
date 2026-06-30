@@ -108,6 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
     // Mensajes directos
+    Route::get('/messages/unread',       [MessageController::class, 'unread']);
     Route::get('/messages/{userId}',     [MessageController::class, 'conversation']);
     Route::post('/messages',             [MessageController::class, 'send']);
 
