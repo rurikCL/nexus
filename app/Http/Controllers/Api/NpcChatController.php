@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Models\Character;
+use App\Models\Combat;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
 use App\Models\MapPlaneta;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\Log;
 
 class NpcChatController extends Controller
 {
-    private const MAX_RESPONSES  = 5;
+    private const MAX_RESPONSES  = 15;
     private const WINDOW_MINUTES = 5;
     private const HISTORY_LIMIT  = 8;
     private const MAX_TOKENS     = 220;
@@ -32,7 +33,15 @@ class NpcChatController extends Controller
         $user = $request->user();
         MapNpc::where('visible', true)->findOrFail($id);
 
-        return response()->json(['remaining' => $this->remainingResponses($user->id, $id)]);
+        $history = NpcChatLog::where('user_id', $user->id)
+            ->where('npc_id', $id)
+            ->oldest()
+            ->get(['role', 'content', 'created_at']);
+
+        return response()->json([
+            'remaining' => $this->remainingResponses($user->id, $id),
+            'history'   => $history,
+        ]);
     }
 
     public function chat(Request $request, int $id): JsonResponse
@@ -199,6 +208,23 @@ class NpcChatController extends Controller
             [
                 'type' => 'function',
                 'function' => [
+                    'name'        => 'ficha_completa_personaje',
+                    'description' => 'Devuelve la ficha completa de un personaje: identidad, historia, lore, rango, sable, estadísticas de combate detalladas, estilo de pelea, últimos combates disputados, créditos, sector de origen y ubicación actual.',
+                    'parameters'  => [
+                        'type'       => 'object',
+                        'properties' => [
+                            'nombre' => [
+                                'type'        => 'string',
+                                'description' => 'Nombre completo o handle del personaje (ej: "Valentina Soto", "V-SOTO").',
+                            ],
+                        ],
+                        'required' => ['nombre'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
                     'name'        => 'consultar_eventos_planeta',
                     'description' => 'Consulta los eventos importantes registrados en un planeta. Úsalo cuando alguien pregunte qué ha pasado en un planeta o quiera saber su historia reciente.',
                     'parameters'  => [
@@ -244,12 +270,13 @@ class NpcChatController extends Controller
     private function executeTool(string $name, array $args): array
     {
         return match ($name) {
-            'buscar_personaje'        => $this->buscarPersonaje($args['nombre'] ?? ''),
-            'personajes_en_lugar'     => $this->personajesEnLugar($args['lugar'] ?? ''),
-            'info_ubicacion'          => $this->infoUbicacion($args['lugar'] ?? ''),
+            'buscar_personaje'         => $this->buscarPersonaje($args['nombre'] ?? ''),
+            'ficha_completa_personaje' => $this->fichaCompletaPersonaje($args['nombre'] ?? ''),
+            'personajes_en_lugar'      => $this->personajesEnLugar($args['lugar'] ?? ''),
+            'info_ubicacion'           => $this->infoUbicacion($args['lugar'] ?? ''),
             'consultar_eventos_planeta'=> $this->consultarEventosPlaneta($args['planeta'] ?? ''),
             'registrar_evento_planeta' => $this->registrarEventoPlaneta($args['planeta'] ?? '', $args['descripcion'] ?? ''),
-            default                   => ['error' => "Herramienta '{$name}' no disponible."],
+            default                    => ['error' => "Herramienta '{$name}' no disponible."],
         };
     }
 
@@ -281,6 +308,124 @@ class NpcChatController extends Controller
             'ubicacion_sistema' => $character->mapSistema?->nombre,
             'stats'           => $character->stats,
         ], fn($v) => $v !== null && $v !== '');
+    }
+
+    private function fichaCompletaPersonaje(string $nombre): array
+    {
+        if (! $nombre) return ['error' => 'Se requiere un nombre o handle.'];
+
+        $character = Character::with(['user', 'mapLugar', 'mapPlaneta', 'mapZona', 'mapSistema'])
+            ->where('name', 'like', "%{$nombre}%")
+            ->orWhere('handle', 'like', "%{$nombre}%")
+            ->first();
+
+        if (! $character) {
+            return ['error' => "No se encontró ningún personaje con el nombre o handle '{$nombre}'."];
+        }
+
+        // Últimos 5 combates resueltos
+        $userId  = $character->user_id;
+        $combats = Combat::where(function ($q) use ($userId) {
+                $q->where('combatant_a_id', $userId)->orWhere('combatant_b_id', $userId);
+            })
+            ->where('resolved', true)
+            ->with(['combatantA:id,name', 'combatantB:id,name'])
+            ->latest('fecha_desafio')
+            ->limit(5)
+            ->get();
+
+        $historialCombates = $combats->map(function ($c) use ($userId) {
+            $rival    = $c->combatant_a_id === $userId ? $c->combatantB?->name : $c->combatantA?->name;
+            $gano     = $c->winner === $userId;
+            $resultado = $gano ? 'VICTORIA' : 'DERROTA';
+            return "{$resultado} vs {$rival} — {$c->event_name}" . ($c->round ? " ({$c->round})" : '');
+        })->toArray();
+
+        // Estilo de combate derivado de stats
+        $stats      = $character->stats ?? [];
+        $estiloTexto = $this->describirEstilo($character->cls, $stats);
+
+        $total    = ($character->wins ?? 0) + ($character->losses ?? 0);
+        $winrate  = $total > 0 ? round(($character->wins / $total) * 100) . '%' : 'sin combates';
+
+        return array_filter([
+            // Identidad
+            'nombre'         => $character->name,
+            'handle'         => $character->handle,
+            'clase'          => $character->cls,
+            'lado'           => $character->side,
+            'sector_origen'  => $character->sector,
+            'sponsor'        => $character->sponsor,
+            'año_ingreso'    => $character->joined_year,
+            'estado_oro'     => $character->gold ? 'Combatiente Gold' : null,
+
+            // Rango
+            'tier'           => $character->user?->tier,
+            'grado'          => $character->user?->grado,
+
+            // Sable
+            'color_sable'    => $character->saber_color,
+
+            // Historia y lore
+            'bio'            => $character->bio,
+            'lore'           => $character->lore,
+
+            // Estadísticas de combate
+            'record'         => ($character->wins ?? 0) . 'V - ' . ($character->losses ?? 0) . 'D',
+            'winrate'        => $winrate,
+            'racha_actual'   => $character->streak ?? 0,
+            'creditos'       => $character->credits,
+
+            // Stats físicos
+            'estadisticas'   => $stats,
+            'estilo_combate' => $estiloTexto,
+
+            // Historial reciente
+            'ultimos_combates' => $historialCombates ?: ['Sin combates registrados'],
+
+            // Ubicación actual
+            'ubicacion_lugar'   => $character->mapLugar?->nombre,
+            'ubicacion_zona'    => $character->mapZona?->nombre,
+            'ubicacion_planeta' => $character->mapPlaneta?->nombre,
+            'ubicacion_sistema' => $character->mapSistema?->nombre,
+        ], fn($v) => $v !== null && $v !== '' && $v !== []);
+    }
+
+    private function describirEstilo(string $cls, array $stats): string
+    {
+        $fuerza    = $stats['fuerza']    ?? 0;
+        $velocidad = $stats['velocidad'] ?? 0;
+        $tecnica   = $stats['tecnica']   ?? 0;
+        $defensa   = $stats['defensa']   ?? 0;
+        $foco      = $stats['foco']      ?? 0;
+
+        $dominante = collect([
+            'fuerza'    => $fuerza,
+            'velocidad' => $velocidad,
+            'tecnica'   => $tecnica,
+            'defensa'   => $defensa,
+            'foco'      => $foco,
+        ])->sortDesc()->keys()->first();
+
+        $descripciones = [
+            'fuerza'    => 'Estilo de combate agresivo y físico. Prefiere el contacto directo y los golpes contundentes.',
+            'velocidad' => 'Estilo dinámico y evasivo. Se mueve constantemente, difícil de leer y de anticipar.',
+            'tecnica'   => 'Estilo técnico y preciso. Economiza movimientos y busca el momento exacto para atacar.',
+            'defensa'   => 'Estilo defensivo y resistente. Aguanta presión y contraataca desde posiciones sólidas.',
+            'foco'      => 'Estilo calculado y cerebral. Lee el combate con varios movimientos de anticipación.',
+        ];
+
+        $base = $descripciones[$dominante] ?? 'Estilo equilibrado.';
+
+        $modificador = match ($cls) {
+            'vanguardia' => ' Vanguardia: cierra distancias rápido y no da respiro.',
+            'espectro'   => ' Espectro: usa el espacio y la invisibilidad táctica a su favor.',
+            'titan'      => ' Titán: su presencia física intimida antes de que empiece el combate.',
+            'oraculo'    => ' Oráculo: convierte la lectura del rival en su principal arma.',
+            default      => '',
+        };
+
+        return $base . $modificador;
     }
 
     private function personajesEnLugar(string $lugar): array

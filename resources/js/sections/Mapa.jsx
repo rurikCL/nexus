@@ -1608,12 +1608,13 @@ function DialogoRPG({ npc, onClose }) {
   }, [npc.interaccion]);
 
   useEffect(() => {
+    if (isAI) return;
     if (npc.saludo) {
       setTyping(true);
       setTimeout(() => {
         setMessages([{ from: 'npc', text: npc.saludo, ts: Date.now() }]);
         setTyping(false);
-        if (!isAI && npcOptions.length > 0) setPhase('dialog');
+        if (npcOptions.length > 0) setPhase('dialog');
       }, 800);
     }
   }, []);
@@ -1621,8 +1622,23 @@ function DialogoRPG({ npc, onClose }) {
   useEffect(() => {
     if (!isAI) return;
     apiFetch(`/npcs/${npc.id}/chat/status`)
-      .then(d => setRemaining(d.remaining))
-      .catch(() => setRemaining(5));
+      .then(d => {
+        setRemaining(d.remaining);
+        if (d.history && d.history.length > 0) {
+          setMessages(d.history.map(m => ({
+            from: m.role === 'user' ? 'player' : 'npc',
+            text: m.content,
+            ts:   new Date(m.created_at).getTime(),
+          })));
+        } else if (npc.saludo) {
+          setTyping(true);
+          setTimeout(() => {
+            setMessages([{ from: 'npc', text: npc.saludo, ts: Date.now() }]);
+            setTyping(false);
+          }, 800);
+        }
+      })
+      .catch(() => setRemaining(15));
   }, []);
 
   const handleAiSend = useCallback(async () => {
@@ -1641,7 +1657,7 @@ function DialogoRPG({ npc, onClose }) {
       const data = await resp.json();
       if (resp.status === 429) {
         setRemaining(0);
-        toast('Límite alcanzado. Vuelve en 30 min.', { tone: 'error', icon: 'x' });
+        toast('Límite alcanzado. Vuelve en 5 min.', { tone: 'error', icon: 'x' });
       } else if (!resp.ok) {
         toast('Error al contactar al NPC.', { tone: 'error', icon: 'x' });
       } else {
