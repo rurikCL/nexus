@@ -169,8 +169,22 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
       {/* Hero — fijo, sin drag */}
-      <section className="nx-panel" style={{ overflow: 'hidden' }}>
-        <div style={{ display: 'flex', gap: 22, padding: 22, flexWrap: 'wrap', alignItems: 'center' }}>
+      <section className="nx-panel" style={{ overflow: 'hidden', position: 'relative' }}>
+        {ch.photo && (
+          <img
+            src={ch.photo}
+            alt=""
+            aria-hidden="true"
+            style={{
+              position: 'absolute', right: 0, top: 0, height: '100%', width: 'auto',
+              objectFit: 'cover', objectPosition: 'top center',
+              pointerEvents: 'none', userSelect: 'none',
+              WebkitMaskImage: 'linear-gradient(to left, black 40%, transparent 85%)',
+              maskImage:       'linear-gradient(to left, black 40%, transparent 85%)',
+            }}
+          />
+        )}
+        <div style={{ display: 'flex', gap: 22, padding: 22, flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 1 }}>
           <Avatar c={me} size={86} ring />
           <div style={{ flex: 1, minWidth: 220 }}>
             <div className="nx-kicker">Combatiente{me.sector ? ` · ${me.sector}` : ''}</div>
