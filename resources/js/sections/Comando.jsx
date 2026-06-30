@@ -821,10 +821,35 @@ function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex 
   );
 }
 
+const STAT_SHORT = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI', escudo: 'ESC', vida: 'VID' };
+const statShort = (s) => STAT_SHORT[s] ?? s.toUpperCase().slice(0, 3);
+
+/* Agrupa array de stats y cuenta repetidos: ['ataque','ataque'] → [{stat:'ataque',n:2}] */
+function groupStats(arr) {
+  if (!Array.isArray(arr)) return [];
+  const counts = {};
+  for (const s of arr) counts[s] = (counts[s] ?? 0) + 1;
+  return Object.entries(counts).map(([stat, n]) => ({ stat, n }));
+}
+
 function HabilidadPickerRow({ habilidad, onAssign }) {
+  const isMelee  = habilidad.tipo === 'melee';
+  const isSelf   = habilidad.objetivo === 'self';
+  const buffs    = groupStats(habilidad.buff);
+  const debuffs  = groupStats(habilidad.debuff);
+
+  const Badge = ({ children, color, bg }) => (
+    <span style={{
+      fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+      padding: '2px 6px', borderRadius: 3,
+      background: bg ?? `${color}18`, border: `1px solid ${color}40`,
+      color, whiteSpace: 'nowrap', lineHeight: 1.4,
+    }}>{children}</span>
+  );
+
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
+      display: 'flex', alignItems: 'flex-start', gap: 11,
       padding: '10px 12px', borderRadius: 'var(--radius-md)',
       border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,.02)',
       transition: 'all .15s',
@@ -832,37 +857,80 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--holo) 8%, transparent)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.background = 'rgba(255,255,255,.02)'; }}
     >
+      {/* Icono de tipo */}
       <div style={{
-        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
         display: 'grid', placeItems: 'center',
-        background: 'color-mix(in srgb, var(--holo) 12%, rgba(4,9,18,.8))',
-        border: '1px solid var(--holo-line)',
+        background: isMelee ? 'rgba(255,112,67,0.14)' : 'rgba(56,205,240,0.12)',
+        border: `1px solid ${isMelee ? 'rgba(255,112,67,0.35)' : 'rgba(56,205,240,0.28)'}`,
         overflow: 'hidden',
       }}>
         {habilidad.icono_url
-          ? <img src={habilidad.icono_url} alt={habilidad.nombre} style={{ width: 30, height: 30, objectFit: 'contain' }} />
-          : <span style={{ fontSize: 20 }}>⚡</span>
+          ? <img src={habilidad.icono_url} alt={habilidad.nombre} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+          : <span style={{ fontSize: 20, lineHeight: 1 }}>{isMelee ? '⚔' : '◎'}</span>
         }
       </div>
+
+      {/* Cuerpo */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt)', lineHeight: 1.2 }}>{habilidad.nombre}</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-          <span className="nx-data" style={{ fontSize: 9, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{habilidad.tipo}</span>
+        {/* Nombre */}
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt)', lineHeight: 1.2, marginBottom: 5 }}>
+          {habilidad.nombre}
+        </div>
+
+        {/* Fila 1: stats principales */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+          {/* Tipo */}
+          <Badge color={isMelee ? '#ff7043' : '#38cdf0'}>
+            {isMelee ? '⚔ CUERPO A CUERPO' : '◎ DISTANCIA'}
+          </Badge>
+          {/* Objetivo */}
+          <Badge color={isSelf ? '#10b981' : '#a78bfa'}>
+            {isSelf ? '↩ PROPIO' : '→ OBJETIVO'}
+          </Badge>
+          {/* Fuerza */}
           {habilidad.costo_fuerza > 0 && (
-            <span className="nx-data" style={{ fontSize: 9, color: 'var(--holo)' }}>⚡ {habilidad.costo_fuerza} fuerza</span>
+            <Badge color="#38cdf0">⚡ {habilidad.costo_fuerza} FRZ</Badge>
           )}
+          {/* Daño */}
           {habilidad.damage > 0 && (
-            <span className="nx-data" style={{ fontSize: 9, color: '#ff6b6b' }}>⚔ {habilidad.damage} daño</span>
+            <Badge color="#ff6b6b">✦ {habilidad.damage} DMG</Badge>
+          )}
+          {/* Cooldown */}
+          {habilidad.cooldown > 0 && (
+            <Badge color="#E6B325">⏱ {habilidad.cooldown} {habilidad.cooldown === 1 ? 'turno' : 'turnos'}</Badge>
           )}
         </div>
+
+        {/* Fila 2: buffs y debuffs */}
+        {(buffs.length > 0 || debuffs.length > 0) && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+            {buffs.map(({ stat, n }) => (
+              <Badge key={`b-${stat}`} color="#10b981">
+                ▲ {statShort(stat)}{n > 1 ? ` ×${n}` : ''}
+              </Badge>
+            ))}
+            {debuffs.map(({ stat, n }) => (
+              <Badge key={`d-${stat}`} color="#f87171">
+                ▼ {statShort(stat)}{n > 1 ? ` ×${n}` : ''}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Efecto */}
         {habilidad.efecto && (
-          <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 3, lineHeight: 1.4 }}>{habilidad.efecto}</div>
+          <div style={{ fontSize: 10, color: 'var(--txt-faint)', lineHeight: 1.45, fontStyle: 'italic' }}>
+            {habilidad.efecto}
+          </div>
         )}
       </div>
+
+      {/* Botón */}
       <button
         className="nx-btn nx-btn-accent nx-btn-sm"
         onClick={onAssign}
-        style={{ padding: '6px 14px', flexShrink: 0, fontSize: 11 }}
+        style={{ padding: '6px 14px', flexShrink: 0, fontSize: 11, marginTop: 2 }}
       >
         Asignar
       </button>
