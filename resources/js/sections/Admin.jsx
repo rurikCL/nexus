@@ -312,6 +312,26 @@ const ENTITY_CONFIG = {
     ],
     defaults: {},
   },
+
+  configuraciones: {
+    label: 'Configuraciones', icon: 'settings', group: 'SISTEMA',
+    columns: [
+      { key: 'id',              label: 'ID',       w: 52 },
+      { key: 'nombre',          label: 'Nombre',   bold: true },
+      { key: 'tipo_valor',      label: 'Tipo',     dim: true },
+      { key: 'valor_numerico',  label: 'Numérico', dim: true },
+      { key: 'valor_texto',     label: 'Texto',    dim: true },
+      { key: 'activo',          label: 'Activo',   type: 'bool', w: 62 },
+    ],
+    fields: [
+      { key: 'nombre',          label: 'Nombre',         type: 'text',   required: true },
+      { key: 'tipo_valor',      label: 'Tipo de valor',  type: 'select', options: ['numerico', 'texto'] },
+      { key: 'valor_numerico',  label: 'Valor numérico', type: 'number' },
+      { key: 'valor_texto',     label: 'Valor texto',    type: 'text',   hint: 'Usar solo cuando tipo_valor = texto' },
+      { key: 'activo',          label: 'Activo',         type: 'toggle' },
+    ],
+    defaults: { tipo_valor: 'numerico', activo: true },
+  },
 };
 
 /* ─── FIELD INPUT ────────────────────────────────────────── */

@@ -626,7 +626,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, myU
         {/* ── visor del sistema ── */}
         <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: 500,
           background: 'linear-gradient(180deg,#07101f,#04070f)' }}>
-
+          
           <div className="nx-starfield">
             <Starfield />
           </div>
@@ -1219,7 +1219,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, myUserId }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onChat, myUserId }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1246,7 +1246,6 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         setLugar(d.lugar);
         setNavNames((prev) => ({ ...prev, [currentId]: d.lugar.nombre }));
         onLugarChange?.(currentId, d.lugar.nombre);
-        onLugarImagen?.(d.lugar.imagen ? mediaUrl(d.lugar.imagen) : null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -1579,483 +1578,8 @@ function NpcCard({ npc, onClick }) {
   );
 }
 
-/* ─── STATS DE COMBATE DEL JUGADOR ─────────────────────── */
-function getPlayerCombatStats(character) {
-  const s = character?.stats ?? {};
-  const f = s.fuerza    ?? 50;
-  const v = s.velocidad ?? 50;
-  const t = s.tecnica   ?? 50;
-  const d = s.defensa   ?? 50;
-  const k = s.foco      ?? 50;
-  return {
-    vida:       30 + Math.round(f * 1.5),
-    escudo:     10 + Math.round(t * 0.4),
-    ataque:     Math.round(f * 0.8),
-    defensa:    Math.round(d * 0.8),
-    movimiento: Math.round(v * 0.8),
-    iniciativa: Math.round((v + k) / 2 * 0.5),
-    punteria:   Math.round((t + k) / 2 * 0.5),
-    nombre:     character?.name ?? 'Tú',
-    photo:      character?.photo_url ?? null,
-  };
-}
-
-function postReputation(delta) {
-  const token = localStorage.getItem('nx-token');
-  fetch('/api/character/reputation', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    body: JSON.stringify({ delta }),
-  }).catch(() => {});
-}
-
-/* ─── BARRA HP + ESCUDO ─────────────────────────────────── */
-function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align = 'left' }) {
-  const vidaPct   = maxVida   > 0 ? Math.max(0, Math.min(100, (vida   / maxVida)   * 100)) : 0;
-  const escudoPct = maxEscudo > 0 ? Math.max(0, Math.min(100, (escudo / maxEscudo) * 100)) : 0;
-  const vidaColor = vidaPct > 50 ? '#10b981' : vidaPct > 25 ? '#E6B325' : '#ff2d45';
-  return (
-    <div style={{ display: 'flex', flexDirection: align === 'right' ? 'row-reverse' : 'row', alignItems: 'center', gap: 14 }}>
-      <div style={{
-        width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
-        backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        background: photoUrl ? undefined : 'rgba(56,205,240,0.15)',
-        border: '2px solid var(--holo-line)', display: 'grid', placeItems: 'center',
-      }}>
-        {!photoUrl && <Icon name="user" size={20} style={{ color: 'var(--holo)', opacity: 0.5 }} />}
-      </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', marginBottom: 6, textAlign: align }}>
-          {nombre}
-        </div>
-        {maxEscudo > 0 && (
-          <div style={{ marginBottom: 5 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>ESCUDO</span>
-              <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>{escudo}/{maxEscudo}</span>
-            </div>
-            <div style={{ height: 4, background: 'rgba(56,205,240,0.12)', borderRadius: 2 }}>
-              <div style={{ height: '100%', width: `${escudoPct}%`, background: '#38cdf0', borderRadius: 2, transition: 'width 0.45s ease', boxShadow: '0 0 6px #38cdf055' }} />
-            </div>
-          </div>
-        )}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-            <span style={{ fontSize: 8, color: vidaColor, fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>VIDA</span>
-            <span style={{ fontSize: 8, color: vidaColor, fontFamily: 'var(--font-data)' }}>{vida}/{maxVida}</span>
-          </div>
-          <div style={{ height: 9, background: 'rgba(16,185,129,0.12)', borderRadius: 5 }}>
-            <div style={{ height: '100%', width: `${vidaPct}%`, background: vidaColor, borderRadius: 5, transition: 'width 0.45s ease', boxShadow: `0 0 8px ${vidaColor}55` }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── COMBATE POR TURNOS ─────────────────────────────────── */
-function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee }) {
-  const d6 = () => Math.floor(Math.random() * 6) + 1;
-
-  const maxPlayer = { vida: player.vida, escudo: player.escudo };
-  const maxNpc    = { vida: Math.max(npc.vida, 1), escudo: npc.escudo ?? 0 };
-
-  const npcAtk = Math.max(npc.ataque,     1);
-  const npcDef = Math.max(npc.defensa,    1);
-  const npcMov = Math.max(npc.movimiento, 1);
-  const npcIni = Math.max(npc.iniciativa, 1);
-  const npcPnt = npc.punteria ?? 0;
-
-  const [playerHp,     setPlayerHp]     = useState({ vida: maxPlayer.vida, escudo: maxPlayer.escudo });
-  const [npcHp,        setNpcHp]        = useState({ vida: maxNpc.vida,    escudo: maxNpc.escudo    });
-  const [phase,        setPhase]        = useState('initiative');
-  const [currTurn,     setCurrTurn]     = useState(null);
-  const [log,          setLog]          = useState([]);
-  const [npcBusy,      setNpcBusy]      = useState(false);
-  const [logCollapsed, setLogCollapsed] = useState(false);
-  const [defBonus,     setDefBonus]     = useState(0);
-  const logRef = useRef(null);
-
-  const applyDmg = (dmg, hp) => {
-    const newEsc = Math.max(0, hp.escudo - dmg);
-    const rem    = dmg - hp.escudo;
-    return { escudo: newEsc, vida: rem > 0 ? Math.max(0, hp.vida - rem) : hp.vida };
-  };
-
-  /* Iniciativa */
-  useEffect(() => {
-    const pR = d6(); const nR = d6();
-    const pT = pR + player.iniciativa; const nT = nR + npcIni;
-    const first = pT >= nT ? 'player' : 'npc';
-    setTimeout(() => {
-      setLog([
-        { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0 },
-        { text: `Iniciativa — Tú: 1d6(${pR})+${player.iniciativa}=${pT} | ${npc.nombre}: 1d6(${nR})+${npcIni}=${nT}`, type: 'info', id: 1 },
-        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2 },
-      ]);
-      setPhase('battle');
-      setCurrTurn(first);
-    }, 500);
-  }, []);
-
-  /* Turno del NPC */
-  /* Turno NPC */
-  useEffect(() => {
-    if (currTurn !== 'npc' || phase !== 'battle') return;
-    setNpcBusy(true);
-    const t = setTimeout(() => {
-      const useRanged = npcPnt > 0 && Math.random() > 0.5;
-      let entries = [];
-      let newHp;
-      const curDef = player.defensa + defBonus;
-      if (useRanged) {
-        const [aR, dR] = [d6(), d6()];
-        const [aT, dT] = [aR + npcPnt, dR + player.movimiento];
-        entries = [
-          { text: `${npc.nombre} dispara: 1d6(${aR})+${npcPnt}=${aT}`, type: 'info' },
-          { text: `Esquivas: 1d6(${dR})+${player.movimiento}=${dT}`, type: 'info' },
-        ];
-        newHp = aT > dT ? applyDmg(npcAtk, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Te impactan! −${npcAtk} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
-      } else {
-        const [aR, dR] = [d6(), d6()];
-        const [aT, dT] = [aR + npcAtk, dR + curDef];
-        entries = [
-          { text: `${npc.nombre} ataca: 1d6(${aR})+${npcAtk}=${aT}`, type: 'info' },
-          { text: `Defiendes: 1d6(${dR})+${curDef}=${dT}${defBonus > 0 ? ` (+${defBonus} postura)` : ''}`, type: 'info' },
-        ];
-        newHp = aT > dT ? applyDmg(npcAtk, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Golpe! −${npcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
-      }
-      setDefBonus(0);
-      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
-      setPlayerHp(newHp);
-      setNpcBusy(false);
-      if (newHp.vida <= 0) {
-        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length }]);
-        setPhase('defeat');
-      } else {
-        setCurrTurn('player');
-      }
-    }, 1500);
-    return () => clearTimeout(t);
-  }, [currTurn, phase, defBonus]);
-
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
-
-  /* Acciones del jugador */
-  const doPlayerAttack = (label, atkVal, defVal, dmg) => {
-    const [aR, dR] = [d6(), d6()];
-    const [aT, dT] = [aR + atkVal, dR + defVal];
-    const hit = aT > dT;
-    const newNpcHp = hit ? applyDmg(dmg, npcHp) : { ...npcHp };
-    const entries = [
-      { text: `${label}: 1d6(${aR})+${atkVal}=${aT} vs 1d6(${dR})+${defVal}=${dT}`, type: 'info' },
-      hit ? { text: `¡Impacto! −${dmg} daño`, type: 'success' } : { text: 'Bloqueado / Falla', type: 'miss' },
-    ];
-    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
-    setNpcHp(newNpcHp);
-    if (newNpcHp.vida <= 0) {
-      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
-      setPhase('victory');
-    } else {
-      setCurrTurn('npc');
-    }
-  };
-
-  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy;
-
-  /* Habilidades del jugador */
-  const SKILLS = [
-    { id: 'melee',   icon: '⚔', name: 'Melee',         desc: `ATQ ${player.ataque}`,     fn: () => doPlayerAttack('Melee',   player.ataque,   npcDef, player.ataque) },
-    { id: 'ranged',  icon: '◎', name: 'Distancia',      desc: `PNT ${player.punteria}`,   fn: () => doPlayerAttack('Distancia', player.punteria, npcMov, player.ataque), disabled: player.punteria <= 0 },
-    { id: 'postura', icon: '🛡', name: 'Postura',        desc: '+4 DEF 1 turno',          fn: () => { setDefBonus(4); setLog(prev => [...prev, { text: 'Postura defensiva — +4 DEF este turno', type: 'info', id: prev.length }]); setCurrTurn('npc'); } },
-    { id: 'potente', icon: '⚡', name: 'Golpe Potente',  desc: `ATQ ×1.5`,                fn: () => doPlayerAttack('Golpe potente', player.ataque, npcDef, Math.ceil(player.ataque * 1.5)) },
-  ];
-
-  /* Visual helpers */
-  const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
-  const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
-  const LOG_C = { info: 'rgba(200,225,255,0.78)', success: '#10b981', danger: '#ff6b6b', miss: 'rgba(150,180,220,0.5)', system: '#38cdf0' };
-
-  const npcBadges = [
-    { l: 'ATQ', v: npcAtk, c: '#ff7043' }, { l: 'DEF', v: npcDef, c: '#38cdf0' },
-    { l: 'MOV', v: npcMov, c: '#a78bfa' }, { l: 'INI', v: npcIni, c: '#E6B325' },
-    ...(npcPnt > 0 ? [{ l: 'PNT', v: npcPnt, c: '#10b981' }] : []),
-  ];
-  const playerBadges = [
-    { l: 'ATQ', v: player.ataque,           c: '#ff7043' },
-    { l: 'DEF', v: player.defensa + defBonus, c: '#38cdf0', bonus: defBonus > 0 },
-    { l: 'MOV', v: player.movimiento,       c: '#a78bfa' },
-    { l: 'INI', v: player.iniciativa,       c: '#E6B325' },
-    ...(player.punteria > 0 ? [{ l: 'PNT', v: player.punteria, c: '#10b981' }] : []),
-  ];
-
-  /* Sub-component HUD */
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, align }) => {
-    const vPct = pct(hp, maxHp);
-    const ePct = pct(escudo, maxEscudo);
-    const vc   = vcol(vPct);
-    const rev  = align === 'right';
-    return (
-      <div style={{
-        background: 'rgba(6,12,26,0.92)', backdropFilter: 'blur(16px)',
-        border: `1px solid ${borderColor}`, borderRadius: 14,
-        padding: 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
-        gap: 14, alignItems: 'flex-start', minWidth: 260,
-      }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-          border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
-        }}>
-          {photoUrl
-            ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
-          }
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 8, textAlign: rev ? 'right' : 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
-          {maxEscudo > 0 && (
-            <div style={{ marginBottom: 5 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>ESC</span>
-                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>{escudo}/{maxEscudo}</span>
-              </div>
-              <div style={{ height: 4, background: 'rgba(56,205,240,0.12)', borderRadius: 2 }}>
-                <div style={{ height: '100%', width: `${ePct}%`, background: '#38cdf0', borderRadius: 2, transition: 'width 0.4s ease' }} />
-              </div>
-            </div>
-          )}
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ fontSize: 8, color: vc, fontFamily: 'var(--font-data)' }}>VID</span>
-              <span style={{ fontSize: 8, color: vc, fontFamily: 'var(--font-data)' }}>{hp}/{maxHp}</span>
-            </div>
-            <div style={{ height: 9, background: 'rgba(16,185,129,0.12)', borderRadius: 5 }}>
-              <div style={{ height: '100%', width: `${vPct}%`, background: vc, borderRadius: 5, transition: 'width 0.4s ease' }} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: rev ? 'flex-end' : 'flex-start' }}>
-            {badges.map(b => (
-              <span key={b.l} style={{
-                fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
-                background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
-                ...(b.bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
-              }}>{b.l} {b.v}{b.bonus ? ' ▲' : ''}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  /* ── JSX ── */
-  const resolvePlayerAttack = (type) => {
-    let entries = [];
-    let newNpcHp;
-    if (type === 'ranged') {
-      const [aR, dR] = [d6(), d6()];
-      const [aT, dT] = [aR + player.punteria, dR + npcMov];
-      entries = [
-        { text: `Ataque a distancia: 1d6(${aR})+${player.punteria}=${aT}`, type: 'info' },
-        { text: `${npc.nombre} esquiva: 1d6(${dR})+${npcMov}=${dT}`, type: 'info' },
-      ];
-      newNpcHp = aT > dT ? applyDmg(player.ataque, npcHp) : { ...npcHp };
-      entries.push(aT > dT
-        ? { text: `¡Impacto certero! −${player.ataque} daño`, type: 'success' }
-        : { text: `${npc.nombre} esquiva`, type: 'miss' });
-    } else {
-      const [aR, dR] = [d6(), d6()];
-      const [aT, dT] = [aR + player.ataque, dR + npcDef];
-      entries = [
-        { text: `Ataque melee: 1d6(${aR})+${player.ataque}=${aT}`, type: 'info' },
-        { text: `${npc.nombre} defiende: 1d6(${dR})+${npcDef}=${dT}`, type: 'info' },
-      ];
-      newNpcHp = aT > dT ? applyDmg(player.ataque, npcHp) : { ...npcHp };
-      entries.push(aT > dT
-        ? { text: `¡Golpe certero! −${player.ataque} daño`, type: 'success' }
-        : { text: 'Ataque bloqueado', type: 'miss' });
-    }
-    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
-    setNpcHp(newNpcHp);
-    if (newNpcHp.vida <= 0) {
-      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
-      setPhase('victory');
-    } else {
-      setCurrTurn('npc');
-    }
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1300, overflow: 'hidden' }}>
-      {/* Fondo: imagen del lugar */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: lugarImagen ? `url(${lugarImagen})` : undefined,
-        background: lugarImagen ? undefined : 'radial-gradient(ellipse at 50% 40%, #0a1628, #020508)',
-        backgroundSize: 'cover', backgroundPosition: 'center',
-      }} />
-      <div style={{ position: 'absolute', inset: 0, background: lugarImagen ? 'rgba(2,5,14,0.78)' : 'transparent' }} />
-
-      {/* NPC HUD — top right */}
-      <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
-        <HUD
-          hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
-          nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)}
-          borderColor="rgba(255,45,69,0.38)" badges={npcBadges} align="left"
-        />
-      </div>
-
-      {/* Player HUD — bottom left, over action bar */}
-      <div style={{ position: 'absolute', bottom: 96, left: 20, zIndex: 10 }}>
-        <HUD
-          hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
-          nombre={player.nombre} photoUrl={player.photo}
-          borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
-        />
-      </div>
-
-      {/* Combat log — left, collapsible */}
-      <div style={{
-        position: 'absolute', left: 20, top: 20, zIndex: 10,
-        width: logCollapsed ? 46 : 288,
-        maxHeight: 'calc(100vh - 230px)',
-        background: 'rgba(5,10,22,0.88)', backdropFilter: 'blur(14px)',
-        borderRadius: 12, border: '1px solid rgba(56,205,240,0.14)',
-        display: 'flex', flexDirection: 'column',
-        transition: 'width 0.22s ease', overflow: 'hidden',
-      }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px',
-          cursor: 'pointer', userSelect: 'none', flexShrink: 0,
-          borderBottom: logCollapsed ? 'none' : '1px solid rgba(56,205,240,0.10)',
-        }} onClick={() => setLogCollapsed(p => !p)}>
-          <span style={{ fontSize: 15, flexShrink: 0, lineHeight: 1 }}>📋</span>
-          {!logCollapsed && (
-            <span style={{ fontSize: 8, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)', letterSpacing: '0.18em', flex: 1, whiteSpace: 'nowrap' }}>
-              REGISTRO DE COMBATE
-            </span>
-          )}
-          <span style={{ fontSize: 13, color: 'rgba(150,200,255,0.4)', flexShrink: 0 }}>{logCollapsed ? '›' : '‹'}</span>
-        </div>
-        {!logCollapsed && (
-          <div ref={logRef} style={{ overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
-            {log.map(e => (
-              <div key={e.id} style={{
-                fontSize: 11, color: LOG_C[e.type] ?? 'rgba(200,225,255,0.78)',
-                fontFamily: 'var(--font-data)', letterSpacing: '0.04em', lineHeight: 1.5,
-                borderLeft: e.type === 'system' ? '2px solid #38cdf0' : 'none',
-                paddingLeft: e.type === 'system' ? 8 : 0,
-                animation: 'nx-fade-up 0.2s ease both',
-              }}>{e.text}</div>
-            ))}
-            {npcBusy && (
-              <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 4 }}>
-                <span style={{ fontSize: 10, color: '#ff8888', fontFamily: 'var(--font-data)' }}>{npc.nombre} actúa</span>
-                {[0,1,2].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#ff8888', animation: `nx-pulse 0.8s ${i*0.2}s infinite` }} />)}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Action bar */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
-        background: 'rgba(4,8,18,0.96)', backdropFilter: 'blur(18px)',
-        borderTop: '1px solid rgba(56,205,240,0.14)',
-        padding: '10px 20px', display: 'flex', gap: 8, alignItems: 'stretch', minHeight: 84,
-      }}>
-        {phase === 'initiative' && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ color: 'rgba(150,200,255,0.4)', fontSize: 12, fontFamily: 'var(--font-data)', letterSpacing: '0.16em' }}>CALCULANDO INICIATIVA…</div>
-          </div>
-        )}
-        {phase === 'victory' && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <div style={{ fontSize: 18, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>⚡ VICTORIA</div>
-            <button onClick={onVictory} style={{ padding: '10px 28px', borderRadius: 8, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.14em' }}>CONTINUAR →</button>
-          </div>
-        )}
-        {phase === 'defeat' && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <div style={{ fontSize: 18, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</div>
-            <button onClick={onDefeat} style={{ padding: '10px 28px', borderRadius: 8, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.14em' }}>RETIRARSE</button>
-          </div>
-        )}
-        {phase === 'battle' && (
-          <>
-            {/* 4 habilidades */}
-            {SKILLS.map(sk => {
-              const active = isPlayerTurn && !sk.disabled;
-              return (
-                <button key={sk.id} onClick={() => active && sk.fn()} disabled={!active} style={{
-                  flex: 1, borderRadius: 10, cursor: active ? 'pointer' : 'not-allowed',
-                  background: active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)',
-                  border: `1px solid ${active ? 'rgba(56,205,240,0.28)' : 'rgba(56,205,240,0.09)'}`,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  gap: 4, padding: '8px 6px', opacity: active ? 1 : 0.38, transition: 'all 0.15s',
-                }}
-                  onMouseEnter={e => { if (active) { e.currentTarget.style.background = 'rgba(56,205,240,0.17)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.5)'; e.currentTarget.style.boxShadow = '0 0 18px -6px rgba(56,205,240,0.4)'; } }}
-                  onMouseLeave={e => { e.currentTarget.style.background = active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)'; e.currentTarget.style.borderColor = active ? 'rgba(56,205,240,0.28)' : 'rgba(56,205,240,0.09)'; e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  <span style={{ fontSize: 22, lineHeight: 1 }}>{sk.icon}</span>
-                  <span style={{ fontSize: 10, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.06em' }}>{sk.name}</span>
-                  <span style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{sk.desc}</span>
-                </button>
-              );
-            })}
-
-            <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '4px 0' }} />
-
-            {/* Usar ítem */}
-            <button disabled style={{
-              minWidth: 62, borderRadius: 10, cursor: 'not-allowed', opacity: 0.30,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 10px',
-            }}>
-              <span style={{ fontSize: 22, lineHeight: 1 }}>🎒</span>
-              <span style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>ÍTEM</span>
-            </button>
-
-            {/* Desarmado */}
-            <button onClick={() => isPlayerTurn && doPlayerAttack('Desarmado', 2, npcDef, 3)} disabled={!isPlayerTurn} style={{
-              minWidth: 68, borderRadius: 10, cursor: isPlayerTurn ? 'pointer' : 'not-allowed',
-              background: isPlayerTurn ? 'rgba(230,179,37,0.08)' : 'rgba(230,179,37,0.03)',
-              border: `1px solid ${isPlayerTurn ? 'rgba(230,179,37,0.28)' : 'rgba(230,179,37,0.09)'}`,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-              padding: '8px 10px', opacity: isPlayerTurn ? 1 : 0.38, transition: 'all 0.15s',
-            }}
-              onMouseEnter={e => { if (isPlayerTurn) { e.currentTarget.style.background = 'rgba(230,179,37,0.18)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.5)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.background = isPlayerTurn ? 'rgba(230,179,37,0.08)' : 'rgba(230,179,37,0.03)'; e.currentTarget.style.borderColor = isPlayerTurn ? 'rgba(230,179,37,0.28)' : 'rgba(230,179,37,0.09)'; }}
-            >
-              <span style={{ fontSize: 22, lineHeight: 1 }}>👊</span>
-              <span style={{ fontSize: 9, color: '#E6B325', fontFamily: 'var(--font-data)', opacity: isPlayerTurn ? 1 : 0.5 }}>DESARMADO</span>
-            </button>
-
-            {/* Huir */}
-            <button onClick={() => { setPhase('fled'); onFlee?.(); }} style={{
-              minWidth: 56, borderRadius: 10, cursor: 'pointer',
-              background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-              padding: '8px 10px', transition: 'all 0.15s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
-            >
-              <span style={{ fontSize: 22, lineHeight: 1 }}>🏃</span>
-              <span style={{ fontSize: 9, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
-function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
+function DialogoRPG({ npc, onClose }) {
   const isAI = Boolean(npc.prompt);
   const [messages, setMessages]   = useState([]);
   const [phase, setPhase]         = useState('greeting');
@@ -2063,30 +1587,6 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
   const [aiInput, setAiInput]     = useState('');
   const [remaining, setRemaining] = useState(null);
   const bottomRef                 = useRef(null);
-  const [combat, setCombat]       = useState(false);
-
-  const npcTipo  = (npc.tipo ?? '').toLowerCase();
-  const isAliado = npcTipo === 'aliado';
-  const isHostil = npcTipo === 'hostil';
-  const isNeutral = !isAliado && !isHostil;
-
-  const startCombat = useCallback(() => setCombat(true), []);
-
-  const attackNeutral = useCallback(() => {
-    postReputation(-50);
-    toast('−50 reputación por atacar a un neutral', { tone: 'error', icon: 'shield' });
-    setCombat(true);
-  }, []);
-
-  const checkHostileAttack = useCallback(() => {
-    if (!isHostil) return;
-    if (Math.floor(Math.random() * 6) + 1 >= 4) {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { from: 'npc', text: `*${npc.nombre} adopta una postura amenazante y ataca*`, ts: Date.now() }]);
-        setTimeout(() => setCombat(true), 900);
-      }, 1100);
-    }
-  }, [isHostil, npc.nombre]);
 
   /* Parsea "- keyword[misionId]: respuesta" o "- keyword: respuesta" */
   const npcOptions = useMemo(() => {
@@ -2124,16 +1624,18 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
     apiFetch(`/npcs/${npc.id}/chat/status`)
       .then(d => {
         setRemaining(d.remaining);
-        if (d.history && d.history.length > 0) {
-          setMessages(d.history.map(m => ({
+        const hist = d.history ?? [];
+        if (hist.length > 0) {
+          setMessages(hist.map(m => ({
             from: m.role === 'user' ? 'player' : 'npc',
             text: m.content,
             ts:   new Date(m.created_at).getTime(),
           })));
-        } else if (npc.saludo) {
+        }
+        if (d.show_greeting && npc.saludo) {
           setTyping(true);
           setTimeout(() => {
-            setMessages([{ from: 'npc', text: npc.saludo, ts: Date.now() }]);
+            setMessages(prev => [...prev, { from: 'npc', text: npc.saludo, ts: Date.now() }]);
             setTyping(false);
           }, 800);
         }
@@ -2163,14 +1665,13 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
       } else {
         setMessages(prev => [...prev, { from: 'npc', text: data.reply, ts: Date.now() }]);
         setRemaining(data.remaining);
-        checkHostileAttack();
       }
     } catch {
       toast('Error de conexión.', { tone: 'error', icon: 'x' });
     } finally {
       setTyping(false);
     }
-  }, [aiInput, typing, remaining, npc.id, checkHostileAttack]);
+  }, [aiInput, typing, remaining, npc.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -2192,9 +1693,8 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
     setTimeout(() => {
       setMessages(prev => [...prev, { from: 'npc', text: opt.response, ts: Date.now() }]);
       setTyping(false);
-      checkHostileAttack();
     }, 800);
-  }, [checkHostileAttack]);
+  }, []);
 
   const STATS = [
     { label: 'VID', val: npc.vida },
@@ -2234,20 +1734,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {npc.profesion && <span className="nx-kicker" style={{ fontSize: 9 }}>{npc.profesion}</span>}
             {npc.faccion   && <Chip tone="dim" icon="shield">{npc.faccion}</Chip>}
-            {npc.tipo && (
-              <span style={{
-                fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-                padding: '3px 8px', borderRadius: 4, fontWeight: 700,
-                ...(isAliado
-                  ? { background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981' }
-                  : isHostil
-                  ? { background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.35)', color: '#ff6b6b' }
-                  : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
-                ),
-              }}>
-                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : '◈ NEUTRAL'}
-              </span>
-            )}
+            {npc.tipo      && <Chip tone="dim">{npc.tipo}</Chip>}
           </div>
         </div>
 
@@ -2371,22 +1858,6 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
               IA · {npc.nombre.toUpperCase()}
             </div>
             <div style={{ flex: 1 }} />
-            {!isAliado && npc.ataque > 0 && (
-              <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,45,69,0.15)' }}>
-                <button onClick={isNeutral ? attackNeutral : startCombat} style={{
-                  width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
-                  border: '1px solid rgba(255,45,69,0.28)', borderRadius: 8, padding: '9px 11px',
-                  cursor: 'pointer', fontSize: 12, color: '#ff6b6b',
-                  display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = '#ff2d45'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.28)'; }}
-                >
-                  <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(255,45,69,0.2)', display: 'grid', placeItems: 'center', fontSize: 10, flexShrink: 0 }}>⚔</span>
-                  <span>ATACAR{isNeutral ? ' (−rep)' : ''}</span>
-                </button>
-              </div>
-            )}
             <div style={{ padding: '12px 12px', borderTop: '1px solid var(--holo-line)' }}>
               {remaining === 0 ? (
                 <div style={{
@@ -2451,20 +1922,6 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
               }}>
                 OPCIONES DE DIÁLOGO
               </div>
-              {!isAliado && npc.ataque > 0 && (
-                <button onClick={isNeutral ? attackNeutral : startCombat} style={{
-                  width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
-                  border: '1px solid rgba(255,45,69,0.28)', borderRadius: 8, padding: '9px 11px',
-                  cursor: 'pointer', fontSize: 12, color: '#ff6b6b',
-                  display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = '#ff2d45'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.28)'; }}
-                >
-                  <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(255,45,69,0.2)', display: 'grid', placeItems: 'center', fontSize: 10, flexShrink: 0 }}>⚔</span>
-                  <span>ATACAR{isNeutral ? ' (−rep)' : ''}</span>
-                </button>
-              )}
               {npcOptions.map((opt, i) => (
                 <button key={i} onClick={() => handleOption(opt)} disabled={typing}
                   style={{
@@ -2507,22 +1964,6 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
         )}
 
       </div>
-
-      {combat && (
-        <NpcCombatScreen
-          npc={npc}
-          player={getPlayerCombatStats(userCharacter)}
-          lugarImagen={lugarImagen}
-          onVictory={() => {
-            if (isHostil) { postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' }); }
-            else          { postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' }); }
-            setCombat(false);
-            onClose();
-          }}
-          onDefeat={() => { setCombat(false); onClose(); }}
-          onFlee={() => setCombat(false)}
-        />
-      )}
     </div>
   );
 }
@@ -2678,7 +2119,6 @@ function ChatModal({ target, myUserId, onClose }) {
   const [other, setOther]       = useState(null);
   const bottomRef               = useRef(null);
   const intervalRef             = useRef(null);
-  const inputRef                = useRef(null);
 
   const loadMessages = useCallback(() => {
     if (!target?.user_id) return;
@@ -2707,10 +2147,7 @@ function ChatModal({ target, myUserId, onClose }) {
     apiPost('/messages', { receiver_id: target.user_id, body })
       .then(() => { setInput(''); loadMessages(); })
       .catch(() => toast('Error enviando mensaje', { tone: 'error', icon: 'x' }))
-      .finally(() => {
-        setSending(false);
-        requestAnimationFrame(() => inputRef.current?.focus());
-      });
+      .finally(() => setSending(false));
   }, [input, sending, target?.user_id, loadMessages]);
 
   const handleKey = (e) => {
@@ -2823,7 +2260,6 @@ function ChatModal({ target, myUserId, onClose }) {
         background: 'rgba(4,7,15,0.95)', flexShrink: 0,
       }}>
         <input
-          ref={inputRef}
           className="nx-input"
           style={{ flex: 1, fontSize: 12 }}
           placeholder="Transmitir mensaje..."
@@ -2840,7 +2276,7 @@ function ChatModal({ target, myUserId, onClose }) {
 }
 
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView({ setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
+export default function MapaView({ setMapLocation, initialLocation, userId }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
   const [sistema, setSistema]     = useState(null);
@@ -2848,16 +2284,8 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [zona, setZona]           = useState(null);
   const [lugar, setLugar]         = useState(null);
   const [dialogNpc, setDialogNpc] = useState(null);
-  const [lugarImagen, setLugarImagen]   = useState(null);
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
-
-  // Abre automáticamente el chat cuando llega un target externo (desde notificación)
-  useEffect(() => {
-    if (!externalChatTarget) return;
-    setChatTarget(externalChatTarget);
-    onExternalChatConsumed?.();
-  }, [externalChatTarget]);
 
   const triggerTravel = useCallback((kind, fn) => {
     setPendingTravel({ kind, fn });
@@ -3001,14 +2429,13 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onTravel={triggerTravel}
           breadcrumbs={crumbsLugar}
           onLugarChange={handleLugarChange}
-          onLugarImagen={setLugarImagen}
           onChat={setChatTarget}
           myUserId={userId}
         />
       )}
 
       {/* Diálogo RPG */}
-      {dialogNpc && <DialogoRPG npc={dialogNpc} userCharacter={userCharacter} lugarImagen={lugarImagen} onClose={() => setDialogNpc(null)} />}
+      {dialogNpc && <DialogoRPG npc={dialogNpc} onClose={() => setDialogNpc(null)} />}
 
       {/* Chat con jugador */}
       {chatTarget && (

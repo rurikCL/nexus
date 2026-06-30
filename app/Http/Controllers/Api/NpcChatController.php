@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Character;
 use App\Models\Combat;
+use App\Models\Configuracion;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
 use App\Models\MapPlaneta;
@@ -18,11 +19,27 @@ use Illuminate\Support\Facades\Log;
 
 class NpcChatController extends Controller
 {
-    private const MAX_RESPONSES  = 15;
-    private const WINDOW_MINUTES = 5;
-    private const HISTORY_LIMIT  = 8;
-    private const MAX_TOKENS     = 220;
-    private const MODEL          = 'open-mistral-nemo';
+    private const MODEL = 'open-mistral-nemo';
+
+    private const DEFAULTS = [
+        'limite_respuestas'   => 15,
+        'ventana_tiempo'      => 5,
+        'historial_max'       => 8,
+        'tokens_max'          => 220,
+        'umbral_conversacion' => 15,
+    ];
+
+    private function loadConfig(): array
+    {
+        $rows = Configuracion::whereIn('nombre', array_keys(self::DEFAULTS))
+            ->where('activo', true)
+            ->get()
+            ->keyBy('nombre')
+            ->map(fn($c) => $c->tipo_valor === 'texto' ? $c->valor_texto : (int) $c->valor_numerico)
+            ->toArray();
+
+        return array_merge(self::DEFAULTS, $rows);
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     //  Endpoints
@@ -30,7 +47,8 @@ class NpcChatController extends Controller
 
     public function status(Request $request, int $id): JsonResponse
     {
-        $user = $request->user();
+        $user   = $request->user();
+        $conf   = $this->loadConfig();
         MapNpc::where('visible', true)->findOrFail($id);
 
         $history = NpcChatLog::where('user_id', $user->id)
@@ -38,27 +56,33 @@ class NpcChatController extends Controller
             ->oldest()
             ->get(['role', 'content', 'created_at']);
 
+        $lastLog      = $history->last();
+        $umbral       = $conf['umbral_conversacion'];
+        $showGreeting = ! $lastLog || $lastLog->created_at->lt(now()->subMinutes($umbral));
+
         return response()->json([
-            'remaining' => $this->remainingResponses($user->id, $id),
-            'history'   => $history,
+            'remaining'     => $this->remainingResponses($user->id, $id, $conf),
+            'history'       => $history,
+            'show_greeting' => $showGreeting,
         ]);
     }
 
     public function chat(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
+        $conf = $this->loadConfig();
         $npc  = MapNpc::where('visible', true)->findOrFail($id);
 
         if (! $npc->prompt) {
             return response()->json(['error' => 'Este NPC no tiene modo conversación.'], 400);
         }
 
-        $remaining = $this->remainingResponses($user->id, $id);
+        $remaining = $this->remainingResponses($user->id, $id, $conf);
         if ($remaining <= 0) {
             return response()->json([
                 'error'     => 'rate_limit',
                 'message'   => 'Límite de conversación alcanzado.',
-                'reset_in'  => $this->secondsUntilReset($user->id, $id),
+                'reset_in'  => $this->secondsUntilReset($user->id, $id, $conf),
                 'remaining' => 0,
             ], 429);
         }
@@ -69,7 +93,7 @@ class NpcChatController extends Controller
         $history = NpcChatLog::where('user_id', $user->id)
             ->where('npc_id', $id)
             ->latest()
-            ->limit(self::HISTORY_LIMIT)
+            ->limit($conf['historial_max'])
             ->get()
             ->reverse()
             ->values();
@@ -88,7 +112,7 @@ class NpcChatController extends Controller
                 'messages'    => $messages,
                 'tools'       => $this->tools(),
                 'tool_choice' => 'auto',
-                'max_tokens'  => self::MAX_TOKENS,
+                'max_tokens'  => $conf['tokens_max'],
                 'temperature' => 0.82,
             ]);
 
@@ -125,7 +149,7 @@ class NpcChatController extends Controller
                 ->post('https://api.mistral.ai/v1/chat/completions', [
                     'model'       => self::MODEL,
                     'messages'    => $messages,
-                    'max_tokens'  => self::MAX_TOKENS,
+                    'max_tokens'  => $conf['tokens_max'],
                     'temperature' => 0.82,
                 ]);
 
@@ -542,28 +566,38 @@ class NpcChatController extends Controller
     //  Helpers de rate limit
     // ──────────────────────────────────────────────────────────────────────
 
-    private function remainingResponses(int $userId, int $npcId): int
+    private function remainingResponses(int $userId, int $npcId, array $conf = []): int
     {
+        if (empty($conf)) {
+            $conf = $this->loadConfig();
+        }
+
         $count = NpcChatLog::where('user_id', $userId)
             ->where('npc_id', $npcId)
             ->where('role', 'assistant')
-            ->where('created_at', '>=', now()->subMinutes(self::WINDOW_MINUTES))
+            ->where('created_at', '>=', now()->subMinutes($conf['ventana_tiempo']))
             ->count();
 
-        return max(0, self::MAX_RESPONSES - $count);
+        return max(0, $conf['limite_respuestas'] - $count);
     }
 
-    private function secondsUntilReset(int $userId, int $npcId): int
+    private function secondsUntilReset(int $userId, int $npcId, array $conf = []): int
     {
+        if (empty($conf)) {
+            $conf = $this->loadConfig();
+        }
+
+        $ventana = $conf['ventana_tiempo'];
+
         $oldest = NpcChatLog::where('user_id', $userId)
             ->where('npc_id', $npcId)
             ->where('role', 'assistant')
-            ->where('created_at', '>=', now()->subMinutes(self::WINDOW_MINUTES))
+            ->where('created_at', '>=', now()->subMinutes($ventana))
             ->oldest()
             ->first();
 
         return $oldest
-            ? (int) $oldest->created_at->addMinutes(self::WINDOW_MINUTES)->diffInSeconds(now())
-            : self::WINDOW_MINUTES * 60;
+            ? (int) $oldest->created_at->addMinutes($ventana)->diffInSeconds(now())
+            : $ventana * 60;
     }
 }

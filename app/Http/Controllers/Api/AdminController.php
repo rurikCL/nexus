@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Character;
+use App\Models\Configuracion;
 use App\Models\MapLugar;
 use App\Models\MapNave;
 use App\Models\MapNpc;
@@ -33,9 +34,10 @@ class AdminController extends Controller
             'usuarios'    => User::class,
             'personajes'  => Character::class,
             'roles'       => Role::class,
-            'rol_objetos' => RolObjeto::class,
+            'rol_objetos'      => RolObjeto::class,
             'rol_character_objeto' => RolCharacterObjeto::class,
-            default      => abort(404, "Entidad no reconocida: {$entity}"),
+            'configuraciones'  => Configuracion::class,
+            default            => abort(404, "Entidad no reconocida: {$entity}"),
         };
     }
 
@@ -111,7 +113,11 @@ class AdminController extends Controller
             $record->roles()->sync($roles);
         }
 
-        return response()->json(['record' => $record->load('roles:id,name,label')], 201);
+        $fresh = $record->fresh();
+        if ($withs = $this->withs($entity)) {
+            $fresh->load($withs);
+        }
+        return response()->json(['record' => $fresh], 201);
     }
 
     public function update(Request $request, string $entity, int $id): JsonResponse
