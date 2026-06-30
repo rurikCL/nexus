@@ -98,6 +98,25 @@ class CharacterController extends Controller
         ], $character->wasRecentlyCreated ? 201 : 200);
     }
 
+    public function updateHabilidades(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'habilidad_1' => 'nullable|exists:rol_habilidades,id',
+            'habilidad_2' => 'nullable|exists:rol_habilidades,id',
+            'habilidad_3' => 'nullable|exists:rol_habilidades,id',
+            'habilidad_4' => 'nullable|exists:rol_habilidades,id',
+        ]);
+
+        $character = $request->user()->character;
+        if (!$character) {
+            return response()->json(['error' => 'Sin personaje'], 404);
+        }
+
+        $character->update($data);
+
+        return response()->json(['character' => $character]);
+    }
+
     public function updateReputation(Request $request): JsonResponse
     {
         $data = $request->validate([

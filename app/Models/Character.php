@@ -14,6 +14,7 @@ class Character extends Model
         'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'stats', 'gold',
         'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria', 'puntos_libres',
+        'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
     ];
 
     protected $casts = [
@@ -32,6 +33,10 @@ class Character extends Model
         'iniciativa'     => 'integer',
         'punteria'       => 'integer',
         'puntos_libres'  => 'integer',
+        'habilidad_1'    => 'integer',
+        'habilidad_2'    => 'integer',
+        'habilidad_3'    => 'integer',
+        'habilidad_4'    => 'integer',
     ];
 
     public function getWinrateAttribute(): int
@@ -68,6 +73,26 @@ class Character extends Model
     public function mapLugar(): BelongsTo
     {
         return $this->belongsTo(MapLugar::class, 'map_lugar_id');
+    }
+
+    public function habilidad1(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_1');
+    }
+
+    public function habilidad2(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_2');
+    }
+
+    public function habilidad3(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_3');
+    }
+
+    public function habilidad4(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_4');
     }
 
     public function rolObjetos(): BelongsToMany

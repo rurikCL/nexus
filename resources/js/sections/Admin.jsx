@@ -27,7 +27,11 @@ const GROUPS = ['MAPA GALÁCTICO', 'ROL', 'SISTEMA'];
 
 /* ─── OPCIONES ESTÁTICAS ─────────────────────────────────── */
 const RAREZA_OPTS     = ['comun', 'poco_comun', 'raro', 'epico', 'legendario'];
-const HABILIDAD_TIPO_OPTS = ['melee', 'distancia'];
+const HABILIDAD_TIPO_OPTS  = ['melee', 'distancia'];
+const HABILIDAD_OBJETIVO_OPTS = ['target', 'self'];
+const BUFF_STATS  = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
+const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+const BUFF_COLOR  = { ataque: '#ff7043', defensa: '#38cdf0', punteria: '#10b981', movimiento: '#a78bfa', iniciativa: '#E6B325' };
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
 const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 'rojo'];
@@ -218,22 +222,29 @@ const ENTITY_CONFIG = {
   rol_habilidades: {
     label: 'Habilidades de Rol', icon: 'zap', group: 'ROL',
     columns: [
-      { key: 'id',           label: 'ID',     w: 52 },
-      { key: 'nombre',       label: 'Nombre', bold: true },
-      { key: 'tipo',         label: 'Tipo',   dim: true },
-      { key: 'forma',        label: 'Forma',  dim: true, w: 70 },
-      { key: 'costo_fuerza', label: 'Coste',  dim: true, w: 70 },
-      { key: 'damage',       label: 'Daño',   dim: true, w: 70 },
+      { key: 'id',           label: 'ID',      w: 52 },
+      { key: 'icono',        label: 'Icono',   type: 'image', w: 52 },
+      { key: 'nombre',       label: 'Nombre',  bold: true },
+      { key: 'tipo',         label: 'Tipo',    dim: true, w: 80 },
+      { key: 'forma',        label: 'Forma',   dim: true, w: 56 },
+      { key: 'objetivo',     label: 'Obj',     dim: true, w: 60 },
+      { key: 'damage',       label: 'Daño',    dim: true, w: 56 },
+      { key: 'cooldown',     label: 'CD',      dim: true, w: 48 },
     ],
     fields: [
-      { key: 'nombre',       label: 'Nombre',       type: 'text',   required: true, span: 2 },
-      { key: 'tipo',         label: 'Tipo',         type: 'select', options: HABILIDAD_TIPO_OPTS, required: true },
-      { key: 'forma',        label: 'Forma (0–7)',   type: 'number', min: 0, max: 7 },
-      { key: 'costo_fuerza', label: 'Costo Fuerza', type: 'number', min: 0 },
-      { key: 'damage',       label: 'Daño',         type: 'number', min: 0 },
-      { key: 'efecto',       label: 'Efecto',       type: 'textarea', span: 2 },
+      { key: 'nombre',       label: 'Nombre',                type: 'text',      required: true },
+      { key: 'icono',        label: 'Icono',                 type: 'file' },
+      { key: 'tipo',         label: 'Tipo',                  type: 'select',    options: HABILIDAD_TIPO_OPTS, required: true, hint: 'melee = cuerpo a cuerpo · distancia = ataque a distancia' },
+      { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
+      { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
+      { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
+      { key: 'damage',       label: 'Daño base',             type: 'number',    min: 0 },
+      { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
+      { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
+      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario durante el turno' },
+      { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
     ],
-    defaults: { tipo: 'melee', forma: 0, costo_fuerza: 0, damage: 0 },
+    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, cooldown: 0 },
   },
 
   /* ── SISTEMA ── */
@@ -509,6 +520,52 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     );
   }
 
+  if (field.type === 'statStack') {
+    const arr = Array.isArray(value) ? value : [];
+    const counts = Object.fromEntries(BUFF_STATS.map(s => [s, 0]));
+    arr.forEach(s => { if (s in counts) counts[s]++; });
+
+    const update = (stat, delta) => {
+      const newCount = Math.max(0, counts[stat] + delta);
+      const newArr = BUFF_STATS.flatMap(s => Array(s === stat ? newCount : counts[s]).fill(s));
+      onChange(newArr);
+    };
+
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {BUFF_STATS.map(stat => {
+          const count = counts[stat];
+          const c = BUFF_COLOR[stat];
+          const active = count > 0;
+          const btnBase = {
+            width: 20, height: 20, borderRadius: 4, border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(255,255,255,0.06)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, lineHeight: 1, color: 'var(--txt)', padding: 0,
+          };
+          return (
+            <div key={stat} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: active ? `${c}18` : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${active ? `${c}55` : 'var(--holo-line)'}`,
+              borderRadius: 8, padding: '5px 9px', transition: 'all 0.15s',
+            }}>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', color: active ? c : 'var(--txt-dim)', minWidth: 30 }}>
+                {BUFF_LABEL[stat]}
+              </span>
+              <button type="button" onClick={() => update(stat, -1)} disabled={!active}
+                style={{ ...btnBase, opacity: active ? 1 : 0.25, cursor: active ? 'pointer' : 'not-allowed' }}>−</button>
+              <span style={{ fontSize: 13, fontFamily: 'var(--font-data)', minWidth: 14, textAlign: 'center', color: active ? c : 'var(--txt-faint)', fontWeight: active ? 700 : 400 }}>
+                {count}
+              </span>
+              <button type="button" onClick={() => update(stat, 1)} style={btnBase}>+</button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <input type="text" {...base}
       value={value ?? ''} onChange={e => onChange(e.target.value)}
@@ -547,6 +604,8 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
           if (val !== null && val !== undefined) {
             if (typeof val === 'boolean') {
               payload.append(key, val ? '1' : '0');
+            } else if (Array.isArray(val)) {
+              payload.append(key, JSON.stringify(val));
             } else {
               payload.append(key, val);
             }
@@ -591,6 +650,9 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
               onChange={val => setField(field.key, val)}
               relatedOptions={relatedOptions}
             />
+            {field.hint && field.type !== 'textarea' && (
+              <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{field.hint}</span>
+            )}
           </div>
         ))}
       </div>
@@ -638,6 +700,13 @@ function CellValue({ col, record }) {
     return raw ? (
       <span style={{ fontSize: 10, color: c, fontFamily: 'var(--font-data)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{raw}</span>
     ) : <span style={{ color: 'var(--txt-faint)' }}>—</span>;
+  }
+
+  if (col.type === 'image') {
+    const src = raw ? (raw.startsWith('http') ? raw : `/storage/${raw}`) : null;
+    return src
+      ? <img src={src} alt="" style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }} />
+      : <span style={{ color: 'var(--txt-faint)' }}>—</span>;
   }
 
   if (raw == null || raw === '') return <span style={{ color: 'var(--txt-faint)' }}>—</span>;

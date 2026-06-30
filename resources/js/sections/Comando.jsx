@@ -684,6 +684,185 @@ const RANGOS_JEDI = [
 ];
 
 
+/* ===================== HABILIDADES ===================== */
+const FORMA_LABELS = ['Shi-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
+const FORMA_IMGS   = ['/assets/Forma1.png', '/assets/Forma2.png', '/assets/Forma3.png', '/assets/Forma4.png', '/assets/Forma5.png', '/assets/Forma6.png', '/assets/Forma7.png'];
+
+function HabilidadSlot({ slot, habilidad, onClick }) {
+  const isEmpty = !habilidad;
+  return (
+    <button
+      onClick={onClick}
+      title={isEmpty ? `Asignar habilidad ${slot}` : habilidad.nombre}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        padding: 14, borderRadius: 'var(--radius-md)', cursor: 'pointer',
+        background: isEmpty ? 'rgba(255,255,255,.025)' : 'color-mix(in srgb, var(--holo) 8%, rgba(255,255,255,.03))',
+        border: `1px solid ${isEmpty ? 'var(--holo-line)' : 'var(--holo)'}`,
+        boxShadow: isEmpty ? 'none' : '0 0 14px -6px var(--holo)',
+        transition: 'all .18s', flex: 1, minWidth: 0,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--holo) 10%, rgba(255,255,255,.03))'; }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = isEmpty ? 'var(--holo-line)' : 'var(--holo)';
+        e.currentTarget.style.background = isEmpty ? 'rgba(255,255,255,.025)' : 'color-mix(in srgb, var(--holo) 8%, rgba(255,255,255,.03))';
+      }}
+    >
+      {isEmpty ? (
+        <>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', border: '1px dashed var(--holo-line)', display: 'grid', placeItems: 'center', opacity: 0.5 }}>
+            <Icon name="plus" size={18} />
+          </div>
+          <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Slot {slot}
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%',
+            display: 'grid', placeItems: 'center',
+            background: 'color-mix(in srgb, var(--holo) 15%, rgba(4,9,18,.8))',
+            border: '1px solid var(--holo)',
+            boxShadow: '0 0 12px -4px var(--holo)',
+            fontSize: 22,
+          }}>
+            {habilidad.icono || '⚡'}
+          </div>
+          <div style={{ textAlign: 'center', minWidth: 0 }}>
+            <div className="nx-display" style={{ fontSize: 10, color: 'var(--holo)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>
+              {habilidad.nombre}
+            </div>
+            <div className="nx-data" style={{ fontSize: 8, color: 'var(--txt-faint)', marginTop: 2 }}>
+              {habilidad.forma > 0 ? FORMA_LABELS[habilidad.forma - 1] : 'Universal'}
+            </div>
+          </div>
+        </>
+      )}
+    </button>
+  );
+}
+
+function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex }) {
+  const [loading, setLoading] = useState(false);
+
+  if (!open) return null;
+
+  const grouped = {};
+  for (const h of habilidades) {
+    const key = h.forma;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(h);
+  }
+  const formaKeys = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(4,7,15,0.85)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'rgba(5,10,22,0.98)', border: '1px solid var(--holo-line)',
+        borderRadius: 'var(--radius-lg)', boxShadow: '0 24px 80px rgba(0,0,0,.7)',
+        width: '100%', maxWidth: 560, maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid var(--holo-line)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: 'var(--holo)' }}><Icon name="zap" size={16} /></span>
+          <div style={{ flex: 1 }}>
+            <div className="nx-display" style={{ fontSize: 14 }}>Seleccionar Habilidad</div>
+            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 2 }}>SLOT {slotIndex} — Elige una técnica de combate</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost" style={{ padding: 7 }} onClick={onClose}>
+            <Icon name="x" size={15} />
+          </button>
+        </div>
+
+        {/* Lista scrollable agrupada por forma */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {habilidades.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--txt-faint)' }}>
+              <div className="nx-data" style={{ fontSize: 11, letterSpacing: '0.1em' }}>SIN HABILIDADES REGISTRADAS</div>
+            </div>
+          ) : formaKeys.map(forma => (
+            <div key={forma} style={{ marginBottom: 18 }}>
+              {/* Encabezado de forma */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <img
+                  src={forma > 0 ? FORMA_IMGS[forma - 1] : undefined}
+                  alt=""
+                  style={{ width: 28, height: 28, objectFit: 'contain', filter: 'drop-shadow(0 0 4px var(--holo))' }}
+                />
+                <div>
+                  <div className="nx-display" style={{ fontSize: 10, color: 'var(--holo)' }}>
+                    {forma === 0 ? 'Universal' : `Forma ${forma} — ${FORMA_LABELS[forma - 1]}`}
+                  </div>
+                  <div className="nx-data" style={{ fontSize: 8, color: 'var(--txt-faint)' }}>{grouped[forma].length} habilidades</div>
+                </div>
+              </div>
+
+              {/* Grid de habilidades */}
+              <div style={{ display: 'grid', gap: 6 }}>
+                {grouped[forma].map(h => (
+                  <HabilidadPickerRow key={h.id} habilidad={h} onAssign={() => onAssign(h)} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HabilidadPickerRow({ habilidad, onAssign }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 12px', borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,.02)',
+      transition: 'all .15s',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--holo) 8%, transparent)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.background = 'rgba(255,255,255,.02)'; }}
+    >
+      <div style={{
+        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+        display: 'grid', placeItems: 'center', fontSize: 20,
+        background: 'color-mix(in srgb, var(--holo) 12%, rgba(4,9,18,.8))',
+        border: '1px solid var(--holo-line)',
+      }}>
+        {habilidad.icono || '⚡'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt)', lineHeight: 1.2 }}>{habilidad.nombre}</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+          <span className="nx-data" style={{ fontSize: 9, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{habilidad.tipo}</span>
+          {habilidad.costo_fuerza > 0 && (
+            <span className="nx-data" style={{ fontSize: 9, color: 'var(--holo)' }}>⚡ {habilidad.costo_fuerza} fuerza</span>
+          )}
+          {habilidad.damage > 0 && (
+            <span className="nx-data" style={{ fontSize: 9, color: '#ff6b6b' }}>⚔ {habilidad.damage} daño</span>
+          )}
+        </div>
+        {habilidad.efecto && (
+          <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 3, lineHeight: 1.4 }}>{habilidad.efecto}</div>
+        )}
+      </div>
+      <button
+        className="nx-btn nx-btn-accent nx-btn-sm"
+        onClick={onAssign}
+        style={{ padding: '6px 14px', flexShrink: 0, fontSize: 11 }}
+      >
+        Asignar
+      </button>
+    </div>
+  );
+}
+
 export function PersonajeView({ S, user, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
   const me = S.byId('you') ?? {};
@@ -695,6 +874,67 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
+
+  // Habilidades state
+  const [habilidades, setHabilidades] = useState([]);
+  const [slotPicker, setSlotPicker] = useState(null); // 1..4
+  const [slots, setSlots] = useState({
+    1: user?.character?.habilidad_1_data ?? null,
+    2: user?.character?.habilidad_2_data ?? null,
+    3: user?.character?.habilidad_3_data ?? null,
+    4: user?.character?.habilidad_4_data ?? null,
+  });
+
+  useEffect(() => {
+    if (!user?.character) return;
+    setSlots({
+      1: user.character.habilidad_1_data ?? null,
+      2: user.character.habilidad_2_data ?? null,
+      3: user.character.habilidad_3_data ?? null,
+      4: user.character.habilidad_4_data ?? null,
+    });
+  }, [user?.character?.id]);
+
+  const loadHabilidades = () => {
+    if (habilidades.length > 0) return;
+    const token = localStorage.getItem('nx-token');
+    fetch('/api/rol-habilidades', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.habilidades) setHabilidades(d.habilidades); })
+      .catch(() => {});
+  };
+
+  const handleOpenPicker = (slot) => {
+    loadHabilidades();
+    setSlotPicker(slot);
+  };
+
+  const handleAssignHabilidad = async (habilidad) => {
+    const slot = slotPicker;
+    setSlotPicker(null);
+    const newSlots = { ...slots, [slot]: habilidad };
+    setSlots(newSlots);
+    const token = localStorage.getItem('nx-token');
+    try {
+      const res = await fetch('/api/character/habilidades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          habilidad_1: newSlots[1]?.id ?? null,
+          habilidad_2: newSlots[2]?.id ?? null,
+          habilidad_3: newSlots[3]?.id ?? null,
+          habilidad_4: newSlots[4]?.id ?? null,
+        }),
+      });
+      if (res.ok) {
+        toast('Habilidad asignada', { tone: 'success', icon: 'check', desc: `"${habilidad.nombre}" equipada en slot ${slot}` });
+      }
+    } catch {
+      toast('Error al guardar habilidad', { tone: 'error', icon: 'x' });
+      setSlots(slots);
+    }
+  };
 
   if (!user?.character) {
     return <CharacterCreation user={user} S={S} onCharacterCreated={onCharacterCreated} />;
@@ -944,6 +1184,23 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
             })}
           </div>
         </Panel>
+
+        {/* Habilidades */}
+        <Panel kicker="Técnicas de Combate" title="Habilidades" icon="zap">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+            {[1, 2, 3, 4].map(slot => (
+              <HabilidadSlot key={slot} slot={slot} habilidad={slots[slot]} onClick={() => handleOpenPicker(slot)} />
+            ))}
+          </div>
+        </Panel>
+
+        <HabilidadPickerModal
+          open={slotPicker !== null}
+          onClose={() => setSlotPicker(null)}
+          habilidades={habilidades}
+          onAssign={handleAssignHabilidad}
+          slotIndex={slotPicker}
+        />
 
         <Panel kicker="Atributos" title="Distribución de Stats" icon="trending"
           right={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip><Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>Asignar</Btn></div>}>

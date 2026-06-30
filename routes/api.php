@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\WidgetLayoutController;
 use App\Http\Controllers\Api\ModuloEntrenamientoController;
 use App\Http\Controllers\Api\InstagramController;
 use App\Http\Controllers\Api\SesionEntrenamientoController;
+use App\Http\Controllers\Api\RolHabilidadController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -47,6 +48,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character', [CharacterController::class, 'upsert']);
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
     Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
+    Route::post('/character/habilidades', [CharacterController::class, 'updateHabilidades']);
+    Route::get('/rol-habilidades', [RolHabilidadController::class, 'index']);
 
     Route::get('/combatants', [CombatantController::class, 'index']);
     Route::get('/combatants/{handle}', [CombatantController::class, 'show']);

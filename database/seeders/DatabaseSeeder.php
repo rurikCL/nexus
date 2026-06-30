@@ -298,5 +298,8 @@ class DatabaseSeeder extends Seeder
         foreach ($trainingLogs as $log) {
             TrainingDay::create(array_merge($log, ['user_id' => $valentina->id]));
         }
+
+        // ─── Habilidades de Rol ────────────────────────────────────────
+        $this->call(RolHabilidadesSeeder::class);
     }
 }

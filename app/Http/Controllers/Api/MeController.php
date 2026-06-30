@@ -34,7 +34,7 @@ class MeController extends Controller
         $character = $user->character;
 
         if ($character) {
-            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema']);
+            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'habilidad1', 'habilidad2', 'habilidad3', 'habilidad4']);
         }
 
         $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
@@ -75,6 +75,14 @@ class MeController extends Controller
                 'iniciativa'  => $character->iniciativa,
                 'punteria'      => $character->punteria,
                 'puntos_libres' => $character->puntos_libres ?? 5,
+                'habilidad_1'   => $character->habilidad_1,
+                'habilidad_2'   => $character->habilidad_2,
+                'habilidad_3'   => $character->habilidad_3,
+                'habilidad_4'   => $character->habilidad_4,
+                'habilidad_1_data' => $character->habilidad1,
+                'habilidad_2_data' => $character->habilidad2,
+                'habilidad_3_data' => $character->habilidad3,
+                'habilidad_4_data' => $character->habilidad4,
                 'gold'          => $character->gold,
                 'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
