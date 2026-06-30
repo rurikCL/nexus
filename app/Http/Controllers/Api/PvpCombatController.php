@@ -46,10 +46,14 @@ class PvpCombatController extends Controller
         $defInit = random_int(1, 6) + $defenderStats['iniciativa'];
         $firstTurn = $atkInit >= $defInit ? $attacker->id : $defender->id;
 
+        $defChar = $defender->character;
         $combat = PvpCombat::create([
             'attacker_id'        => $attacker->id,
             'defender_id'        => $defender->id,
-            'lugar_id'           => $defender->character->map_lugar_id,
+            'lugar_id'           => $defChar->map_lugar_id,
+            'zona_id'            => $defChar->map_zona_id,
+            'planeta_id'         => $defChar->map_planeta_id,
+            'sistema_id'         => $defChar->map_sistema_id,
             'attacker_hp'        => $attackerStats['vida'],
             'defender_hp'        => $defenderStats['vida'],
             'attacker_escudo'    => $attackerStats['escudo'],
@@ -233,6 +237,9 @@ class PvpCombatController extends Controller
             'attacker_def_bonus' => $c->attacker_def_bonus,
             'defender_def_bonus' => $c->defender_def_bonus,
             'lugar_id'           => $c->lugar_id,
+            'zona_id'            => $c->zona_id,
+            'planeta_id'         => $c->planeta_id,
+            'sistema_id'         => $c->sistema_id,
             'log'                => $c->log ?? [],
             'attacker'           => $this->formatPlayer($att),
             'defender'           => $this->formatPlayer($def),

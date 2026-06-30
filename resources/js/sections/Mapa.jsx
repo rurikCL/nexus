@@ -2922,13 +2922,23 @@ function PvpCombatScreen({ combat: initialCombat, userId, onClose }) {
   const oppEscudo  = combat.i_am_attacker ? combat.defender_escudo    : combat.attacker_escudo;
   const oppDefBonus= combat.i_am_attacker ? combat.defender_def_bonus : combat.attacker_def_bonus;
 
-  /* fondo del lugar */
+  /* fondo: busca imagen en lugar → zona → planeta → sistema del defensor */
   useEffect(() => {
-    if (!combat.lugar_id) return;
-    apiFetch(`/map/lugares/${combat.lugar_id}`)
-      .then(d => d?.lugar?.imagen && setBgImg(mediaUrl(d.lugar.imagen)))
+    const token = localStorage.getItem('nx-token');
+    const get = (url) => fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }).then(r => r.json());
+
+    const tryLugar   = () => combat.lugar_id   ? get(`/api/map/lugares/${combat.lugar_id}`).then(d => d?.lugar?.imagen   || null) : Promise.resolve(null);
+    const tryZona    = () => combat.zona_id    ? get(`/api/map/zonas/${combat.zona_id}`).then(d => d?.zona?.imagen     || null) : Promise.resolve(null);
+    const tryPlaneta = () => combat.planeta_id ? get(`/api/map/planetas/${combat.planeta_id}`).then(d => d?.planeta?.imagen  || null) : Promise.resolve(null);
+    const trySistema = () => combat.sistema_id ? get(`/api/map/sistemas/${combat.sistema_id}`).then(d => d?.sistema?.imagen || null) : Promise.resolve(null);
+
+    tryLugar()
+      .then(img => img || tryZona())
+      .then(img => img || tryPlaneta())
+      .then(img => img || trySistema())
+      .then(img => { if (img) setBgImg(mediaUrl(img)); })
       .catch(() => {});
-  }, [combat.lugar_id]);
+  }, [combat.lugar_id, combat.zona_id, combat.planeta_id, combat.sistema_id]);
 
   /* polling cuando no es mi turno */
   useEffect(() => {

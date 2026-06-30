@@ -10,6 +10,7 @@ use App\Models\MapPlaneta;
 use App\Models\MapZona;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
+use App\Models\PvpCombat;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -114,9 +115,22 @@ class MapController extends Controller
 
     public function updateLocation(Request $request): JsonResponse
     {
-        $character = $request->user()?->character;
+        $user = $request->user();
+        $character = $user?->character;
         if (! $character) {
             return response()->json(['ok' => false], 404);
+        }
+
+        $activeCombat = PvpCombat::where('status', 'active')
+            ->where(fn($q) => $q->where('attacker_id', $user->id)->orWhere('defender_id', $user->id))
+            ->exists();
+
+        if ($activeCombat) {
+            return response()->json([
+                'ok'      => false,
+                'blocked' => true,
+                'message' => 'No puedes moverte mientras tienes un combate activo.',
+            ], 422);
         }
 
         $character->update([

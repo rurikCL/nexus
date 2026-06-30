@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PvpCombat extends Model
 {
     protected $fillable = [
-        'attacker_id', 'defender_id', 'lugar_id',
+        'attacker_id', 'defender_id', 'lugar_id', 'zona_id', 'planeta_id', 'sistema_id',
         'attacker_hp', 'defender_hp', 'attacker_escudo', 'defender_escudo',
         'attacker_def_bonus', 'defender_def_bonus',
         'current_turn', 'status', 'log',
@@ -19,6 +19,9 @@ class PvpCombat extends Model
         'attacker_id'        => 'integer',
         'defender_id'        => 'integer',
         'lugar_id'           => 'integer',
+        'zona_id'            => 'integer',
+        'planeta_id'         => 'integer',
+        'sistema_id'         => 'integer',
         'attacker_hp'        => 'integer',
         'defender_hp'        => 'integer',
         'attacker_escudo'    => 'integer',
