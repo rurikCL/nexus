@@ -806,13 +806,16 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
 }
 
 /* ─── VISTA PLANETA ─────────────────────────────────────── */
-function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, myUserId }) {
+function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, onPlanetaImagen, myUserId }) {
   const [planeta, setPlaneta] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     apiFetch(`/map/planetas/${planetaId}`)
-      .then((d) => setPlaneta(d.planeta))
+      .then((d) => {
+        setPlaneta(d.planeta);
+        onPlanetaImagen?.(d.planeta.imagen ? mediaUrl(d.planeta.imagen) : null);
+      })
       .catch(() => toast('Error cargando planeta', { tone: 'error', icon: 'x' }))
       .finally(() => setLoading(false));
   }, [planetaId]);
@@ -1024,7 +1027,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
 }
 
 /* ─── VISTA ZONA ────────────────────────────────────────── */
-function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, onAttack, myUserId }) {
+function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, onAttack, onZonaImagen, myUserId }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1034,7 +1037,10 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
 
   useEffect(() => {
     apiFetch(`/map/zonas/${zonaId}`)
-      .then((d) => setZona(d.zona))
+      .then((d) => {
+        setZona(d.zona);
+        onZonaImagen?.(d.zona.imagen ? mediaUrl(d.zona.imagen) : null);
+      })
       .catch(() => toast('Error cargando zona', { tone: 'error', icon: 'x' }))
       .finally(() => setLoading(false));
   }, [zonaId]);
@@ -3229,7 +3235,9 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [zona, setZona]           = useState(null);
   const [lugar, setLugar]         = useState(null);
   const [dialogNpc, setDialogNpc] = useState(null);
-  const [lugarImagen, setLugarImagen]   = useState(null);
+  const [lugarImagen,   setLugarImagen]   = useState(null);
+  const [zonaImagen,    setZonaImagen]    = useState(null);
+  const [planetaImagen, setPlanetaImagen] = useState(null);
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
   const [activePvpCombat, setActivePvpCombat] = useState(null);
@@ -3296,11 +3304,13 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
 
   const goGalaxy  = () => {
     setNivel('galaxy'); setSistema(null); setPlaneta(null); setZona(null); setLugar(null);
+    setLugarImagen(null); setZonaImagen(null); setPlanetaImagen(null);
     updateLocation({ sistema_id: null, planeta_id: null, zona_id: null, lugar_id: null });
     setMapLocation?.(null);
   };
   const goSistema = (tgt) => {
     setNivel('sistema'); setPlaneta(null); setZona(null); setLugar(null);
+    setLugarImagen(null); setZonaImagen(null); setPlanetaImagen(null);
     if (tgt?.id) {
       updateLocation({ sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null });
       setMapLocation?.({
@@ -3314,6 +3324,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   };
   const goPlaneta = (tgt) => {
     setNivel('planeta'); setZona(null); setLugar(null);
+    setLugarImagen(null); setZonaImagen(null);
     if (tgt?.id) {
       updateLocation({ sistema_id: sistema?.id ?? null, planeta_id: tgt.id, zona_id: null, lugar_id: null });
       setMapLocation?.({
@@ -3327,6 +3338,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   };
   const goZona = (tgt) => {
     setNivel('zona'); setLugar(null);
+    setLugarImagen(null);
     if (tgt?.id) {
       updateLocation({ sistema_id: sistema?.id ?? null, planeta_id: planeta?.id ?? null, zona_id: tgt.id, lugar_id: null });
       setMapLocation?.({
@@ -3395,6 +3407,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onTravel={triggerTravel}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
+          onPlanetaImagen={setPlanetaImagen}
           myUserId={userId}
         />
       )}
@@ -3407,6 +3420,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           breadcrumbs={crumbsZona}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
+          onZonaImagen={setZonaImagen}
           myUserId={userId}
         />
       )}
@@ -3453,7 +3467,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           busy={pvpChallenging}
           onConfirm={handleStartPvp}
           onCancel={() => setPvpAttackTarget(null)}
-          lugarImagen={lugarImagen}
+          lugarImagen={lugarImagen || zonaImagen || planetaImagen}
         />
       )}
 
