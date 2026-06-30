@@ -1686,7 +1686,7 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
-function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
+function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart }) {
   const isAI = Boolean(npc.prompt);
   const [messages, setMessages]   = useState([]);
   const [phase, setPhase]         = useState('greeting');
@@ -1694,7 +1694,6 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
   const [aiInput, setAiInput]     = useState('');
   const [remaining, setRemaining] = useState(null);
   const bottomRef                 = useRef(null);
-  const [combat, setCombat]       = useState(false);
   const [typingInMsg, setTypingInMsg] = useState(null); // { text, visibleChars }
   const [npcTextDelay, setNpcTextDelay] = useState(30); // ms por carácter
 
@@ -1729,12 +1728,13 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
   const isHostil = npcTipo === 'hostil';
   const isNeutral = !isAliado && !isHostil;
 
-  const startCombat = useCallback(() => setCombat(true), []);
+  const startCombat = useCallback(() => { onCombatStart?.(isHostil); onClose(); }, [isHostil]);
 
   const attackNeutral = useCallback(() => {
     postReputation(-50);
     toast('−50 reputación por atacar a un neutral', { tone: 'error', icon: 'shield' });
-    setCombat(true);
+    onCombatStart?.(false);
+    onClose();
   }, []);
 
   const checkHostileAttack = useCallback(() => {
@@ -1742,7 +1742,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
     if (Math.floor(Math.random() * 6) + 1 >= 4) {
       setTimeout(() => {
         showNpcMsg(`*${npc.nombre} adopta una postura amenazante y ataca*`);
-        setTimeout(() => setCombat(true), 900);
+        setTimeout(() => { onCombatStart?.(isHostil); onClose(); }, 900);
       }, 1100);
     }
   }, [isHostil, npc.nombre]);
@@ -2186,21 +2186,6 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose }) {
 
       </div>
 
-      {combat && (
-        <NpcCombatScreen
-          npc={npc}
-          player={getPlayerCombatStats(userCharacter)}
-          lugarImagen={lugarImagen}
-          onVictory={() => {
-            if (isHostil) { postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' }); }
-            else          { postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' }); }
-            setCombat(false);
-            onClose();
-          }}
-          onDefeat={() => { setCombat(false); onClose(); }}
-          onFlee={() => setCombat(false)}
-        />
-      )}
     </div>
   );
 }
@@ -2757,6 +2742,9 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [zona, setZona]           = useState(null);
   const [lugar, setLugar]         = useState(null);
   const [dialogNpc, setDialogNpc] = useState(null);
+  const [activeNpcCombat, setActiveNpcCombat] = useState(() => {
+    try { const s = localStorage.getItem('nx-npc-combat'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [lugarImagen,   setLugarImagen]   = useState(null);
   const [zonaImagen,    setZonaImagen]    = useState(null);
   const [planetaImagen, setPlanetaImagen] = useState(null);
@@ -2997,7 +2985,19 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
       )}
 
       {/* Diálogo RPG */}
-      {dialogNpc && <DialogoRPG npc={dialogNpc} userCharacter={userCharacter} lugarImagen={lugarImagen} onClose={() => setDialogNpc(null)} />}
+      {dialogNpc && (
+        <DialogoRPG
+          npc={dialogNpc}
+          userCharacter={userCharacter}
+          lugarImagen={lugarImagen}
+          onClose={() => setDialogNpc(null)}
+          onCombatStart={(isHostil) => {
+            const session = { npc: dialogNpc, player: getPlayerCombatStats(userCharacter), lugarImagen, isHostil };
+            localStorage.setItem('nx-npc-combat', JSON.stringify(session));
+            setActiveNpcCombat(session);
+          }}
+        />
+      )}
 
       {/* Chat con jugador */}
       {chatTarget && (
@@ -3005,6 +3005,24 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           target={chatTarget}
           myUserId={userId}
           onClose={() => setChatTarget(null)}
+        />
+      )}
+
+      {/* Combate NPC activo — overlay persistente */}
+      {activeNpcCombat && (
+        <NpcCombatScreen
+          npc={activeNpcCombat.npc}
+          player={activeNpcCombat.player ?? getPlayerCombatStats(userCharacter)}
+          lugarImagen={activeNpcCombat.lugarImagen || lugarImagen}
+          initialState={activeNpcCombat.state}
+          onVictory={() => {
+            localStorage.removeItem('nx-npc-combat');
+            if (activeNpcCombat.isHostil) { postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' }); }
+            else { postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' }); }
+            setActiveNpcCombat(null);
+          }}
+          onDefeat={() => { localStorage.removeItem('nx-npc-combat'); setActiveNpcCombat(null); }}
+          onFlee={() => { localStorage.removeItem('nx-npc-combat'); setActiveNpcCombat(null); }}
         />
       )}
 

@@ -12,7 +12,9 @@ const mediaUrl = (path) => {
   return `/storage${cleanPath}`;
 };
 
-export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee }) {
+const NPC_COMBAT_LS = 'nx-npc-combat';
+
+export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee, initialState }) {
   const d6 = () => Math.floor(Math.random() * 6) + 1;
 
   const maxPlayer = { vida: player.vida, escudo: player.escudo };
@@ -24,26 +26,26 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const npcIni = Math.max(npc.iniciativa, 1);
   const npcPnt = npc.punteria ?? 0;
 
-  const [playerHp,     setPlayerHp]     = useState({ vida: maxPlayer.vida, escudo: maxPlayer.escudo });
-  const [npcHp,        setNpcHp]        = useState({ vida: maxNpc.vida,    escudo: maxNpc.escudo    });
-  const [phase,        setPhase]        = useState('initiative');
-  const [currTurn,     setCurrTurn]     = useState(null);
-  const [log,          setLog]          = useState([]);
+  const [playerHp,     setPlayerHp]     = useState(initialState?.playerHp ?? { vida: maxPlayer.vida, escudo: maxPlayer.escudo });
+  const [npcHp,        setNpcHp]        = useState(initialState?.npcHp    ?? { vida: maxNpc.vida,    escudo: maxNpc.escudo    });
+  const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
+  const [currTurn,     setCurrTurn]     = useState(initialState?.currTurn  ?? null);
+  const [log,          setLog]          = useState(initialState?.log       ?? []);
   const [npcBusy,      setNpcBusy]      = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
 
   /* Estado de habilidades del jugador */
-  const [playerFuerza, setPlayerFuerza] = useState(0);
-  const [cooldowns,    setCooldowns]    = useState({});  // { habId: turnsLeft }
-  const [playerBuffs,  setPlayerBuffs]  = useState([]);  // [{ stat, turns }]
-  const [npcDebuffs,   setNpcDebuffs]   = useState([]);  // [{ stat, turns }] debuffs aplicados al NPC
+  const [playerFuerza, setPlayerFuerza] = useState(initialState?.playerFuerza ?? 0);
+  const [cooldowns,    setCooldowns]    = useState(initialState?.cooldowns     ?? {});
+  const [playerBuffs,  setPlayerBuffs]  = useState(initialState?.playerBuffs  ?? []);
+  const [npcDebuffs,   setNpcDebuffs]   = useState(initialState?.npcDebuffs   ?? []);
 
   /* Forma actual y cambio de estancia */
   const habPool    = player.all_habilidades_data ?? {};
   const porForma   = player.habilidades_por_forma ?? {};
-  const [currentForma,  setCurrentForma]  = useState(player.current_forma ?? 1);
+  const [currentForma,  setCurrentForma]  = useState(initialState?.currentForma ?? player.current_forma ?? 1);
   const [stancePicker,  setStancePicker]  = useState(false);
 
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
@@ -86,8 +88,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     return { escudo: newEsc, vida: rem > 0 ? Math.max(0, hp.vida - rem) : hp.vida };
   };
 
-  /* Iniciativa */
+  /* Iniciativa — solo si es combate nuevo (no restaurado) */
   useEffect(() => {
+    if (initialState) return;
     const pR = d6(); const nR = d6();
     const pT = pR + player.iniciativa; const nT = nR + npcIni;
     const first = pT >= nT ? 'player' : 'npc';
@@ -103,6 +106,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       if (first === 'player') setPlayerFuerza(2);
     }, 500);
   }, []);
+
+  /* Persistir estado en localStorage cada vez que cambia algo de batalla */
+  useEffect(() => {
+    if (phase === 'initiative' || phase === 'victory' || phase === 'defeat' || phase === 'fled') return;
+    localStorage.setItem(NPC_COMBAT_LS, JSON.stringify({
+      npc, player, lugarImagen,
+      state: { playerHp, npcHp, phase, currTurn, log, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma },
+    }));
+  }, [playerHp, npcHp, phase, currTurn, log, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma]);
 
   /* Turno del NPC */
   useEffect(() => {
@@ -428,13 +440,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           {phase === 'victory' && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
               <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>⚡ VICTORIA</span>
-              <button onClick={onVictory} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
+              <button onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); onVictory?.(); }} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
             </div>
           )}
           {phase === 'defeat' && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
               <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
-              <button onClick={onDefeat} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
+              <button onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); onDefeat?.(); }} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
             </div>
           )}
           {phase === 'battle' && (
@@ -538,7 +550,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-                <ActionBtn onClick={() => { setPhase('fled'); onFlee?.(); }}
+                <ActionBtn onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); setPhase('fled'); onFlee?.(); }}
                   bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
                   hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
                 >
