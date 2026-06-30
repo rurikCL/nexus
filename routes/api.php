@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\MapController;
+use App\Http\Controllers\Api\NpcChatController;
 use App\Http\Controllers\Api\BetController;
 use App\Http\Controllers\Api\CharacterController;
 use App\Http\Controllers\Api\CharacterPhotoController;
@@ -41,7 +42,6 @@ Route::post('/broadcasting/auth', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [MeController::class, 'show']);
-    Route::get('/tutors', [MeController::class, 'tutors']);
 
     Route::post('/character', [CharacterController::class, 'upsert']);
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
@@ -136,6 +136,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sesiones/{id}/attend',      [SesionEntrenamientoController::class, 'attend']);
     Route::delete('/sesiones/{id}/attend',    [SesionEntrenamientoController::class, 'unattend']);
     Route::post('/sesiones/{id}/close',       [SesionEntrenamientoController::class, 'close']);
+
+    // NPC AI chat
+    Route::get('/npcs/{id}/chat/status', [NpcChatController::class, 'status']);
+    Route::post('/npcs/{id}/chat',       [NpcChatController::class, 'chat']);
 
     // Admin CRUD
     Route::prefix('admin')->group(function () {
