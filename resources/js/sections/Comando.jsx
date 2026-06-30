@@ -725,9 +725,12 @@ function HabilidadSlot({ slot, habilidad, onClick }) {
             background: 'color-mix(in srgb, var(--holo) 15%, rgba(4,9,18,.8))',
             border: '1px solid var(--holo)',
             boxShadow: '0 0 12px -4px var(--holo)',
-            fontSize: 22,
+            overflow: 'hidden',
           }}>
-            {habilidad.icono || '⚡'}
+            {habilidad.icono_url
+              ? <img src={habilidad.icono_url} alt={habilidad.nombre} style={{ width: 32, height: 32, objectFit: 'contain', filter: 'drop-shadow(0 0 4px var(--holo))' }} />
+              : <span style={{ fontSize: 22 }}>⚡</span>
+            }
           </div>
           <div style={{ textAlign: 'center', minWidth: 0 }}>
             <div className="nx-display" style={{ fontSize: 10, color: 'var(--holo)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>
@@ -831,11 +834,15 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
     >
       <div style={{
         width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-        display: 'grid', placeItems: 'center', fontSize: 20,
+        display: 'grid', placeItems: 'center',
         background: 'color-mix(in srgb, var(--holo) 12%, rgba(4,9,18,.8))',
         border: '1px solid var(--holo-line)',
+        overflow: 'hidden',
       }}>
-        {habilidad.icono || '⚡'}
+        {habilidad.icono_url
+          ? <img src={habilidad.icono_url} alt={habilidad.nombre} style={{ width: 30, height: 30, objectFit: 'contain' }} />
+          : <span style={{ fontSize: 20 }}>⚡</span>
+        }
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt)', lineHeight: 1.2 }}>{habilidad.nombre}</div>

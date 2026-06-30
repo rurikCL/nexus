@@ -30,6 +30,19 @@ const mediaUrl = (path) => {
   return `/storage${cleanPath}`;
 };
 
+/* Tabla de efectividad (forma atacante → formas que supera) */
+const BEATS = {
+  1: [6], 6: [3], 3: [4], 4: [1],
+  2: [1, 5], 5: [4], 7: [5, 6],
+};
+const isEffective = (atkForma, defForma) => {
+  if (!atkForma || !defForma) return false;
+  return (BEATS[atkForma] ?? []).includes(defForma);
+};
+
+const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
+const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
+
 export default function PvpCombatScreen({ combat: initialCombat, userId, onClose, lugarImagen }) {
   const [combat, setCombat]             = useState(initialCombat);
   const [busy, setBusy]                 = useState(false);
@@ -47,7 +60,16 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const oppEscudo   = combat.i_am_attacker ? combat.defender_escudo    : combat.attacker_escudo;
   const oppDefBonus = combat.i_am_attacker ? combat.defender_def_bonus : combat.attacker_def_bonus;
 
-  /* fondo: si no vino del padre, busca via API lugar → zona → planeta → sistema */
+  const myFuerza   = combat.my_fuerza    ?? 0;
+  const myCooldowns = combat.my_cooldowns ?? {};
+  const myBuffs    = combat.my_buffs     ?? [];
+  const myDebuffs  = combat.my_debuffs   ?? [];
+  const oppDebuffs = combat.opp_debuffs  ?? [];
+  const oppBuffs   = combat.opp_buffs    ?? [];
+  const myLastForma  = combat.my_last_forma  ?? 0;
+  const oppLastForma = combat.opp_last_forma ?? 0;
+
+  /* Fondo */
   useEffect(() => {
     if (lugarImagen) return;
     const token = localStorage.getItem('nx-token');
@@ -67,10 +89,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     })();
   }, [combat.lugar_id, combat.zona_id, combat.planeta_id, combat.sistema_id]);
 
-  /* polling cuando no es mi turno */
+  /* Polling cuando no es mi turno o cuando el combate está pendiente */
   useEffect(() => {
     clearInterval(pollRef.current);
-    if (combat.status !== 'active' || combat.is_my_turn) return;
+    const shouldPoll = combat.status === 'pending' || (combat.status === 'active' && !combat.is_my_turn);
+    if (!shouldPoll) return;
     pollRef.current = setInterval(() => {
       apiFetch(`/pvp/${combat.id}`)
         .then(d => { if (d?.combat) setCombat(d.combat); })
@@ -83,36 +106,46 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [combat.log]);
 
-  const doAction = async (skill) => {
+  const doAction = async (skillId) => {
     if (busy || !combat.is_my_turn || combat.status !== 'active') return;
     setBusy(true);
     try {
-      const d = await apiPost(`/pvp/${combat.id}/action`, { skill });
+      const d = await apiPost(`/pvp/${combat.id}/action`, { skill: String(skillId) });
       if (d?.combat) setCombat(d.combat);
     } catch { /* toast shown by apiPost */ }
     finally { setBusy(false); }
   };
 
-  const isOver = combat.status !== 'active';
-  const iWon   = (combat.status === 'attacker_won' &&  combat.i_am_attacker)
-              || (combat.status === 'defender_won' && !combat.i_am_attacker);
+  const isPending  = combat.status === 'pending';
+  const isDeclined = combat.status === 'declined';
+  const isOver = combat.status !== 'active' && !isPending;
+  const iWon   = (combat.status === 'attacker_won'  &&  combat.i_am_attacker)
+              || (combat.status === 'defender_won'  && !combat.i_am_attacker)
+              || (combat.status === 'fled_attacker' && !combat.i_am_attacker)
+              || (combat.status === 'fled_defender' &&  combat.i_am_attacker);
   const iFled  = (combat.status === 'fled_attacker' &&  combat.i_am_attacker)
               || (combat.status === 'fled_defender' && !combat.i_am_attacker);
 
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
 
+  /* Stats efectivos para mostrar en HUD */
+  const countBuff   = (arr, stat) => (arr ?? []).filter(b => b.stat === stat).length;
+  const effMyStat   = (stat) => (me.stats?.[stat] ?? 0) + countBuff(myBuffs, stat)  - countBuff(myDebuffs, stat);
+  const effOppStat  = (stat) => (opp.stats?.[stat] ?? 0) + countBuff(oppBuffs, stat) - countBuff(oppDebuffs, stat);
+
   const myBadges = [
-    { l: 'ATQ', v: me.stats.ataque,                    c: '#ff7043' },
-    { l: 'DEF', v: me.stats.defensa + (myDefBonus||0), c: '#38cdf0', bonus: myDefBonus > 0 },
-    { l: 'PNT', v: me.stats.punteria,                  c: '#10b981' },
-    { l: 'INI', v: me.stats.iniciativa,                c: '#E6B325' },
+    { l: 'ATQ', v: effMyStat('ataque'),    c: '#ff7043', bonus: countBuff(myBuffs, 'ataque')   > 0, dim: countBuff(myDebuffs, 'ataque')   > 0 },
+    { l: 'DEF', v: effMyStat('defensa') + (myDefBonus || 0), c: '#38cdf0', bonus: countBuff(myBuffs, 'defensa') > 0 },
+    { l: 'PNT', v: effMyStat('punteria'),  c: '#10b981', bonus: countBuff(myBuffs, 'punteria') > 0 },
+    { l: 'INI', v: me.stats?.iniciativa ?? 0, c: '#E6B325' },
   ];
   const oppBadges = [
-    { l: 'ATQ', v: opp.stats.ataque,                     c: '#ff7043' },
-    { l: 'DEF', v: opp.stats.defensa + (oppDefBonus||0), c: '#38cdf0', bonus: oppDefBonus > 0 },
-    { l: 'PNT', v: opp.stats.punteria,                   c: '#10b981' },
-    { l: 'INI', v: opp.stats.iniciativa,                 c: '#E6B325' },
+    { l: 'ATQ', v: effOppStat('ataque'),   c: '#ff7043', dim: countBuff(oppDebuffs, 'ataque')   > 0 },
+    { l: 'DEF', v: effOppStat('defensa') + (oppDefBonus || 0), c: '#38cdf0', dim: countBuff(oppDebuffs, 'defensa') > 0 },
+    { l: 'PNT', v: effOppStat('punteria'), c: '#10b981', dim: countBuff(oppDebuffs, 'punteria') > 0 },
+    { l: 'INI', v: opp.stats?.iniciativa ?? 0, c: '#E6B325' },
+    ...(oppLastForma > 0 ? [{ l: `F${formaLabel(oppLastForma)}`, v: null, c: 'rgba(200,200,255,0.5)' }] : []),
   ];
 
   const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, align }) => {
@@ -165,8 +198,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               <span key={b.l} style={{
                 fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
                 background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
+                opacity: b.dim ? 0.55 : 1,
                 ...(b.bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
-              }}>{b.l} {b.v}{b.bonus ? ' ▲' : ''}</span>
+              }}>{b.l}{b.v !== null ? ` ${b.v}` : ''}{b.bonus ? ' ▲' : b.dim ? ' ▼' : ''}</span>
             ))}
           </div>
         </div>
@@ -174,12 +208,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     );
   };
 
-  const SKILLS = [
-    { id: 'melee',     icon: '⚔', name: 'Melee',        desc: `ATQ ${me.stats?.ataque ?? 0}` },
-    { id: 'distancia', icon: '◎', name: 'Distancia',     desc: `PNT ${me.stats?.punteria ?? 0}` },
-    { id: 'postura',   icon: '🛡', name: 'Postura',       desc: '+4 DEF 1 turno' },
-    { id: 'potente',   icon: '⚡', name: 'Golpe Potente', desc: 'ATQ ×1.5' },
-  ];
+  const myHabilidades = me.habilidades ?? [];
 
   const screen = (
     <div style={{
@@ -195,14 +224,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         borderRadius: 18, overflow: 'hidden',
         boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(56,205,240,0.18)',
       }}>
-        {/* Fondo: imagen del lugar vía <img> */}
         {bgImg
           ? <img src={bgImg} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
           : <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, #0c1e42, #020810)' }} />
         }
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
-        {/* Contenido sobre el fondo */}
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
         {/* Oponente HUD — arriba derecha */}
@@ -214,8 +241,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           />
         </div>
 
-        {/* Mi HUD — abajo izquierda, sobre la action bar */}
-        <div style={{ position: 'absolute', bottom: 90, left: 14, zIndex: 10, width: 'clamp(200px, 36%, 320px)' }}>
+        {/* Mi HUD — abajo izquierda */}
+        <div style={{ position: 'absolute', bottom: 100, left: 14, zIndex: 10, width: 'clamp(200px, 36%, 320px)' }}>
           <HUD
             hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
             nombre={me.name} handle={me.handle} photoUrl={me.photo_url}
@@ -223,11 +250,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           />
         </div>
 
-        {/* Log de combate — izquierda, colapsable */}
+        {/* Log de combate */}
         <div style={{
           position: 'absolute', left: 14, top: 14, zIndex: 10,
           width: logCollapsed ? 40 : 'clamp(160px, 26%, 280px)',
-          maxHeight: 'calc(100% - 260px)',
+          maxHeight: 'calc(100% - 270px)',
           background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
           borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
           display: 'flex', flexDirection: 'column',
@@ -258,7 +285,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               {!combat.is_my_turn && combat.status === 'active' && (
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 3 }}>
                   <span style={{ fontSize: 9, color: '#ff9999', fontFamily: 'var(--font-data)' }}>{opp.name}…</span>
-                  {[0,1,2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: '#ff9999', animation: `nx-pulse 0.8s ${i*0.2}s infinite` }} />)}
+                  {[0, 1, 2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: '#ff9999', animation: `nx-pulse 0.8s ${i * 0.2}s infinite` }} />)}
                 </div>
               )}
             </div>
@@ -270,14 +297,30 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
           background: 'rgba(3,7,16,0.96)', backdropFilter: 'blur(16px)',
           borderTop: '1px solid rgba(56,205,240,0.13)',
-          padding: '8px 16px', display: 'flex', gap: 8, alignItems: 'stretch',
-          minHeight: 82,
+          padding: '6px 16px 8px', display: 'flex', flexDirection: 'column', gap: 5,
+          minHeight: 92,
         }}>
-          {isOver ? (
+          {isPending ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <span style={{ color: '#E6B325', fontSize: 12, fontFamily: 'var(--font-data)', letterSpacing: '0.15em' }}>
+                ⚔ RETO ENVIADO
+              </span>
+              <span style={{ color: 'rgba(150,200,255,0.45)', fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.12em', animation: 'nx-pulse 1.5s infinite' }}>
+                ESPERANDO RESPUESTA DE {(opp.name ?? '').toUpperCase()}…
+              </span>
+            </div>
+          ) : isOver ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-              {iWon ? (
+              {isDeclined ? (
                 <>
-                  <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>⚡ VICTORIA</span>
+                  <span style={{ fontSize: 16, color: '#E6B325', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>✗ RETO RECHAZADO</span>
+                  <button onClick={() => onClose({})} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(230,179,37,0.10)', border: '1px solid rgba(230,179,37,0.4)', color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CERRAR</button>
+                </>
+              ) : iWon ? (
+                <>
+                  <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>
+                    {(combat.status === 'fled_attacker' || combat.status === 'fled_defender') ? '🏃 RIVAL HUYÓ — VICTORIA' : '⚡ VICTORIA'}
+                  </span>
                   <button onClick={() => onClose({ won: true })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
                 </>
               ) : iFled ? (
@@ -300,38 +343,133 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             </div>
           ) : (
             <>
-              {SKILLS.map(sk => {
-                const active = !busy;
-                return (
-                  <button key={sk.id} onClick={() => active && doAction(sk.id)} disabled={!active} style={{
-                    flex: 1, minWidth: 0, borderRadius: 8, cursor: active ? 'pointer' : 'not-allowed',
-                    background: active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)',
-                    border: `1px solid ${active ? 'rgba(56,205,240,0.26)' : 'rgba(56,205,240,0.09)'}`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    gap: 3, padding: '6px 4px', opacity: active ? 1 : 0.36, transition: 'all 0.13s',
-                  }}
-                    onMouseEnter={e => { if (active) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; e.currentTarget.style.boxShadow = '0 0 14px -5px rgba(56,205,240,0.4)'; } }}
-                    onMouseLeave={e => { e.currentTarget.style.background = active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)'; e.currentTarget.style.borderColor = active ? 'rgba(56,205,240,0.26)' : 'rgba(56,205,240,0.09)'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <span style={{ fontSize: 18, lineHeight: 1 }}>{sk.icon}</span>
-                    <span style={{ fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{sk.name}</span>
-                    <span style={{ fontSize: 7, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{sk.desc}</span>
-                  </button>
-                );
-              })}
-              <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '4px 0' }} />
-              <button onClick={() => doAction('flee')} disabled={busy} style={{
-                minWidth: 56, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-                background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-              }}
-                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
-              >
-                <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
-                <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
-              </button>
+              {/* Barra de Fuerza */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', flexShrink: 0 }}>FUERZA</span>
+                <div style={{ display: 'flex', gap: 2, flex: 1 }}>
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <div key={i} style={{
+                      flex: 1, height: 6, borderRadius: 2,
+                      background: i < myFuerza ? '#38cdf0' : 'rgba(56,205,240,0.12)',
+                      transition: 'background 0.2s ease',
+                    }} />
+                  ))}
+                </div>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{myFuerza}/10</span>
+              </div>
+
+              {/* Botones de habilidades */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1 }}>
+                {myHabilidades.length === 0 ? (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
+                  </div>
+                ) : (
+                  myHabilidades.map(hab => {
+                    const habId    = String(hab.id);
+                    const cdLeft   = myCooldowns[habId] ?? 0;
+                    const noFuerza = myFuerza < hab.costo_fuerza;
+                    const effective = isEffective(hab.forma, oppLastForma);
+                    const disabled = busy || cdLeft > 0 || noFuerza;
+                    const isSelf   = hab.objetivo === 'self';
+
+                    return (
+                      <button key={hab.id}
+                        onClick={() => !disabled && doAction(hab.id)}
+                        disabled={disabled}
+                        style={{
+                          flex: 1, minWidth: 0, borderRadius: 8,
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          background: effective
+                            ? 'rgba(16,185,129,0.12)'
+                            : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
+                          border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
+                          position: 'relative', transition: 'all 0.13s',
+                        }}
+                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } }}
+                        onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; }}
+                      >
+                        {/* Overlay de cooldown */}
+                        {cdLeft > 0 && (
+                          <div style={{
+                            position: 'absolute', inset: 0, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(0,0,0,0.55)', zIndex: 2,
+                          }}>
+                            <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
+                          </div>
+                        )}
+                        {/* Indicador de efectividad */}
+                        {effective && (
+                          <div style={{
+                            position: 'absolute', top: 3, right: 4, fontSize: 8,
+                            color: '#10b981', fontFamily: 'var(--font-data)', fontWeight: 700, zIndex: 1,
+                          }}>EFF</div>
+                        )}
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
+                        <span style={{
+                          fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
+                        }}>{hab.nombre}</span>
+                        <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                          {!isSelf && (
+                            <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
+                              DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
+                            </span>
+                          )}
+                          {isSelf && (
+                            <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                          )}
+                          <span style={{
+                            fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                            background: noFuerza ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                            color: noFuerza ? '#ff6b6b' : '#38cdf0',
+                          }}>
+                            ⚡{hab.costo_fuerza}
+                          </span>
+                          {hab.forma > 0 && (
+                            <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
+                              F{formaLabel(hab.forma)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+
+                {/* Ataque desarmado */}
+                <button onClick={() => doAction('unarmed')} disabled={busy} style={{
+                  minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                  background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+                }}
+                  onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
+                >
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>✊</span>
+                  <span style={{ fontSize: 7, color: '#ff9955', fontFamily: 'var(--font-data)', letterSpacing: '0.04em' }}>DESARMADO</span>
+                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG 2</span>
+                </button>
+
+                {/* Huir */}
+                <button onClick={() => doAction('flee')} disabled={busy} style={{
+                  minWidth: 50, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                  background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+                }}
+                  onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
+                >
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
+                  <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
+                </button>
+              </div>
             </>
           )}
         </div>

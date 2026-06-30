@@ -11,6 +11,14 @@ use Illuminate\Support\Facades\Storage;
 
 class MeController extends Controller
 {
+    private function habilidadResource(?\App\Models\RolHabilidad $h): ?array
+    {
+        if (!$h) return null;
+        return array_merge($h->toArray(), [
+            'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
+        ]);
+    }
+
     public function tutors(): JsonResponse
     {
         $tutors = User::whereIn('tier', ['caballero', 'maestro', 'granmaestro'])
@@ -79,10 +87,10 @@ class MeController extends Controller
                 'habilidad_2'   => $character->habilidad_2,
                 'habilidad_3'   => $character->habilidad_3,
                 'habilidad_4'   => $character->habilidad_4,
-                'habilidad_1_data' => $character->habilidad1,
-                'habilidad_2_data' => $character->habilidad2,
-                'habilidad_3_data' => $character->habilidad3,
-                'habilidad_4_data' => $character->habilidad4,
+                'habilidad_1_data' => $this->habilidadResource($character->habilidad1),
+                'habilidad_2_data' => $this->habilidadResource($character->habilidad2),
+                'habilidad_3_data' => $this->habilidadResource($character->habilidad3),
+                'habilidad_4_data' => $this->habilidadResource($character->habilidad4),
                 'gold'          => $character->gold,
                 'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp

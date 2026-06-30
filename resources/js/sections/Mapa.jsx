@@ -1616,6 +1616,12 @@ function getPlayerCombatStats(character) {
     punteria:   character?.punteria   ?? Math.round((t + k) / 2 * 0.5),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
+    habilidades: [
+      character?.habilidad_1_data,
+      character?.habilidad_2_data,
+      character?.habilidad_3_data,
+      character?.habilidad_4_data,
+    ].filter(Boolean),
   };
 }
 
@@ -2465,6 +2471,144 @@ function ChatModal({ target, myUserId, onClose }) {
   );
 }
 
+/* ─── RETO DE COMBATE RECIBIDO ───────────────────────────── */
+function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
+  const [busy, setBusy] = useState(false);
+  const attacker  = combat.attacker;
+  const color     = SABER_COLORS[attacker?.saber_color] ?? '#38cdf0';
+  const photoUrl  = mediaUrl(attacker?.photo_url);
+
+  const AUTH = () => {
+    const t = localStorage.getItem('nx-token');
+    return { Accept: 'application/json', Authorization: `Bearer ${t}` };
+  };
+  const apiPost = (path, data) =>
+    fetch(`/api${path}`, {
+      method: 'POST',
+      headers: { ...AUTH(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+
+  const handleAccept = async () => {
+    setBusy(true);
+    try {
+      const d = await apiPost(`/pvp/${combat.id}/accept`, {});
+      if (d?.combat) onAccept(d.combat);
+    } catch {
+      toast('Error al aceptar el reto', { tone: 'error', icon: 'x' });
+      setBusy(false);
+    }
+  };
+
+  const handleDecline = async () => {
+    setBusy(true);
+    try {
+      await apiPost(`/pvp/${combat.id}/decline`, {});
+      onDecline();
+    } catch {
+      toast('Error al rechazar el reto', { tone: 'error', icon: 'x' });
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      {lugarImagen
+        ? <img src={lugarImagen} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+        : null
+      }
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: lugarImagen
+          ? 'linear-gradient(to bottom, rgba(4,7,15,0.55) 0%, rgba(4,7,15,0.82) 60%, rgba(4,7,15,0.97) 100%)'
+          : 'rgba(4,7,15,0.92)',
+      }} />
+
+      <div style={{
+        position: 'relative', zIndex: 1,
+        width: '100%', maxWidth: 400, padding: '0 24px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
+      }}>
+        {/* Etiqueta transmisión entrante */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div className="nx-display" style={{
+            fontSize: 9, color: '#E6B325', letterSpacing: '0.22em',
+            border: '1px solid rgba(230,179,37,0.4)', padding: '3px 14px', borderRadius: 2,
+          }}>
+            TRANSMISIÓN ENTRANTE
+          </div>
+          <div className="nx-display" style={{
+            fontSize: 14, color: '#fff', letterSpacing: '0.14em',
+            textShadow: '0 0 24px rgba(230,179,37,0.4)',
+          }}>
+            ⚔ RETO DE COMBATE
+          </div>
+        </div>
+
+        {/* Avatar del retador */}
+        <div style={{
+          width: 80, height: 80, borderRadius: 14,
+          border: `2px solid ${color}`,
+          overflow: 'hidden',
+          display: 'grid', placeItems: 'center',
+          background: 'rgba(255,255,255,0.06)',
+          boxShadow: `0 0 24px ${color}44`,
+        }}>
+          {photoUrl
+            ? <img src={photoUrl} alt={attacker?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Icon name="user" size={32} style={{ color, opacity: 0.6 }} />
+          }
+        </div>
+
+        {/* Info del retador */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
+            {attacker?.name ?? 'Desconocido'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>
+            @{attacker?.handle ?? '?'} te reta a un duelo
+          </div>
+        </div>
+
+        {/* Botones */}
+        <div style={{ display: 'flex', gap: 14, width: '100%' }}>
+          <button
+            onClick={handleDecline}
+            disabled={busy}
+            style={{
+              flex: 1, padding: '12px 0', borderRadius: 10, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.18)',
+              color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', fontSize: 11,
+              letterSpacing: '0.14em', transition: 'all 0.14s', opacity: busy ? 0.4 : 1,
+            }}
+            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.12)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; e.currentTarget.style.color = '#ff6b6b'; } }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+          >
+            RECHAZAR
+          </button>
+          <button
+            onClick={handleAccept}
+            disabled={busy}
+            style={{
+              flex: 1, padding: '12px 0', borderRadius: 10, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.5)',
+              color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 11,
+              letterSpacing: '0.14em', transition: 'all 0.14s', opacity: busy ? 0.4 : 1,
+            }}
+            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(230,179,37,0.26)'; e.currentTarget.style.borderColor = '#E6B325'; } }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.14)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.5)'; }}
+          >
+            {busy ? 'INICIANDO…' : '⚔ ACEPTAR'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── CONFIRMACIÓN DE ATAQUE PVP ────────────────────────── */
 function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
   const color    = SABER_COLORS[target?.saber_color] ?? '#38cdf0';
@@ -2571,13 +2715,48 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [activePvpCombat, setActivePvpCombat] = useState(null);
   const [pvpAttackTarget, setPvpAttackTarget]  = useState(null);
   const [pvpChallenging, setPvpChallenging]    = useState(false);
+  const [pendingChallenge, setPendingChallenge] = useState(null);
+  const pvpPollRef = useRef(null);
 
-  // Comprueba si hay un combate PvP activo al entrar al mapa
+  // Comprueba si hay un combate PvP activo o pendiente al entrar al mapa
   useEffect(() => {
-    apiFetch('/pvp/active')
-      .then(d => { if (d?.combat) setActivePvpCombat(d.combat); })
-      .catch(() => {});
+    const checkCombat = () => {
+      apiFetch('/pvp/active')
+        .then(d => {
+          if (!d?.combat) return;
+          const c = d.combat;
+          if (c.status === 'pending' && !c.i_am_attacker) {
+            setPendingChallenge(c);
+            setActivePvpCombat(null);
+          } else {
+            setActivePvpCombat(c);
+            setPendingChallenge(null);
+          }
+        })
+        .catch(() => {});
+    };
+    checkCombat();
   }, []);
+
+  // Polling para detectar retos entrantes cuando no hay combate activo
+  useEffect(() => {
+    clearInterval(pvpPollRef.current);
+    if (activePvpCombat || pendingChallenge) return;
+    pvpPollRef.current = setInterval(() => {
+      apiFetch('/pvp/active')
+        .then(d => {
+          if (!d?.combat) return;
+          const c = d.combat;
+          if (c.status === 'pending' && !c.i_am_attacker) {
+            setPendingChallenge(c);
+          } else {
+            setActivePvpCombat(c);
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(pvpPollRef.current);
+  }, [activePvpCombat, pendingChallenge]);
 
   const handleAttackUser = (character) => setPvpAttackTarget(character);
 
@@ -2786,6 +2965,19 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           userId={userId}
           onClose={() => setActivePvpCombat(null)}
           lugarImagen={lugarImagen || zonaImagen || planetaImagen}
+        />
+      )}
+
+      {/* Reto de combate recibido — overlay de aceptar/rechazar */}
+      {pendingChallenge && (
+        <PvpChallengeReceived
+          combat={pendingChallenge}
+          lugarImagen={lugarImagen || zonaImagen || planetaImagen}
+          onAccept={(activeCombat) => {
+            setPendingChallenge(null);
+            setActivePvpCombat(activeCombat);
+          }}
+          onDecline={() => setPendingChallenge(null)}
         />
       )}
 

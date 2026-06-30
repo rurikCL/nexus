@@ -71,6 +71,14 @@ class AdminController extends Controller
         };
     }
 
+    private function filterableColumns(string $entity): array
+    {
+        return match ($entity) {
+            'rol_habilidades' => ['tipo', 'forma'],
+            default           => [],
+        };
+    }
+
     public function index(Request $request, string $entity): JsonResponse
     {
         $model = $this->model($entity);
@@ -79,6 +87,12 @@ class AdminController extends Controller
         if ($q = $request->input('q')) {
             $label = $this->labelField($entity);
             $query->where($label, 'like', "%{$q}%");
+        }
+
+        foreach ($this->filterableColumns($entity) as $col) {
+            if ($request->filled($col)) {
+                $query->where($col, $request->input($col));
+            }
         }
 
         if ($withs = $this->withs($entity)) {

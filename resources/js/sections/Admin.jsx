@@ -221,6 +221,10 @@ const ENTITY_CONFIG = {
   /* ── ROL ── */
   rol_habilidades: {
     label: 'Habilidades de Rol', icon: 'zap', group: 'ROL',
+    filters: [
+      { key: 'tipo',  label: 'Tipo',  options: [{ value: 'melee', label: 'Melee' }, { value: 'distancia', label: 'Distancia' }] },
+      { key: 'forma', label: 'Forma', options: [0,1,2,3,4,5,6,7].map(n => ({ value: String(n), label: n === 0 ? 'Universal (0)' : `Forma ${n}` })) },
+    ],
     columns: [
       { key: 'id',           label: 'ID',      w: 52 },
       { key: 'icono',        label: 'Icono',   type: 'image', w: 52 },
@@ -245,6 +249,27 @@ const ENTITY_CONFIG = {
       { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
     ],
     defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, cooldown: 0 },
+  },
+
+  rol_objetos: {
+    label: 'Objetos de Rol', icon: 'box', group: 'ROL',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'tipo', label: 'Tipo', dim: true },
+      { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
+    ],
+    fields: [
+      { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
+      { key: 'tipo',        label: 'Tipo',        type: 'text' },
+      { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
+      { key: 'activo',      label: 'Activo',      type: 'toggle' },
+      { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
+      { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
+      { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
+    ],
+    defaults: { activo: true },
   },
 
   /* ── SISTEMA ── */
@@ -309,27 +334,6 @@ const ENTITY_CONFIG = {
       { key: 'bio',        label: 'Bio',         type: 'textarea', span: 2 },
     ],
     defaults: {},
-  },
-
-  rol_objetos: {
-    label: 'Objetos de Rol', icon: 'box', group: 'SISTEMA',
-    columns: [
-      { key: 'id', label: 'ID', w: 52 },
-      { key: 'nombre', label: 'Nombre', bold: true },
-      { key: 'tipo', label: 'Tipo', dim: true },
-      { key: 'rareza', label: 'Rareza', type: 'rareza' },
-      { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
-    ],
-    fields: [
-      { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'text' },
-      { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
-      { key: 'activo',      label: 'Activo',      type: 'toggle' },
-      { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
-      { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
-      { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
-    ],
-    defaults: { activo: true },
   },
 
   rol_character_objeto: {
@@ -733,12 +737,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [loading, setLoading]   = useState(false);
   const [editRecord, setEditRecord]   = useState(null);  // null=closed, {}=new, {id,...}=edit
   const [deleteId, setDeleteId] = useState(null);
+  const [activeFilters, setActiveFilters] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, per_page: 25 });
       if (search) params.set('q', search);
+      Object.entries(activeFilters).forEach(([k, v]) => { if (v !== '') params.set(k, v); });
       const res = await api('GET', `/admin/${entityKey}?${params}`);
       setData(res);
     } catch (err) {
@@ -746,9 +752,9 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
     } finally {
       setLoading(false);
     }
-  }, [entityKey, page, search]);
+  }, [entityKey, page, search, activeFilters]);
 
-  useEffect(() => { setPage(1); setSearch(''); setSearchInput(''); }, [entityKey]);
+  useEffect(() => { setPage(1); setSearch(''); setSearchInput(''); setActiveFilters({}); }, [entityKey]);
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id) => {
@@ -807,7 +813,28 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
           )}
         </form>
 
+        {/* Filtros específicos de entidad */}
+        {(config.filters ?? []).map(f => (
+          <select
+            key={f.key}
+            className="nx-select"
+            value={activeFilters[f.key] ?? ''}
+            onChange={e => { setActiveFilters(prev => ({ ...prev, [f.key]: e.target.value })); setPage(1); }}
+            style={{ fontSize: 11, minWidth: 110, height: 32, padding: '0 8px' }}
+          >
+            <option value="">— {f.label} —</option>
+            {f.options.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        ))}
+
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {Object.values(activeFilters).some(v => v !== '') && (
+            <Btn kind="ghost" sm onClick={() => { setActiveFilters({}); setPage(1); }}>
+              <Icon name="x" size={11} /> Limpiar
+            </Btn>
+          )}
           <Btn kind="ghost" sm onClick={load} disabled={loading}>
             <Icon name="zap" size={11} />
           </Btn>

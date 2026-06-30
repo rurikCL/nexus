@@ -31,10 +31,33 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [log,          setLog]          = useState([]);
   const [npcBusy,      setNpcBusy]      = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
-  const [defBonus,     setDefBonus]     = useState(0);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
 
+  /* Estado de habilidades del jugador */
+  const [playerFuerza, setPlayerFuerza] = useState(0);
+  const [cooldowns,    setCooldowns]    = useState({});  // { habId: turnsLeft }
+  const [playerBuffs,  setPlayerBuffs]  = useState([]);  // [{ stat, turns }]
+  const [npcDebuffs,   setNpcDebuffs]   = useState([]);  // [{ stat, turns }] debuffs aplicados al NPC
+
+  /* Habilidades equipadas (filtrar nulos) */
+  const habilidades = useMemo(() => (player.habilidades ?? []).filter(Boolean), [player]);
+
+  /* Stats efectivos considerando buffs/debuffs */
+  const countBuff    = (stat) => playerBuffs.filter(b => b.stat === stat).length;
+  const countNpcDeb  = (stat) => npcDebuffs.filter(d => d.stat === stat).length;
+
+  const effPlayerAtk = player.ataque     + countBuff('ataque');
+  const effPlayerDef = player.defensa    + countBuff('defensa');
+  const effPlayerPnt = player.punteria   + countBuff('punteria');
+  const effPlayerMov = player.movimiento + countBuff('movimiento');
+
+  const effNpcAtk = Math.max(1, npcAtk - countNpcDeb('ataque'));
+  const effNpcDef = Math.max(1, npcDef - countNpcDeb('defensa'));
+  const effNpcMov = Math.max(1, npcMov - countNpcDeb('movimiento'));
+  const effNpcPnt = Math.max(0, npcPnt - countNpcDeb('punteria'));
+
+  /* Fondo desde el lugar del NPC */
   useEffect(() => {
     if (bgImg || !npc.LugarID) return;
     const token = localStorage.getItem('nx-token');
@@ -65,6 +88,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       ]);
       setPhase('battle');
       setCurrTurn(first);
+      /* Pre-recuperar fuerza si el jugador actúa primero */
+      if (first === 'player') setPlayerFuerza(2);
     }, 500);
   }, []);
 
@@ -73,32 +98,42 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     if (currTurn !== 'npc' || phase !== 'battle') return;
     setNpcBusy(true);
     const t = setTimeout(() => {
-      const useRanged = npcPnt > 0 && Math.random() > 0.5;
+      /* Leer stats efectivos ahora (closure over current state at render time) */
+      const useRanged = effNpcPnt > 0 && Math.random() > 0.5;
       let entries = [];
       let newHp;
-      const curDef = player.defensa + defBonus;
+
       if (useRanged) {
         const [aR, dR] = [d6(), d6()];
-        const [aT, dT] = [aR + npcPnt, dR + player.movimiento];
+        const [aT, dT] = [aR + effNpcPnt, dR + effPlayerMov];
         entries = [
-          { text: `${npc.nombre} dispara: 1d6(${aR})+${npcPnt}=${aT}`, type: 'info' },
-          { text: `Esquivas: 1d6(${dR})+${player.movimiento}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} dispara: 1d6(${aR})+${effNpcPnt}=${aT}`, type: 'info' },
+          { text: `Esquivas: 1d6(${dR})+${effPlayerMov}=${dT}`, type: 'info' },
         ];
-        newHp = aT > dT ? applyDmg(npcAtk, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Te impactan! −${npcAtk} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
+        newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
+        entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcAtk} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
       } else {
         const [aR, dR] = [d6(), d6()];
-        const [aT, dT] = [aR + npcAtk, dR + curDef];
+        const [aT, dT] = [aR + effNpcAtk, dR + effPlayerDef];
         entries = [
-          { text: `${npc.nombre} ataca: 1d6(${aR})+${npcAtk}=${aT}`, type: 'info' },
-          { text: `Defiendes: 1d6(${dR})+${curDef}=${dT}${defBonus > 0 ? ` (+${defBonus} postura)` : ''}`, type: 'info' },
+          { text: `${npc.nombre} ataca: 1d6(${aR})+${effNpcAtk}=${aT}`, type: 'info' },
+          { text: `Defiendes: 1d6(${dR})+${effPlayerDef}=${dT}`, type: 'info' },
         ];
-        newHp = aT > dT ? applyDmg(npcAtk, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Golpe! −${npcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
+        newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
+        entries.push(aT > dT ? { text: `¡Golpe! −${effNpcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
       }
-      setDefBonus(0);
+
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
       setPlayerHp(newHp);
+
+      /* Al fin del turno NPC: decrementar cooldowns/buffs y pre-recuperar fuerza del jugador */
+      setCooldowns(prev => Object.fromEntries(
+        Object.entries(prev).filter(([, v]) => v > 1).map(([k, v]) => [k, v - 1])
+      ));
+      setPlayerBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
+      setNpcDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
+      setPlayerFuerza(prev => Math.min(10, prev + 2));
+
       setNpcBusy(false);
       if (newHp.vida <= 0) {
         setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length }]);
@@ -108,21 +143,76 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       }
     }, 1500);
     return () => clearTimeout(t);
-  }, [currTurn, phase, defBonus]);
+  }, [currTurn, phase]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
-  const doPlayerAttack = (label, atkVal, defVal, dmg) => {
+  /* Ejecutar habilidad del jugador */
+  const doPlayerSkill = (hab) => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy) return;
+    const habId = String(hab.id);
+    if ((cooldowns[habId] ?? 0) > 0) return;
+    if (playerFuerza < hab.costo_fuerza) return;
+
+    const habBuff   = Array.isArray(hab.buff)   ? hab.buff   : [];
+    const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
+
+    /* Gastar fuerza */
+    setPlayerFuerza(prev => prev - hab.costo_fuerza);
+
+    /* Registrar cooldown */
+    if (hab.cooldown > 0) {
+      setCooldowns(prev => ({ ...prev, [habId]: hab.cooldown }));
+    }
+
+    /* Aplicar buff al jugador */
+    if (habBuff.length > 0) {
+      setPlayerBuffs(prev => [...prev, ...habBuff.map(stat => ({ stat, turns: 2 }))]);
+    }
+
+    const entries = [];
+
+    /* ─── Habilidad de auto-buff ────────────────────────────────── */
+    if (hab.objetivo === 'self') {
+      const buffDesc = habBuff.map(s => `+1 ${s}`).join(', ');
+      entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
+      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
+      setCurrTurn('npc');
+      return;
+    }
+
+    /* ─── Habilidad de ataque ───────────────────────────────────── */
+    const useAtq  = hab.tipo === 'melee';
+    const atkVal  = useAtq ? effPlayerAtk : effPlayerPnt;
+    const defVal  = useAtq ? effNpcDef    : effNpcMov;
+
     const [aR, dR] = [d6(), d6()];
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const hit = aT > dT;
-    const newNpcHp = hit ? applyDmg(dmg, npcHp) : { ...npcHp };
-    const entries = [
-      { text: `${label}: 1d6(${aR})+${atkVal}=${aT} vs 1d6(${dR})+${defVal}=${dT}`, type: 'info' },
-      hit ? { text: `¡Impacto! −${dmg} daño`, type: 'success' } : { text: 'Bloqueado / Falla', type: 'miss' },
-    ];
+
+    entries.push({
+      text: `${player.nombre} usa "${hab.nombre}": 1d6(${aR})+${atkVal}=${aT} vs 1d6(${dR})+${defVal}=${dT}`,
+      type: 'info',
+    });
+
+    let newNpcHp = { ...npcHp };
+    if (hit) {
+      const dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
+      /* vs NPC: forma siempre neutral (sin bonus de efectividad) */
+      newNpcHp = applyDmg(dmg, npcHp);
+      entries.push({ text: `¡Impacto! −${dmg} daño`, type: 'success' });
+
+      if (habDebuff.length > 0) {
+        setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: 2 }))]);
+        entries.push({ text: `${npc.nombre}: ${habDebuff.map(s => `−1 ${s}`).join(', ')} (2 turnos)`, type: 'info' });
+      }
+    } else {
+      entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
+    }
+
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
     setNpcHp(newNpcHp);
+
     if (newNpcHp.vida <= 0) {
       setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
       setPhase('victory');
@@ -133,28 +223,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
   const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy;
 
-  const SKILLS = useMemo(() => [
-    { id: 'melee',   icon: '⚔', name: 'Melee',        desc: `ATQ ${player.ataque}`,    fn: () => doPlayerAttack('Melee',       player.ataque,   npcDef, player.ataque) },
-    { id: 'ranged',  icon: '◎', name: 'Distancia',     desc: `PNT ${player.punteria}`,  fn: () => doPlayerAttack('Distancia',   player.punteria, npcMov, player.ataque), disabled: player.punteria <= 0 },
-    { id: 'postura', icon: '🛡', name: 'Postura',       desc: '+4 DEF 1 turno',         fn: () => { setDefBonus(4); setLog(prev => [...prev, { text: 'Postura defensiva — +4 DEF este turno', type: 'info', id: prev.length }]); setCurrTurn('npc'); } },
-    { id: 'potente', icon: '⚡', name: 'Golpe Potente', desc: `ATQ ×1.5`,               fn: () => doPlayerAttack('Golpe potente', player.ataque, npcDef, Math.ceil(player.ataque * 1.5)) },
-  ], [isPlayerTurn, npcHp, playerHp, defBonus]);
-
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
   const LOG_C = { info: 'rgba(200,225,255,0.78)', success: '#10b981', danger: '#ff6b6b', miss: 'rgba(150,180,220,0.5)', system: '#38cdf0' };
 
+  /* Badges para HUDs */
   const npcBadges = [
-    { l: 'ATQ', v: npcAtk, c: '#ff7043' }, { l: 'DEF', v: npcDef, c: '#38cdf0' },
-    { l: 'MOV', v: npcMov, c: '#a78bfa' }, { l: 'INI', v: npcIni, c: '#E6B325' },
-    ...(npcPnt > 0 ? [{ l: 'PNT', v: npcPnt, c: '#10b981' }] : []),
+    { l: 'ATQ', v: effNpcAtk, c: '#ff7043', dim: effNpcAtk < npcAtk },
+    { l: 'DEF', v: effNpcDef, c: '#38cdf0', dim: effNpcDef < npcDef },
+    { l: 'MOV', v: effNpcMov, c: '#a78bfa', dim: effNpcMov < npcMov },
+    { l: 'INI', v: npcIni,    c: '#E6B325' },
+    ...(npcPnt > 0 ? [{ l: 'PNT', v: effNpcPnt, c: '#10b981', dim: effNpcPnt < npcPnt }] : []),
   ];
   const playerBadges = [
-    { l: 'ATQ', v: player.ataque,              c: '#ff7043' },
-    { l: 'DEF', v: player.defensa + defBonus,  c: '#38cdf0', bonus: defBonus > 0 },
-    { l: 'MOV', v: player.movimiento,          c: '#a78bfa' },
-    { l: 'INI', v: player.iniciativa,          c: '#E6B325' },
-    ...(player.punteria > 0 ? [{ l: 'PNT', v: player.punteria, c: '#10b981' }] : []),
+    { l: 'ATQ', v: effPlayerAtk, c: '#ff7043', bonus: effPlayerAtk > player.ataque },
+    { l: 'DEF', v: effPlayerDef, c: '#38cdf0', bonus: effPlayerDef > player.defensa },
+    { l: 'MOV', v: effPlayerMov, c: '#a78bfa', bonus: effPlayerMov > player.movimiento },
+    { l: 'INI', v: player.iniciativa, c: '#E6B325' },
+    ...(player.punteria > 0 ? [{ l: 'PNT', v: effPlayerPnt, c: '#10b981', bonus: effPlayerPnt > player.punteria }] : []),
   ];
 
   const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, align }) => {
@@ -205,8 +291,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
               <span key={b.l} style={{
                 fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
                 background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
+                opacity: b.dim ? 0.55 : 1,
                 ...(b.bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
-              }}>{b.l} {b.v}{b.bonus ? ' ▲' : ''}</span>
+              }}>{b.l} {b.v}{b.bonus ? ' ▲' : b.dim ? ' ▼' : ''}</span>
             ))}
           </div>
         </div>
@@ -225,6 +312,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; }}
     >{children}</button>
   );
+
+  /* Icono por tipo de habilidad */
+  const tipoIcon = (tipo) => tipo === 'melee' ? '⚔' : '◎';
+  const formaLabel = (f) => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
 
   const screen = (
     <div style={{
@@ -258,7 +349,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
 
         {/* Jugador HUD — abajo izquierda */}
-        <div style={{ position: 'absolute', bottom: 82, left: 14, zIndex: 10, width: 'clamp(190px, 36%, 260px)' }}>
+        <div style={{ position: 'absolute', bottom: 90, left: 14, zIndex: 10, width: 'clamp(190px, 36%, 260px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={player.photo}
@@ -270,7 +361,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         <div style={{
           position: 'absolute', left: 14, top: 14, zIndex: 10,
           width: logCollapsed ? 40 : 'clamp(150px, 26%, 240px)',
-          maxHeight: 'calc(100% - 250px)',
+          maxHeight: 'calc(100% - 260px)',
           background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
           borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
           display: 'flex', flexDirection: 'column',
@@ -303,7 +394,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
               {npcBusy && (
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 3 }}>
                   <span style={{ fontSize: 9, color: '#ff9999', fontFamily: 'var(--font-data)' }}>{npc.nombre}…</span>
-                  {[0,1,2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: '#ff9999', animation: `nx-pulse 0.8s ${i*0.2}s infinite` }} />)}
+                  {[0, 1, 2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: '#ff9999', animation: `nx-pulse 0.8s ${i * 0.2}s infinite` }} />)}
                 </div>
               )}
             </div>
@@ -315,8 +406,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
           background: 'rgba(3,7,16,0.96)', backdropFilter: 'blur(16px)',
           borderTop: '1px solid rgba(56,205,240,0.13)',
-          padding: '8px 12px', display: 'flex', gap: 6, alignItems: 'stretch',
-          minHeight: 76,
+          padding: '6px 12px 8px', display: 'flex', flexDirection: 'column', gap: 5,
+          minHeight: 90,
         }}>
           {phase === 'initiative' && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -337,49 +428,101 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           )}
           {phase === 'battle' && (
             <>
-              {SKILLS.map(sk => {
-                const active = isPlayerTurn && !sk.disabled;
-                return (
-                  <button key={sk.id} onClick={() => active && sk.fn()} disabled={!active} style={{
-                    flex: 1, minWidth: 0, borderRadius: 8, cursor: active ? 'pointer' : 'not-allowed',
-                    background: active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)',
-                    border: `1px solid ${active ? 'rgba(56,205,240,0.26)' : 'rgba(56,205,240,0.09)'}`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    gap: 3, padding: '6px 4px', opacity: active ? 1 : 0.36, transition: 'all 0.13s',
-                  }}
-                    onMouseEnter={e => { if (active) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; e.currentTarget.style.boxShadow = '0 0 14px -5px rgba(56,205,240,0.4)'; } }}
-                    onMouseLeave={e => { e.currentTarget.style.background = active ? 'rgba(56,205,240,0.08)' : 'rgba(56,205,240,0.03)'; e.currentTarget.style.borderColor = active ? 'rgba(56,205,240,0.26)' : 'rgba(56,205,240,0.09)'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <span style={{ fontSize: 18, lineHeight: 1 }}>{sk.icon}</span>
-                    <span style={{ fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{sk.name}</span>
-                    <span style={{ fontSize: 7, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{sk.desc}</span>
-                  </button>
-                );
-              })}
+              {/* Barra de Fuerza */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', flexShrink: 0 }}>FUERZA</span>
+                <div style={{ display: 'flex', gap: 2, flex: 1 }}>
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <div key={i} style={{
+                      flex: 1, height: 6, borderRadius: 2,
+                      background: i < playerFuerza ? '#38cdf0' : 'rgba(56,205,240,0.12)',
+                      transition: 'background 0.2s ease',
+                    }} />
+                  ))}
+                </div>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{playerFuerza}/10</span>
+              </div>
 
-              <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '4px 0' }} />
+              {/* Botones de habilidades */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1 }}>
+                {habilidades.length === 0 ? (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
+                  </div>
+                ) : (
+                  habilidades.map(hab => {
+                    const habId    = String(hab.id);
+                    const cdLeft   = cooldowns[habId] ?? 0;
+                    const noFuerza = playerFuerza < hab.costo_fuerza;
+                    const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
+                    const isSelf   = hab.objetivo === 'self';
 
-              <ActionBtn disabled bg="rgba(255,255,255,0.04)" border="rgba(255,255,255,0.09)" hoverBg="" hoverBorder="" minW={52}>
-                <span style={{ fontSize: 18, lineHeight: 1 }}>🎒</span>
-                <span style={{ fontSize: 8, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>ÍTEM</span>
-              </ActionBtn>
+                    return (
+                      <button key={hab.id} onClick={() => !disabled && doPlayerSkill(hab)}
+                        disabled={disabled}
+                        style={{
+                          flex: 1, minWidth: 0, borderRadius: 8,
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          background: disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
+                          border: `1px solid ${disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
+                          position: 'relative', transition: 'all 0.13s',
+                        }}
+                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } }}
+                        onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; }}
+                      >
+                        {/* Overlay de cooldown */}
+                        {cdLeft > 0 && (
+                          <div style={{
+                            position: 'absolute', inset: 0, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'rgba(0,0,0,0.55)', zIndex: 2,
+                          }}>
+                            <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
+                          </div>
+                        )}
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
+                        <span style={{
+                          fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
+                        }}>{hab.nombre}</span>
+                        <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                          {!isSelf && (
+                            <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                              DMG {hab.damage}
+                            </span>
+                          )}
+                          {isSelf && (
+                            <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                          )}
+                          <span style={{
+                            fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                            background: noFuerza && isPlayerTurn ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                            color: noFuerza && isPlayerTurn ? '#ff6b6b' : '#38cdf0',
+                          }}>
+                            ⚡{hab.costo_fuerza}
+                          </span>
+                          {hab.forma > 0 && (
+                            <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
+                              F{formaLabel(hab.forma)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
 
-              <ActionBtn onClick={() => doPlayerAttack('Desarmado', 2, npcDef, 3)} disabled={!isPlayerTurn}
-                bg={isPlayerTurn ? 'rgba(230,179,37,0.08)' : 'rgba(230,179,37,0.03)'}
-                border={isPlayerTurn ? 'rgba(230,179,37,0.28)' : 'rgba(230,179,37,0.09)'}
-                hoverBg="rgba(230,179,37,0.18)" hoverBorder="rgba(230,179,37,0.5)" minW={60}
-              >
-                <span style={{ fontSize: 18, lineHeight: 1 }}>👊</span>
-                <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)', opacity: isPlayerTurn ? 1 : 0.5 }}>DESARMADO</span>
-              </ActionBtn>
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-              <ActionBtn onClick={() => { setPhase('fled'); onFlee?.(); }}
-                bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
-                hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
-              >
-                <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
-                <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
-              </ActionBtn>
+                <ActionBtn onClick={() => { setPhase('fled'); onFlee?.(); }}
+                  bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
+                  hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
+                >
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
+                  <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
+                </ActionBtn>
+              </div>
             </>
           )}
         </div>

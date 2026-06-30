@@ -148,6 +148,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pvp/active',          [PvpCombatController::class, 'active']);
     Route::get('/pvp/{id}',            [PvpCombatController::class, 'show']);
     Route::post('/pvp/{id}/action',    [PvpCombatController::class, 'action']);
+    Route::post('/pvp/{id}/accept',    [PvpCombatController::class, 'accept']);
+    Route::post('/pvp/{id}/decline',   [PvpCombatController::class, 'decline']);
 
     // NPC AI chat
     Route::get('/npcs/{id}/chat/status', [NpcChatController::class, 'status']);
