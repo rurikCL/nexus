@@ -1616,12 +1616,17 @@ function getPlayerCombatStats(character) {
     punteria:   character?.punteria   ?? Math.round((t + k) / 2 * 0.5),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
-    habilidades: [
-      character?.habilidad_1_data,
-      character?.habilidad_2_data,
-      character?.habilidad_3_data,
-      character?.habilidad_4_data,
-    ].filter(Boolean),
+    current_forma:         character?.current_forma ?? 1,
+    habilidades_por_forma: character?.habilidades_por_forma ?? {},
+    all_habilidades_data:  character?.all_habilidades_data  ?? {},
+    /* current form's habilidades for backward compat */
+    habilidades: (() => {
+      const forma   = character?.current_forma ?? 1;
+      const por     = character?.habilidades_por_forma ?? {};
+      const allHabs = character?.all_habilidades_data  ?? {};
+      const ids     = Array.isArray(por[String(forma)]) ? por[String(forma)] : [];
+      return ids.filter(Boolean).map(id => allHabs[String(id)]).filter(Boolean);
+    })(),
   };
 }
 

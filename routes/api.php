@@ -48,7 +48,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character', [CharacterController::class, 'upsert']);
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
     Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
-    Route::post('/character/habilidades', [CharacterController::class, 'updateHabilidades']);
+    Route::post('/character/habilidades',        [CharacterController::class, 'updateHabilidades']);
+    Route::post('/character/aprender-habilidad', [CharacterController::class, 'aprenderHabilidad']);
     Route::get('/rol-habilidades', [RolHabilidadController::class, 'index']);
 
     Route::get('/combatants', [CombatantController::class, 'index']);

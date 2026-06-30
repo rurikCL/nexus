@@ -101,10 +101,9 @@ class CharacterController extends Controller
     public function updateHabilidades(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'habilidad_1' => 'nullable|exists:rol_habilidades,id',
-            'habilidad_2' => 'nullable|exists:rol_habilidades,id',
-            'habilidad_3' => 'nullable|exists:rol_habilidades,id',
-            'habilidad_4' => 'nullable|exists:rol_habilidades,id',
+            'forma'    => 'required|integer|min:1|max:7',
+            'slots'    => 'required|array',
+            'slots.*'  => 'nullable|exists:rol_habilidades,id',
         ]);
 
         $character = $request->user()->character;
@@ -112,9 +111,32 @@ class CharacterController extends Controller
             return response()->json(['error' => 'Sin personaje'], 404);
         }
 
-        $character->update($data);
+        $formaSlots     = is_array($character->habilidades_por_forma) ? $character->habilidades_por_forma : [];
+        $slots          = $data['slots'];
+        $normalized     = [(string)1 => null, (string)2 => null, (string)3 => null, (string)4 => null];
+        foreach ($slots as $k => $v) {
+            if (array_key_exists((string)$k, $normalized)) {
+                $normalized[(string)$k] = $v ? (int)$v : null;
+            }
+        }
+        $formaSlots[(string)$data['forma']] = array_values($normalized);
+        $character->habilidades_por_forma   = $formaSlots;
+        $character->current_forma           = $data['forma'];
+        $character->save();
 
-        return response()->json(['character' => $character]);
+        return response()->json(['ok' => true]);
+    }
+
+    public function aprenderHabilidad(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'habilidad_id' => 'required|exists:rol_habilidades,id',
+        ]);
+
+        $user = $request->user();
+        $user->habilidadesAprendidas()->syncWithoutDetaching([$data['habilidad_id']]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function updateReputation(Request $request): JsonResponse

@@ -301,5 +301,8 @@ class DatabaseSeeder extends Seeder
 
         // ─── Habilidades de Rol ────────────────────────────────────────
         $this->call(RolHabilidadesSeeder::class);
+
+        // ─── Habilidades aprendidas (inicial) ─────────────────────────
+        $this->call(RolHabilidadesAprendidasSeeder::class);
     }
 }

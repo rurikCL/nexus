@@ -40,8 +40,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [playerBuffs,  setPlayerBuffs]  = useState([]);  // [{ stat, turns }]
   const [npcDebuffs,   setNpcDebuffs]   = useState([]);  // [{ stat, turns }] debuffs aplicados al NPC
 
-  /* Habilidades equipadas (filtrar nulos) */
-  const habilidades = useMemo(() => (player.habilidades ?? []).filter(Boolean), [player]);
+  /* Forma actual y cambio de estancia */
+  const habPool    = player.all_habilidades_data ?? {};
+  const porForma   = player.habilidades_por_forma ?? {};
+  const [currentForma,  setCurrentForma]  = useState(player.current_forma ?? 1);
+  const [stancePicker,  setStancePicker]  = useState(false);
+
+  const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
+
+  /* Habilidades de la forma actual (del pool, sin fetch adicional) */
+  const habilidades = useMemo(() => {
+    const slotIds = Array.isArray(porForma[String(currentForma)]) ? porForma[String(currentForma)] : [];
+    return slotIds.filter(Boolean).map(id => habPool[String(id)]).filter(Boolean);
+  }, [currentForma]);
 
   /* Stats efectivos considerando buffs/debuffs */
   const countBuff    = (stat) => playerBuffs.filter(b => b.stat === stat).length;
@@ -515,6 +526,18 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
+                <ActionBtn onClick={() => isPlayerTurn && setStancePicker(true)}
+                  disabled={!isPlayerTurn}
+                  bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)"
+                  hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={54}
+                >
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>F{currentForma}</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+                </ActionBtn>
+
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+
                 <ActionBtn onClick={() => { setPhase('fled'); onFlee?.(); }}
                   bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
                   hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
@@ -526,6 +549,57 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             </>
           )}
         </div>
+
+        {/* Stance Picker Modal */}
+        {stancePicker && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 20,
+            background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} onClick={() => setStancePicker(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'rgba(6,12,26,0.97)', border: '1px solid rgba(139,92,246,0.35)',
+              borderRadius: 16, padding: 24, width: 360, maxWidth: '90%',
+            }}>
+              <div style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
+                🔄 CAMBIAR ESTANCIA — Acabará tu turno
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {FORMA_LABELS_SHORT.map((label, i) => {
+                  const f = i + 1;
+                  const active = f === currentForma;
+                  const hasSlots = Array.isArray(porForma[String(f)]) && porForma[String(f)].some(Boolean);
+                  return (
+                    <button key={f} onClick={() => {
+                      if (active) { setStancePicker(false); return; }
+                      setCurrentForma(f);
+                      setStancePicker(false);
+                      setLog(prev => [...prev, {
+                        text: `🔄 Cambias a Forma ${f} (${label})`,
+                        type: 'info', id: prev.length,
+                      }]);
+                      setCurrTurn('npc');
+                    }} style={{
+                      padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                      background: active ? 'rgba(139,92,246,0.25)' : hasSlots ? 'rgba(139,92,246,0.06)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${active ? '#a78bfa' : hasSlots ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      opacity: active ? 1 : 0.85,
+                    }}>
+                      <div style={{ fontSize: 13, fontFamily: 'var(--font-data)', color: active ? '#a78bfa' : '#fff', fontWeight: 700 }}>F{f}</div>
+                      <div style={{ fontSize: 8, color: 'rgba(200,180,255,0.6)', marginTop: 3, lineHeight: 1.3 }}>{label}</div>
+                      {!hasSlots && <div style={{ fontSize: 7, color: 'rgba(150,150,150,0.5)', marginTop: 2 }}>sin slots</div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={() => setStancePicker(false)} style={{
+                marginTop: 16, width: '100%', padding: '8px', borderRadius: 8, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                color: 'rgba(200,200,255,0.5)', fontSize: 10, fontFamily: 'var(--font-data)',
+              }}>Cancelar</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

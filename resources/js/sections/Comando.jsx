@@ -950,30 +950,42 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
 
-  // Habilidades state
+  // Habilidades state (per-forma)
   const [habilidades, setHabilidades] = useState([]);
-  const [slotPicker, setSlotPicker] = useState(null); // 1..4
-  const [slots, setSlots] = useState({
-    1: user?.character?.habilidad_1_data ?? null,
-    2: user?.character?.habilidad_2_data ?? null,
-    3: user?.character?.habilidad_3_data ?? null,
-    4: user?.character?.habilidad_4_data ?? null,
+  const [slotPicker, setSlotPicker]   = useState(null); // 1..4
+  const [selectedForma, setSelectedForma] = useState(() => user?.character?.current_forma ?? 1);
+  const [formaSlots, setFormaSlots]   = useState(() => {
+    const raw = user?.character?.habilidades_por_forma ?? {};
+    const allHabs = user?.character?.all_habilidades_data ?? {};
+    const resolved = {};
+    for (const [f, ids] of Object.entries(raw)) {
+      resolved[f] = (Array.isArray(ids) ? ids : [null, null, null, null]).map(id =>
+        id && allHabs[String(id)] ? allHabs[String(id)] : null
+      );
+    }
+    return resolved;
   });
 
   useEffect(() => {
     if (!user?.character) return;
-    setSlots({
-      1: user.character.habilidad_1_data ?? null,
-      2: user.character.habilidad_2_data ?? null,
-      3: user.character.habilidad_3_data ?? null,
-      4: user.character.habilidad_4_data ?? null,
-    });
+    const raw     = user.character.habilidades_por_forma ?? {};
+    const allHabs = user.character.all_habilidades_data  ?? {};
+    const resolved = {};
+    for (const [f, ids] of Object.entries(raw)) {
+      resolved[f] = (Array.isArray(ids) ? ids : [null, null, null, null]).map(id =>
+        id && allHabs[String(id)] ? allHabs[String(id)] : null
+      );
+    }
+    setFormaSlots(resolved);
+    setSelectedForma(user.character.current_forma ?? 1);
   }, [user?.character?.id]);
+
+  const currentSlots = formaSlots[String(selectedForma)] ?? [null, null, null, null];
 
   const loadHabilidades = () => {
     if (habilidades.length > 0) return;
     const token = localStorage.getItem('nx-token');
-    fetch('/api/rol-habilidades', {
+    fetch('/api/rol-habilidades?aprendidas=1', {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     }).then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.habilidades) setHabilidades(d.habilidades); })
@@ -988,26 +1000,25 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   const handleAssignHabilidad = async (habilidad) => {
     const slot = slotPicker;
     setSlotPicker(null);
-    const newSlots = { ...slots, [slot]: habilidad };
-    setSlots(newSlots);
+    const newCurrent = [...currentSlots];
+    newCurrent[slot - 1] = habilidad;
+    const newFormaSlots = { ...formaSlots, [String(selectedForma)]: newCurrent };
+    setFormaSlots(newFormaSlots);
     const token = localStorage.getItem('nx-token');
     try {
+      const slotPayload = {};
+      newCurrent.forEach((h, i) => { slotPayload[i + 1] = h?.id ?? null; });
       const res = await fetch('/api/character/habilidades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          habilidad_1: newSlots[1]?.id ?? null,
-          habilidad_2: newSlots[2]?.id ?? null,
-          habilidad_3: newSlots[3]?.id ?? null,
-          habilidad_4: newSlots[4]?.id ?? null,
-        }),
+        body: JSON.stringify({ forma: selectedForma, slots: slotPayload }),
       });
       if (res.ok) {
-        toast('Habilidad asignada', { tone: 'success', icon: 'check', desc: `"${habilidad.nombre}" equipada en slot ${slot}` });
+        toast('Habilidad asignada', { tone: 'success', icon: 'check', desc: `"${habilidad.nombre}" en Forma ${selectedForma}, slot ${slot}` });
       }
     } catch {
       toast('Error al guardar habilidad', { tone: 'error', icon: 'x' });
-      setSlots(slots);
+      setFormaSlots(formaSlots);
     }
   };
 
@@ -1262,9 +1273,32 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
 
         {/* Habilidades */}
         <Panel kicker="Técnicas de Combate" title="Habilidades" icon="zap">
+          {/* Forma selector */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {FORMA_LABELS.map((label, i) => {
+              const f = i + 1;
+              const active = f === selectedForma;
+              return (
+                <button key={f} onClick={() => setSelectedForma(f)} title={label} style={{
+                  padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
+                  fontFamily: 'var(--font-data)', letterSpacing: '0.08em',
+                  background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+                  border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  color: active ? 'var(--holo)' : 'var(--txt-faint)',
+                  boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
+                  transition: 'all .14s',
+                }}>
+                  F{f}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginBottom: 10, letterSpacing: '0.06em' }}>
+            {FORMA_LABELS[selectedForma - 1]} — 4 slots
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
             {[1, 2, 3, 4].map(slot => (
-              <HabilidadSlot key={slot} slot={slot} habilidad={slots[slot]} onClick={() => handleOpenPicker(slot)} />
+              <HabilidadSlot key={slot} slot={slot} habilidad={currentSlots[slot - 1] ?? null} onClick={() => handleOpenPicker(slot)} />
             ))}
           </div>
         </Panel>
@@ -1272,7 +1306,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         <HabilidadPickerModal
           open={slotPicker !== null}
           onClose={() => setSlotPicker(null)}
-          habilidades={habilidades}
+          habilidades={habilidades.filter(h => h.forma === 0 || h.forma === selectedForma)}
           onAssign={handleAssignHabilidad}
           slotIndex={slotPicker}
         />

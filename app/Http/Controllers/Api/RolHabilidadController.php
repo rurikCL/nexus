@@ -9,12 +9,19 @@ use Illuminate\Support\Facades\Storage;
 
 class RolHabilidadController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(\Illuminate\Http\Request $request): JsonResponse
     {
-        $habilidades = RolHabilidad::orderBy('forma')->orderBy('nombre')->get()
-            ->map(fn($h) => array_merge($h->toArray(), [
-                'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
-            ]));
+        $query = RolHabilidad::orderBy('forma')->orderBy('nombre');
+
+        if ($request->boolean('aprendidas')) {
+            $user       = $request->user();
+            $aprendidasIds = $user->habilidadesAprendidas()->pluck('habilidad_id')->toArray();
+            $query->whereIn('id', $aprendidasIds);
+        }
+
+        $habilidades = $query->get()->map(fn($h) => array_merge($h->toArray(), [
+            'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
+        ]));
 
         return response()->json(['habilidades' => $habilidades]);
     }

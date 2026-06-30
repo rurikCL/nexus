@@ -15,6 +15,7 @@ class Character extends Model
         'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria', 'puntos_libres',
         'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
+        'habilidades_por_forma', 'current_forma',
     ];
 
     protected $casts = [
@@ -33,10 +34,12 @@ class Character extends Model
         'iniciativa'     => 'integer',
         'punteria'       => 'integer',
         'puntos_libres'  => 'integer',
-        'habilidad_1'    => 'integer',
-        'habilidad_2'    => 'integer',
-        'habilidad_3'    => 'integer',
-        'habilidad_4'    => 'integer',
+        'habilidad_1'           => 'integer',
+        'habilidad_2'           => 'integer',
+        'habilidad_3'           => 'integer',
+        'habilidad_4'           => 'integer',
+        'habilidades_por_forma' => 'array',
+        'current_forma'         => 'integer',
     ];
 
     public function getWinrateAttribute(): int

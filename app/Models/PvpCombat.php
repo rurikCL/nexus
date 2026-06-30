@@ -16,6 +16,7 @@ class PvpCombat extends Model
         'attacker_buffs', 'defender_buffs',
         'attacker_debuffs', 'defender_debuffs',
         'attacker_last_forma', 'defender_last_forma',
+        'attacker_current_forma', 'defender_current_forma',
         'current_turn', 'status', 'log',
     ];
 
@@ -41,9 +42,11 @@ class PvpCombat extends Model
         'defender_def_bonus'   => 'integer',
         'attacker_fuerza'      => 'integer',
         'defender_fuerza'      => 'integer',
-        'attacker_last_forma'  => 'integer',
-        'defender_last_forma'  => 'integer',
-        'current_turn'         => 'integer',
+        'attacker_last_forma'    => 'integer',
+        'defender_last_forma'    => 'integer',
+        'attacker_current_forma' => 'integer',
+        'defender_current_forma' => 'integer',
+        'current_turn'           => 'integer',
     ];
 
     public function attacker(): BelongsTo

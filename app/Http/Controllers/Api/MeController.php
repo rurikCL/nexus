@@ -36,13 +36,27 @@ class MeController extends Controller
         return response()->json(['tutors' => $tutors]);
     }
 
+    private function resolveAllHabilidades(?\App\Models\Character $character): array
+    {
+        if (!$character) return [];
+        $porForma = is_array($character->habilidades_por_forma) ? $character->habilidades_por_forma : [];
+        $allIds   = collect($porForma)->flatten()->filter()->unique()->values()->toArray();
+        if (empty($allIds)) return [];
+
+        return \App\Models\RolHabilidad::whereIn('id', $allIds)->get()
+            ->mapWithKeys(fn($h) => [(string)$h->id => array_merge($h->toArray(), [
+                'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
+            ])])
+            ->toArray();
+    }
+
     public function show(Request $request): JsonResponse
     {
         $user = $request->user()->load('character', 'roles');
         $character = $user->character;
 
         if ($character) {
-            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'habilidad1', 'habilidad2', 'habilidad3', 'habilidad4']);
+            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema']);
         }
 
         $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
@@ -82,16 +96,11 @@ class MeController extends Controller
                 'movimiento'  => $character->movimiento,
                 'iniciativa'  => $character->iniciativa,
                 'punteria'      => $character->punteria,
-                'puntos_libres' => $character->puntos_libres ?? 5,
-                'habilidad_1'   => $character->habilidad_1,
-                'habilidad_2'   => $character->habilidad_2,
-                'habilidad_3'   => $character->habilidad_3,
-                'habilidad_4'   => $character->habilidad_4,
-                'habilidad_1_data' => $this->habilidadResource($character->habilidad1),
-                'habilidad_2_data' => $this->habilidadResource($character->habilidad2),
-                'habilidad_3_data' => $this->habilidadResource($character->habilidad3),
-                'habilidad_4_data' => $this->habilidadResource($character->habilidad4),
-                'gold'          => $character->gold,
+                'puntos_libres'         => $character->puntos_libres ?? 5,
+                'habilidades_por_forma' => $character->habilidades_por_forma ?? (object)[],
+                'current_forma'         => $character->current_forma ?? 1,
+                'all_habilidades_data'  => $this->resolveAllHabilidades($character),
+                'gold'                  => $character->gold,
                 'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
                     : null,

@@ -13,13 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 class PvpCombatController extends Controller
 {
-    /* Relaciones que siempre cargamos con el combate */
-    private const WITHS = [
-        'attacker.character.habilidad1', 'attacker.character.habilidad2',
-        'attacker.character.habilidad3', 'attacker.character.habilidad4',
-        'defender.character.habilidad1', 'defender.character.habilidad2',
-        'defender.character.habilidad3', 'defender.character.habilidad4',
-    ];
+    private const WITHS = ['attacker.character', 'defender.character'];
 
     /* Tabla de efectividad: forma atacante → formas que supera */
     private const BEATS = [
@@ -77,23 +71,25 @@ class PvpCombatController extends Controller
         $defenderFuerza = $firstTurn === $defender->id ? 2 : 0;
 
         $combat = PvpCombat::create([
-            'attacker_id'        => $attacker->id,
-            'defender_id'        => $defender->id,
-            'lugar_id'           => $defChar->map_lugar_id,
-            'zona_id'            => $defChar->map_zona_id,
-            'planeta_id'         => $defChar->map_planeta_id,
-            'sistema_id'         => $defChar->map_sistema_id,
-            'attacker_hp'        => $attackerStats['vida'],
-            'defender_hp'        => $defenderStats['vida'],
-            'attacker_escudo'    => $attackerStats['escudo'],
-            'defender_escudo'    => $defenderStats['escudo'],
-            'attacker_def_bonus' => 0,
-            'defender_def_bonus' => 0,
-            'attacker_fuerza'    => $attackerFuerza,
-            'defender_fuerza'    => $defenderFuerza,
-            'current_turn'       => $firstTurn,
-            'status'             => 'pending',
-            'log'                => [],
+            'attacker_id'            => $attacker->id,
+            'defender_id'            => $defender->id,
+            'lugar_id'               => $defChar->map_lugar_id,
+            'zona_id'                => $defChar->map_zona_id,
+            'planeta_id'             => $defChar->map_planeta_id,
+            'sistema_id'             => $defChar->map_sistema_id,
+            'attacker_hp'            => $attackerStats['vida'],
+            'defender_hp'            => $defenderStats['vida'],
+            'attacker_escudo'        => $attackerStats['escudo'],
+            'defender_escudo'        => $defenderStats['escudo'],
+            'attacker_def_bonus'     => 0,
+            'defender_def_bonus'     => 0,
+            'attacker_fuerza'        => $attackerFuerza,
+            'defender_fuerza'        => $defenderFuerza,
+            'attacker_current_forma' => $attacker->character->current_forma ?? 1,
+            'defender_current_forma' => $defChar->current_forma ?? 1,
+            'current_turn'           => $firstTurn,
+            'status'                 => 'pending',
+            'log'                    => [],
         ]);
 
         $defender->notify(new PvpCombatNotification(
@@ -189,7 +185,7 @@ class PvpCombatController extends Controller
     /** POST /pvp/{id}/action */
     public function action(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate(['skill' => 'required']);
+        $data = $request->validate(['skill' => 'required', 'forma' => 'nullable|integer|min:1|max:7']);
 
         $user   = $request->user();
         $combat = PvpCombat::with(self::WITHS)->findOrFail($id);
@@ -248,6 +244,16 @@ class PvpCombatController extends Controller
             $combat->status      = $isAttacker ? 'fled_attacker' : 'fled_defender';
             $entry['messages'][] = "{$actorChar->name} huyó del combate";
 
+        /* ─── Cambio de estancia ─────────────────────────────────────── */
+        } elseif ($skill === 'stance') {
+            $forma = (int) ($data['forma'] ?? 1);
+            if ($forma < 1 || $forma > 7) {
+                return response()->json(['error' => 'Forma inválida'], 422);
+            }
+            if ($isAttacker) $combat->attacker_current_forma = $forma;
+            else             $combat->defender_current_forma = $forma;
+            $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
+
         /* ─── Ataque desarmado ────────────────────────────────────────── */
         } elseif ($skill === 'unarmed') {
             $atkVal  = $actorStats['ataque'];
@@ -272,19 +278,22 @@ class PvpCombatController extends Controller
 
         /* ─── Habilidad ───────────────────────────────────────────────── */
         } else {
-            $skillId = (int) $skill;
+            $skillId      = (int) $skill;
+            $myCurrentForma = $isAttacker
+                ? ($combat->attacker_current_forma ?? 1)
+                : ($combat->defender_current_forma ?? 1);
 
-            /* Verificar que la habilidad pertenece al actor */
-            $habs = array_filter([
-                $actorChar->habilidad1,
-                $actorChar->habilidad2,
-                $actorChar->habilidad3,
-                $actorChar->habilidad4,
-            ]);
-            $hab = collect($habs)->firstWhere('id', $skillId);
+            /* Verificar que la habilidad está en los slots de la forma actual */
+            $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
+            $slotIds  = array_filter($porForma[(string)$myCurrentForma] ?? []);
 
+            if (!in_array($skillId, $slotIds)) {
+                return response()->json(['error' => 'Habilidad no disponible en esta forma'], 422);
+            }
+
+            $hab = RolHabilidad::find($skillId);
             if (!$hab) {
-                return response()->json(['error' => 'Habilidad no disponible'], 422);
+                return response()->json(['error' => 'Habilidad no encontrada'], 422);
             }
             if (($myCooldowns[(string)$skillId] ?? 0) > 0) {
                 return response()->json(['error' => 'Habilidad en cooldown'], 422);
@@ -451,28 +460,33 @@ class PvpCombatController extends Controller
             'my_debuffs'     => ($isAtt ? $c->attacker_debuffs   : $c->defender_debuffs)   ?? [],
             'opp_buffs'      => ($isAtt ? $c->defender_buffs     : $c->attacker_buffs)     ?? [],
             'opp_debuffs'    => ($isAtt ? $c->defender_debuffs   : $c->attacker_debuffs)   ?? [],
-            'my_last_forma'  => $isAtt ? $c->attacker_last_forma  : $c->defender_last_forma,
-            'opp_last_forma' => $isAtt ? $c->defender_last_forma  : $c->attacker_last_forma,
-            'attacker'       => $this->formatPlayer($att),
-            'defender'       => $this->formatPlayer($def),
+            'my_last_forma'      => $isAtt ? $c->attacker_last_forma    : $c->defender_last_forma,
+            'opp_last_forma'     => $isAtt ? $c->defender_last_forma    : $c->attacker_last_forma,
+            'my_current_forma'   => $isAtt ? ($c->attacker_current_forma ?? 1) : ($c->defender_current_forma ?? 1),
+            'opp_current_forma'  => $isAtt ? ($c->defender_current_forma ?? 1) : ($c->attacker_current_forma ?? 1),
+            'attacker'           => $this->formatPlayer($att, $c->attacker_current_forma ?? 1),
+            'defender'           => $this->formatPlayer($def, $c->defender_current_forma ?? 1),
         ];
     }
 
-    private function formatPlayer(User $user): array
+    private function formatPlayer(User $user, int $currentForma = 1): array
     {
-        $ch = $user->character;
+        $ch       = $user->character;
+        $porForma = is_array($ch?->habilidades_por_forma) ? $ch->habilidades_por_forma : [];
+        $slotIds  = array_filter($porForma[(string)$currentForma] ?? []);
+
+        $habilidades = $slotIds
+            ? RolHabilidad::whereIn('id', $slotIds)->get()->map(fn($h) => self::fmtHab($h))->values()->toArray()
+            : [];
+
         return [
-            'id'          => $user->id,
-            'name'        => $ch?->name ?? $user->name,
-            'handle'      => $ch?->handle ?? $user->name,
-            'photo_url'   => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
-            'stats'       => self::getCombatStats($ch),
-            'habilidades' => array_values(array_filter([
-                $ch?->habilidad1 ? self::fmtHab($ch->habilidad1) : null,
-                $ch?->habilidad2 ? self::fmtHab($ch->habilidad2) : null,
-                $ch?->habilidad3 ? self::fmtHab($ch->habilidad3) : null,
-                $ch?->habilidad4 ? self::fmtHab($ch->habilidad4) : null,
-            ])),
+            'id'           => $user->id,
+            'name'         => $ch?->name ?? $user->name,
+            'handle'       => $ch?->handle ?? $user->name,
+            'photo_url'    => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
+            'stats'        => self::getCombatStats($ch),
+            'habilidades'  => $habilidades,
+            'current_forma' => $currentForma,
         ];
     }
 

@@ -111,6 +111,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class);
     }
 
+    public function habilidadesAprendidas(): BelongsToMany
+    {
+        return $this->belongsToMany(RolHabilidad::class, 'rol_habilidades_aprendidas', 'user_id', 'habilidad_id');
+    }
+
     public function hasRole(string $role): bool
     {
         return $this->roles->contains('name', $role);

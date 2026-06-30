@@ -66,8 +66,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myDebuffs  = combat.my_debuffs   ?? [];
   const oppDebuffs = combat.opp_debuffs  ?? [];
   const oppBuffs   = combat.opp_buffs    ?? [];
-  const myLastForma  = combat.my_last_forma  ?? 0;
-  const oppLastForma = combat.opp_last_forma ?? 0;
+  const myLastForma    = combat.my_last_forma    ?? 0;
+  const oppLastForma   = combat.opp_last_forma   ?? 0;
+  const myCurrentForma = combat.my_current_forma ?? 1;
+
+  const [stancePicker, setStancePicker] = useState(false);
+  const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 
   /* Fondo */
   useEffect(() => {
@@ -113,6 +117,17 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       const d = await apiPost(`/pvp/${combat.id}/action`, { skill: String(skillId) });
       if (d?.combat) setCombat(d.combat);
     } catch { /* toast shown by apiPost */ }
+    finally { setBusy(false); }
+  };
+
+  const doStance = async (forma) => {
+    if (busy || !combat.is_my_turn || combat.status !== 'active') return;
+    setStancePicker(false);
+    setBusy(true);
+    try {
+      const d = await apiPost(`/pvp/${combat.id}/action`, { skill: 'stance', forma });
+      if (d?.combat) setCombat(d.combat);
+    } catch { /* ignore */ }
     finally { setBusy(false); }
   };
 
@@ -456,6 +471,21 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                   <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG 2</span>
                 </button>
 
+                {/* Estancia */}
+                <button onClick={() => !busy && combat.is_my_turn && setStancePicker(true)} disabled={busy} style={{
+                  minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                  background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+                }}
+                  onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
+                >
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>F{myCurrentForma}</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+                </button>
+
                 {/* Huir */}
                 <button onClick={() => doAction('flee')} disabled={busy} style={{
                   minWidth: 50, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
@@ -473,6 +503,46 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             </>
           )}
         </div>
+
+        {/* Stance Picker Modal */}
+        {stancePicker && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 20,
+            background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} onClick={() => setStancePicker(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'rgba(6,12,26,0.97)', border: '1px solid rgba(139,92,246,0.35)',
+              borderRadius: 16, padding: 24, width: 360, maxWidth: '90%',
+            }}>
+              <div style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
+                🔄 CAMBIAR ESTANCIA — Acabará tu turno
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {FORMA_LABELS_SHORT.map((label, i) => {
+                  const f = i + 1;
+                  const active = f === myCurrentForma;
+                  return (
+                    <button key={f} onClick={() => doStance(f)} style={{
+                      padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                      background: active ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.06)',
+                      border: `1px solid ${active ? '#a78bfa' : 'rgba(139,92,246,0.3)'}`,
+                      opacity: active ? 1 : 0.85,
+                    }}>
+                      <div style={{ fontSize: 13, fontFamily: 'var(--font-data)', color: active ? '#a78bfa' : '#fff', fontWeight: 700 }}>F{f}</div>
+                      <div style={{ fontSize: 8, color: 'rgba(200,180,255,0.6)', marginTop: 3, lineHeight: 1.3 }}>{label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={() => setStancePicker(false)} style={{
+                marginTop: 16, width: '100%', padding: '8px', borderRadius: 8, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                color: 'rgba(200,200,255,0.5)', fontSize: 10, fontFamily: 'var(--font-data)',
+              }}>Cancelar</button>
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </div>
