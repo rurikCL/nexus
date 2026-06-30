@@ -21,6 +21,8 @@ return new class extends Migration
             $table->tinyInteger('defender_def_bonus')->default(0);
             $table->unsignedBigInteger('current_turn');
             $table->enum('status', ['active', 'attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'])->default('active');
+            $table->tinyInteger('attacker_current_forma')->default(1)->after('attacker_last_forma');
+            $table->tinyInteger('defender_current_forma')->default(1)->after('defender_last_forma');
             $table->json('log')->nullable();
             $table->timestamps();
         });
