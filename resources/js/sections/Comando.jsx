@@ -4,6 +4,16 @@ import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toas
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
 
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const fn = () => setW(window.innerWidth);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return w;
+}
+
 const SIDES = {
   luminoso: { label: 'Lado Luminoso', color: '#3aa0ff', img: '/assets/lado-luminoso.png', desc: 'Disciplina, honor y protección' },
   oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.png',   desc: 'Pasión, ambición y poder' },
@@ -83,6 +93,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
+  const isMobile = useWindowWidth() < 640;
   const myTasks = S.tasks.filter(t => t.pupil === 'you' && t.status !== 'completada');
   const nextCombat = S.combats.find(m => m.a === 'you' || m.b === 'you');
   const loggedCount = Object.keys(S.training.logged).length;
@@ -184,11 +195,11 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
             }}
           />
         )}
-        <div style={{ display: 'flex', gap: 22, padding: 22, flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-          <Avatar c={me} size={86} ring />
-          <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ display: 'flex', gap: isMobile ? 14 : 22, padding: isMobile ? 16 : 22, flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+          <Avatar c={me} size={isMobile ? 64 : 86} ring />
+          <div style={{ flex: 1, minWidth: isMobile ? 140 : 220 }}>
             <div className="nx-kicker">Combatiente{me.sector ? ` · ${me.sector}` : ''}</div>
-            <h1 className="nx-display" style={{ fontSize: 30, margin: '4px 0 8px', color: 'var(--txt)' }}>{ch.name}</h1>
+            <h1 className="nx-display" style={{ fontSize: isMobile ? 22 : 30, margin: '4px 0 8px', color: 'var(--txt)' }}>{ch.name}</h1>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <TierBadge tier={myTier} />
               {(() => { const c = NX.CLASSES.find(x => x.id === ch.cls); return c ? <Chip icon={c.icon}>{c.num} · {c.name}</Chip> : null; })()}
@@ -200,7 +211,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
       </section>
 
       {/* Widgets reordenables — grilla de 2 columnas */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18, alignItems: 'stretch' }}>
         {widgetOrder.map(({ id, cols }, idx) => {
           const isDragging = draggingId === id;
           const isOver    = overIdx === idx && !isDragging;
@@ -208,8 +219,8 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
           const panelRight = (extra) => (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               {extra}
-              <ColToggle cols={cols} onToggle={() => toggleCols(id)} />
-              <GripHandle />
+              {!isMobile && <ColToggle cols={cols} onToggle={() => toggleCols(id)} />}
+              {!isMobile && <GripHandle />}
             </div>
           );
 
@@ -455,7 +466,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
               onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
               onDrop={(e) => { e.preventDefault(); applyDrop(idx); setOverIdx(null); }}
               style={{
-                gridColumn: `span ${cols}`,
+                gridColumn: isMobile ? 'span 1' : `span ${cols}`,
                 opacity: isDragging ? 0.4 : 1,
                 outline: isOver ? '2px dashed rgba(56,205,240,.45)' : '2px dashed transparent',
                 outlineOffset: 4,
@@ -485,6 +496,7 @@ export function Empty({ label }) {
 
 /* ===================== CREAR PERSONAJE ===================== */
 function CharacterCreation({ user, S, onCharacterCreated }) {
+  const isMobile = useWindowWidth() < 640;
   const DEFAULT_STATS = { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 };
   const [form, setForm] = useState({
     name: user?.name ?? '',
@@ -558,7 +570,7 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
                 <Icon name="x" size={13} />{error}
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
               <div>
                 <label className="nx-label">Nombre de combate *</label>
                 <input className="nx-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="Tu nombre en la Arena" required />
@@ -577,7 +589,7 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="nx-label">Lado de la Fuerza</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
                   {Object.entries(SIDES).map(([key, s]) => {
                     const on = form.side === key;
                     return (
@@ -673,6 +685,7 @@ const RANGOS_JEDI = [
 
 
 export function PersonajeView({ S, user, onCharacterCreated }) {
+  const isMobile = useWindowWidth() < 640;
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
@@ -716,7 +729,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   };
 
   return (
-    <div className="nx-fade nx-personaje-grid" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 18, alignItems: 'start' }}>
+    <div className="nx-fade nx-personaje-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '340px 1fr', gap: 18, alignItems: 'start' }}>
       {/* Retrato */}
       <div style={{ display: 'grid', gap: 18 }}>
         <Panel kicker="Retrato de combate" title="Identidad" icon="user" noBody>
@@ -785,7 +798,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
 
         {/* Rango — read-only */}
         <Panel kicker="Orden Jedi" title="Rango" icon="shield">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 6 }}>
             {RANGOS_JEDI.map(r => {
               const on = myTier === r.id;
               return (
@@ -864,7 +877,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
       <div style={{ display: 'grid', gap: 18 }}>
         <Panel kicker="Ficha" title="Datos del Personaje" icon="edit"
           right={<Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>{saving ? 'Guardando...' : 'Guardar'}</Btn>}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
             <div>
               <label className="nx-label">Nombre de combate *</label>
               <input className="nx-input" value={ch.name} onChange={(e) => S.setCharacter({ ...ch, name: e.target.value })} />
@@ -883,7 +896,7 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label className="nx-label">Lado de la Fuerza</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
                 {Object.entries(SIDES).map(([key, s]) => {
                   const on = ch.side === key;
                   return (
