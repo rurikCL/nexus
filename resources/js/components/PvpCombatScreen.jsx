@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 
+function useIsMobile() {
+  const [m, setM] = useState(() => window.innerWidth < 640);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 640);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+}
+
 const AUTH = () => {
   const t = localStorage.getItem('nx-token');
   return { Accept: 'application/json', Authorization: `Bearer ${t}` };
@@ -71,6 +81,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myCurrentForma = combat.my_current_forma ?? 1;
 
   const [stancePicker, setStancePicker] = useState(false);
+  const isMobile = useIsMobile();
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 
   /* Fondo */
@@ -172,11 +183,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       <div style={{
         background: 'rgba(6,12,26,0.92)', backdropFilter: 'blur(16px)',
         border: `1px solid ${borderColor}`, borderRadius: 14,
-        padding: 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
-        gap: 14, alignItems: 'flex-start',
+        padding: isMobile ? 8 : 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
+        gap: isMobile ? 8 : 14, alignItems: 'flex-start',
       }}>
         <div style={{
-          width: 64, height: 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          width: isMobile ? 40 : 64, height: isMobile ? 40 : 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
           border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
           display: 'grid', placeItems: 'center',
         }}>
@@ -248,7 +259,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
         {/* Oponente HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 10, width: 'clamp(200px, 36%, 320px)' }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(200px, 36%, 320px)' }}>
           <HUD
             hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
             nombre={opp.name} handle={opp.handle} photoUrl={opp.photo_url}
@@ -256,8 +267,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           />
         </div>
 
-        {/* Mi HUD — abajo izquierda */}
-        <div style={{ position: 'absolute', bottom: 100, left: 14, zIndex: 10, width: 'clamp(200px, 36%, 320px)' }}>
+        {/* Mi HUD — abajo izquierda (móvil: arriba izquierda) */}
+        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(200px, 36%, 320px)' }}>
           <HUD
             hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
             nombre={me.name} handle={me.handle} photoUrl={me.photo_url}
@@ -267,9 +278,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
         {/* Log de combate */}
         <div style={{
-          position: 'absolute', left: 14, top: 14, zIndex: 10,
-          width: logCollapsed ? 40 : 'clamp(160px, 26%, 280px)',
-          maxHeight: 'calc(100% - 270px)',
+          position: 'absolute', left: isMobile ? 8 : 14, top: isMobile ? 'calc(50% - 20px)' : 14, zIndex: 10,
+          width: logCollapsed ? 36 : isMobile ? 'clamp(110px, 42%, 180px)' : 'clamp(160px, 26%, 280px)',
+          maxHeight: isMobile ? '45%' : 'calc(100% - 270px)',
           background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
           borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
           display: 'flex', flexDirection: 'column',
@@ -312,8 +323,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
           background: 'rgba(3,7,16,0.96)', backdropFilter: 'blur(16px)',
           borderTop: '1px solid rgba(56,205,240,0.13)',
-          padding: '6px 16px 8px', display: 'flex', flexDirection: 'column', gap: 5,
-          minHeight: 92,
+          padding: isMobile ? '8px 10px 12px' : '6px 16px 8px', display: 'flex', flexDirection: 'column', gap: 5,
+          minHeight: isMobile ? 110 : 92,
         }}>
           {isPending ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -374,7 +385,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               </div>
 
               {/* Botones de habilidades */}
-              <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap' }}>
                 {myHabilidades.length === 0 ? (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
@@ -393,7 +404,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                         onClick={() => !disabled && doAction(hab.id)}
                         disabled={disabled}
                         style={{
-                          flex: 1, minWidth: 0, borderRadius: 8,
+                          flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 64 : 0, borderRadius: 8,
                           cursor: disabled ? 'not-allowed' : 'pointer',
                           background: effective
                             ? 'rgba(16,185,129,0.12)'
@@ -518,7 +529,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               <div style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
                 🔄 CAMBIAR ESTANCIA — Acabará tu turno
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
                 {FORMA_LABELS_SHORT.map((label, i) => {
                   const f = i + 1;
                   const active = f === myCurrentForma;

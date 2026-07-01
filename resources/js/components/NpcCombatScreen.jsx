@@ -2,6 +2,16 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 
+function useIsMobile() {
+  const [m, setM] = useState(() => window.innerWidth < 640);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 640);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+}
+
 const mediaUrl = (path) => {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -47,6 +57,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const porForma   = player.habilidades_por_forma ?? {};
   const [currentForma,  setCurrentForma]  = useState(initialState?.currentForma ?? player.current_forma ?? 1);
   const [stancePicker,  setStancePicker]  = useState(false);
+  const isMobile = useIsMobile();
 
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 
@@ -275,11 +286,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       <div style={{
         background: 'rgba(6,12,26,0.92)', backdropFilter: 'blur(16px)',
         border: `1px solid ${borderColor}`, borderRadius: 14,
-        padding: 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
-        gap: 14, alignItems: 'flex-start', minWidth: 260,
+        padding: isMobile ? 8 : 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
+        gap: isMobile ? 8 : 14, alignItems: 'flex-start',
       }}>
         <div style={{
-          width: 64, height: 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          width: isMobile ? 40 : 64, height: isMobile ? 40 : 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
           border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
         }}>
           {photoUrl
@@ -363,7 +374,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
         {/* NPC HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 10, width: 'clamp(190px, 36%, 260px)' }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(190px, 36%, 260px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)}
@@ -371,8 +382,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           />
         </div>
 
-        {/* Jugador HUD — abajo izquierda */}
-        <div style={{ position: 'absolute', bottom: 90, left: 14, zIndex: 10, width: 'clamp(190px, 36%, 260px)' }}>
+        {/* Jugador HUD — abajo izquierda (móvil: arriba izquierda) */}
+        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(190px, 36%, 260px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={player.photo}
@@ -382,9 +393,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
         {/* Log de combate — izquierda, colapsable */}
         <div style={{
-          position: 'absolute', left: 14, top: 14, zIndex: 10,
-          width: logCollapsed ? 40 : 'clamp(150px, 26%, 240px)',
-          maxHeight: 'calc(100% - 260px)',
+          position: 'absolute', left: isMobile ? 8 : 14, top: isMobile ? 'calc(50% - 20px)' : 14, zIndex: 10,
+          width: logCollapsed ? 36 : isMobile ? 'clamp(110px, 42%, 180px)' : 'clamp(150px, 26%, 240px)',
+          maxHeight: isMobile ? '45%' : 'calc(100% - 260px)',
           background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
           borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
           display: 'flex', flexDirection: 'column',
@@ -467,7 +478,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
               </div>
 
               {/* Botones de habilidades */}
-              <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap' }}>
                 {habilidades.length === 0 ? (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
@@ -484,7 +495,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                       <button key={hab.id} onClick={() => !disabled && doPlayerSkill(hab)}
                         disabled={disabled}
                         style={{
-                          flex: 1, minWidth: 0, borderRadius: 8,
+                          flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 64 : 0, borderRadius: 8,
                           cursor: disabled ? 'not-allowed' : 'pointer',
                           background: disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
                           border: `1px solid ${disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,

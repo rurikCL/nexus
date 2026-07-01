@@ -36,6 +36,16 @@ const mediaUrl = (path) => {
   return `/storage${cleanPath}`;
 };
 
+function useIsMobile() {
+  const [m, setM] = useState(() => window.innerWidth < 700);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 700);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+}
+
 const HOSTILIDAD_COLOR = {
   seguro:   { bg: 'rgba(16,185,129,0.18)',  border: '#10b981', text: '#10b981',  label: 'Seguro'   },
   bajo:     { bg: 'rgba(56,205,240,0.15)',   border: '#38cdf0', text: '#38cdf0',  label: 'Bajo'     },
@@ -237,6 +247,7 @@ function GalaxiaView({ onSelectSistema }) {
   const [loading, setLoading]       = useState(true);
   const [traveling, setTraveling]   = useState(null);
   const [hovered, setHovered]       = useState(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     apiFetch('/map/sistemas')
@@ -296,7 +307,13 @@ function GalaxiaView({ onSelectSistema }) {
               key={s.id}
               onMouseEnter={() => setHovered(s.id)}
               onMouseLeave={() => setHovered(null)}
-              onClick={() => !traveling && handleTravel(s)}
+              onClick={() => {
+                if (!traveling) {
+                  if (isMobile && hovered !== s.id) { setHovered(s.id); return; }
+                  setHovered(null);
+                  handleTravel(s);
+                }
+              }}
               style={{
                 position: 'absolute',
                 left: pos.left, top: pos.top,
@@ -568,7 +585,7 @@ function TravelOverlay({ kind, onDone }) {
 /* ─── CABECERA CON BOTÓN VOLVER ──────────────────────────── */
 function VolverHeader({ onVolver, crumbs }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
       <button
         onClick={onVolver}
         style={{
@@ -596,6 +613,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
   const [sistema, setSistema] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePlaneta, setActivePlaneta] = useState(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     apiFetch(`/map/sistemas/${sistemaId}`)
@@ -624,9 +642,9 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
         crumbs={[{ label: 'Galaxia' }, { label: sistema.nombre }]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px 220px', gap: 20, marginTop: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px 220px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
         {/* ── visor del sistema ── */}
-        <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: 500,
+        <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: isMobile ? 260 : 500,
           background: 'linear-gradient(180deg,#07101f,#04070f)' }}>
 
           <div className="nx-starfield">
@@ -643,7 +661,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
           </div>
 
           <div style={{
-            position: 'relative', height: 460,
+            position: 'relative', height: isMobile ? 240 : 460,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {/* Sol central */}
@@ -811,6 +829,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
 function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, onPlanetaImagen, myUserId }) {
   const [planeta, setPlaneta] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     apiFetch(`/map/planetas/${planetaId}`)
@@ -846,7 +865,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
         crumbs={[{ label: 'Galaxia' }, { label: planeta.sistema?.nombre }, { label: planeta.nombre }]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px 220px', gap: 20, marginTop: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px 220px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
         {/* mapa del planeta */}
         <Panel title={planeta.nombre} kicker="MAPA PLANETARIO" icon="target"
           right={<Chip tone={hostilidadStyle(planeta.hostilidad).text !== '#8aa0c0' ? 'orange' : 'default'}>
@@ -1032,6 +1051,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
 function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, onAttack, onZonaImagen, myUserId }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const isMobile = useIsMobile();
 
   const handleSelectLugar = useCallback((lugar) => {
     onSelectLugar(lugar);
@@ -1062,7 +1082,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
         crumbs={[...breadcrumbs, { label: zona.nombre }]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 20, marginTop: 0, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 220px', gap: isMobile ? 14 : 20, marginTop: 0, alignItems: 'start' }}>
         {/* columna principal */}
         <div style={{
           position: 'relative',
@@ -1236,6 +1256,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
   const [lugar, setLugar]           = useState(null);
   const [loading, setLoading]       = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const isMobile = useIsMobile();
 
   const currentId = navStack[navStack.length - 1];
 
@@ -1362,9 +1383,9 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         }} />
 
         {/* header info */}
-        <div style={{ display: 'grid', gridTemplateColumns: lugarImagen ? '280px 1fr' : '1fr', gap: 20, position: 'relative', zIndex: 1, padding: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: lugarImagen && !isMobile ? '280px 1fr' : '1fr', gap: 16, position: 'relative', zIndex: 1, padding: 12 }}>
           {lugarImagen && (
-            <div style={{ borderRadius: 12, overflow: 'hidden', height: 200, border: '1px solid var(--holo-line)' }}>
+            <div style={{ borderRadius: 12, overflow: 'hidden', height: isMobile ? 160 : 200, border: '1px solid var(--holo-line)' }}>
               <img src={lugarImagen} alt={lugar.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           )}
@@ -1915,7 +1936,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
         {/* stats combate */}
         {STATS.length > 0 && (
           <div style={{
-            display: 'flex', gap: 10, padding: '6px 12px',
+            display: 'flex', gap: 6, padding: '6px 10px', flexWrap: 'wrap',
             background: 'rgba(4,7,15,0.5)', borderRadius: 8, border: '1px solid var(--holo-line)',
           }}>
             {STATS.map(s => (
