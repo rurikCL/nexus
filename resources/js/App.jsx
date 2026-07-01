@@ -169,7 +169,7 @@ const TITLES = {
   combates: ['Combates', 'Arena, apuestas y desafíos'],
   combatientes: ['Combatientes', 'Directorio y perfiles públicos'],
   temporadas:    ['Temporadas',         'Historial de campeones y recompensas'],
-  mapa: ['Mapa Galáctico', 'Navegación entre sistemas y planetas'],
+  mapa: ['Mapa Galáctico', 'Navegación estelar'],
   instagram: ['Instagram', 'Publicaciones y feed de tu cuenta'],
   configuracion: ['Configuración', 'Gestión de tablas del sistema'],
 };
