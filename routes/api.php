@@ -100,10 +100,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/misiones', [MisionController::class, 'index']);
     Route::post('/misiones', [MisionController::class, 'store']);
+    // Static sub-routes MUST come before {mision} wildcard routes
+    Route::get('/misiones/comunidad',               [MisionController::class, 'comunidad']);
+    Route::get('/misiones/individual',              [MisionController::class, 'individual']);
+    Route::get('/misiones/temporada/{temporadaId}', [MisionController::class, 'porTemporada']);
+    Route::get('/misiones/npcs-mision',             [MisionController::class, 'npcsMision']);
     Route::patch('/misiones/{mision}', [MisionController::class, 'update']);
     Route::delete('/misiones/{mision}', [MisionController::class, 'destroy']);
     Route::post('/misiones/{mision}/assign', [MisionController::class, 'assign']);
     Route::post('/misiones/{mision}/accept', [MisionController::class, 'accept']);
+    Route::post('/misiones/{mision}/completar', [MisionController::class, 'completar']);
     Route::delete('/misiones/{mision}/users/{userId}', [MisionController::class, 'unassign']);
     Route::patch('/misiones/{mision}/progress', [MisionController::class, 'updateProgress']);
 

@@ -183,12 +183,23 @@ class AdminController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    private function optionExtraFields(string $entity): array
+    {
+        return match ($entity) {
+            'rol_habilidades' => ['forma'],
+            default           => [],
+        };
+    }
+
     public function options(string $entity): JsonResponse
     {
         $model = $this->model($entity);
         $label = $this->labelField($entity);
+        $extras = $this->optionExtraFields($entity);
 
-        $options = $model::select('id', "{$label} as label")
+        $select = array_merge(['id', "{$label} as label"], $extras);
+
+        $options = $model::select($select)
             ->orderBy($label)
             ->get();
 

@@ -52,4 +52,9 @@ class MapNpc extends Model
     {
         return $this->belongsTo(MapLugar::class, 'LugarID');
     }
+
+    public function mision(): BelongsTo
+    {
+        return $this->belongsTo(Mision::class, 'MisionID');
+    }
 }

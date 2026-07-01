@@ -498,10 +498,126 @@ function PodioNum({ color, num, size = 22 }) {
   );
 }
 
+/* ── MisionesTemporadaModal — Battle pass popup ─────────── */
+function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
+  const [misiones, setMisiones] = useState([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    if (!temporadaId) return;
+    const token = localStorage.getItem('nx-token');
+    fetch(`/api/misiones/temporada/${temporadaId}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.misiones) setMisiones(d.misiones); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [temporadaId]);
+
+  const completadas = misiones.filter(m => m.completada_por_mi).length;
+
+  return (
+    <Modal open onClose={onClose} kicker="Pase de Batalla" title={temporadaNombre ?? 'Misiones de Temporada'}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 32 }}>
+          <span className="nx-data" style={{ color: 'var(--holo)', animation: 'nx-pulse 1.4s infinite' }}>CARGANDO...</span>
+        </div>
+      ) : misiones.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 32, color: 'var(--txt-faint)', fontSize: 13 }}>
+          Esta temporada no tiene misiones configuradas aún
+        </div>
+      ) : (
+        <>
+          {/* Progreso global del pase */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>PROGRESO DEL PASE</span>
+              <span className="nx-num" style={{ fontSize: 11, color: 'var(--holo)' }}>
+                {completadas} / {misiones.length}
+              </span>
+            </div>
+            <div style={{ height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 3 }}>
+              <div style={{
+                height: '100%',
+                width: `${misiones.length ? Math.round((completadas / misiones.length) * 100) : 0}%`,
+                background: completadas === misiones.length ? '#10b981' : 'var(--holo)',
+                borderRadius: 3, transition: 'width 0.5s ease',
+              }} />
+            </div>
+          </div>
+
+          {/* Lista de misiones */}
+          <div style={{ display: 'grid', gap: 10, maxHeight: '60vh', overflowY: 'auto', paddingRight: 4 }}>
+            {misiones.map((m, idx) => {
+              const done = m.completada_por_mi;
+              return (
+                <div key={m.id} style={{
+                  display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 8,
+                  background: done ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${done ? 'rgba(16,185,129,0.25)' : 'var(--holo-line)'}`,
+                  opacity: done ? 0.85 : 1,
+                }}>
+                  {/* Número / check */}
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                    display: 'grid', placeItems: 'center',
+                    background: done ? 'rgba(16,185,129,0.2)' : 'rgba(56,205,240,0.1)',
+                    border: `2px solid ${done ? '#10b981' : 'rgba(56,205,240,0.3)'}`,
+                  }}>
+                    {done
+                      ? <Icon name="check" size={14} style={{ color: '#10b981' }} />
+                      : <span className="nx-num" style={{ fontSize: 11, color: 'var(--holo)' }}>{idx + 1}</span>
+                    }
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: done ? '#10b981' : 'var(--txt)', marginBottom: 2 }}>
+                      {m.nombre}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 6 }}>{m.mision}</div>
+
+                    {/* Objetivos */}
+                    {(m.objetivos ?? []).length > 0 && (
+                      <div style={{ display: 'grid', gap: 3, marginBottom: 6 }}>
+                        {m.objetivos.map(obj => (
+                          <div key={obj.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--txt-faint)' }}>
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: done ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
+                            {obj.nombre}
+                            <span style={{ marginLeft: 'auto' }}>Meta: {obj.meta} {obj.unidad ?? ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recompensas */}
+                    {(m.recompensas ?? []).length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {m.recompensas.map((r, i) => (
+                          <span key={r.id ?? i} style={{
+                            fontSize: 10, padding: '2px 8px', borderRadius: 4,
+                            background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.25)', color: '#E6B325',
+                          }}>
+                            {r.tipo === 'creditos' ? '💰' : '📦'} {r.nombre}{r.valor > 0 ? ` ×${r.valor}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 /* ── TemporadaCard ──────────────────────────────────────── */
 function TemporadaCard({ temporada: t, canEdit, onEdit }) {
-  const [showRec, setShowRec] = useState(false);
-  const [openTier, setOpenTier] = useState(null);
+  const [showRec, setShowRec]       = useState(false);
+  const [openTier, setOpenTier]     = useState(null);
+  const [showMisiones, setShowMisiones] = useState(false);
 
   const hasPodios = t.divide_por_rango && t.podios?.length > 0;
   const activePodios = hasPodios
@@ -628,14 +744,26 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
           </>
         )}
 
-        {canEdit && (
-          <div style={{ marginTop: 'auto', paddingTop: 8 }}>
-            <Btn kind="ghost" sm icon="edit" onClick={() => onEdit(t)} style={{ width: '100%', justifyContent: 'center' }}>
-              Editar temporada
+        {/* Acciones */}
+        <div style={{ marginTop: 'auto', paddingTop: 8, display: 'flex', gap: 8 }}>
+          <Btn kind="ghost" sm icon="target" onClick={() => setShowMisiones(true)} style={{ flex: 1, justifyContent: 'center' }}>
+            Misiones
+          </Btn>
+          {canEdit && (
+            <Btn kind="ghost" sm icon="edit" onClick={() => onEdit(t)} style={{ flex: 1, justifyContent: 'center' }}>
+              Editar
             </Btn>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {showMisiones && (
+        <MisionesTemporadaModal
+          temporadaId={t.id}
+          temporadaNombre={t.nombre}
+          onClose={() => setShowMisiones(false)}
+        />
+      )}
     </div>
   );
 }

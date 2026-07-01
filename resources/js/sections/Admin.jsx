@@ -37,7 +37,7 @@ const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmae
 const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 'rojo'];
 const CLASE_OPTS      = ['forma1', 'forma2', 'forma3', 'forma4', 'forma5', 'forma6', 'forma7'];
 const LADO_OPTS       = ['luminoso', 'oscuro', 'neutral'];
-const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'mercader', 'mision', 'jefe'];
+const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'mercader', { value: 'mision', label: 'misión' }, 'jefe'];
 const TIPO_LUGAR_OPTS = ['exterior', 'interior'];
 
 const H_COLOR = {
@@ -371,6 +371,11 @@ const ENTITY_CONFIG = {
     defaults: {},
   },
 
+  misiones: {
+    label: 'Misiones', icon: 'target', group: 'SISTEMA',
+    custom: true,
+  },
+
   configuraciones: {
     label: 'Configuraciones', icon: 'settings', group: 'SISTEMA',
     noDelete: true,
@@ -424,9 +429,11 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     return (
       <select className="nx-select" value={value ?? ''} onChange={e => onChange(e.target.value || null)}>
         <option value="">— Sin seleccionar —</option>
-        {(field.options ?? []).map(o => (
-          <option key={o} value={o}>{o}</option>
-        ))}
+        {(field.options ?? []).map(o => {
+          const val = typeof o === 'object' ? o.value : o;
+          const lbl = typeof o === 'object' ? o.label : o;
+          return <option key={val} value={val}>{lbl}</option>;
+        })}
       </select>
     );
   }
@@ -1136,15 +1143,547 @@ export default function AdminView() {
           )}
         </div>
 
-        {/* tabla */}
+        {/* tabla / vista custom */}
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <EntityTable
-            key={activeEntity}
-            entityKey={activeEntity}
-            config={config}
-            relatedOptions={relatedOptions}
-            onRefreshRelated={refreshRelated}
-          />
+          {config.custom
+            ? <MisionesAdmin key={activeEntity} />
+            : (
+              <EntityTable
+                key={activeEntity}
+                entityKey={activeEntity}
+                config={config}
+                relatedOptions={relatedOptions}
+                onRefreshRelated={refreshRelated}
+              />
+            )
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MISIONES ADMIN — CRUD completo con objetivos y recompensas inline
+───────────────────────────────────────────────────────────── */
+const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual'];
+const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo'];
+const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad'];
+
+const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
+const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
+
+const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unidad: '' };
+const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null };
+const EMPTY_MISION = {
+  nombre: '', mision: '', descripcion: '', foto_mision: '',
+  tipo_mision: 'individual', temporada_id: '', npc_id: '',
+  puntos_requeridos: 100, activa: true, orden: 0,
+  fecha_inicio: '', fecha_termino: '',
+  objetivos: [], recompensas: [],
+};
+
+function misionFromApi(m) {
+  return {
+    nombre:             m.nombre            ?? '',
+    mision:             m.mision            ?? '',
+    descripcion:        m.descripcion       ?? '',
+    foto_mision:        m.foto_mision       ?? '',
+    tipo_mision:        m.tipo_mision       ?? 'individual',
+    temporada_id:       m.temporada_id      ?? '',
+    npc_id:             m.npc_id            ?? '',
+    puntos_requeridos:  m.puntos_requeridos ?? 100,
+    activa:             m.activa            ?? true,
+    orden:              m.orden             ?? 0,
+    fecha_inicio:       m.fecha_inicio      ?? '',
+    fecha_termino:      m.fecha_termino     ?? '',
+    objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
+    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null })),
+  };
+}
+
+function NpcPicker({ npcs, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = npcs.find(n => n.id === value) ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const imgUrl = (n) => n.imagen_mini ? `/storage/${n.imagen_mini}` : null;
+
+  const rowStyle = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+    cursor: 'pointer', borderRadius: 6,
+    background: active ? 'rgba(56,205,240,0.12)' : 'transparent',
+    transition: 'background 0.15s',
+  });
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* Trigger */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+          background: 'rgba(255,255,255,0.04)',
+          border: `1px solid ${open ? 'var(--holo)' : 'rgba(255,255,255,0.12)'}`,
+          minHeight: 44, transition: 'border-color 0.15s',
+        }}
+      >
+        {selected ? (
+          <>
+            {imgUrl(selected)
+              ? <img src={imgUrl(selected)} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              : <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(56,205,240,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>👤</div>
+            }
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selected.nombre}</div>
+              {selected.lugar && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 1 }}>{selected.lugar}</div>}
+            </div>
+          </>
+        ) : (
+          <span style={{ fontSize: 13, color: 'var(--txt-faint)' }}>— Seleccionar NPC —</span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--txt-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▼</span>
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
+          background: 'var(--bg-card, #0e1729)', border: '1px solid rgba(56,205,240,0.25)',
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          maxHeight: 260, overflowY: 'auto',
+          padding: 4,
+        }}>
+          {/* Clear option */}
+          <div
+            onClick={() => { onChange(null); setOpen(false); }}
+            style={{ ...rowStyle(value === null), color: 'var(--txt-faint)', fontSize: 12, fontStyle: 'italic' }}
+          >
+            Sin NPC asignado
+          </div>
+
+          {npcs.length === 0 && (
+            <div style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: 'var(--txt-faint)' }}>
+              No hay NPCs de tipo misión
+            </div>
+          )}
+
+          {npcs.map(n => (
+            <div
+              key={n.id}
+              onClick={() => { onChange(n.id); setOpen(false); }}
+              style={rowStyle(n.id === value)}
+            >
+              {imgUrl(n)
+                ? <img src={imgUrl(n)} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: n.id === value ? '2px solid var(--holo)' : '2px solid transparent' }} />
+                : <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(56,205,240,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
+              }
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: n.id === value ? 'var(--holo)' : 'var(--txt)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.nombre}</div>
+                {n.lugar && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 1 }}>{n.lugar}</div>}
+              </div>
+              {n.id === value && <span style={{ fontSize: 12, color: 'var(--holo)' }}>✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MisionesAdmin() {
+  const [misiones, setMisiones]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [editing, setEditing]       = useState(null);
+  const [saving, setSaving]         = useState(false);
+  const [form, setForm]             = useState({ ...EMPTY_MISION });
+  const [filter, setFilter]         = useState('');
+  const [habilidades, setHabilidades]   = useState([]);
+  const [npcsOptions, setNpcsOptions]   = useState([]);
+
+  /* Load habilidades options once */
+  useEffect(() => {
+    api('GET', '/admin/rol_habilidades/options')
+      .then(d => setHabilidades(d.options ?? []))
+      .catch(() => {});
+  }, []);
+
+  /* Load NPCs de tipo mision once */
+  useEffect(() => {
+    api('GET', '/misiones/npcs-mision')
+      .then(d => setNpcsOptions(d.npcs ?? []))
+      .catch(() => {});
+  }, []);
+
+  /* Load */
+  const reload = useCallback(async (tipo = filter) => {
+    setLoading(true);
+    try {
+      const q  = tipo ? `?tipo=${tipo}` : '';
+      const res = await api('GET', `/misiones${q}`);
+      setMisiones(res.misiones ?? []);
+    } catch { toast('Error al cargar misiones', { tone: 'error', icon: 'x' }); }
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => { reload(); }, []);
+
+  /* Start edit / create */
+  const openNew  = () => { setForm({ ...EMPTY_MISION }); setEditing('new'); };
+  const openEdit = (m) => { setForm(misionFromApi(m)); setEditing(m); };
+  const cancel   = () => setEditing(null);
+
+  /* Save */
+  const handleSave = async () => {
+    if (!form.nombre.trim() || !form.mision.trim()) {
+      toast('Nombre y descripción de la misión son obligatorios', { tone: 'error', icon: 'x' }); return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        temporada_id:      form.temporada_id      || null,
+        npc_id:            form.npc_id            || null,
+        fecha_inicio:      form.fecha_inicio      || null,
+        fecha_termino:     form.fecha_termino     || null,
+        puntos_requeridos: Number(form.puntos_requeridos),
+        orden:             Number(form.orden),
+      };
+      const res = editing === 'new'
+        ? await api('POST', '/misiones', payload)
+        : await api('PATCH', `/misiones/${editing.id}`, payload);
+      toast(editing === 'new' ? 'Misión creada' : 'Misión actualizada', { tone: 'success', icon: 'check' });
+      setEditing(null);
+      reload(filter);
+    } catch (e) { toast(e?.message ?? 'Error al guardar', { tone: 'error', icon: 'x' }); }
+    setSaving(false);
+  };
+
+  /* Delete */
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Eliminar esta misión y todos sus objetivos y recompensas?')) return;
+    try {
+      await api('DELETE', `/misiones/${id}`);
+      setMisiones(prev => prev.filter(m => m.id !== id));
+      toast('Misión eliminada', { tone: 'success', icon: 'check' });
+    } catch { toast('Error al eliminar', { tone: 'error', icon: 'x' }); }
+  };
+
+  /* Form helpers */
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const addObj = () => set('objetivos', [...form.objetivos, { ...EMPTY_OBJ }]);
+  const rmObj  = (i) => set('objetivos', form.objetivos.filter((_, x) => x !== i));
+  const setObj = (i, k, v) => set('objetivos', form.objetivos.map((o, x) => x === i ? { ...o, [k]: v } : o));
+
+  const addRec = () => set('recompensas', [...form.recompensas, { ...EMPTY_REC }]);
+  const rmRec  = (i) => set('recompensas', form.recompensas.filter((_, x) => x !== i));
+  const setRec = (i, k, v) => set('recompensas', form.recompensas.map((r, x) => x === i ? { ...r, [k]: v } : r));
+
+  const tipoColor = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0' };
+
+  /* ── FORM ── */
+  if (editing !== null) {
+    return (
+      <div style={{ height: '100%', overflowY: 'auto', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <button onClick={cancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-dim)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <Icon name="chevron" size={13} style={{ transform: 'rotate(180deg)' }} /> Volver
+          </button>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--txt)' }}>
+            {editing === 'new' ? 'Nueva Misión' : `Editando: ${editing.nombre}`}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 14 }}>
+          {/* Tipo */}
+          <div>
+            <label className="nx-label">Tipo de misión *</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {TIPO_MISION_OPTS.map(t => (
+                <button key={t} onClick={() => set('tipo_mision', t)} style={{
+                  flex: 1, padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontSize: 11,
+                  fontFamily: 'var(--font-data)', letterSpacing: '0.08em', textTransform: 'uppercase',
+                  background: form.tipo_mision === t ? `${tipoColor[t]}22` : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${form.tipo_mision === t ? tipoColor[t] : 'rgba(255,255,255,0.1)'}`,
+                  color: form.tipo_mision === t ? tipoColor[t] : 'var(--txt-dim)',
+                }}>{t}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Nombre y misión */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div>
+              <label className="nx-label">Nombre *</label>
+              <input className="nx-input" value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Guardianes del Templo" />
+            </div>
+            <div>
+              <label className="nx-label">Objetivo breve *</label>
+              <input className="nx-input" value={form.mision} onChange={e => set('mision', e.target.value)} placeholder="Ej: Completar 10 sesiones de entrenamiento" />
+            </div>
+          </div>
+
+          <div>
+            <label className="nx-label">Descripción</label>
+            <textarea className="nx-textarea" rows={3} value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Contexto e instrucciones detalladas..." />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px', gap: 14 }}>
+            <div>
+              <label className="nx-label">Fecha de inicio</label>
+              <input className="nx-input" type="date" value={form.fecha_inicio} onChange={e => set('fecha_inicio', e.target.value)} />
+            </div>
+            <div>
+              <label className="nx-label">Fecha de término</label>
+              <input className="nx-input" type="date" value={form.fecha_termino} onChange={e => set('fecha_termino', e.target.value)} />
+            </div>
+            <div>
+              <label className="nx-label">Orden</label>
+              <input className="nx-input" type="number" min="0" value={form.orden} onChange={e => set('orden', +e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <label className="nx-label">Activa</label>
+              <button onClick={() => set('activa', !form.activa)} style={{
+                padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                background: form.activa ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${form.activa ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                color: form.activa ? '#10b981' : 'var(--txt-dim)',
+              }}>{form.activa ? 'Activa' : 'Inactiva'}</button>
+            </div>
+          </div>
+
+          {/* Campos según tipo */}
+          {form.tipo_mision === 'temporada' && (
+            <div>
+              <label className="nx-label">ID de Temporada</label>
+              <input className="nx-input" type="number" min="1" value={form.temporada_id} onChange={e => set('temporada_id', e.target.value)} placeholder="ID de la temporada" />
+            </div>
+          )}
+          {form.tipo_mision === 'comunidad' && (
+            <div>
+              <label className="nx-label">Puntos requeridos (meta global)</label>
+              <input className="nx-input" type="number" min="1" value={form.puntos_requeridos} onChange={e => set('puntos_requeridos', +e.target.value)} />
+            </div>
+          )}
+          {form.tipo_mision === 'individual' && (
+            <div>
+              <label className="nx-label">NPC que da la misión</label>
+              <NpcPicker
+                npcs={npcsOptions}
+                value={form.npc_id ? +form.npc_id : null}
+                onChange={id => set('npc_id', id)}
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="nx-label">URL imagen de portada</label>
+            <input className="nx-input" value={form.foto_mision} onChange={e => set('foto_mision', e.target.value)} placeholder="https://..." />
+          </div>
+
+          {/* ── OBJETIVOS ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <label className="nx-label" style={{ margin: 0 }}>Objetivos</label>
+              <button onClick={addObj} style={{
+                background: 'rgba(56,205,240,0.1)', border: '1px solid rgba(56,205,240,0.3)', color: 'var(--holo)',
+                borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <Icon name="plus" size={11} /> Agregar objetivo
+              </button>
+            </div>
+            {form.objetivos.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '10px 0' }}>Sin objetivos — agrega al menos uno</div>
+            )}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {form.objetivos.map((o, i) => (
+                <div key={i} style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--holo-line)', position: 'relative' }}>
+                  <button onClick={() => rmObj(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
+                    <Icon name="x" size={12} />
+                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 80px 80px', gap: 10, paddingRight: 28, marginBottom: 8 }}>
+                    <div>
+                      <label className="nx-label">Nombre *</label>
+                      <input className="nx-input" value={o.nombre} onChange={e => setObj(i, 'nombre', e.target.value)} placeholder="Ej: Ganar 5 combates" />
+                    </div>
+                    <div>
+                      <label className="nx-label">Tipo</label>
+                      <select className="nx-select" value={o.tipo ?? 'general'} onChange={e => setObj(i, 'tipo', e.target.value)}>
+                        {TIPO_OBJETIVO_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="nx-label">Meta</label>
+                      <input className="nx-input" type="number" min="1" value={o.meta ?? 1} onChange={e => setObj(i, 'meta', +e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="nx-label">Unidad</label>
+                      <input className="nx-input" value={o.unidad ?? ''} onChange={e => setObj(i, 'unidad', e.target.value)} placeholder="victorias" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="nx-label">Descripción</label>
+                    <input className="nx-input" value={o.descripcion ?? ''} onChange={e => setObj(i, 'descripcion', e.target.value)} placeholder="Detalle del objetivo..." />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── RECOMPENSAS ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <label className="nx-label" style={{ margin: 0 }}>Recompensas</label>
+              <button onClick={addRec} style={{
+                background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)', color: '#E6B325',
+                borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <Icon name="plus" size={11} /> Agregar recompensa
+              </button>
+            </div>
+            {form.recompensas.length === 0 && (
+              <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '10px 0' }}>Sin recompensas definidas</div>
+            )}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {form.recompensas.map((r, i) => (
+                <div key={i} style={{ padding: '12px 14px', background: 'rgba(230,179,37,0.04)', borderRadius: 8, border: '1px solid rgba(230,179,37,0.15)', position: 'relative' }}>
+                  <button onClick={() => rmRec(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
+                    <Icon name="x" size={12} />
+                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: r.tipo === 'habilidad' ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
+                    <div>
+                      <label className="nx-label">Nombre *</label>
+                      <input className="nx-input" value={r.nombre} onChange={e => setRec(i, 'nombre', e.target.value)} placeholder="Ej: 500 Créditos" />
+                    </div>
+                    <div>
+                      <label className="nx-label">Tipo</label>
+                      <select className="nx-select" value={r.tipo ?? 'creditos'} onChange={e => setRec(i, 'tipo', e.target.value)}>
+                        {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    {r.tipo !== 'habilidad' && (
+                      <div>
+                        <label className="nx-label">Valor</label>
+                        <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+                  {r.tipo === 'habilidad' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label className="nx-label">Habilidad a otorgar *</label>
+                      <select className="nx-select" value={r.habilidad_id ?? ''}
+                        onChange={e => setRec(i, 'habilidad_id', e.target.value ? +e.target.value : null)}>
+                        <option value="">— Seleccionar habilidad —</option>
+                        {habilidades.map(h => (
+                          <option key={h.id} value={h.id}>{habilidadLabel(h)}</option>
+                        ))}
+                      </select>
+                      {habilidades.length === 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando habilidades...</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8, borderTop: '1px solid var(--holo-line)', marginTop: 4 }}>
+            <Btn onClick={cancel}>Cancelar</Btn>
+            <Btn kind="accent" icon="check" onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando...' : editing === 'new' ? 'Crear misión' : 'Guardar cambios'}
+            </Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── LIST ── */
+  const TIPOS = [{ v: '', l: 'Todas' }, { v: 'temporada', l: 'Temporada' }, { v: 'comunidad', l: 'Comunidad' }, { v: 'individual', l: 'Individual' }];
+  const tipoC = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0' };
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Toolbar */}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--holo-line)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {TIPOS.map(t => (
+            <button key={t.v} onClick={() => { setFilter(t.v); reload(t.v); }} style={{
+              padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+              fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+              background: filter === t.v ? 'color-mix(in srgb, var(--holo) 15%, transparent)' : 'transparent',
+              border: `1px solid ${filter === t.v ? 'var(--holo)' : 'transparent'}`,
+              color: filter === t.v ? 'var(--txt)' : 'var(--txt-dim)',
+            }}>{t.l}</button>
+          ))}
+        </div>
+        <div style={{ flex: 1 }} />
+        <Btn sm icon="plus" kind="accent" onClick={openNew}>Nueva misión</Btn>
+      </div>
+
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <span className="nx-data" style={{ color: 'var(--holo)', animation: 'nx-pulse 1.4s infinite' }}>CARGANDO...</span>
+          </div>
+        )}
+        {!loading && misiones.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
+            Sin misiones{filter ? ` de tipo "${filter}"` : ''}
+          </div>
+        )}
+        <div style={{ display: 'grid', gap: 10 }}>
+          {misiones.map(m => {
+            const c = tipoC[m.tipo_mision] ?? '#38cdf0';
+            return (
+              <div key={m.id} style={{
+                padding: '12px 14px', borderRadius: 8, border: '1px solid var(--holo-line)',
+                background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'flex-start', gap: 12,
+                borderLeft: `3px solid ${c}`,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{m.nombre}</span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 7px', borderRadius: 3, background: `${c}18`, color: c, border: `1px solid ${c}40` }}>
+                      {m.tipo_mision?.toUpperCase()}
+                    </span>
+                    {!m.activa && <span style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>INACTIVA</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--txt-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.mision}</div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 5 }}>
+                    <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                      {(m.objetivos ?? []).length} obj · {(m.recompensas ?? []).length} rec
+                    </span>
+                    {m.fecha_termino && (
+                      <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                        <Icon name="clock" size={9} /> {m.fecha_termino}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => openEdit(m)} style={{ background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.2)', color: 'var(--holo)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11 }}>
+                    <Icon name="edit" size={12} />
+                  </button>
+                  <button onClick={() => handleDelete(m.id)} style={{ background: 'rgba(255,45,69,0.08)', border: '1px solid rgba(255,45,69,0.2)', color: '#ff6b6b', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11 }}>
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
