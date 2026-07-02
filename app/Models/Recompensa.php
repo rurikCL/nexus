@@ -19,6 +19,7 @@ class Recompensa extends Model
         'valor',
         'imagen',
         'habilidad_id',
+        'objeto_id',
     ];
 
     public function mision(): BelongsTo
@@ -29,6 +30,11 @@ class Recompensa extends Model
     public function habilidad(): BelongsTo
     {
         return $this->belongsTo(RolHabilidad::class, 'habilidad_id');
+    }
+
+    public function objeto(): BelongsTo
+    {
+        return $this->belongsTo(RolObjeto::class, 'objeto_id');
     }
 
     public function misiones(): HasMany

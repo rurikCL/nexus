@@ -48,7 +48,7 @@ class MisionController extends Controller
             return response()->json(['misiones' => []]);
         }
 
-        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'users']);
+        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
 
         if ($request->filled('tipo')) {
             $query->where('tipo_mision', $request->tipo);
@@ -66,7 +66,7 @@ class MisionController extends Controller
     {
         $user = $request->user();
 
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'users.character'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users.character'])
             ->where('tipo_mision', 'comunidad')
             ->where('activa', true)
             ->orderBy('orden')
@@ -108,7 +108,7 @@ class MisionController extends Controller
         $userMisionIds = $user->misiones()->pluck('misiones.id');
 
         // Active individual missions either assigned to this user or not yet completed
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'npc.lugar'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'npc.lugar'])
             ->where('tipo_mision', 'individual')
             ->where('activa', true)
             ->where(function ($q) use ($userMisionIds, $user) {
@@ -149,7 +149,7 @@ class MisionController extends Controller
     {
         $user = $request->user();
 
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
             ->where('tipo_mision', 'temporada')
             ->where('temporada_id', $temporadaId)
             ->where('activa', true)
@@ -204,21 +204,22 @@ class MisionController extends Controller
             'recompensas.*.valor'        => 'sometimes|numeric',
             'recompensas.*.imagen'       => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
+            'recompensas.*.objeto_id'    => 'nullable|integer|exists:rol_objetos,id',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito'      => 'nullable|string',
         ]);
 
-        $mision = Mision::create(Arr::except($data, ['objetivos', 'recompensas.habilidad']));
+        $mision = Mision::create(Arr::except($data, ['objetivos', 'recompensas']));
 
-        foreach ($request->input('objetivos', []) as $obj) {
+        foreach ($data['objetivos'] ?? [] as $obj) {
             $mision->objetivos()->create($obj);
         }
 
-        foreach ($request->input('recompensas', []) as $rec) {
-            $mision->recompensas()->create($rec);
+        foreach ($data['recompensas'] ?? [] as $rec) {
+            $mision->recompensas()->create(Arr::except($rec, ['id']));
         }
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
 
         return response()->json(['mision' => $this->formatMision($mision, true)], 201);
     }
@@ -259,15 +260,16 @@ class MisionController extends Controller
             'recompensas.*.valor'        => 'sometimes|numeric',
             'recompensas.*.imagen'       => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
+            'recompensas.*.objeto_id'    => 'nullable|integer|exists:rol_objetos,id',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito'      => 'nullable|string',
         ]);
 
-        $mision->update(Arr::except($data, ['objetivos', 'recompensas.habilidad']));
+        $mision->update(Arr::except($data, ['objetivos', 'recompensas']));
 
         // Sync objetivos
-        if ($request->has('objetivos')) {
-            $incomingObjetivoIds = collect($request->input('objetivos'))
+        if (array_key_exists('objetivos', $data)) {
+            $incomingObjetivoIds = collect($data['objetivos'])
                 ->pluck('id')
                 ->filter()
                 ->values();
@@ -275,40 +277,40 @@ class MisionController extends Controller
             // Delete removed objetivos
             $mision->objetivos()->whereNotIn('id', $incomingObjetivoIds)->delete();
 
-            foreach ($request->input('objetivos') as $obj) {
+            foreach ($data['objetivos'] as $obj) {
                 if (! empty($obj['id'])) {
                     Objetivo::where('id', $obj['id'])
                         ->where('mision_id', $mision->id)
                         ->update(Arr::except($obj, ['id']));
                 } else {
-                    $mision->objetivos()->create($obj);
+                    $mision->objetivos()->create(Arr::except($obj, ['id']));
                 }
             }
         }
 
         // Sync recompensas
-        if ($request->has('recompensas')) {
-            $incomingRecompensaIds = collect($request->input('recompensas'))
+        if (array_key_exists('recompensas', $data)) {
+            $incomingRecompensaIds = collect($data['recompensas'])
                 ->pluck('id')
                 ->filter()
                 ->values();
 
             $mision->recompensas()->whereNotIn('id', $incomingRecompensaIds)->delete();
 
-            foreach ($request->input('recompensas') as $rec) {
+            foreach ($data['recompensas'] as $rec) {
                 if (! empty($rec['id'])) {
                     Recompensa::where('id', $rec['id'])
                         ->where('mision_id', $mision->id)
                         ->update(Arr::except($rec, ['id']));
                 } else {
-                    $mision->recompensas()->create($rec);
+                    $mision->recompensas()->create(Arr::except($rec, ['id']));
                 }
             }
         }
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
 
-        return response()->json(['mision' => $this->formatMision($mision->fresh(['objetivos', 'recompensas.habilidad', 'users']), true)]);
+        return response()->json(['mision' => $this->formatMision($mision->fresh(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']), true)]);
     }
 
     // ── DELETE /api/misiones/{mision} ─────────────────────────────────────────
@@ -338,7 +340,7 @@ class MisionController extends Controller
             $data['user_id'] => ['status' => 'pendiente', 'progreso' => 0],
         ]);
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
 
         return response()->json(['mision' => $this->formatMision($mision, true)]);
     }
@@ -363,7 +365,7 @@ class MisionController extends Controller
 
         $mision->users()->detach($userId);
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
 
         return response()->json(['mision' => $this->formatMision($mision, true)]);
     }
@@ -426,14 +428,22 @@ class MisionController extends Controller
             $user->id => ['status' => 'completada', 'progreso' => 100],
         ]);
 
-        $mision->load(['objetivos', 'recompensas.habilidad']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto']);
 
-        // Otorgar habilidades de las recompensas tipo "habilidad"
+        // Otorgar recompensas según su tipo
         $habilidadesAprendidas = [];
+        $objetosOtorgados      = [];
+        $creditosOtorgados     = 0;
         foreach ($mision->recompensas as $recompensa) {
             if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
                 $user->habilidadesAprendidas()->syncWithoutDetaching([$recompensa->habilidad_id]);
                 $habilidadesAprendidas[] = $recompensa->habilidad_id;
+            } elseif ($recompensa->tipo === 'objeto' && $recompensa->objeto_id && $character) {
+                $character->rolObjetos()->syncWithoutDetaching([$recompensa->objeto_id]);
+                $objetosOtorgados[] = $recompensa->objeto_id;
+            } elseif ($recompensa->tipo === 'creditos' && $recompensa->valor && $character) {
+                $character->increment('credits', $recompensa->valor);
+                $creditosOtorgados += $recompensa->valor;
             }
         }
 
@@ -454,6 +464,8 @@ class MisionController extends Controller
         return response()->json([
             'message'                => 'Misión completada.',
             'habilidades_aprendidas' => $habilidadesAprendidas,
+            'objetos_otorgados'      => $objetosOtorgados,
+            'creditos_otorgados'     => $creditosOtorgados,
             'hitos_otorgados'        => $hitosOtorgados,
             'mision'                 => array_merge($this->formatMision($mision), [
                 'status'   => $pivot?->status ?? 'completada',
@@ -504,6 +516,10 @@ class MisionController extends Controller
                     'habilidad_id' => $r->habilidad_id,
                     'habilidad'    => $r->relationLoaded('habilidad') && $r->habilidad
                         ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre]
+                        : null,
+                    'objeto_id'    => $r->objeto_id,
+                    'objeto'       => $r->relationLoaded('objeto') && $r->objeto
+                        ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen]
                         : null,
                 ])->values()
                 : [],

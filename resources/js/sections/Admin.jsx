@@ -1174,7 +1174,7 @@ const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'S
 const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
 
 const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unidad: '' };
-const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null };
+const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null };
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '',
@@ -1201,7 +1201,7 @@ function misionFromApi(m) {
     hito_requerimiento:   m.hito_requerimiento    ?? '',
     entregar_hito:        m.entregar_hito         ?? '',
     objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
-    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null })),
+    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null })),
   };
 }
 
@@ -1374,12 +1374,20 @@ function MisionesAdmin() {
   const [form, setForm]             = useState({ ...EMPTY_MISION });
   const [filter, setFilter]         = useState('');
   const [habilidades, setHabilidades]   = useState([]);
+  const [objetos, setObjetos]           = useState([]);
   const [npcsOptions, setNpcsOptions]   = useState([]);
 
   /* Load habilidades options once */
   useEffect(() => {
     api('GET', '/admin/rol_habilidades/options')
       .then(d => setHabilidades(d.options ?? []))
+      .catch(() => {});
+  }, []);
+
+  /* Load objetos options once */
+  useEffect(() => {
+    api('GET', '/admin/rol_objetos/options')
+      .then(d => setObjetos(d.options ?? []))
       .catch(() => {});
   }, []);
 
@@ -1654,7 +1662,7 @@ function MisionesAdmin() {
                   <button onClick={() => rmRec(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
                     <Icon name="x" size={12} />
                   </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: r.tipo === 'habilidad' ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
                     <div>
                       <label className="nx-label">Nombre *</label>
                       <input className="nx-input" value={r.nombre} onChange={e => setRec(i, 'nombre', e.target.value)} placeholder="Ej: 500 Créditos" />
@@ -1665,7 +1673,7 @@ function MisionesAdmin() {
                         {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    {r.tipo !== 'habilidad' && (
+                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && (
                       <div>
                         <label className="nx-label">Valor</label>
                         <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
@@ -1684,6 +1692,21 @@ function MisionesAdmin() {
                       </select>
                       {habilidades.length === 0 && (
                         <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando habilidades...</div>
+                      )}
+                    </div>
+                  )}
+                  {r.tipo === 'objeto' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label className="nx-label">Objeto a otorgar *</label>
+                      <select className="nx-select" value={r.objeto_id ?? ''}
+                        onChange={e => setRec(i, 'objeto_id', e.target.value ? +e.target.value : null)}>
+                        <option value="">— Seleccionar objeto —</option>
+                        {objetos.map(o => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                      {objetos.length === 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando objetos...</div>
                       )}
                     </div>
                   )}

@@ -1250,7 +1250,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId, refreshToken }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1291,6 +1291,17 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [currentId]);
+
+  /* refresco silencioso (sin spinner) cuando cambia el estado de una misión */
+  const skipFirstRefresh = useRef(true);
+  useEffect(() => {
+    if (skipFirstRefresh.current) { skipFirstRefresh.current = false; return; }
+    let cancelled = false;
+    apiFetch(`/map/lugares/${currentId}`)
+      .then((d) => { if (!cancelled) setLugar(d.lugar); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [refreshToken]);
 
   const navigateTo = (conn) => onTravel('vehiculo', () => setNavStack((prev) => [...prev, conn.id]));
 
@@ -1520,6 +1531,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
 function NpcCard({ npc, onClick }) {
   const npcImagen = mediaUrl(npc.imagen);
   const npcMiniImagen = mediaUrl(npc.imagen_mini);
+  const tieneMision = Boolean(npc.mision_disponible) && npc.mision_disponible.estado !== 'completada';
   return (
     <button onClick={onClick}
       style={{
@@ -1556,7 +1568,7 @@ function NpcCard({ npc, onClick }) {
             <Icon name="user" size={44} style={{ color: 'var(--holo)' }} />
           </div>
         )}
-        {npc.MisionID && (
+        {tieneMision && (
           <div style={{
             position: 'absolute', top: 8, right: 8, zIndex: 2,
             width: 22, height: 22, borderRadius: '50%',
@@ -1607,7 +1619,7 @@ function NpcCard({ npc, onClick }) {
         <span style={{ fontSize: 10, color: 'var(--pompeyo-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
           HABLAR
         </span>
-        {npc.MisionID && (
+        {tieneMision && (
           <>
             <span style={{ marginLeft: 'auto' }} />
             <Icon name="star" size={11} style={{ color: 'var(--pompeyo-oro)' }} />
@@ -1660,6 +1672,18 @@ function postReputation(delta) {
   }).catch(() => {});
 }
 
+function postNpcVictory(npcId) {
+  const token = localStorage.getItem('nx-token');
+  fetch('/api/character/npc-victory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    body: JSON.stringify({ npc_id: npcId }),
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if (d?.hito) toast(`🏆 Hito obtenido: "${d.hito}"`, { tone: 'success', icon: 'star' }); })
+    .catch(() => {});
+}
+
 /* ─── BARRA HP + ESCUDO ─────────────────────────────────── */
 function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align = 'left' }) {
   const vidaPct   = maxVida   > 0 ? Math.max(0, Math.min(100, (vida   / maxVida)   * 100)) : 0;
@@ -1707,7 +1731,7 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
-function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart }) {
+function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange }) {
   const isAI = Boolean(npc.prompt);
   const [messages, setMessages]   = useState([]);
   const [phase, setPhase]         = useState('greeting');
@@ -1717,6 +1741,10 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
   const bottomRef                 = useRef(null);
   const [typingInMsg, setTypingInMsg] = useState(null); // { text, visibleChars }
   const [npcTextDelay, setNpcTextDelay] = useState(30); // ms por carácter
+
+  const [misionInfo, setMisionInfo]   = useState(npc.mision_disponible ?? null);
+  const [showMisionPopup, setShowMisionPopup] = useState(false);
+  const [misionBusy, setMisionBusy]   = useState(false);
 
   /* Carga el retraso_texto_npc desde configuraciones */
   useEffect(() => {
@@ -1794,8 +1822,10 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
       setTimeout(() => {
         showNpcMsg(npc.saludo);
         setTyping(false);
-        if (npcOptions.length > 0) setPhase('dialog');
+        if (npcOptions.length > 0 || misionInfo) setPhase('dialog');
       }, 800);
+    } else if (npcOptions.length > 0 || misionInfo) {
+      setPhase('dialog');
     }
   }, []);
 
@@ -1877,6 +1907,52 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
       checkHostileAttack();
     }, 800);
   }, [checkHostileAttack]);
+
+  const consultarMision = useCallback(() => {
+    if (!misionInfo || typing) return;
+    setMessages(prev => [...prev, { from: 'player', text: 'Consultar por misión', ts: Date.now() }]);
+    setTyping(true);
+    setTimeout(() => {
+      showNpcMsg(misionInfo.descripcion || misionInfo.mision || '...');
+      setTyping(false);
+      setShowMisionPopup(true);
+    }, 800);
+  }, [misionInfo, typing]);
+
+  const handleAceptarMision = useCallback(async () => {
+    if (!misionInfo) return;
+    setMisionBusy(true);
+    try {
+      await apiPost(`/misiones/${misionInfo.id}/accept`, {});
+      toast('¡Misión aceptada!', { tone: 'success', icon: 'star' });
+      setMisionInfo(prev => ({ ...prev, estado: 'pendiente' }));
+      setShowMisionPopup(false);
+      onMisionChange?.();
+    } catch {
+      toast('Error al aceptar la misión', { tone: 'error', icon: 'x' });
+    } finally {
+      setMisionBusy(false);
+    }
+  }, [misionInfo, onMisionChange]);
+
+  const handleCompletarMision = useCallback(async () => {
+    if (!misionInfo) return;
+    setMisionBusy(true);
+    try {
+      await apiPost(`/misiones/${misionInfo.id}/completar`, {});
+      toast('¡Misión completada!', { tone: 'success', icon: 'check' });
+      setMisionInfo(prev => ({ ...prev, estado: 'completada' }));
+      setShowMisionPopup(false);
+      onMisionChange?.();
+    } catch (e) {
+      const msg = String(e.message) === '403'
+        ? 'No cumples los hitos requeridos para completar esta misión.'
+        : 'Error al completar la misión';
+      toast(msg, { tone: 'error', icon: 'x' });
+    } finally {
+      setMisionBusy(false);
+    }
+  }, [misionInfo, onMisionChange]);
 
   const STATS = [
     { label: 'VID', val: npc.vida },
@@ -2069,6 +2145,23 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
             }}>
               IA · {npc.nombre.toUpperCase()}
             </div>
+            {misionInfo && (
+              <div style={{ padding: '10px 12px 0' }}>
+                <button onClick={consultarMision} disabled={typing} style={{
+                  width: '100%', textAlign: 'left', background: 'rgba(230,179,37,0.10)',
+                  border: '1px solid rgba(230,179,37,0.35)', borderRadius: 8, padding: '9px 11px',
+                  cursor: typing ? 'wait' : 'pointer', fontSize: 12, color: '#E6B325',
+                  display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+                  opacity: typing ? 0.45 : 1,
+                }}
+                  onMouseEnter={e => { if (typing) return; e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
+                >
+                  <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>!</span>
+                  <span>Consultar por misión</span>
+                </button>
+              </div>
+            )}
             <div style={{ flex: 1 }} />
             {!isAliado && npc.ataque > 0 && (
               <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,45,69,0.15)' }}>
@@ -2134,7 +2227,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
             </div>
           </div>
         ) : (
-          npcOptions.length > 0 && phase === 'dialog' && (
+          (npcOptions.length > 0 || misionInfo) && phase === 'dialog' && (
             <div style={{
               width: 210, flexShrink: 0,
               borderLeft: '1px solid var(--holo-line)',
@@ -2150,6 +2243,21 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
               }}>
                 OPCIONES DE DIÁLOGO
               </div>
+              {misionInfo && (
+                <button onClick={consultarMision} disabled={typing} style={{
+                  width: '100%', textAlign: 'left', background: 'rgba(230,179,37,0.10)',
+                  border: '1px solid rgba(230,179,37,0.35)', borderRadius: 8, padding: '9px 11px',
+                  cursor: typing ? 'wait' : 'pointer', fontSize: 12, color: '#E6B325',
+                  display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+                  opacity: typing ? 0.45 : 1,
+                }}
+                  onMouseEnter={e => { if (typing) return; e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
+                >
+                  <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>!</span>
+                  <span>Consultar por misión</span>
+                </button>
+              )}
               {!isAliado && npc.ataque > 0 && (
                 <button onClick={isNeutral ? attackNeutral : startCombat} style={{
                   width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
@@ -2207,6 +2315,133 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart })
 
       </div>
 
+      {showMisionPopup && misionInfo && (
+        <MisionOfrecidaPopup
+          mision={misionInfo}
+          busy={misionBusy}
+          onClose={() => setShowMisionPopup(false)}
+          onAceptar={handleAceptarMision}
+          onCompletar={handleCompletarMision}
+        />
+      )}
+
+    </div>
+  );
+}
+
+/* ─── POPUP DE MISIÓN OFRECIDA POR NPC ─────────────────── */
+function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) {
+  const ESTADO_LABEL = { pendiente: 'Pendiente', 'en-curso': 'En curso', completada: 'Completada' };
+  const ESTADO_COLOR = { pendiente: '#E6B325', 'en-curso': '#38cdf0', completada: '#10b981' };
+  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : '📦';
+
+  const hitosReq = mision.hito_requerimiento
+    ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)
+    : [];
+
+  return (
+    <div onMouseDown={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 1300,
+      background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(6px)',
+      display: 'grid', placeItems: 'center', padding: 20,
+      animation: 'nx-fade-up 0.25s ease both',
+    }}>
+      <div onMouseDown={e => e.stopPropagation()} className="nx-panel solid nx-panel-glow" style={{
+        width: 480, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto',
+      }}>
+        {mision.foto_mision && (
+          <div style={{ height: 140, overflow: 'hidden' }}>
+            <img src={mediaUrl(mision.foto_mision)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+        )}
+        <header className="nx-panel-head">
+          <div style={{ flex: 1 }}>
+            <div className="nx-kicker" style={{ marginBottom: 2, color: '#E6B325' }}>MISIÓN</div>
+            <div className="nx-display" style={{ fontSize: 15 }}>{mision.nombre}</div>
+          </div>
+          {mision.estado && (
+            <span style={{
+              fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.1em',
+              padding: '3px 9px', borderRadius: 4, fontWeight: 700,
+              background: `${ESTADO_COLOR[mision.estado]}18`, border: `1px solid ${ESTADO_COLOR[mision.estado]}55`,
+              color: ESTADO_COLOR[mision.estado],
+            }}>{ESTADO_LABEL[mision.estado]?.toUpperCase()}</span>
+          )}
+          <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 5 }}><Icon name="x" size={13} /></button>
+        </header>
+        <div className="nx-panel-body" style={{ display: 'grid', gap: 16 }}>
+          {mision.mision && (
+            <p style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, margin: 0 }}>{mision.mision}</p>
+          )}
+          {mision.descripcion && (
+            <p style={{ fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{mision.descripcion}</p>
+          )}
+
+          {mision.objetivos?.length > 0 && (
+            <div>
+              <div className="nx-kicker" style={{ marginBottom: 8 }}>OBJETIVOS</div>
+              <div style={{ display: 'grid', gap: 7 }}>
+                {mision.objetivos.map(o => (
+                  <div key={o.id} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px',
+                    background: 'rgba(56,205,240,0.05)', border: '1px solid var(--holo-line)', borderRadius: 7,
+                  }}>
+                    <Icon name="target" size={13} style={{ color: 'var(--holo)', marginTop: 1, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--txt)', fontWeight: 600 }}>
+                        {o.nombre}{o.meta > 1 ? ` (${o.meta}${o.unidad ? ` ${o.unidad}` : ''})` : ''}
+                      </div>
+                      {o.descripcion && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 2 }}>{o.descripcion}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mision.recompensas?.length > 0 && (
+            <div>
+              <div className="nx-kicker" style={{ marginBottom: 8 }}>RECOMPENSAS</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {mision.recompensas.map(r => (
+                  <div key={r.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+                    background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)', borderRadius: 20,
+                  }}>
+                    <span style={{ fontSize: 13 }}>{recIcon(r.tipo)}</span>
+                    <span style={{ fontSize: 11, color: 'var(--txt)' }}>
+                      {r.tipo === 'creditos' ? `${r.valor} créditos` : (r.habilidad?.nombre || r.objeto?.nombre || r.nombre)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hitosReq.length > 0 && mision.estado !== 'completada' && (
+            <div style={{ fontSize: 11, color: mision.puede_completar ? '#10b981' : 'var(--txt-faint)' }}>
+              Requiere: {hitosReq.join(', ')}
+            </div>
+          )}
+
+          {mision.estado === 'completada' ? (
+            <div style={{ fontSize: 12, color: '#10b981', textAlign: 'right' }}>Ya completaste esta misión.</div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
+              {!mision.estado && (
+                <Btn kind="accent" icon="star" onClick={onAceptar} disabled={busy}>
+                  {busy ? 'Aceptando...' : 'Aceptar misión'}
+                </Btn>
+              )}
+              {(mision.estado === 'pendiente' || mision.estado === 'en-curso') && (
+                <Btn kind="accent" icon="check" onClick={onCompletar} disabled={busy || !mision.puede_completar}>
+                  {busy ? 'Completando...' : 'Completar misión'}
+                </Btn>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2763,6 +2998,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [zona, setZona]           = useState(null);
   const [lugar, setLugar]         = useState(null);
   const [dialogNpc, setDialogNpc] = useState(null);
+  const [lugarRefreshKey, setLugarRefreshKey] = useState(0);
   const [activeNpcCombat, setActiveNpcCombat] = useState(() => {
     try { const s = localStorage.getItem('nx-npc-combat'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -3002,6 +3238,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onChat={setChatTarget}
           onAttack={handleAttackUser}
           myUserId={userId}
+          refreshToken={lugarRefreshKey}
         />
       )}
 
@@ -3017,6 +3254,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
             localStorage.setItem('nx-npc-combat', JSON.stringify(session));
             setActiveNpcCombat(session);
           }}
+          onMisionChange={() => setLugarRefreshKey((k) => k + 1)}
         />
       )}
 
@@ -3040,6 +3278,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
             localStorage.removeItem('nx-npc-combat');
             if (activeNpcCombat.isHostil) { postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' }); }
             else { postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' }); }
+            if (activeNpcCombat.npc?.id) postNpcVictory(activeNpcCombat.npc.id);
             setActiveNpcCombat(null);
           }}
           onDefeat={() => { localStorage.removeItem('nx-npc-combat'); setActiveNpcCombat(null); }}

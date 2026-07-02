@@ -373,6 +373,19 @@ class PvpCombatController extends Controller
         if ($combat->attacker_hp <= 0)     $combat->status = 'defender_won';
         elseif ($combat->defender_hp <= 0) $combat->status = 'attacker_won';
 
+        /* ─── Hito de victoria ──────────────────────────────────────────── */
+        if (in_array($combat->status, ['attacker_won', 'defender_won'], true)) {
+            $winnerChar = $combat->status === 'attacker_won' ? $combat->attacker->character : $combat->defender->character;
+            $loserChar  = $combat->status === 'attacker_won' ? $combat->defender->character : $combat->attacker->character;
+
+            if ($winnerChar && $loserChar) {
+                \App\Models\CharacterHito::firstOrCreate([
+                    'character_id' => $winnerChar->id,
+                    'hito'         => "{$loserChar->name} derrotado",
+                ]);
+            }
+        }
+
         /* ─── Cambio de turno y pre-recuperación de fuerza ───────────── */
         if ($combat->status === 'active') {
             $combat->current_turn = $opponentUser->id;

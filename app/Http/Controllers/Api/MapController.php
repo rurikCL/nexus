@@ -10,9 +10,12 @@ use App\Models\MapPlaneta;
 use App\Models\MapZona;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
+use App\Models\Mision;
 use App\Models\PvpCombat;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class MapController extends Controller
 {
@@ -87,6 +90,8 @@ class MapController extends Controller
             ])
             ->findOrFail($id);
 
+        $lugar->setRelation('npcs', $this->attachMisionInfo($lugar->npcs, $request->user()));
+
         $character = $request->user()?->character;
         $requiredPassId = $lugar->pase;
 
@@ -143,12 +148,87 @@ class MapController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function npc(int $id): JsonResponse
+    public function npc(Request $request, int $id): JsonResponse
     {
         $npc = MapNpc::where('visible', true)
             ->with('lugar.zona.planeta.sistema')
             ->findOrFail($id);
 
+        $npc = $this->attachMisionInfo(collect([$npc]), $request->user())->first();
+
         return response()->json(['npc' => $npc]);
+    }
+
+    /**
+     * Adjunta a cada NPC la misión individual activa que ofrece (misiones.npc_id),
+     * junto con el estado de esa misión para el usuario autenticado.
+     */
+    private function attachMisionInfo(Collection $npcs, ?User $user): Collection
+    {
+        $npcIds = $npcs->pluck('id');
+
+        $misionesPorNpc = Mision::whereIn('npc_id', $npcIds)
+            ->where('activa', true)
+            ->with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
+            ->orderBy('orden')
+            ->get()
+            ->groupBy('npc_id');
+
+        $misionIds = $misionesPorNpc->flatten()->pluck('id');
+
+        $pivots = ($user && $misionIds->isNotEmpty())
+            ? \DB::table('mision_user')->where('user_id', $user->id)->whereIn('mision_id', $misionIds)->get()->keyBy('mision_id')
+            : collect();
+
+        $characterHitos = $user?->character
+            ? $user->character->hitos()->pluck('hito')->all()
+            : [];
+
+        return $npcs->map(function (MapNpc $npc) use ($misionesPorNpc, $pivots, $characterHitos) {
+            $mision = $misionesPorNpc->get($npc->id)?->first();
+
+            if (! $mision) {
+                $npc->setAttribute('mision_disponible', null);
+                return $npc;
+            }
+
+            $pivot = $pivots->get($mision->id);
+            $requeridos = $mision->hito_requerimiento
+                ? array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)))
+                : [];
+            $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+
+            $npc->setAttribute('mision_disponible', [
+                'id'                 => $mision->id,
+                'nombre'             => $mision->nombre,
+                'mision'             => $mision->mision,
+                'descripcion'        => $mision->descripcion,
+                'foto_mision'        => $mision->foto_mision,
+                'hito_requerimiento' => $mision->hito_requerimiento,
+                'entregar_hito'      => $mision->entregar_hito,
+                'objetivos'          => $mision->objetivos->map(fn ($o) => [
+                    'id'          => $o->id,
+                    'nombre'      => $o->nombre,
+                    'descripcion' => $o->descripcion,
+                    'tipo'        => $o->tipo,
+                    'meta'        => $o->meta,
+                    'unidad'      => $o->unidad,
+                ])->values(),
+                'recompensas'        => $mision->recompensas->map(fn ($r) => [
+                    'id'          => $r->id,
+                    'nombre'      => $r->nombre,
+                    'descripcion' => $r->descripcion,
+                    'tipo'        => $r->tipo,
+                    'valor'       => $r->valor,
+                    'imagen'      => $r->imagen,
+                    'habilidad'   => $r->habilidad ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre] : null,
+                    'objeto'      => $r->objeto ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen] : null,
+                ])->values(),
+                'estado'             => $pivot->status ?? null,
+                'puede_completar'    => (bool) ($pivot && $pivot->status !== 'completada' && $cumpleHitos),
+            ]);
+
+            return $npc;
+        });
     }
 }
