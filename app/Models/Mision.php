@@ -24,6 +24,8 @@ class Mision extends Model
         'orden',
         'fecha_inicio',
         'fecha_termino',
+        'hito_requerimiento',
+        'entregar_hito',
         // Legacy single FK columns (kept for backwards compat)
         'recompensa_id',
         'objetivo_id',

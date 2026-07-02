@@ -25,7 +25,6 @@ class MisionController extends Controller
     {
         $npcs = \DB::table('map_npcs')
             ->leftJoin('map_lugares', 'map_npcs.LugarID', '=', 'map_lugares.id')
-            ->where('map_npcs.tipo', 'mision')
             ->whereNull('map_npcs.deleted_at')
             ->select(
                 'map_npcs.id',
@@ -205,6 +204,8 @@ class MisionController extends Controller
             'recompensas.*.valor'        => 'sometimes|numeric',
             'recompensas.*.imagen'       => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
+            'hito_requerimiento' => 'nullable|string',
+            'entregar_hito'      => 'nullable|string',
         ]);
 
         $mision = Mision::create(Arr::except($data, ['objetivos', 'recompensas.habilidad']));
@@ -258,6 +259,8 @@ class MisionController extends Controller
             'recompensas.*.valor'        => 'sometimes|numeric',
             'recompensas.*.imagen'       => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
+            'hito_requerimiento' => 'nullable|string',
+            'entregar_hito'      => 'nullable|string',
         ]);
 
         $mision->update(Arr::except($data, ['objetivos', 'recompensas.habilidad']));
@@ -400,7 +403,24 @@ class MisionController extends Controller
     // ── POST /api/misiones/{mision}/completar ─────────────────────────────────
     public function completar(Request $request, Mision $mision): JsonResponse
     {
-        $user = $request->user();
+        $user      = $request->user();
+        $character = $user->character;
+
+        // Verificar hitos requeridos
+        if ($mision->hito_requerimiento) {
+            $requeridos  = array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)));
+            $tieneHitos  = $character
+                ? $character->hitos()->whereIn('hito', $requeridos)->pluck('hito')->toArray()
+                : [];
+            $faltantes   = array_values(array_diff($requeridos, $tieneHitos));
+
+            if (! empty($faltantes)) {
+                return response()->json([
+                    'message'  => 'No cumples los hitos requeridos para esta misión.',
+                    'faltantes' => $faltantes,
+                ], 403);
+            }
+        }
 
         $mision->users()->syncWithoutDetaching([
             $user->id => ['status' => 'completada', 'progreso' => 100],
@@ -417,12 +437,25 @@ class MisionController extends Controller
             }
         }
 
+        // Otorgar hitos de la misión
+        $hitosOtorgados = [];
+        if ($mision->entregar_hito && $character) {
+            $hitos = array_filter(array_map('trim', explode(',', $mision->entregar_hito)));
+            foreach ($hitos as $hito) {
+                \App\Models\CharacterHito::firstOrCreate(
+                    ['character_id' => $character->id, 'hito' => $hito]
+                );
+                $hitosOtorgados[] = $hito;
+            }
+        }
+
         $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
 
         return response()->json([
-            'message'               => 'Misión completada.',
+            'message'                => 'Misión completada.',
             'habilidades_aprendidas' => $habilidadesAprendidas,
-            'mision'                => array_merge($this->formatMision($mision), [
+            'hitos_otorgados'        => $hitosOtorgados,
+            'mision'                 => array_merge($this->formatMision($mision), [
                 'status'   => $pivot?->status ?? 'completada',
                 'progreso' => $pivot?->progreso ?? 100,
             ]),
@@ -445,8 +478,10 @@ class MisionController extends Controller
             'puntos_requeridos' => $mision->puntos_requeridos,
             'activa'            => (bool) $mision->activa,
             'orden'             => $mision->orden,
-            'fecha_inicio'      => $mision->fecha_inicio?->format('Y-m-d'),
-            'fecha_termino'     => $mision->fecha_termino?->format('Y-m-d'),
+            'fecha_inicio'         => $mision->fecha_inicio?->format('Y-m-d'),
+            'fecha_termino'        => $mision->fecha_termino?->format('Y-m-d'),
+            'hito_requerimiento'   => $mision->hito_requerimiento,
+            'entregar_hito'        => $mision->entregar_hito,
             'objetivos'         => $mision->relationLoaded('objetivos')
                 ? $mision->objetivos->map(fn ($o) => [
                     'id'           => $o->id,

@@ -1180,6 +1180,7 @@ const EMPTY_MISION = {
   tipo_mision: 'individual', temporada_id: '', npc_id: '',
   puntos_requeridos: 100, activa: true, orden: 0,
   fecha_inicio: '', fecha_termino: '',
+  hito_requerimiento: '', entregar_hito: '',
   objetivos: [], recompensas: [],
 };
 
@@ -1195,11 +1196,77 @@ function misionFromApi(m) {
     puntos_requeridos:  m.puntos_requeridos ?? 100,
     activa:             m.activa            ?? true,
     orden:              m.orden             ?? 0,
-    fecha_inicio:       m.fecha_inicio      ?? '',
-    fecha_termino:      m.fecha_termino     ?? '',
+    fecha_inicio:         m.fecha_inicio          ?? '',
+    fecha_termino:        m.fecha_termino         ?? '',
+    hito_requerimiento:   m.hito_requerimiento    ?? '',
+    entregar_hito:        m.entregar_hito         ?? '',
     objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
     recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null })),
   };
+}
+
+function TagInput({ value, onChange, placeholder = 'Escribe y presiona Enter o coma...' }) {
+  const [input, setInput] = useState('');
+  const tags = value ? value.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  const addTag = (raw) => {
+    const newTags = raw.split(',').map(t => t.trim()).filter(Boolean);
+    const merged = [...new Set([...tags, ...newTags])];
+    onChange(merged.join(', '));
+  };
+
+  const removeTag = (tag) => {
+    const next = tags.filter(t => t !== tag);
+    onChange(next.join(', '));
+  };
+
+  const handleKey = (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+      e.preventDefault();
+      addTag(input);
+      setInput('');
+    } else if (e.key === 'Backspace' && !input && tags.length) {
+      removeTag(tags[tags.length - 1]);
+    }
+  };
+
+  const handleBlur = () => {
+    if (input.trim()) { addTag(input); setInput(''); }
+  };
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+      padding: '6px 10px', minHeight: 42, borderRadius: 8,
+      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
+      cursor: 'text',
+    }} onClick={e => e.currentTarget.querySelector('input')?.focus()}>
+      {tags.map(tag => (
+        <span key={tag} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+          background: 'rgba(56,205,240,0.12)', border: '1px solid rgba(56,205,240,0.3)', color: 'var(--holo)',
+        }}>
+          {tag}
+          <button onClick={() => removeTag(tag)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--holo)',
+            padding: 0, lineHeight: 1, fontSize: 13, opacity: 0.7,
+          }}>×</button>
+        </span>
+      ))}
+      <input
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={handleKey}
+        onBlur={handleBlur}
+        placeholder={tags.length ? '' : placeholder}
+        style={{
+          flex: 1, minWidth: 120, background: 'none', border: 'none', outline: 'none',
+          color: 'var(--txt)', fontSize: 13,
+        }}
+      />
+    </div>
+  );
 }
 
 function NpcPicker({ npcs, value, onChange }) {
@@ -1316,7 +1383,7 @@ function MisionesAdmin() {
       .catch(() => {});
   }, []);
 
-  /* Load NPCs de tipo mision once */
+  /* Load NPCs (cualquier tipo) once */
   useEffect(() => {
     api('GET', '/misiones/npcs-mision')
       .then(d => setNpcsOptions(d.npcs ?? []))
@@ -1350,12 +1417,14 @@ function MisionesAdmin() {
     try {
       const payload = {
         ...form,
-        temporada_id:      form.temporada_id      || null,
-        npc_id:            form.npc_id            || null,
-        fecha_inicio:      form.fecha_inicio      || null,
-        fecha_termino:     form.fecha_termino     || null,
-        puntos_requeridos: Number(form.puntos_requeridos),
-        orden:             Number(form.orden),
+        temporada_id:        form.temporada_id        || null,
+        npc_id:              form.npc_id              || null,
+        fecha_inicio:        form.fecha_inicio        || null,
+        fecha_termino:       form.fecha_termino       || null,
+        puntos_requeridos:   Number(form.puntos_requeridos),
+        orden:               Number(form.orden),
+        hito_requerimiento:  form.hito_requerimiento  || null,
+        entregar_hito:       form.entregar_hito       || null,
       };
       const res = editing === 'new'
         ? await api('POST', '/misiones', payload)
@@ -1488,6 +1557,32 @@ function MisionesAdmin() {
           <div>
             <label className="nx-label">URL imagen de portada</label>
             <input className="nx-input" value={form.foto_mision} onChange={e => set('foto_mision', e.target.value)} placeholder="https://..." />
+          </div>
+
+          {/* ── HITOS ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <label className="nx-label">Hito requerimiento</label>
+              <TagInput
+                value={form.hito_requerimiento}
+                onChange={v => set('hito_requerimiento', v)}
+                placeholder="Hito necesario para completar..."
+              />
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
+                El jugador debe tener estos hitos antes de completar la misión.
+              </div>
+            </div>
+            <div>
+              <label className="nx-label">Entregar hito</label>
+              <TagInput
+                value={form.entregar_hito}
+                onChange={v => set('entregar_hito', v)}
+                placeholder="Hito que se otorga al completar..."
+              />
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
+                Hitos que se otorgan al jugador al finalizar la misión.
+              </div>
+            </div>
           </div>
 
           {/* ── OBJETIVOS ── */}

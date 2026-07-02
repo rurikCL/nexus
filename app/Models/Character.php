@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Character extends Model
@@ -102,6 +103,11 @@ class Character extends Model
     {
         return $this->belongsToMany(RolObjeto::class, 'rol_character_objeto')
             ->withTimestamps();
+    }
+
+    public function hitos(): HasMany
+    {
+        return $this->hasMany(CharacterHito::class);
     }
 
     public function statsTemporadas(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
