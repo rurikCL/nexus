@@ -56,7 +56,7 @@ class MeController extends Controller
         $character = $user->character;
 
         if ($character) {
-            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema']);
+            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada']);
         }
 
         $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
@@ -100,6 +100,8 @@ class MeController extends Controller
                 'habilidades_por_forma' => $character->habilidades_por_forma ?? (object)[],
                 'current_forma'         => $character->current_forma ?? 1,
                 'all_habilidades_data'  => $this->resolveAllHabilidades($character),
+                'rol_objetos'   => $character->rolObjetos->values(),
+                'arma_equipada' => $character->armaEquipada,
                 'gold'                  => $character->gold,
                 'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp

@@ -14,6 +14,8 @@ class RolObjeto extends Model
     protected $fillable = [
         'nombre',
         'tipo',
+        'tipo_ataque',
+        'dano',
         'rareza',
         'descripcion',
         'efecto',
@@ -24,6 +26,7 @@ class RolObjeto extends Model
 
     protected $casts = [
         'activo' => 'boolean',
+        'dano'   => 'integer',
     ];
 
     public function characters(): BelongsToMany

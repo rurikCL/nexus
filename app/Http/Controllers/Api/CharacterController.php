@@ -127,6 +127,35 @@ class CharacterController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function equiparArma(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'rol_objeto_id' => 'nullable|integer|exists:rol_objetos,id',
+        ]);
+
+        $character = $request->user()->character;
+        if (!$character) {
+            return response()->json(['error' => 'Sin personaje'], 404);
+        }
+
+        $armaId = $data['rol_objeto_id'] ?? null;
+
+        if ($armaId) {
+            $objeto = $character->rolObjetos()->where('rol_objetos.id', $armaId)->first();
+            if (!$objeto) {
+                return response()->json(['error' => 'No posees ese objeto'], 403);
+            }
+            if ($objeto->tipo !== 'arma') {
+                return response()->json(['error' => 'Ese objeto no es un arma'], 422);
+            }
+        }
+
+        $character->arma_equipada_id = $armaId;
+        $character->save();
+
+        return response()->json(['arma_equipada' => $character->armaEquipada()->first()]);
+    }
+
     public function aprenderHabilidad(Request $request): JsonResponse
     {
         $data = $request->validate([

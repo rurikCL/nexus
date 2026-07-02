@@ -25,7 +25,7 @@ const mediaUrl = (path) => {
 const NPC_COMBAT_LS = 'nx-npc-combat';
 
 export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee, initialState }) {
-  const d6 = () => Math.floor(Math.random() * 6) + 1;
+  const d20 = () => Math.floor(Math.random() * 20) + 1;
 
   const maxPlayer = { vida: player.vida, escudo: player.escudo };
   const maxNpc    = { vida: Math.max(npc.vida, 1), escudo: npc.escudo ?? 0 };
@@ -41,6 +41,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
   const [currTurn,     setCurrTurn]     = useState(initialState?.currTurn  ?? null);
   const [log,          setLog]          = useState(initialState?.log       ?? []);
+  const [ronda,        setRonda]        = useState(initialState?.ronda       ?? 1);
+  const [rondaTurno,   setRondaTurno]   = useState(initialState?.rondaTurno  ?? 0);
   const [npcBusy,      setNpcBusy]      = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
@@ -81,6 +83,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const effNpcMov = Math.max(1, npcMov - countNpcDeb('movimiento'));
   const effNpcPnt = Math.max(0, npcPnt - countNpcDeb('punteria'));
 
+  const effPlayerIni = player.iniciativa + countBuff('iniciativa');
+  const effNpcIni     = Math.max(1, npcIni - countNpcDeb('iniciativa'));
+
   /* Fondo desde el lugar del NPC */
   useEffect(() => {
     if (bgImg || !npc.LugarID) return;
@@ -102,13 +107,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   /* Iniciativa — solo si es combate nuevo (no restaurado) */
   useEffect(() => {
     if (initialState) return;
-    const pR = d6(); const nR = d6();
-    const pT = pR + player.iniciativa; const nT = nR + npcIni;
+    const pR = d20(); const nR = d20();
+    const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
     const first = pT >= nT ? 'player' : 'npc';
     setTimeout(() => {
       setLog([
         { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0 },
-        { text: `Iniciativa — Tú: 1d6(${pR})+${player.iniciativa}=${pT} | ${npc.nombre}: 1d6(${nR})+${npcIni}=${nT}`, type: 'info', id: 1 },
+        { text: `Ronda 1 — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: 1 },
         { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2 },
       ]);
       setPhase('battle');
@@ -118,14 +123,38 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     }, 500);
   }, []);
 
+  /* Termina el turno de quien actuó — decide si sigue la ronda o se tira nueva iniciativa */
+  const endTurnAfter = (actor) => {
+    if (rondaTurno === 0) {
+      /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
+      const next = actor === 'player' ? 'npc' : 'player';
+      setRondaTurno(1);
+      setCurrTurn(next);
+      if (next === 'player') setPlayerFuerza(p => Math.min(10, p + 2));
+    } else {
+      /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
+      const pR = d20(); const nR = d20();
+      const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
+      const first = pT >= nT ? 'player' : 'npc';
+      setLog(prev => [...prev,
+        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: prev.length },
+        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1 },
+      ]);
+      setRonda(r => r + 1);
+      setRondaTurno(0);
+      setCurrTurn(first);
+      if (first === 'player') setPlayerFuerza(p => Math.min(10, p + 2));
+    }
+  };
+
   /* Persistir estado en localStorage cada vez que cambia algo de batalla */
   useEffect(() => {
     if (phase === 'initiative' || phase === 'victory' || phase === 'defeat' || phase === 'fled') return;
     localStorage.setItem(NPC_COMBAT_LS, JSON.stringify({
       npc, player, lugarImagen,
-      state: { playerHp, npcHp, phase, currTurn, log, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma },
+      state: { playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma },
     }));
-  }, [playerHp, npcHp, phase, currTurn, log, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma]);
+  }, [playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma]);
 
   /* Turno del NPC */
   useEffect(() => {
@@ -138,20 +167,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       let newHp;
 
       if (useRanged) {
-        const [aR, dR] = [d6(), d6()];
+        const [aR, dR] = [d20(), d20()];
         const [aT, dT] = [aR + effNpcPnt, dR + effPlayerMov];
         entries = [
-          { text: `${npc.nombre} dispara: 1d6(${aR})+${effNpcPnt}=${aT}`, type: 'info' },
-          { text: `Esquivas: 1d6(${dR})+${effPlayerMov}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info' },
+          { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info' },
         ];
-        newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcAtk} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
+        newHp = aT > dT ? applyDmg(effNpcPnt, playerHp) : { ...playerHp };
+        entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcPnt} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
       } else {
-        const [aR, dR] = [d6(), d6()];
+        const [aR, dR] = [d20(), d20()];
         const [aT, dT] = [aR + effNpcAtk, dR + effPlayerDef];
         entries = [
-          { text: `${npc.nombre} ataca: 1d6(${aR})+${effNpcAtk}=${aT}`, type: 'info' },
-          { text: `Defiendes: 1d6(${dR})+${effPlayerDef}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info' },
+          { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info' },
         ];
         newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Golpe! −${effNpcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
@@ -166,14 +195,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       ));
       setPlayerBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
       setNpcDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
-      setPlayerFuerza(prev => Math.min(10, prev + 2));
 
       setNpcBusy(false);
       if (newHp.vida <= 0) {
         setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length }]);
         setPhase('defeat');
       } else {
-        setCurrTurn('player');
+        endTurnAfter('npc');
       }
     }, 1500);
     return () => clearTimeout(t);
@@ -211,7 +239,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       const buffDesc = habBuff.map(s => `+1 ${s}`).join(', ');
       entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
-      setCurrTurn('npc');
+      endTurnAfter('player');
       return;
     }
 
@@ -220,12 +248,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     const atkVal  = useAtq ? effPlayerAtk : effPlayerPnt;
     const defVal  = useAtq ? effNpcDef    : effNpcMov;
 
-    const [aR, dR] = [d6(), d6()];
+    const [aR, dR] = [d20(), d20()];
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const hit = aT > dT;
 
     entries.push({
-      text: `${player.nombre} usa "${hab.nombre}": 1d6(${aR})+${atkVal}=${aT} vs 1d6(${dR})+${defVal}=${dT}`,
+      text: `${player.nombre} usa "${hab.nombre}": 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
       type: 'info',
     });
 
@@ -251,7 +279,46 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
       setPhase('victory');
     } else {
-      setCurrTurn('npc');
+      endTurnAfter('player');
+    }
+  };
+
+  /* Ataque básico: arma equipada o desarmado */
+  const doPlayerBasicAttack = () => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy) return;
+
+    const arma        = player.arma_equipada;
+    const esDistancia = arma?.tipo_ataque === 'distancia';
+    const atkVal       = esDistancia ? effPlayerPnt : effPlayerAtk;
+    const defVal       = esDistancia ? effNpcMov    : effNpcDef;
+
+    const [aR, dR] = [d20(), d20()];
+    const [aT, dT] = [aR + atkVal, dR + defVal];
+    const hit = aT > dT;
+    const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
+
+    const entries = [{
+      text: `${player.nombre} ${accion}: 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
+      type: 'info',
+    }];
+
+    let newNpcHp = { ...npcHp };
+    if (hit) {
+      const dmg = arma?.dano ?? 3;
+      newNpcHp = applyDmg(dmg, npcHp);
+      entries.push({ text: `¡Impacto! −${dmg} daño`, type: 'success' });
+    } else {
+      entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
+    }
+
+    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
+    setNpcHp(newNpcHp);
+
+    if (newNpcHp.vida <= 0) {
+      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
+      setPhase('victory');
+    } else {
+      endTurnAfter('player');
     }
   };
 
@@ -409,7 +476,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1 }}>📋</span>
             {!logCollapsed && (
               <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)', letterSpacing: '0.16em', flex: 1, whiteSpace: 'nowrap' }}>
-                REGISTRO
+                REGISTRO · RONDA {ronda}
               </span>
             )}
             <span style={{ fontSize: 11, color: 'rgba(150,200,255,0.4)', flexShrink: 0 }}>{logCollapsed ? '›' : '‹'}</span>
@@ -549,6 +616,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
+                <ActionBtn onClick={() => isPlayerTurn && doPlayerBasicAttack()}
+                  disabled={!isPlayerTurn}
+                  bg="rgba(255,140,0,0.07)" border="rgba(255,140,0,0.22)"
+                  hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={58}
+                >
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>{player.arma_equipada ? '🗡' : '✊'}</span>
+                  <span style={{ fontSize: 7, color: '#ff9955', fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
+                  </span>
+                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {player.arma_equipada?.dano ?? 3}</span>
+                </ActionBtn>
+
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+
                 <ActionBtn onClick={() => isPlayerTurn && setStancePicker(true)}
                   disabled={!isPlayerTurn}
                   bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)"
@@ -601,7 +682,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                         text: `🔄 Cambias a Forma ${f} (${label})`,
                         type: 'info', id: prev.length,
                       }]);
-                      setCurrTurn('npc');
+                      endTurnAfter('player');
                     }} style={{
                       padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                       background: active ? 'rgba(139,92,246,0.25)' : hasSlots ? 'rgba(139,92,246,0.06)' : 'rgba(255,255,255,0.03)',

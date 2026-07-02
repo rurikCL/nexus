@@ -982,6 +982,37 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
 
   const currentSlots = formaSlots[String(selectedForma)] ?? [null, null, null, null];
 
+  // Arma equipada
+  const [armaEquipadaId, setArmaEquipadaId] = useState(() => user?.character?.arma_equipada?.id ?? '');
+  const [equipandoArma, setEquipandoArma]   = useState(false);
+
+  useEffect(() => {
+    setArmaEquipadaId(user?.character?.arma_equipada?.id ?? '');
+  }, [user?.character?.id, user?.character?.arma_equipada?.id]);
+
+  const armasDisponibles = (user?.character?.rol_objetos ?? []).filter(o => o.tipo === 'arma');
+
+  const handleEquiparArma = async () => {
+    setEquipandoArma(true);
+    const token = localStorage.getItem('nx-token');
+    try {
+      const res = await fetch('/api/character/equipar-arma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rol_objeto_id: armaEquipadaId || null }),
+      });
+      if (res.ok) {
+        toast(armaEquipadaId ? 'Arma equipada' : 'Arma desequipada', { tone: 'success', icon: 'check' });
+      } else {
+        toast('Error al equipar el arma', { tone: 'error', icon: 'x' });
+      }
+    } catch {
+      toast('Error de conexión', { tone: 'error', icon: 'x' });
+    } finally {
+      setEquipandoArma(false);
+    }
+  };
+
   const loadHabilidades = () => {
     if (habilidades.length > 0) return;
     const token = localStorage.getItem('nx-token');
@@ -1310,6 +1341,32 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
           onAssign={handleAssignHabilidad}
           slotIndex={slotPicker}
         />
+
+        {/* Arma equipada */}
+        <Panel kicker="Equipo" title="Arma Equipada" icon="sword">
+          {armasDisponibles.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+              No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select className="nx-select" style={{ flex: 1, minWidth: 200 }}
+                value={armaEquipadaId ?? ''}
+                onChange={e => setArmaEquipadaId(e.target.value ? +e.target.value : '')}
+              >
+                <option value="">Sin arma (desarmado — 3 daño)</option>
+                {armasDisponibles.map(o => (
+                  <option key={o.id} value={o.id}>
+                    {o.nombre}{o.dano ? ` — ${o.dano} daño` : ''}{o.tipo_ataque ? ` (${o.tipo_ataque})` : ''}
+                  </option>
+                ))}
+              </select>
+              <Btn kind="accent" icon="check" sm disabled={equipandoArma} onClick={handleEquiparArma}>
+                {equipandoArma ? 'Equipando...' : 'Equipar'}
+              </Btn>
+            </div>
+          )}
+        </Panel>
 
         <Panel kicker="Atributos" title="Distribución de Stats" icon="trending"
           right={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip><Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>Asignar</Btn></div>}>

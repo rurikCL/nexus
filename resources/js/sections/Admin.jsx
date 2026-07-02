@@ -262,7 +262,9 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'text' },
+      { key: 'tipo',        label: 'Tipo',        type: 'text', hint: "usa 'arma' para que dano/tipo_ataque apliquen en combate" },
+      { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
+      { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
       { key: 'activo',      label: 'Activo',      type: 'toggle' },
       { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },

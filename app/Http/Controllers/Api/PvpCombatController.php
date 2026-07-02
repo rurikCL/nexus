@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 
 class PvpCombatController extends Controller
 {
-    private const WITHS = ['attacker.character', 'defender.character'];
+    private const WITHS = ['attacker.character.armaEquipada', 'defender.character.armaEquipada'];
 
     /* Tabla de efectividad: forma atacante → formas que supera */
     private const BEATS = [
@@ -60,9 +60,8 @@ class PvpCombatController extends Controller
         $attackerStats = self::getCombatStats($attacker->character);
         $defenderStats = self::getCombatStats($defender->character);
 
-        $atkInit = random_int(1, 6) + $attackerStats['iniciativa'];
-        $defInit = random_int(1, 6) + $defenderStats['iniciativa'];
-        $firstTurn = $atkInit >= $defInit ? $attacker->id : $defender->id;
+        $roll = self::rollIniciativa($attackerStats['iniciativa'], $defenderStats['iniciativa']);
+        $firstTurn = $roll['gana_atacante'] ? $attacker->id : $defender->id;
 
         $defChar = $defender->character;
 
@@ -88,8 +87,18 @@ class PvpCombatController extends Controller
             'attacker_current_forma' => $attacker->character->current_forma ?? 1,
             'defender_current_forma' => $defChar->current_forma ?? 1,
             'current_turn'           => $firstTurn,
+            'ronda'                  => 1,
+            'ronda_turno'            => 0,
             'status'                 => 'pending',
-            'log'                    => [],
+            'log'                    => [[
+                'turn'     => 1,
+                'actor_id' => null,
+                'messages' => [
+                    "Ronda 1 — Iniciativa: {$attacker->character->name} 1d20({$roll['atk_dado']})+{$attackerStats['iniciativa']}={$roll['atk_total']} "
+                        . "vs {$defChar->name} 1d20({$roll['def_dado']})+{$defenderStats['iniciativa']}={$roll['def_total']}",
+                    $roll['gana_atacante'] ? "¡{$attacker->character->name} actúa primero!" : "¡{$defChar->name} actúa primero!",
+                ],
+            ]],
         ]);
 
         $defender->notify(new PvpCombatNotification(
@@ -254,16 +263,19 @@ class PvpCombatController extends Controller
             else             $combat->defender_current_forma = $forma;
             $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
 
-        /* ─── Ataque desarmado ────────────────────────────────────────── */
+        /* ─── Ataque básico (con arma equipada o desarmado) ─────────────── */
         } elseif ($skill === 'unarmed') {
-            $atkVal  = $actorStats['ataque'];
-            $defVal  = $opponentStats['defensa'];
-            $atkRoll = random_int(1, 6) + $atkVal;
-            $defRoll = random_int(1, 6) + $defVal;
-            $entry['messages'][] = "{$actorChar->name} ataca desarmado: 1d6+{$atkVal}={$atkRoll} vs 1d6+{$defVal}={$defRoll}";
+            $arma        = $actorChar->armaEquipada;
+            $esDistancia = $arma?->tipo_ataque === 'distancia';
+            $atkVal      = $esDistancia ? $actorStats['punteria']    : $actorStats['ataque'];
+            $defVal      = $esDistancia ? $opponentStats['movimiento'] : $opponentStats['defensa'];
+            $atkRoll     = random_int(1, 20) + $atkVal;
+            $defRoll     = random_int(1, 20) + $defVal;
+            $accion      = $arma ? "ataca con {$arma->nombre}" : 'ataca desarmado';
+            $entry['messages'][] = "{$actorChar->name} {$accion}: 1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
 
             if ($atkRoll > $defRoll) {
-                $dmg = 2;
+                $dmg = $arma?->dano ?? 3;
                 if ($isAttacker) {
                     [$combat->defender_hp, $combat->defender_escudo] =
                         self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg);
@@ -330,11 +342,11 @@ class PvpCombatController extends Controller
                 $atkVal  = $useAtq ? $actorStats['ataque']   : $actorStats['punteria'];
                 $defVal  = $useAtq ? $opponentStats['defensa'] : $opponentStats['movimiento'];
 
-                $atkRoll = random_int(1, 6) + $atkVal;
-                $defRoll = random_int(1, 6) + $defVal;
+                $atkRoll = random_int(1, 20) + $atkVal;
+                $defRoll = random_int(1, 20) + $defVal;
 
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: "
-                    . "1d6+{$atkVal}={$atkRoll} vs 1d6+{$defVal}={$defRoll}";
+                    . "1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
 
                 if ($atkRoll > $defRoll) {
                     $dmg       = $hab->damage ?? 0;
@@ -386,27 +398,56 @@ class PvpCombatController extends Controller
             }
         }
 
-        /* ─── Cambio de turno y pre-recuperación de fuerza ───────────── */
+        /* ─── Fuerza final de cada bando (antes del pre-cobro de ronda) ──── */
+        $attackerFuerzaFinal = $isAttacker ? $myFuerza : ($combat->attacker_fuerza ?? 0);
+        $defenderFuerzaFinal = $isAttacker ? ($combat->defender_fuerza ?? 0) : $myFuerza;
+
+        /* ─── Cambio de turno / rondas ──────────────────────────────────── */
         if ($combat->status === 'active') {
-            $combat->current_turn = $opponentUser->id;
-            /* Pre-recuperar fuerza del próximo en actuar */
-            if ($isAttacker) {
-                $combat->defender_fuerza = min(10, ($combat->defender_fuerza ?? 0) + 2);
+            if ($combat->ronda_turno === 0) {
+                /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
+                $combat->ronda_turno  = 1;
+                $combat->current_turn = $opponentUser->id;
+                if ($isAttacker) $defenderFuerzaFinal = min(10, $defenderFuerzaFinal + 2);
+                else             $attackerFuerzaFinal = min(10, $attackerFuerzaFinal + 2);
             } else {
-                $combat->attacker_fuerza = min(10, ($combat->attacker_fuerza ?? 0) + 2);
+                /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
+                $combat->ronda      += 1;
+                $combat->ronda_turno = 0;
+
+                $attBuffs   = $isAttacker ? $myBuffs   : $oppBuffs;
+                $attDebuffs = $isAttacker ? $myDebuffs : $oppDebuffs;
+                $defBuffs   = $isAttacker ? $oppBuffs  : $myBuffs;
+                $defDebuffs = $isAttacker ? $oppDebuffs : $myDebuffs;
+
+                $attEff = self::getEffectiveStats(self::getCombatStats($combat->attacker->character), $attBuffs, $attDebuffs);
+                $defEff = self::getEffectiveStats(self::getCombatStats($combat->defender->character), $defBuffs, $defDebuffs);
+
+                $roll = self::rollIniciativa($attEff['iniciativa'], $defEff['iniciativa']);
+                $combat->current_turn = $roll['gana_atacante'] ? $combat->attacker_id : $combat->defender_id;
+
+                $entry['messages'][] = "Ronda {$combat->ronda} — Iniciativa: {$combat->attacker->character->name} "
+                    . "1d20({$roll['atk_dado']})+{$attEff['iniciativa']}={$roll['atk_total']} vs "
+                    . "{$combat->defender->character->name} 1d20({$roll['def_dado']})+{$defEff['iniciativa']}={$roll['def_total']}";
+                $entry['messages'][] = $roll['gana_atacante']
+                    ? "¡{$combat->attacker->character->name} actúa primero!"
+                    : "¡{$combat->defender->character->name} actúa primero!";
+
+                if ($roll['gana_atacante']) $attackerFuerzaFinal = min(10, $attackerFuerzaFinal + 2);
+                else                        $defenderFuerzaFinal = min(10, $defenderFuerzaFinal + 2);
             }
         }
 
         /* ─── Guardar estado del actor ────────────────────────────────── */
+        $combat->attacker_fuerza = $attackerFuerzaFinal;
+        $combat->defender_fuerza = $defenderFuerzaFinal;
         if ($isAttacker) {
-            $combat->attacker_fuerza    = $myFuerza;
             $combat->attacker_cooldowns = $myCooldowns ?: null;
             $combat->attacker_buffs     = $myBuffs     ?: null;
             $combat->attacker_debuffs   = $myDebuffs   ?: null;
             $combat->defender_buffs     = $oppBuffs    ?: null;
             $combat->defender_debuffs   = $oppDebuffs  ?: null;
         } else {
-            $combat->defender_fuerza    = $myFuerza;
             $combat->defender_cooldowns = $myCooldowns ?: null;
             $combat->defender_buffs     = $myBuffs     ?: null;
             $combat->defender_debuffs   = $myDebuffs   ?: null;
@@ -452,6 +493,7 @@ class PvpCombatController extends Controller
         return [
             'id'              => $c->id,
             'status'          => $c->status,
+            'ronda'           => $c->ronda ?? 1,
             'current_turn'    => $c->current_turn,
             'is_my_turn'      => $c->current_turn === $myId && $c->status === 'active',
             'i_am_attacker'   => $c->attacker_id === $myId,
@@ -500,6 +542,12 @@ class PvpCombatController extends Controller
             'stats'        => self::getCombatStats($ch),
             'habilidades'  => $habilidades,
             'current_forma' => $currentForma,
+            'arma_equipada' => $ch?->armaEquipada ? [
+                'id'          => $ch->armaEquipada->id,
+                'nombre'      => $ch->armaEquipada->nombre,
+                'tipo_ataque' => $ch->armaEquipada->tipo_ataque,
+                'dano'        => $ch->armaEquipada->dano,
+            ] : null,
         ];
     }
 
@@ -549,6 +597,23 @@ class PvpCombatController extends Controller
             'movimiento' => $char->movimiento ?? (int) round($v * 0.8),
             'iniciativa' => $char->iniciativa ?? (int) round(($v + $k) / 2 * 0.5),
             'punteria'   => $char->punteria   ?? (int) round(($t + $k) / 2 * 0.5),
+        ];
+    }
+
+    /** Tirada de iniciativa 1d20 + iniciativa para ambos bandos */
+    private static function rollIniciativa(int $attackerIniciativa, int $defenderIniciativa): array
+    {
+        $atkDado  = random_int(1, 20);
+        $defDado  = random_int(1, 20);
+        $atkTotal = $atkDado + $attackerIniciativa;
+        $defTotal = $defDado + $defenderIniciativa;
+
+        return [
+            'atk_dado'      => $atkDado,
+            'def_dado'      => $defDado,
+            'atk_total'     => $atkTotal,
+            'def_total'     => $defTotal,
+            'gana_atacante' => $atkTotal >= $defTotal,
         ];
     }
 

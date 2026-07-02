@@ -17,6 +17,7 @@ class Character extends Model
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria', 'puntos_libres',
         'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
         'habilidades_por_forma', 'current_forma',
+        'arma_equipada_id',
     ];
 
     protected $casts = [
@@ -103,6 +104,11 @@ class Character extends Model
     {
         return $this->belongsToMany(RolObjeto::class, 'rol_character_objeto')
             ->withTimestamps();
+    }
+
+    public function armaEquipada(): BelongsTo
+    {
+        return $this->belongsTo(RolObjeto::class, 'arma_equipada_id');
     }
 
     public function hitos(): HasMany

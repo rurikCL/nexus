@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
     Route::post('/character/npc-victory', [CharacterController::class, 'npcVictory']);
     Route::post('/character/habilidades',        [CharacterController::class, 'updateHabilidades']);
+    Route::post('/character/equipar-arma',       [CharacterController::class, 'equiparArma']);
     Route::post('/character/aprender-habilidad', [CharacterController::class, 'aprenderHabilidad']);
     Route::get('/rol-habilidades', [RolHabilidadController::class, 'index']);
 

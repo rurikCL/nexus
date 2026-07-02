@@ -293,7 +293,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           }} onClick={() => setLogCollapsed(p => !p)}>
             <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1 }}>📋</span>
             {!logCollapsed && (
-              <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)', letterSpacing: '0.16em', flex: 1, whiteSpace: 'nowrap' }}>REGISTRO</span>
+              <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)', letterSpacing: '0.16em', flex: 1, whiteSpace: 'nowrap' }}>
+                REGISTRO · RONDA {combat.ronda ?? 1}
+              </span>
             )}
             <span style={{ fontSize: 11, color: 'rgba(150,200,255,0.4)', flexShrink: 0 }}>{logCollapsed ? '›' : '‹'}</span>
           </div>
@@ -467,7 +469,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-                {/* Ataque desarmado */}
+                {/* Ataque básico (arma equipada o desarmado) */}
                 <button onClick={() => doAction('unarmed')} disabled={busy} style={{
                   minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                   background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
@@ -477,9 +479,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                   onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
                 >
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>✊</span>
-                  <span style={{ fontSize: 7, color: '#ff9955', fontFamily: 'var(--font-data)', letterSpacing: '0.04em' }}>DESARMADO</span>
-                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG 2</span>
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
+                  <span style={{ fontSize: 7, color: '#ff9955', fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
+                  </span>
+                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
                 </button>
 
                 {/* Estancia */}

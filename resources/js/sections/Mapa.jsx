@@ -1649,6 +1649,9 @@ function getPlayerCombatStats(character) {
     punteria:   character?.punteria   ?? Math.round((t + k) / 2 * 0.5),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
+    arma_equipada: character?.arma_equipada
+      ? { nombre: character.arma_equipada.nombre, dano: character.arma_equipada.dano, tipo_ataque: character.arma_equipada.tipo_ataque }
+      : null,
     current_forma:         character?.current_forma ?? 1,
     habilidades_por_forma: character?.habilidades_por_forma ?? {},
     all_habilidades_data:  character?.all_habilidades_data  ?? {},

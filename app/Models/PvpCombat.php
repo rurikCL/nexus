@@ -18,10 +18,13 @@ class PvpCombat extends Model
         'attacker_last_forma', 'defender_last_forma',
         'attacker_current_forma', 'defender_current_forma',
         'current_turn', 'status', 'log',
+        'ronda', 'ronda_turno',
     ];
 
     protected $casts = [
         'log'                  => 'array',
+        'ronda'                => 'integer',
+        'ronda_turno'          => 'integer',
         'attacker_cooldowns'   => 'array',
         'defender_cooldowns'   => 'array',
         'attacker_buffs'       => 'array',
