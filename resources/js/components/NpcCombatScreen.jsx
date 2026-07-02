@@ -205,7 +205,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       }
     }, 1500);
     return () => clearTimeout(t);
-  }, [currTurn, phase]);
+  }, [currTurn, phase, ronda]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
