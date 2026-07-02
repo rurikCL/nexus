@@ -1001,8 +1001,10 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ rol_objeto_id: armaEquipadaId || null }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
         toast(armaEquipadaId ? 'Arma equipada' : 'Arma desequipada', { tone: 'success', icon: 'check' });
+        onCharacterCreated?.({ ...user.character, arma_equipada: data?.arma_equipada ?? null });
       } else {
         toast('Error al equipar el arma', { tone: 'error', icon: 'x' });
       }
@@ -1046,6 +1048,12 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
       });
       if (res.ok) {
         toast('Habilidad asignada', { tone: 'success', icon: 'check', desc: `"${habilidad.nombre}" en Forma ${selectedForma}, slot ${slot}` });
+        onCharacterCreated?.({
+          ...user.character,
+          current_forma: selectedForma,
+          habilidades_por_forma: { ...(user.character.habilidades_por_forma ?? {}), [String(selectedForma)]: newCurrent.map(h => h?.id ?? null) },
+          all_habilidades_data: { ...(user.character.all_habilidades_data ?? {}), [String(habilidad.id)]: habilidad },
+        });
       }
     } catch {
       toast('Error al guardar habilidad', { tone: 'error', icon: 'x' });
