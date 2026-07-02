@@ -4,6 +4,16 @@ import { Empty } from './Comando.jsx';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 
+const mediaUrl = (path) => {
+  if (!path) return null;
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/storage/')) return cleanPath;
+  if (cleanPath.startsWith('/admin/')) return `/storage${cleanPath}`;
+  if (cleanPath.startsWith('/public/')) return cleanPath.replace('/public/', '/storage/');
+  return `/storage${cleanPath}`;
+};
+
 const TIPO_LABELS = {
   temporada:   { label: 'Temporada',  color: '#E6B325' },
   comunidad:   { label: 'Comunidad',  color: '#10b981' },
@@ -114,7 +124,7 @@ function ComunidadCard({ mision, userId }) {
     }}>
       {mision.foto_mision && (
         <div style={{
-          height: 120, background: `url(${mision.foto_mision}) center/cover no-repeat`,
+          height: 120, background: `url(${mediaUrl(mision.foto_mision)}) center/cover no-repeat`,
           opacity: 0.65, borderBottom: '1px solid var(--holo-line)',
         }} />
       )}

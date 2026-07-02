@@ -1425,7 +1425,7 @@ function MisionesAdmin() {
     }
     setSaving(true);
     try {
-      const payload = {
+      const payloadObj = {
         ...form,
         temporada_id:        form.temporada_id        || null,
         npc_id:              form.npc_id              || null,
@@ -1436,9 +1436,29 @@ function MisionesAdmin() {
         hito_requerimiento:  form.hito_requerimiento  || null,
         entregar_hito:       form.entregar_hito       || null,
       };
-      const res = editing === 'new'
-        ? await api('POST', '/misiones', payload)
-        : await api('PATCH', `/misiones/${editing.id}`, payload);
+
+      const hasNewFile = payloadObj.foto_mision instanceof File;
+      let payload = payloadObj;
+      if (hasNewFile) {
+        payload = new FormData();
+        Object.entries(payloadObj).forEach(([key, val]) => {
+          if (val === null || val === undefined) return;
+          if (val instanceof File) {
+            payload.append(key, val);
+          } else if (typeof val === 'boolean') {
+            payload.append(key, val ? '1' : '0');
+          } else if (Array.isArray(val) || typeof val === 'object') {
+            payload.append(key, JSON.stringify(val));
+          } else {
+            payload.append(key, val);
+          }
+        });
+        if (editing !== 'new') payload.append('_method', 'PATCH');
+      }
+
+      const method = hasNewFile ? 'POST' : (editing === 'new' ? 'POST' : 'PATCH');
+      const path   = editing === 'new' ? '/misiones' : `/misiones/${editing.id}`;
+      const res = await api(method, path, payload);
       toast(editing === 'new' ? 'Misión creada' : 'Misión actualizada', { tone: 'success', icon: 'check' });
       setEditing(null);
       reload(filter);
@@ -1565,8 +1585,27 @@ function MisionesAdmin() {
           )}
 
           <div>
-            <label className="nx-label">URL imagen de portada</label>
-            <input className="nx-input" value={form.foto_mision} onChange={e => set('foto_mision', e.target.value)} placeholder="https://..." />
+            <label className="nx-label">Imagen de portada</label>
+            <input type="file" accept="image/*" className="nx-input"
+              onChange={e => e.target.files[0] && set('foto_mision', e.target.files[0])}
+            />
+            {form.foto_mision && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <img
+                  src={form.foto_mision instanceof File
+                    ? URL.createObjectURL(form.foto_mision)
+                    : (form.foto_mision.startsWith('http') ? form.foto_mision : `/storage/${form.foto_mision}`)}
+                  style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }}
+                />
+                <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                  {form.foto_mision instanceof File ? 'Nuevo archivo seleccionado' : 'Imagen actual'}
+                </span>
+                <button type="button" onClick={() => set('foto_mision', '')} style={{
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)',
+                  fontSize: 10, textDecoration: 'underline', padding: 0,
+                }}>Quitar</button>
+              </div>
+            )}
           </div>
 
           {/* ── HITOS ── */}

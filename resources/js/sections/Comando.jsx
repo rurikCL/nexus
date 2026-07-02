@@ -19,6 +19,15 @@ const SIDES = {
   oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.png',   desc: 'Pasión, ambición y poder' },
 };
 
+function mediaUrl(path) {
+  if (!path) return null;
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/storage/')) return cleanPath;
+  if (cleanPath.startsWith('/public/'))  return cleanPath.replace('/public/', '/storage/');
+  return `/storage${cleanPath}`;
+}
+
 export function classIcon(clsId) {
   const c = NX.CLASSES.find(x => x.id === clsId);
   return c ? c.icon : 'shield';
@@ -688,6 +697,70 @@ const RANGOS_JEDI = [
 const FORMA_LABELS = ['Shi-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
 const FORMA_IMGS   = ['/assets/Forma1.png', '/assets/Forma2.png', '/assets/Forma3.png', '/assets/Forma4.png', '/assets/Forma5.png', '/assets/Forma6.png', '/assets/Forma7.png'];
 
+function WeaponCard({ objeto, selected, onClick }) {
+  const isUnarmed = !objeto;
+  const img = objeto ? mediaUrl(objeto.imagen) : null;
+  const dano = isUnarmed ? 3 : (objeto.dano ?? null);
+  const tipoAtaque = isUnarmed ? null : objeto.tipo_ataque;
+
+  return (
+    <button
+      onClick={onClick}
+      title={isUnarmed ? 'Sin arma (desarmado)' : objeto.nombre}
+      className="nx-panel solid"
+      style={{
+        padding: 0, overflow: 'hidden', cursor: 'pointer', textAlign: 'left',
+        display: 'flex', alignItems: 'stretch', width: '100%',
+        borderColor: selected ? 'var(--holo)' : undefined,
+        boxShadow: selected ? '0 0 16px -6px var(--holo)' : undefined,
+        background: selected ? 'color-mix(in srgb, var(--holo) 8%, var(--space-panel-solid))' : undefined,
+        transition: 'all .18s',
+      }}
+    >
+      <div style={{
+        width: 60, height: 60, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: 'color-mix(in srgb, var(--holo) 5%, rgba(4,9,18,0.9))',
+        borderRight: `1px solid ${selected ? 'var(--holo)' + '55' : 'var(--holo-line)'}`,
+      }}>
+        {img ? (
+          <img src={img} alt={objeto.nombre} style={{
+            width: 44, height: 44, objectFit: 'contain',
+            filter: selected ? 'drop-shadow(0 0 6px var(--holo))' : 'brightness(0.75) saturate(0.8)',
+            transition: 'filter .18s',
+          }} />
+        ) : (
+          <Icon name="sword" size={26} style={{ color: 'var(--txt-faint)', opacity: isUnarmed ? 0.4 : 0.7 }} />
+        )}
+      </div>
+      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+        <div className="nx-display" style={{
+          fontSize: 12, color: selected ? 'var(--holo)' : 'var(--txt)', lineHeight: 1.2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {isUnarmed ? 'Sin arma (desarmado)' : objeto.nombre}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {dano != null && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {dano}
+            </span>
+          )}
+          {tipoAtaque && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)', textTransform: 'capitalize' }}>
+              <Icon name={tipoAtaque === 'melee' ? 'sword' : 'target'} size={12} /> {tipoAtaque}
+            </span>
+          )}
+        </div>
+      </div>
+      {selected && (
+        <div style={{ display: 'flex', alignItems: 'center', paddingRight: 12 }}>
+          <Icon name="check" size={16} style={{ color: 'var(--holo)' }} />
+        </div>
+      )}
+    </button>
+  );
+}
+
 function HabilidadSlot({ slot, habilidad, onClick }) {
   const isEmpty = !habilidad;
   return (
@@ -1351,27 +1424,22 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
         />
 
         {/* Arma equipada */}
-        <Panel kicker="Equipo" title="Arma Equipada" icon="sword">
+        <Panel kicker="Equipo" title="Arma Equipada" icon="sword"
+          right={
+            <Btn kind="accent" icon="check" sm disabled={equipandoArma || (armaEquipadaId ?? '') === (user?.character?.arma_equipada?.id ?? '')} onClick={handleEquiparArma}>
+              {equipandoArma ? 'Equipando...' : 'Equipar'}
+            </Btn>
+          }>
           {armasDisponibles.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
               No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select className="nx-select" style={{ flex: 1, minWidth: 200 }}
-                value={armaEquipadaId ?? ''}
-                onChange={e => setArmaEquipadaId(e.target.value ? +e.target.value : '')}
-              >
-                <option value="">Sin arma (desarmado — 3 daño)</option>
-                {armasDisponibles.map(o => (
-                  <option key={o.id} value={o.id}>
-                    {o.nombre}{o.dano ? ` — ${o.dano} daño` : ''}{o.tipo_ataque ? ` (${o.tipo_ataque})` : ''}
-                  </option>
-                ))}
-              </select>
-              <Btn kind="accent" icon="check" sm disabled={equipandoArma} onClick={handleEquiparArma}>
-                {equipandoArma ? 'Equipando...' : 'Equipar'}
-              </Btn>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+              <WeaponCard objeto={null} selected={!armaEquipadaId} onClick={() => setArmaEquipadaId('')} />
+              {armasDisponibles.map(o => (
+                <WeaponCard key={o.id} objeto={o} selected={armaEquipadaId === o.id} onClick={() => setArmaEquipadaId(o.id)} />
+              ))}
             </div>
           )}
         </Panel>

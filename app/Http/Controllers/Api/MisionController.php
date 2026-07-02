@@ -7,17 +7,35 @@ use App\Models\Mision;
 use App\Models\Objetivo;
 use App\Models\Recompensa;
 use App\Models\User;
+use App\Traits\ConvertsToWebp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 
 class MisionController extends Controller
 {
+    use ConvertsToWebp;
+
     private const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 
     private function isAdmin(User $user): bool
     {
         return in_array($user->tier, self::ADMIN_TIERS);
+    }
+
+    /**
+     * Cuando la misión se guarda con multipart/form-data (por la subida de foto_mision),
+     * objetivos/recompensas llegan como strings JSON — los decodifica antes de validar.
+     */
+    private function decodeJsonArrayFields(Request $request): void
+    {
+        foreach (['objetivos', 'recompensas'] as $field) {
+            $value = $request->input($field);
+            if (is_string($value)) {
+                $request->merge([$field => json_decode($value, true) ?? []]);
+            }
+        }
     }
 
     // ── GET /api/misiones/npcs-mision ────────────────────────────────────────
@@ -177,11 +195,13 @@ class MisionController extends Controller
             return response()->json(['message' => 'No autorizado.'], 403);
         }
 
+        $this->decodeJsonArrayFields($request);
+
         $data = $request->validate([
             'nombre'            => 'required|string|max:255',
             'mision'            => 'required|string',
             'descripcion'       => 'nullable|string',
-            'foto_mision'       => 'nullable|string|max:500',
+            'foto_mision'       => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
             'tipo_mision'       => 'sometimes|in:temporada,comunidad,individual',
             'temporada_id'      => 'nullable|integer|exists:temporadas,id',
             'npc_id'            => 'nullable|integer|exists:map_npcs,id',
@@ -209,6 +229,10 @@ class MisionController extends Controller
             'entregar_hito'      => 'nullable|string',
         ]);
 
+        if ($request->hasFile('foto_mision')) {
+            $data['foto_mision'] = $this->saveAsWebp($request->file('foto_mision'), 'admin/misiones');
+        }
+
         $mision = Mision::create(Arr::except($data, ['objetivos', 'recompensas']));
 
         foreach ($data['objetivos'] ?? [] as $obj) {
@@ -231,11 +255,13 @@ class MisionController extends Controller
             return response()->json(['message' => 'No autorizado.'], 403);
         }
 
+        $this->decodeJsonArrayFields($request);
+
         $data = $request->validate([
             'nombre'            => 'sometimes|string|max:255',
             'mision'            => 'sometimes|string',
             'descripcion'       => 'nullable|string',
-            'foto_mision'       => 'nullable|string|max:500',
+            'foto_mision'       => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
             'tipo_mision'       => 'sometimes|in:temporada,comunidad,individual',
             'temporada_id'      => 'nullable|integer|exists:temporadas,id',
             'npc_id'            => 'nullable|integer|exists:map_npcs,id',
@@ -264,6 +290,16 @@ class MisionController extends Controller
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito'      => 'nullable|string',
         ]);
+
+        $reemplazandoFoto = $request->hasFile('foto_mision');
+        $borrandoFoto     = array_key_exists('foto_mision', $data) && $data['foto_mision'] === null;
+
+        if (($reemplazandoFoto || $borrandoFoto) && $mision->foto_mision && !str_starts_with($mision->foto_mision, 'http')) {
+            Storage::disk('public')->delete($mision->foto_mision);
+        }
+        if ($reemplazandoFoto) {
+            $data['foto_mision'] = $this->saveAsWebp($request->file('foto_mision'), 'admin/misiones');
+        }
 
         $mision->update(Arr::except($data, ['objetivos', 'recompensas']));
 
