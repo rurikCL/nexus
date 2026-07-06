@@ -1560,7 +1560,7 @@ function NpcCard({ npc, onClick }) {
       }}>
         {!npcImagen && npcMiniImagen && (
           <img src={npcMiniImagen} alt={npc.nombre} style={{
-            width: '100%', height: '100%', objectFit: 'cover',
+            width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center',
           }} />
         )}
         {!npcImagen && !npcMiniImagen && (
