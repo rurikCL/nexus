@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\ModuloEntrenamientoController;
 use App\Http\Controllers\Api\InstagramController;
 use App\Http\Controllers\Api\SesionEntrenamientoController;
 use App\Http\Controllers\Api\RolHabilidadController;
+use App\Http\Controllers\Api\TorneoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -114,6 +115,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/misiones/{mision}/completar', [MisionController::class, 'completar']);
     Route::delete('/misiones/{mision}/users/{userId}', [MisionController::class, 'unassign']);
     Route::patch('/misiones/{mision}/progress', [MisionController::class, 'updateProgress']);
+
+    Route::get('/torneos', [TorneoController::class, 'index']);
+    Route::post('/torneos', [TorneoController::class, 'store']);
+    Route::get('/torneos/{torneo}', [TorneoController::class, 'show']);
+    Route::patch('/torneos/{torneo}', [TorneoController::class, 'update']);
+    Route::delete('/torneos/{torneo}', [TorneoController::class, 'destroy']);
+    Route::post('/torneos/{torneo}/inscribir', [TorneoController::class, 'inscribir']);
+    Route::delete('/torneos/{torneo}/inscribir', [TorneoController::class, 'retirar']);
+    Route::post('/torneos/{torneo}/iniciar', [TorneoController::class, 'iniciar']);
+    Route::post('/torneos/{torneo}/combates/{combate}/resolver', [TorneoController::class, 'resolverCombate']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/test', [NotificationController::class, 'test']);

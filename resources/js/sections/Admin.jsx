@@ -23,7 +23,7 @@ const api = async (method, path, body) => {
 };
 
 /* ─── GRUPOS para el sidebar ────────────────────────────── */
-const GROUPS = ['MAPA GALÁCTICO', 'ROL', 'SISTEMA'];
+const GROUPS = ['MAPA GALÁCTICO', 'ROL', 'COMPETITIVO', 'SISTEMA'];
 
 /* ─── OPCIONES ESTÁTICAS ─────────────────────────────────── */
 const RAREZA_OPTS     = ['comun', 'poco_comun', 'raro', 'epico', 'legendario'];
@@ -375,6 +375,11 @@ const ENTITY_CONFIG = {
 
   misiones: {
     label: 'Misiones', icon: 'target', group: 'SISTEMA',
+    custom: true,
+  },
+
+  torneos: {
+    label: 'Torneos', icon: 'trophy', group: 'COMPETITIVO',
     custom: true,
   },
 
@@ -1148,7 +1153,7 @@ export default function AdminView() {
         {/* tabla / vista custom */}
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {config.custom
-            ? <MisionesAdmin key={activeEntity} />
+            ? (activeEntity === 'torneos' ? <TorneosAdmin key={activeEntity} /> : <MisionesAdmin key={activeEntity} />)
             : (
               <EntityTable
                 key={activeEntity}
@@ -1837,6 +1842,252 @@ function MisionesAdmin() {
                     <Icon name="edit" size={12} />
                   </button>
                   <button onClick={() => handleDelete(m.id)} style={{ background: 'rgba(255,45,69,0.08)', border: '1px solid rgba(255,45,69,0.2)', color: '#ff6b6b', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11 }}>
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TORNEOS ADMIN — CRUD de torneos competitivos
+───────────────────────────────────────────────────────────── */
+const EMPTY_TORNEO = {
+  nombre: '', descripcion: '', imagen: '', premios: '', requisitos: '',
+  cupos: 8, fecha_inicio: '',
+};
+
+function torneoFromApi(t) {
+  return {
+    nombre:        t.nombre        ?? '',
+    descripcion:   t.descripcion   ?? '',
+    imagen:        t.imagen        ?? '',
+    premios:       t.premios       ?? '',
+    requisitos:    t.requisitos    ?? '',
+    cupos:         t.cupos         ?? 8,
+    fecha_inicio:  t.fecha_inicio  ?? '',
+  };
+}
+
+const ESTADO_TORNEO_ADMIN = {
+  inscripcion: { label: 'Inscripción', color: '#10b981' },
+  en_curso:    { label: 'En curso',    color: '#38cdf0' },
+  finalizado:  { label: 'Finalizado',  color: '#E6B325' },
+};
+
+function TorneosAdmin() {
+  const [torneos, setTorneos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving]   = useState(false);
+  const [form, setForm]       = useState({ ...EMPTY_TORNEO });
+  const [starting, setStarting] = useState(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api('GET', '/torneos');
+      setTorneos(res.torneos ?? []);
+    } catch { toast('Error al cargar torneos', { tone: 'error', icon: 'x' }); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { reload(); }, []);
+
+  const openNew  = () => { setForm({ ...EMPTY_TORNEO }); setEditing('new'); };
+  const openEdit = (t) => { setForm(torneoFromApi(t)); setEditing(t); };
+  const cancel   = () => setEditing(null);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    if (!form.nombre.trim() || !form.cupos) {
+      toast('Nombre y cupos son obligatorios', { tone: 'error', icon: 'x' }); return;
+    }
+    setSaving(true);
+    try {
+      const payloadObj = {
+        ...form,
+        cupos:        Number(form.cupos),
+        fecha_inicio: form.fecha_inicio || null,
+      };
+
+      const hasNewFile = payloadObj.imagen instanceof File;
+      let payload = payloadObj;
+      if (hasNewFile) {
+        payload = new FormData();
+        Object.entries(payloadObj).forEach(([key, val]) => {
+          if (val === null || val === undefined) return;
+          payload.append(key, val);
+        });
+        if (editing !== 'new') payload.append('_method', 'PATCH');
+      }
+
+      const method = hasNewFile ? 'POST' : (editing === 'new' ? 'POST' : 'PATCH');
+      const path   = editing === 'new' ? '/torneos' : `/torneos/${editing.id}`;
+      await api(method, path, payload);
+      toast(editing === 'new' ? 'Torneo creado' : 'Torneo actualizado', { tone: 'success', icon: 'check' });
+      setEditing(null);
+      reload();
+    } catch (e) { toast(e?.message ?? 'Error al guardar', { tone: 'error', icon: 'x' }); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Eliminar este torneo y todos sus combates?')) return;
+    try {
+      await api('DELETE', `/torneos/${id}`);
+      setTorneos(prev => prev.filter(t => t.id !== id));
+      toast('Torneo eliminado', { tone: 'success', icon: 'check' });
+    } catch { toast('Error al eliminar', { tone: 'error', icon: 'x' }); }
+  };
+
+  const handleIniciar = async (id) => {
+    if (!window.confirm('¿Generar el árbol de este torneo? La inscripción se cerrará.')) return;
+    setStarting(id);
+    try {
+      await api('POST', `/torneos/${id}/iniciar`);
+      toast('Árbol generado', { tone: 'success', icon: 'check' });
+      reload();
+    } catch (e) { toast(e?.message ?? 'Error al generar el árbol', { tone: 'error', icon: 'x' }); }
+    setStarting(null);
+  };
+
+  /* ── FORM ── */
+  if (editing !== null) {
+    return (
+      <div style={{ height: '100%', overflowY: 'auto', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <button onClick={cancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-dim)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <Icon name="chevron" size={13} style={{ transform: 'rotate(180deg)' }} /> Volver
+          </button>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--txt)' }}>
+            {editing === 'new' ? 'Nuevo Torneo' : `Editando: ${editing.nombre}`}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 14 }}>
+            <div>
+              <label className="nx-label">Nombre *</label>
+              <input className="nx-input" value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Copa Solsticio" />
+            </div>
+            <div>
+              <label className="nx-label">Cupos *</label>
+              <input className="nx-input" type="number" min="2" value={form.cupos} onChange={e => set('cupos', e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <label className="nx-label">Descripción</label>
+            <textarea className="nx-textarea" rows={3} value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Contexto y formato del torneo..." />
+          </div>
+
+          <div>
+            <label className="nx-label">Fecha de inicio</label>
+            <input className="nx-input" type="date" value={form.fecha_inicio} onChange={e => set('fecha_inicio', e.target.value)} style={{ maxWidth: 220 }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div>
+              <label className="nx-label">Premios</label>
+              <textarea className="nx-textarea" rows={4} value={form.premios} onChange={e => set('premios', e.target.value)} placeholder="Ej: 1er lugar: 500 créditos + medalla..." />
+            </div>
+            <div>
+              <label className="nx-label">Requisitos</label>
+              <textarea className="nx-textarea" rows={4} value={form.requisitos} onChange={e => set('requisitos', e.target.value)} placeholder="Ej: Tier caballero o superior..." />
+            </div>
+          </div>
+
+          <div>
+            <label className="nx-label">Imagen de portada</label>
+            <input type="file" accept="image/*" className="nx-input"
+              onChange={e => e.target.files[0] && set('imagen', e.target.files[0])}
+            />
+            {form.imagen && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <img
+                  src={form.imagen instanceof File
+                    ? URL.createObjectURL(form.imagen)
+                    : (form.imagen.startsWith('http') ? form.imagen : `/storage/${form.imagen}`)}
+                  style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }}
+                />
+                <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                  {form.imagen instanceof File ? 'Nuevo archivo seleccionado' : 'Imagen actual'}
+                </span>
+                <button type="button" onClick={() => set('imagen', '')} style={{
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)',
+                  fontSize: 10, textDecoration: 'underline', padding: 0,
+                }}>Quitar</button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 6 }}>
+            <Btn onClick={cancel}>Cancelar</Btn>
+            <Btn kind="accent" icon="check" onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando...' : 'Guardar'}
+            </Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── LIST ── */
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--holo-line)', display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ flex: 1 }} />
+        <Btn sm icon="plus" kind="accent" onClick={openNew}>Nuevo torneo</Btn>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <span className="nx-data" style={{ color: 'var(--holo)', animation: 'nx-pulse 1.4s infinite' }}>CARGANDO...</span>
+          </div>
+        )}
+        {!loading && torneos.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>Sin torneos</div>
+        )}
+        <div style={{ display: 'grid', gap: 10 }}>
+          {torneos.map(t => {
+            const e = ESTADO_TORNEO_ADMIN[t.estado] ?? ESTADO_TORNEO_ADMIN.inscripcion;
+            return (
+              <div key={t.id} style={{
+                padding: '12px 14px', borderRadius: 8, border: '1px solid var(--holo-line)',
+                background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'flex-start', gap: 12,
+                borderLeft: `3px solid ${e.color}`,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{t.nombre}</span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 7px', borderRadius: 3, background: `${e.color}18`, color: e.color, border: `1px solid ${e.color}40` }}>
+                      {e.label.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                    {t.inscritos_count} / {t.cupos} cupos
+                    {t.ganador && ` · Campeón: ${t.ganador.name}`}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {t.estado === 'inscripcion' && (
+                    <button onClick={() => handleIniciar(t.id)} disabled={starting === t.id || t.inscritos_count < 2}
+                      style={{ background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)', color: 'var(--pompeyo-oro)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11, opacity: t.inscritos_count < 2 ? 0.4 : 1 }}>
+                      <Icon name="crown" size={12} /> Generar Árbol
+                    </button>
+                  )}
+                  <button onClick={() => openEdit(t)} style={{ background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.2)', color: 'var(--holo)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11 }}>
+                    <Icon name="edit" size={12} />
+                  </button>
+                  <button onClick={() => handleDelete(t.id)} style={{ background: 'rgba(255,45,69,0.08)', border: '1px solid rgba(255,45,69,0.2)', color: '#ff6b6b', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11 }}>
                     <Icon name="x" size={12} />
                   </button>
                 </div>

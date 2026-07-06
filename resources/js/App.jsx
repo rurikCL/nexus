@@ -135,6 +135,7 @@ import MapaView from './sections/Mapa.jsx';
 import AdminView from './sections/Admin.jsx';
 import { TemporadasView } from './sections/Temporadas.jsx';
 import { MisionesView } from './sections/Misiones.jsx';
+import { CompetitivoView } from './sections/Competitivo.jsx';
 import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
 import SesionesView from './sections/Sesiones.jsx';
 import InstagramView from './sections/Instagram.jsx';
@@ -152,6 +153,7 @@ const NAV = [
   { id: 'ranking', label: 'Ranking', icon: 'trophy' },
   { id: 'combates', label: 'Combates', icon: 'swords' },
   { id: 'combatientes', label: 'Combatientes', icon: 'roster' },
+  { id: 'competitivo', label: 'Competitivo', icon: 'medal' },
   { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
   { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
@@ -168,6 +170,7 @@ const TITLES = {
   ranking: ['Ranking', 'Escalera de la liga orbital'],
   combates: ['Combates', 'Arena, apuestas y desafíos'],
   combatientes: ['Combatientes', 'Directorio y perfiles públicos'],
+  competitivo: ['Competitivo', 'Torneos y combates por puntos'],
   temporadas:    ['Temporadas',         'Historial de campeones y recompensas'],
   mapa: ['Mapa Galáctico', 'Navegación estelar'],
   instagram: ['Instagram', 'Publicaciones y feed de tu cuenta'],
@@ -395,6 +398,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     ranking: <RankingView S={S} />,
     combates: <CombatesView S={S} user={user} initialViewCombat={combatToView} onClearViewCombat={() => setCombatToView(null)} />,
     combatientes: <CombatientesView S={S} />,
+    competitivo:  <CompetitivoView S={S} user={user} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
     mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
