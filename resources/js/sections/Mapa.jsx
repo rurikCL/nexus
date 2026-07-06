@@ -1555,7 +1555,7 @@ function NpcCard({ npc, onClick }) {
       <div style={{
         height: 140, position: 'relative',
         background: npcImagen
-          ? `url(${npcImagen}) center top/cover`
+          ? `url(${npcImagen}) center/contain no-repeat`
           : 'linear-gradient(160deg, rgba(56,205,240,0.12), rgba(4,7,15,0.9))',
       }}>
         {!npcImagen && npcMiniImagen && (
