@@ -11,6 +11,8 @@ const EVENT_TYPES = {
   'GALA':         { banner: '#E6B325', icon: 'star' },
   'CHARLA':       { banner: '#10b981', icon: 'user' },
 };
+const EVENT_ADMIN_TIERS = ['maestro', 'granmaestro'];
+
 const EVENT_STATUS = {
   'ABIERTO':   { tone: 'green', label: 'Inscripción abierta' },
   'PRÓXIMO':   { tone: 'dim',   label: 'Próximamente' },
@@ -104,6 +106,7 @@ export function EventosView({ S, go, user }) {
     return true;
   });
   const misCount = events.filter(e => e.mine).length;
+  const canCreateEvent = EVENT_ADMIN_TIERS.includes(user?.tier);
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
@@ -124,7 +127,9 @@ export function EventosView({ S, go, user }) {
           <span className="nx-num" style={{ fontSize: 15, color: 'var(--txt)' }}>{misCount}</span>
           <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>inscritos</span>
         </div>
-        <Btn kind="accent" icon="plus" onClick={() => setCreating(true)}>Agregar evento</Btn>
+        {canCreateEvent && (
+          <Btn kind="accent" icon="plus" onClick={() => setCreating(true)}>Agregar evento</Btn>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

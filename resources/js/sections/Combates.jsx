@@ -1007,7 +1007,7 @@ export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) 
         <div style={{ display: 'grid', gap: 14 }}>
           {S.combats.length === 0
             ? <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>No hay combates en cartelera</div>
-            : S.combats.map((m) => <CombatCard key={m.id} m={m} S={S} onBet={(pick) => setBet({ combat: m, pick })} onScore={() => setScoring(m)} onView={m.resolved ? () => setViewing(m) : undefined} />)}
+            : S.combats.map((m) => <CombatCard key={m.id} m={m} S={S} user={user} onBet={(pick) => setBet({ combat: m, pick })} onScore={() => setScoring(m)} onView={m.resolved ? () => setViewing(m) : undefined} />)}
         </div>
       </Panel>
 
@@ -1053,10 +1053,11 @@ export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) 
   );
 }
 
-export function CombatCard({ m, S, onBet, onScore, onView }) {
+export function CombatCard({ m, S, user, onBet, onScore, onView }) {
   const a = m._a ?? S.byId(m.a);
   const b = m._b ?? S.byId(m.b);
   const myBet = S.bets.find(x => x.combatId === m.id);
+  const isJuez = user?.roles?.includes('juez');
   const Fighter = ({ c, side, odds }) => (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' }}>
       <Avatar c={c} size={52} ring />
@@ -1088,9 +1089,11 @@ export function CombatCard({ m, S, onBet, onScore, onView }) {
         <Fighter c={b} side="b" odds={m.oddsB} />
       </div>
       {!m.resolved ? (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
-          <Btn sm kind="accent" icon="target" onClick={onScore}>Puntuar combate</Btn>
-        </div>
+        isJuez && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+            <Btn sm kind="accent" icon="target" onClick={onScore}>Puntuar combate</Btn>
+          </div>
+        )
       ) : (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           <Chip tone="green" icon="trophy">Ganó {(m.winner === 'a' ? a : b).name}</Chip>

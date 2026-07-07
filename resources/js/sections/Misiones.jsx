@@ -16,7 +16,7 @@ const mediaUrl = (path) => {
 
 const TIPO_LABELS = {
   temporada:   { label: 'Temporada',  color: '#E6B325' },
-  comunidad:   { label: 'Comunidad',  color: '#10b981' },
+  comunidad:   { label: 'Comunidad',  color: '#E6B325' },
   individual:  { label: 'Individual', color: '#38cdf0' },
 };
 
@@ -120,12 +120,13 @@ function ComunidadCard({ mision, userId }) {
   return (
     <div className="nx-panel solid" style={{
       overflow: 'hidden',
-      border: completada ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--holo-line)',
+      border: completada ? '1px solid rgba(230,179,37,0.6)' : '1px solid rgba(230,179,37,0.3)',
+      boxShadow: completada ? '0 0 14px -6px rgba(230,179,37,0.5)' : 'none',
     }}>
       {mision.foto_mision && (
         <div style={{
           height: 120, background: `url(${mediaUrl(mision.foto_mision)}) center/cover no-repeat`,
-          opacity: 0.65, borderBottom: '1px solid var(--holo-line)',
+          opacity: 0.65, borderBottom: '1px solid rgba(230,179,37,0.3)',
         }} />
       )}
       <div style={{ padding: '14px 16px' }}>
@@ -150,16 +151,16 @@ function ComunidadCard({ mision, userId }) {
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
             <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>PROGRESO COMUNIDAD</span>
-            <span className="nx-num" style={{ fontSize: 11, color: completada ? '#10b981' : 'var(--holo)' }}>
+            <span className="nx-num" style={{ fontSize: 11, color: completada ? '#10b981' : '#E6B325' }}>
               {totalPuntos} / {requeridos} pts
             </span>
           </div>
           <div style={{ height: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{
               height: '100%', width: `${progresoPct}%`,
-              background: completada ? '#10b981' : 'var(--holo)',
+              background: completada ? '#10b981' : '#E6B325',
               borderRadius: 4, transition: 'width 0.5s ease',
-              boxShadow: completada ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(56,205,240,0.4)',
+              boxShadow: completada ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(230,179,37,0.5)',
             }} />
           </div>
         </div>
@@ -177,7 +178,7 @@ function ComunidadCard({ mision, userId }) {
                 }}>
                   <div style={{
                     width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                    background: 'var(--holo)', boxShadow: '0 0 4px var(--holo)',
+                    background: '#E6B325', boxShadow: '0 0 4px #E6B325',
                   }} />
                   <span style={{ flex: 1, fontSize: 12, color: 'var(--txt-dim)' }}>{obj.nombre}</span>
                   <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
@@ -217,7 +218,7 @@ function ComunidadCard({ mision, userId }) {
         <div>
           <button
             className="nx-data"
-            style={{ fontSize: 11, color: 'var(--holo)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '.08em', marginBottom: open ? 10 : 0 }}
+            style={{ fontSize: 11, color: '#E6B325', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '.08em', marginBottom: open ? 10 : 0 }}
             onClick={() => setOpen(o => !o)}
           >
             <Icon name={open ? 'chevdown' : 'chevron'} size={11} />{' '}
@@ -241,7 +242,7 @@ function ComunidadCard({ mision, userId }) {
                       {p.name}
                     </span>
                     <div className="nx-bar" style={{ flex: 1 }}>
-                      <i style={{ width: `${pp}%`, background: pp >= 100 ? '#10b981' : 'var(--holo)' }} />
+                      <i style={{ width: `${pp}%`, background: pp >= 100 ? '#10b981' : '#E6B325' }} />
                     </div>
                     <span className="nx-num" style={{ fontSize: 10, width: 38, textAlign: 'right', color: 'var(--txt-faint)' }}>
                       {p.progreso ?? 0} pt
@@ -264,16 +265,20 @@ function ComunidadCard({ mision, userId }) {
 // MISIONES INDIVIDUALES (dadas por NPC)
 // ─────────────────────────────────────────────────────────────
 function IndividualSection({ misiones, onReload }) {
-  const activas    = misiones.filter(m => m.status !== 'completada');
-  const completadas = misiones.filter(m => m.status === 'completada');
+  const misionesNpc = misiones.filter(m => m.npc);
+  const activas      = misionesNpc.filter(m => m.status !== 'completada');
+  const completadas  = misionesNpc.filter(m => m.status === 'completada');
 
   return (
     <Panel kicker="NPC" title="Misiones Individuales" icon="target">
-      {misiones.length === 0 && (
+      {misionesNpc.length === 0 && (
         <Empty label="No tienes misiones individuales asignadas — habla con los NPC del mapa" />
       )}
       {activas.length > 0 && (
-        <div style={{ display: 'grid', gap: 12, marginBottom: completadas.length ? 18 : 0 }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14,
+          marginBottom: completadas.length ? 18 : 0,
+        }}>
           {activas.map(m => (
             <IndividualCard key={m.id} mision={m} onReload={onReload} />
           ))}
@@ -284,7 +289,7 @@ function IndividualSection({ misiones, onReload }) {
           <div className="nx-kicker" style={{ marginBottom: 10, marginTop: activas.length ? 8 : 0 }}>
             COMPLETADAS
           </div>
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
             {completadas.map(m => (
               <IndividualCard key={m.id} mision={m} completed onReload={onReload} />
             ))}
