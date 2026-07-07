@@ -173,9 +173,12 @@ const ENTITY_CONFIG = {
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto.' },
-      { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea.' },
-      { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Si se rellena, el NPC usará IA en lugar del diálogo estático.' },
+      { key: 'hito_requerimiento', label: 'Hito(s) requerido(s)', type: 'text', span: 2, hint: 'Nombres de hito separados por coma. El NPC solo aparece si el personaje posee todos.' },
+      { key: 'fecha_inicio',  label: 'Disponible desde', type: 'date', hint: 'Opcional. El NPC solo aparece a partir de esta fecha.' },
+      { key: 'fecha_fin',     label: 'Disponible hasta', type: 'date', hint: 'Opcional. El NPC deja de aparecer después de esta fecha.' },
+      { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
+      { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
+      { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Si se rellena, el NPC usará IA en lugar del diálogo estático. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
       { key: 'urlInteraccion',label: 'URL interacción',  type: 'text', span: 2 },
       { key: 'MisionID',      label: 'ID de misión',     type: 'number', min: 0 },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
@@ -483,6 +486,15 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
         </div>
         {on ? 'Visible' : 'Oculto'}
       </button>
+    );
+  }
+
+  if (field.type === 'date') {
+    return (
+      <input type="date" {...base}
+        value={value ? String(value).slice(0, 10) : ''}
+        onChange={e => onChange(e.target.value || null)}
+      />
     );
   }
 

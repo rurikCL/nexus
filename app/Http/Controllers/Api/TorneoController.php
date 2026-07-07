@@ -315,7 +315,7 @@ class TorneoController extends Controller
             return null;
         }
 
-        return Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp;
+        return '/storage/' . $character->photo . '?v=' . $character->updated_at->timestamp;
     }
 
     private function formatTorneo(Torneo $torneo): array

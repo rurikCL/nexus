@@ -90,7 +90,12 @@ class MapController extends Controller
             ])
             ->findOrFail($id);
 
-        $lugar->setRelation('npcs', $this->attachMisionInfo($lugar->npcs, $request->user()));
+        $characterHitos = $request->user()?->character
+            ? $request->user()->character->hitos()->pluck('hito')->all()
+            : [];
+
+        $npcsDisponibles = $lugar->npcs->filter(fn (MapNpc $npc) => $this->npcCumpleRequisitos($npc, $characterHitos))->values();
+        $lugar->setRelation('npcs', $this->attachMisionInfo($npcsDisponibles, $request->user()));
 
         $character = $request->user()?->character;
         $requiredPassId = $lugar->pase;
@@ -154,9 +159,43 @@ class MapController extends Controller
             ->with('lugar.zona.planeta.sistema')
             ->findOrFail($id);
 
+        $characterHitos = $request->user()?->character
+            ? $request->user()->character->hitos()->pluck('hito')->all()
+            : [];
+
+        if (! $this->npcCumpleRequisitos($npc, $characterHitos)) {
+            abort(404);
+        }
+
         $npc = $this->attachMisionInfo(collect([$npc]), $request->user())->first();
 
         return response()->json(['npc' => $npc]);
+    }
+
+    /**
+     * Determina si un NPC debe aparecer para el personaje: cumple el/los hito(s)
+     * requeridos (si tiene) y está dentro del rango de fechas configurado (si tiene).
+     */
+    private function npcCumpleRequisitos(MapNpc $npc, array $characterHitos): bool
+    {
+        if ($npc->hito_requerimiento) {
+            $requeridos = array_filter(array_map('trim', explode(',', $npc->hito_requerimiento)));
+            if (! empty(array_diff($requeridos, $characterHitos))) {
+                return false;
+            }
+        }
+
+        $hoy = now()->toDateString();
+
+        if ($npc->fecha_inicio && $hoy < $npc->fecha_inicio->toDateString()) {
+            return false;
+        }
+
+        if ($npc->fecha_fin && $hoy > $npc->fecha_fin->toDateString()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

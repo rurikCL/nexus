@@ -11,9 +11,11 @@ use App\Models\MapLugar;
 use App\Models\MapNpc;
 use App\Models\MapPlaneta;
 use App\Models\NpcChatLog;
+use App\Models\RolObjeto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -65,6 +67,34 @@ class NpcChatController extends Controller
             'history'       => $history,
             'show_greeting' => $showGreeting,
         ]);
+    }
+
+    /**
+     * Resuelve por nombre las referencias inline usadas en los textos de NPC:
+     * [Nombre Objeto] -> rol_objetos, @[Nombre NPC] -> map_npcs.
+     */
+    public function refs(Request $request): JsonResponse
+    {
+        $objetoNombres = array_slice(array_values(array_filter(array_map('trim',
+            explode(',', (string) $request->query('objetos', ''))
+        ))), 0, 40);
+
+        $npcNombres = array_slice(array_values(array_filter(array_map('trim',
+            explode(',', (string) $request->query('npcs', ''))
+        ))), 0, 40);
+
+        $objetos = $objetoNombres
+            ? RolObjeto::whereIn(DB::raw('LOWER(nombre)'), array_map('mb_strtolower', $objetoNombres))
+                ->get(['id', 'nombre', 'tipo', 'rareza', 'imagen', 'descripcion', 'efecto'])
+            : collect();
+
+        $npcs = $npcNombres
+            ? MapNpc::where('visible', true)
+                ->whereIn(DB::raw('LOWER(nombre)'), array_map('mb_strtolower', $npcNombres))
+                ->get(['id', 'nombre', 'tipo', 'profesion', 'faccion', 'imagen_mini', 'imagen'])
+            : collect();
+
+        return response()->json(['objetos' => $objetos, 'npcs' => $npcs]);
     }
 
     public function chat(Request $request, int $id): JsonResponse

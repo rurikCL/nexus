@@ -38,14 +38,17 @@ const ESTADO_TORNEO = {
   finalizado:  { label: 'Finalizado',          tone: 'gold' },
 };
 
-function MiniAvatar({ name, photoUrl, size = 36 }) {
+function MiniAvatar({ name, photoUrl, size = 36, ring }) {
   const initials = (name ?? '?').trim().slice(0, 2).toUpperCase();
   const color = hashColor(name ?? '?');
+  const ringStyle = ring
+    ? { border: '2px solid var(--pompeyo-oro)', boxShadow: '0 0 12px -2px var(--pompeyo-oro)' }
+    : { border: '1px solid var(--holo-line)' };
   if (photoUrl) {
     return (
       <img src={photoUrl} alt={name ?? ''} style={{
         width: size, height: size, borderRadius: '50%', objectFit: 'cover',
-        border: '1px solid var(--holo-line)', flexShrink: 0,
+        flexShrink: 0, ...ringStyle,
       }} />
     );
   }
@@ -54,6 +57,7 @@ function MiniAvatar({ name, photoUrl, size = 36 }) {
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
       display: 'grid', placeItems: 'center', fontSize: size * 0.38, fontWeight: 700, color: '#fff',
       background: `linear-gradient(135deg, ${color}, ${color}99)`,
+      ...(ring ? ringStyle : {}),
     }}>
       {initials}
     </div>
@@ -223,7 +227,19 @@ function TorneoDetalle({ torneoId, user, onBack }) {
       {tab === 'arbol' && (
         torneo.combates.length === 0
           ? <Empty label="El árbol de este torneo aún no ha sido generado" />
-          : <BracketTab combatesPorRonda={torneo.combates} isTutor={isTutorUser} onOpenCombate={setScoringCombate} />
+          : (
+            <div className="nx-panel solid" style={{
+              position: 'relative', padding: 20, overflow: 'hidden', borderRadius: 'var(--radius-lg)',
+              backgroundImage: [
+                'radial-gradient(ellipse at 60% 25%, rgba(56,205,240,0.12) 0%, rgba(4,10,30,0.55) 70%)',
+                'linear-gradient(rgba(56,205,240,0.07) 1px, transparent 1px)',
+                'linear-gradient(90deg, rgba(56,205,240,0.07) 1px, transparent 1px)',
+              ].join(', '),
+              backgroundSize: 'auto, 48px 48px, 48px 48px',
+            }}>
+              <BracketTab combatesPorRonda={torneo.combates} isTutor={isTutorUser} onOpenCombate={setScoringCombate} />
+            </div>
+          )
       )}
 
       <Modal open={!!scoringCombate} onClose={() => setScoringCombate(null)}
@@ -276,18 +292,35 @@ function ResumenTab({ torneo, isTutorUser, onOpenCombate }) {
       <Panel kicker={`${torneo.participantes.length} inscritos`} title="Participantes" icon="roster">
         {torneo.participantes.length === 0 ? <Empty label="Sin inscritos todavía" /> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px,1fr))', gap: 8 }}>
-            {torneo.participantes.map(p => (
-              <div key={p.user_id} className="nx-panel solid" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
-                <MiniAvatar name={p.name} photoUrl={p.photo_url} size={30} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                  {p.handle && <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{p.handle}</div>}
-                </div>
-                <Chip tone={p.estado === 'campeon' ? 'gold' : p.estado === 'eliminado' ? 'red' : 'green'}>
-                  {p.estado === 'campeon' ? 'Campeón' : p.estado === 'eliminado' ? 'Eliminado' : 'Activo'}
-                </Chip>
-              </div>
-            ))}
+            {[...torneo.participantes]
+              .sort((a, b) => (a.estado === 'campeon' ? -1 : b.estado === 'campeon' ? 1 : 0))
+              .map(p => {
+                const esCampeon = p.estado === 'campeon';
+                return (
+                  <div key={p.user_id} className="nx-panel solid" style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: esCampeon ? '10px 12px' : '8px 10px',
+                    borderColor: esCampeon ? 'var(--pompeyo-oro)' : undefined,
+                    background: esCampeon ? 'linear-gradient(135deg, rgba(230,179,37,0.16), rgba(230,179,37,0.03))' : undefined,
+                    boxShadow: esCampeon ? '0 0 18px -6px var(--pompeyo-oro)' : undefined,
+                  }}>
+                    <MiniAvatar name={p.name} photoUrl={p.photo_url} size={esCampeon ? 42 : 30} ring={esCampeon} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{
+                          fontSize: esCampeon ? 13 : 12, fontWeight: esCampeon ? 700 : 600,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{p.name}</span>
+                        {esCampeon && <Icon name="star" size={12} fill style={{ color: 'var(--pompeyo-oro)', flexShrink: 0 }} />}
+                      </div>
+                      {p.handle && <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{p.handle}</div>}
+                    </div>
+                    <Chip tone={esCampeon ? 'gold' : p.estado === 'eliminado' ? 'red' : 'green'} icon={esCampeon ? 'crown' : undefined}>
+                      {esCampeon ? 'Campeón' : p.estado === 'eliminado' ? 'Eliminado' : 'Activo'}
+                    </Chip>
+                  </div>
+                );
+              })}
           </div>
         )}
       </Panel>

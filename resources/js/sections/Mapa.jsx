@@ -36,6 +36,97 @@ const mediaUrl = (path) => {
   return `/storage${cleanPath}`;
 };
 
+/* ─── referencias inline en textos de NPC ────────────────
+   [Nombre Objeto]  -> rol_objetos
+   @[Nombre NPC]    -> map_npcs                             */
+const REF_TOKEN_RE = /(@)?\[([^\[\]]+)\]/g;
+
+function parseRefTokens(text) {
+  if (!text) return [];
+  const tokens = [];
+  let last = 0, m;
+  REF_TOKEN_RE.lastIndex = 0;
+  while ((m = REF_TOKEN_RE.exec(text))) {
+    if (m.index > last) tokens.push({ type: 'text', value: text.slice(last, m.index) });
+    tokens.push({ type: m[1] ? 'npc' : 'objeto', name: m[2].trim() });
+    last = REF_TOKEN_RE.lastIndex;
+  }
+  if (last < text.length) tokens.push({ type: 'text', value: text.slice(last) });
+  return tokens;
+}
+
+const REF_COLOR = { objeto: '#E6B325', npc: '#8b5cf6' };
+
+function RefToken({ type, name, data }) {
+  const [hover, setHover] = useState(false);
+  const color = REF_COLOR[type];
+
+  if (!data) {
+    return <span>{type === 'npc' ? `@[${name}]` : `[${name}]`}</span>;
+  }
+
+  const imagen = mediaUrl(type === 'objeto' ? data.imagen : (data.imagen_mini || data.imagen));
+
+  return (
+    <span
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: 'relative', display: 'inline-block',
+        color, fontWeight: 600, cursor: 'help',
+        borderBottom: `1px dotted ${color}`,
+      }}
+    >
+      {name}
+      {hover && (
+        <div style={{
+          position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+          marginBottom: 6, width: 200, zIndex: 50,
+          background: 'rgba(5,12,26,0.98)', border: `1px solid ${color}`,
+          borderRadius: 8, padding: 10, boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
+          fontSize: 11, lineHeight: 1.5, color: 'var(--txt)',
+          fontFamily: 'var(--font-body)', whiteSpace: 'normal', pointerEvents: 'none',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: data.descripcion || data.efecto || data.profesion || data.faccion ? 6 : 0 }}>
+            {imagen && (
+              <img src={imagen} alt={data.nombre} style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', border: `1px solid ${color}55`, flexShrink: 0 }} />
+            )}
+            <div style={{ fontWeight: 700, color, fontSize: 12 }}>{data.nombre}</div>
+          </div>
+          {type === 'objeto' ? (
+            <>
+              {data.rareza && <div style={{ fontSize: 9, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{data.rareza.replace('_', ' ')}</div>}
+              {data.descripcion && <div>{data.descripcion}</div>}
+              {data.efecto && <div style={{ marginTop: 4, color: 'var(--txt-dim)' }}>{data.efecto}</div>}
+            </>
+          ) : (
+            <>
+              {(data.profesion || data.faccion) && (
+                <div style={{ color: 'var(--txt-dim)' }}>
+                  {[data.profesion, data.faccion].filter(Boolean).join(' · ')}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
+function RichNpcText({ text, refsMap }) {
+  const tokens = useMemo(() => parseRefTokens(text), [text]);
+  return (
+    <>
+      {tokens.map((tok, i) => {
+        if (tok.type === 'text') return <span key={i}>{tok.value}</span>;
+        const data = refsMap?.[tok.type]?.get(tok.name.toLowerCase());
+        return <RefToken key={i} type={tok.type} name={tok.name} data={data} />;
+      })}
+    </>
+  );
+}
+
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 700);
   useEffect(() => {
@@ -1818,6 +1909,49 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       .slice(0, 4);
   }, [npc.interaccion]);
 
+  /* Referencias [Objeto] / @[NPC] presentes en los textos del NPC: se resuelven
+     una vez por nombre nuevo y se cachean para pintar los tokens + tooltip. */
+  const [refsMap, setRefsMap] = useState({ objeto: new Map(), npc: new Map() });
+  const resolvedNamesRef = useRef({ objeto: new Set(), npc: new Set() });
+
+  useEffect(() => {
+    const npcTexts = [
+      npc.saludo,
+      ...npcOptions.map(o => o.response),
+      ...messages.filter(m => m.from === 'npc').map(m => m.text),
+    ].filter(Boolean);
+
+    const nuevos = { objeto: [], npc: [] };
+    npcTexts.forEach(text => {
+      parseRefTokens(text).forEach(tok => {
+        if (tok.type === 'text') return;
+        const key = tok.name.toLowerCase();
+        if (!resolvedNamesRef.current[tok.type].has(key)) {
+          resolvedNamesRef.current[tok.type].add(key);
+          nuevos[tok.type].push(tok.name);
+        }
+      });
+    });
+
+    if (!nuevos.objeto.length && !nuevos.npc.length) return;
+
+    const params = new URLSearchParams();
+    if (nuevos.objeto.length) params.set('objetos', nuevos.objeto.join(','));
+    if (nuevos.npc.length)    params.set('npcs', nuevos.npc.join(','));
+
+    apiFetch(`/npcs/refs?${params.toString()}`)
+      .then(d => {
+        setRefsMap(prev => {
+          const objeto = new Map(prev.objeto);
+          const npcM   = new Map(prev.npc);
+          (d.objetos ?? []).forEach(o => objeto.set(o.nombre.toLowerCase(), o));
+          (d.npcs ?? []).forEach(n => npcM.set(n.nombre.toLowerCase(), n));
+          return { objeto, npc: npcM };
+        });
+      })
+      .catch(() => {});
+  }, [npc.saludo, npcOptions, messages]);
+
   useEffect(() => {
     if (isAI) return;
     if (npc.saludo) {
@@ -2090,7 +2224,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                     {npc.nombre.toUpperCase()}
                   </div>
                 )}
-                {m.text}
+                {m.from === 'npc' ? <RichNpcText text={m.text} refsMap={refsMap} /> : m.text}
               </div>
             </div>
           ))}

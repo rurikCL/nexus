@@ -172,6 +172,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pvp/{id}/decline',   [PvpCombatController::class, 'decline']);
 
     // NPC AI chat
+    Route::get('/npcs/refs',             [NpcChatController::class, 'refs']);
     Route::get('/npcs/{id}/chat/status', [NpcChatController::class, 'status']);
     Route::post('/npcs/{id}/chat',       [NpcChatController::class, 'chat']);
 

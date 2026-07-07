@@ -35,6 +35,9 @@ class MapNpc extends Model
         'movimiento',
         'iniciativa',
         'punteria',
+        'hito_requerimiento',
+        'fecha_inicio',
+        'fecha_fin',
     ];
 
     protected $casts = [
@@ -46,6 +49,8 @@ class MapNpc extends Model
         'movimiento' => 'integer',
         'iniciativa' => 'integer',
         'punteria' => 'integer',
+        'fecha_inicio' => 'date',
+        'fecha_fin' => 'date',
     ];
 
     public function lugar(): BelongsTo
