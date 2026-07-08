@@ -33,11 +33,15 @@ class SableController extends Controller
 
     /**
      * Verifica que cada slot enviado sea un objeto que el personaje posee
-     * y que su `tipo` corresponda al slot indicado.
+     * y que su `tipo` corresponda al slot indicado. También valida que el
+     * consumo de energía total no supere la energía máxima del núcleo.
      */
     private function validarSlots(Character $character, array $data): array
     {
-        $slots = [];
+        $slots         = [];
+        $consumoTotal  = 0;
+        $energiaMaxima = 0;
+
         foreach (CharacterSable::SLOTS as $slot => $tipoEsperado) {
             $objetoId = $data["{$slot}_id"] ?? null;
             if (! $objetoId) {
@@ -50,7 +54,17 @@ class SableController extends Controller
             abort_if($objeto->tipo !== $tipoEsperado, 422, "El objeto '{$objeto->nombre}' no es un componente de tipo {$tipoEsperado}.");
 
             $slots["{$slot}_id"] = $objetoId;
+            $consumoTotal += $objeto->consumo_energia ?? 0;
+            if ($slot === 'nucleo') {
+                $energiaMaxima = $objeto->energia_maxima ?? 0;
+            }
         }
+
+        abort_if(
+            $consumoTotal > $energiaMaxima,
+            422,
+            "El consumo de energía ({$consumoTotal}) supera la energía máxima del núcleo ({$energiaMaxima})."
+        );
 
         return $slots;
     }

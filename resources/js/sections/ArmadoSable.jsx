@@ -64,6 +64,13 @@ function bonusPreview(objeto) {
   return parts.length ? parts.join(' · ') : '';
 }
 
+function energyPreview(objeto) {
+  const parts = [];
+  if (objeto.consumo_energia) parts.push(`Consumo ${objeto.consumo_energia} EN`);
+  if (objeto.tipo === 'nucleo_energia' && objeto.energia_maxima) parts.push(`Máx ${objeto.energia_maxima} EN`);
+  return parts.join(' · ');
+}
+
 function sumaBonos(fuente, resolver) {
   const totales = Object.fromEntries(BONUS_FIELDS.map((b) => [b.key, 0]));
   SLOTS.forEach((s) => {
@@ -104,6 +111,7 @@ function ComponentPickerModal({ slot, opciones, onAssign, onClear, onClose }) {
               <div className="nx-saber-modal-meta">
                 <div className="nx-saber-modal-name">{o.nombre}</div>
                 {bonusPreview(o) && <div className="nx-saber-modal-bonus">{bonusPreview(o)}</div>}
+                {energyPreview(o) && <div className="nx-saber-modal-bonus" style={{ color: '#ffb020' }}>{energyPreview(o)}</div>}
               </div>
             </button>
           ))}
@@ -254,6 +262,14 @@ export function ArmadoSableView({ user, onUserUpdate }) {
   const cristalSeleccionado = objetoPorId(form.cristal_id);
   const hexHoja = cristalSeleccionado?.color_hoja ? NX.SABERS[cristalSeleccionado.color_hoja] : null;
 
+  const nucleoSeleccionado = objetoPorId(form.nucleo_id);
+  const energiaMaxima = nucleoSeleccionado?.energia_maxima ?? 0;
+  const consumoEnergia = useMemo(
+    () => SLOTS.reduce((acc, s) => acc + (objetoPorId(form[`${s.key}_id`])?.consumo_energia ?? 0), 0),
+    [form, objetoPorId]
+  );
+  const sobreConsumo = consumoEnergia > energiaMaxima;
+
   const setSlot = (key, value) => setForm((f) => ({ ...f, [`${key}_id`]: value ? Number(value) : null }));
 
   const nuevo = () => setForm(emptyForm());
@@ -340,6 +356,33 @@ export function ArmadoSableView({ user, onUserUpdate }) {
               {cristalSeleccionado && <Chip tone="holo">Cristal {cristalSeleccionado.nombre}</Chip>}
             </div>
 
+            <div className="nx-saber-energy-row" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0 4px' }}>
+              <span className="nx-kicker" style={{ flexShrink: 0, color: sobreConsumo ? '#ff6b6b' : undefined }}>ENERGÍA</span>
+              <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${energiaMaxima > 0 ? Math.min(100, (consumoEnergia / energiaMaxima) * 100) : (consumoEnergia > 0 ? 100 : 0)}%`,
+                  background: sobreConsumo ? '#ff2d45' : '#38cdf0',
+                  boxShadow: sobreConsumo ? '0 0 8px #ff2d45' : consumoEnergia > 0 ? '0 0 8px #38cdf0' : 'none',
+                  transition: 'width 0.2s ease, background 0.2s ease',
+                }} />
+              </div>
+              <span style={{
+                fontSize: 11, fontFamily: 'var(--font-data)', flexShrink: 0,
+                color: sobreConsumo ? '#ff6b6b' : 'var(--holo)',
+              }}>
+                {consumoEnergia}/{energiaMaxima} EN
+              </span>
+            </div>
+            {sobreConsumo && (
+              <div style={{
+                fontSize: 11, color: '#ff6b6b', background: 'rgba(255,45,69,0.1)',
+                border: '1px solid rgba(255,45,69,0.35)', borderRadius: 6, padding: '6px 10px', marginBottom: 4,
+              }}>
+                ⚠ El consumo de energía ({consumoEnergia}) supera la energía máxima del núcleo ({energiaMaxima}). No podrá guardarse hasta que ajustes los componentes o instales un núcleo más potente.
+              </div>
+            )}
+
             <div className="nx-saber-preview-panel">
               <div className="nx-kicker" style={{ marginBottom: 8 }}>VISTA ENSAMBLADA</div>
               <div className="nx-saber-preview-canvas">
@@ -422,7 +465,8 @@ export function ArmadoSableView({ user, onUserUpdate }) {
           <div className="nx-saber-actions-row">
             <Btn kind="accent" icon={form.id ? 'check' : 'plus'}
               onClick={() => (form.id ? guardar() : setConfirmCrear(true))}
-              disabled={saving}>
+              disabled={saving || sobreConsumo}
+              title={sobreConsumo ? 'El consumo de energía supera la energía máxima del núcleo' : undefined}>
               {saving ? 'Guardando…' : form.id ? 'Actualizar sable' : 'Guardar como nuevo'}
             </Btn>
             {form.id && <Btn onClick={nuevo}>Nuevo sable en blanco</Btn>}
@@ -439,6 +483,9 @@ export function ArmadoSableView({ user, onUserUpdate }) {
             {sables.map((s) => {
               const color = s.cristal?.color_hoja ? NX.SABERS[s.cristal.color_hoja] : null;
               const bonos = sumaBonos(s, (sable, slot) => sable[slot.key]);
+              const consumo = s.consumo_energia ?? 0;
+              const maxEnergia = s.energia_maxima ?? 0;
+              const sobreConsumoGuardado = consumo > maxEnergia;
               return (
                 <div key={s.id} className={`nx-panel solid nx-saber-saved-card ${s.activo ? 'is-active' : ''}`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -447,6 +494,11 @@ export function ArmadoSableView({ user, onUserUpdate }) {
                     {s.activo && <Chip tone="green">Activo</Chip>}
                   </div>
                   <div className="nx-saber-saved-badges">
+                    <span className="nx-saber-saved-badge" style={{
+                      background: sobreConsumoGuardado ? 'rgba(255,45,69,0.14)' : 'rgba(56,205,240,0.14)',
+                      borderColor: sobreConsumoGuardado ? 'rgba(255,45,69,0.45)' : 'rgba(56,205,240,0.45)',
+                      color: sobreConsumoGuardado ? '#ff6b6b' : '#38cdf0',
+                    }}>EN {consumo}/{maxEnergia}</span>
                     {BONUS_FIELDS.map((b) => (
                       bonos[b.key] !== 0 && (
                         <span key={b.key} className="nx-saber-saved-badge" style={{ background: `${b.color}14`, borderColor: `${b.color}45`, color: b.color }}>{b.label} {bonos[b.key] > 0 ? '+' : ''}{bonos[b.key]}</span>

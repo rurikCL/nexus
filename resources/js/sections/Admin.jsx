@@ -299,6 +299,8 @@ const ENTITY_CONFIG = {
       { key: 'bono_critico',    label: 'Bono Crítico (CRT)', type: 'number', min: 0, hint: 'CRT 2 = crítico con 20, 19 o 18 natural. Un crítico siempre impacta y hace +1 de daño' },
       { key: 'bono_fuerza',     label: 'Bono Fuerza',    type: 'number', min: -999, hint: 'Aumenta el máximo de Fuerza en combate (base 10)' },
       { key: 'bono_generacion_fuerza', label: 'Bono Generación de Fuerza', type: 'number', min: -999, hint: 'Aumenta la Fuerza recuperada por turno (base 2)' },
+      { key: 'consumo_energia', label: 'Consumo de Energía', type: 'number', min: 0, hint: 'Energía que consume esta pieza al instalarse en un sable' },
+      { key: 'energia_maxima',  label: 'Energía Máxima',     type: 'number', min: 0, hint: 'Solo si tipo = nucleo_energia · energía máxima total que el sable puede soportar' },
       { key: 'color_hoja',      label: 'Color de hoja',   type: 'select', options: SABER_OPTS, hint: 'Solo si tipo = cristal · define el color del sable al activarlo' },
     ],
     defaults: { activo: true },

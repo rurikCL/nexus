@@ -29,7 +29,7 @@ class CharacterSable extends Model
         'activo' => 'boolean',
     ];
 
-    protected $appends = ['dano', 'critico', 'tipo_ataque', 'color_hoja'];
+    protected $appends = ['dano', 'critico', 'tipo_ataque', 'color_hoja', 'consumo_energia', 'energia_maxima'];
 
     /** Daño base del ataque cuerpo a cuerpo con un sable de luz armado. */
     const DANO_BASE = 6;
@@ -122,5 +122,17 @@ class CharacterSable extends Model
     public function getColorHojaAttribute(): ?string
     {
         return $this->cristal?->color_hoja;
+    }
+
+    /** Energía total que consumen los componentes instalados. */
+    public function getConsumoEnergiaAttribute(): int
+    {
+        return $this->sumaBono('consumo_energia');
+    }
+
+    /** Energía máxima que el sable puede soportar, definida por el Núcleo de Energía instalado. */
+    public function getEnergiaMaximaAttribute(): int
+    {
+        return $this->nucleo?->energia_maxima ?? 0;
     }
 }

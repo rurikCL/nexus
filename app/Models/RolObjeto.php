@@ -33,6 +33,8 @@ class RolObjeto extends Model
         'bono_critico',
         'bono_fuerza',
         'bono_generacion_fuerza',
+        'consumo_energia',
+        'energia_maxima',
         'color_hoja',
     ];
 
@@ -50,6 +52,8 @@ class RolObjeto extends Model
         'bono_critico'    => 'integer',
         'bono_fuerza'     => 'integer',
         'bono_generacion_fuerza' => 'integer',
+        'consumo_energia' => 'integer',
+        'energia_maxima'  => 'integer',
     ];
 
     public function characters(): BelongsToMany
