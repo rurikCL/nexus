@@ -23,6 +23,7 @@ const mediaUrl = (path) => {
 };
 
 const NPC_COMBAT_LS = 'nx-npc-combat';
+const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
 
 export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee, initialState }) {
   const d20 = () => Math.floor(Math.random() * 20) + 1;
@@ -332,19 +333,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const npcBadges = [
     { l: 'ATQ', v: effNpcAtk, c: '#ff7043', dim: effNpcAtk < npcAtk },
     { l: 'DEF', v: effNpcDef, c: '#38cdf0', dim: effNpcDef < npcDef },
-    { l: 'MOV', v: effNpcMov, c: '#a78bfa', dim: effNpcMov < npcMov },
-    { l: 'INI', v: npcIni,    c: '#E6B325' },
     ...(npcPnt > 0 ? [{ l: 'PNT', v: effNpcPnt, c: '#10b981', dim: effNpcPnt < npcPnt }] : []),
+    { l: 'MOV', v: effNpcMov, c: '#a78bfa', dim: effNpcMov < npcMov },
   ];
   const playerBadges = [
     { l: 'ATQ', v: effPlayerAtk, c: '#ff7043', bonus: effPlayerAtk > player.ataque },
     { l: 'DEF', v: effPlayerDef, c: '#38cdf0', bonus: effPlayerDef > player.defensa },
-    { l: 'MOV', v: effPlayerMov, c: '#a78bfa', bonus: effPlayerMov > player.movimiento },
-    { l: 'INI', v: player.iniciativa, c: '#E6B325' },
     ...(player.punteria > 0 ? [{ l: 'PNT', v: effPlayerPnt, c: '#10b981', bonus: effPlayerPnt > player.punteria }] : []),
+    { l: 'MOV', v: effPlayerMov, c: '#a78bfa', bonus: effPlayerMov > player.movimiento },
   ];
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, align }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -357,7 +356,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         gap: isMobile ? 8 : 14, alignItems: 'flex-start',
       }}>
         <div style={{
-          width: isMobile ? 40 : 64, height: isMobile ? 40 : 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          width: isMobile ? 52 : 84, height: isMobile ? 68 : 122, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
           border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
         }}>
           {photoUrl
@@ -366,7 +365,18 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           }
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 8, textAlign: rev ? 'right' : 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+          <div style={{ display: 'flex', flexDirection: rev ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+            {ini != null && (
+              <span style={{
+                fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
+                background: 'rgba(230,179,37,0.12)', border: '1px solid rgba(230,179,37,0.4)', color: '#E6B325',
+                display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 9, lineHeight: 1 }}>⚡</span>{ini}
+              </span>
+            )}
+          </div>
           {maxEscudo > 0 && (
             <div style={{ marginBottom: 5 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -387,14 +397,18 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
               <div style={{ height: '100%', width: `${vPct}%`, background: vc, borderRadius: 5, transition: 'width 0.4s ease' }} />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: rev ? 'flex-end' : 'flex-start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: 4, justifyContent: rev ? 'end' : 'start' }}>
             {badges.map(b => (
               <span key={b.l} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
                 fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
                 background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
                 opacity: b.dim ? 0.55 : 1,
                 ...(b.bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
-              }}>{b.l} {b.v}{b.bonus ? ' ▲' : b.dim ? ' ▼' : ''}</span>
+              }}>
+                {BADGE_ICON[b.l] && <Icon name={BADGE_ICON[b.l]} size={9} />}
+                {b.l} {b.v}{b.bonus ? ' ▲' : b.dim ? ' ▼' : ''}
+              </span>
             ))}
           </div>
         </div>
@@ -444,7 +458,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(190px, 36%, 260px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
-            nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)}
+            nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
             borderColor="rgba(255,45,69,0.40)" badges={npcBadges} align="left"
           />
         </div>
@@ -453,7 +467,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(190px, 36%, 260px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
-            nombre={player.nombre} photoUrl={player.photo}
+            nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
             borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
           />
         </div>
@@ -636,7 +650,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                   hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={54}
                 >
                   <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
-                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>F{currentForma}</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1] ?? `F${currentForma}`}</span>
                   <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
                 </ActionBtn>
 

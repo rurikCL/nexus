@@ -139,6 +139,7 @@ import { CompetitivoView } from './sections/Competitivo.jsx';
 import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
 import SesionesView from './sections/Sesiones.jsx';
 import InstagramView from './sections/Instagram.jsx';
+import { ArmadoSableView } from './sections/ArmadoSable.jsx';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
@@ -175,6 +176,7 @@ const TITLES = {
   mapa: ['Mapa Galáctico', 'Navegación estelar'],
   instagram: ['Instagram', 'Publicaciones y feed de tu cuenta'],
   configuracion: ['Configuración', 'Gestión de tablas del sistema'],
+  'armado-sable': ['Armado de Sable', 'Ensambla los componentes de tu sable de luz'],
 };
 
 export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
@@ -404,6 +406,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,
+    'armado-sable': <ArmadoSableView user={user} />,
   };
   const [title, sub] = TITLES[view] ?? ['', ''];
 

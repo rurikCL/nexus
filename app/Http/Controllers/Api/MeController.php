@@ -96,6 +96,7 @@ class MeController extends Controller
                 'movimiento'  => $character->movimiento,
                 'iniciativa'  => $character->iniciativa,
                 'punteria'      => $character->punteria,
+                'sable_bonos'   => $character->sableBonos(),
                 'puntos_libres'         => $character->puntos_libres ?? 5,
                 'habilidades_por_forma' => $character->habilidades_por_forma ?? (object)[],
                 'current_forma'         => $character->current_forma ?? 1,

@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\ModuloEntrenamientoController;
 use App\Http\Controllers\Api\InstagramController;
 use App\Http\Controllers\Api\SesionEntrenamientoController;
 use App\Http\Controllers\Api\RolHabilidadController;
+use App\Http\Controllers\Api\SableController;
 use App\Http\Controllers\Api\TorneoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
@@ -54,6 +55,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character/equipar-arma',       [CharacterController::class, 'equiparArma']);
     Route::post('/character/aprender-habilidad', [CharacterController::class, 'aprenderHabilidad']);
     Route::get('/rol-habilidades', [RolHabilidadController::class, 'index']);
+
+    // Armado de sable de luz
+    Route::get('/sable/sables',                 [SableController::class, 'index']);
+    Route::post('/sable/sables',                [SableController::class, 'store']);
+    Route::patch('/sable/sables/{sable}',       [SableController::class, 'update']);
+    Route::delete('/sable/sables/{sable}',      [SableController::class, 'destroy']);
+    Route::post('/sable/sables/{sable}/activar', [SableController::class, 'activar']);
 
     Route::get('/combatants', [CombatantController::class, 'index']);
     Route::get('/combatants/{handle}', [CombatantController::class, 'show']);

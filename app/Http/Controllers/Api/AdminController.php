@@ -75,6 +75,7 @@ class AdminController extends Controller
     {
         return match ($entity) {
             'rol_habilidades' => ['tipo', 'forma'],
+            'rol_objetos'     => ['tipo', 'rareza'],
             default           => [],
         };
     }

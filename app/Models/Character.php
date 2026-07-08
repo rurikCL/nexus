@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Character extends Model
 {
@@ -114,6 +115,39 @@ class Character extends Model
     public function hitos(): HasMany
     {
         return $this->hasMany(CharacterHito::class);
+    }
+
+    public function sables(): HasMany
+    {
+        return $this->hasMany(CharacterSable::class);
+    }
+
+    public function sableActivo(): HasOne
+    {
+        return $this->hasOne(CharacterSable::class)->where('activo', true);
+    }
+
+    public function sableBonos(): array
+    {
+        $vacio = [
+            'ataque' => 0, 'defensa' => 0, 'punteria' => 0, 'movimiento' => 0,
+            'iniciativa' => 0, 'vida' => 0, 'escudo' => 0,
+        ];
+
+        $sable = $this->sableActivo()->with(array_keys(CharacterSable::SLOTS))->first();
+        if (! $sable) {
+            return $vacio;
+        }
+
+        return [
+            'ataque'     => $sable->sumaBono('bono_ataque'),
+            'defensa'    => $sable->sumaBono('bono_defensa'),
+            'punteria'   => $sable->sumaBono('bono_punteria'),
+            'movimiento' => $sable->sumaBono('bono_movimiento'),
+            'iniciativa' => $sable->sumaBono('bono_iniciativa'),
+            'vida'       => $sable->sumaBono('bono_vida'),
+            'escudo'     => $sable->sumaBono('bono_escudo'),
+        ];
     }
 
     public function statsTemporadas(): \Illuminate\Database\Eloquent\Relations\HasManyThrough

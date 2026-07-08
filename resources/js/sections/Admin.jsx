@@ -37,6 +37,17 @@ const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmae
 const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 'rojo'];
 const CLASE_OPTS      = ['forma1', 'forma2', 'forma3', 'forma4', 'forma5', 'forma6', 'forma7'];
 const LADO_OPTS       = ['luminoso', 'oscuro', 'neutral'];
+const TIPO_OBJETO_OPTS = [
+  { value: 'arma',               label: 'Arma' },
+  { value: 'nucleo_energia',     label: 'Núcleo de Energía' },
+  { value: 'cristal',            label: 'Cristal' },
+  { value: 'lente_enfoque',      label: 'Lente de Enfoque' },
+  { value: 'emisor',             label: 'Emisor' },
+  { value: 'estabilizador',      label: 'Estabilizador' },
+  { value: 'empunadura',         label: 'Empuñadura' },
+  { value: 'modulo_activacion',  label: 'Módulo de Activación' },
+  { value: 'accesorio',          label: 'Accesorio' },
+];
 const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'mercader', { value: 'mision', label: 'misión' }, 'jefe'];
 const TIPO_LUGAR_OPTS = ['exterior', 'interior'];
 
@@ -256,6 +267,10 @@ const ENTITY_CONFIG = {
 
   rol_objetos: {
     label: 'Objetos de Rol', icon: 'box', group: 'ROL',
+    filters: [
+      { key: 'tipo',   label: 'Tipo',   options: TIPO_OBJETO_OPTS },
+      { key: 'rareza', label: 'Rareza', options: RAREZA_OPTS.map(r => ({ value: r, label: r })) },
+    ],
     columns: [
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
@@ -265,7 +280,7 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'text', hint: "usa 'arma' para que dano/tipo_ataque apliquen en combate" },
+      { key: 'tipo',        label: 'Tipo',        type: 'text', hint: "usa 'arma' para que dano/tipo_ataque apliquen en combate · usa nucleo_energia, cristal, lente_enfoque, emisor, estabilizador, empunadura, modulo_activacion o accesorio para que sea un componente de sable de luz" },
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
@@ -273,6 +288,14 @@ const ENTITY_CONFIG = {
       { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
       { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
       { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
+      { key: 'bono_ataque',     label: 'Bono Ataque',     type: 'number', min: -999, hint: 'Aplica si este objeto se usa como componente de sable equipado' },
+      { key: 'bono_defensa',    label: 'Bono Defensa',    type: 'number', min: -999 },
+      { key: 'bono_punteria',   label: 'Bono Puntería',   type: 'number', min: -999 },
+      { key: 'bono_movimiento', label: 'Bono Movimiento', type: 'number', min: -999 },
+      { key: 'bono_iniciativa', label: 'Bono Iniciativa', type: 'number', min: -999 },
+      { key: 'bono_vida',       label: 'Bono Vida',       type: 'number', min: -999 },
+      { key: 'bono_escudo',     label: 'Bono Escudo',     type: 'number', min: -999 },
+      { key: 'color_hoja',      label: 'Color de hoja',   type: 'select', options: SABER_OPTS, hint: 'Solo si tipo = cristal · define el color del sable al activarlo' },
     ],
     defaults: { activo: true },
   },

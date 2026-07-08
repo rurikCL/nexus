@@ -589,14 +589,17 @@ class PvpCombatController extends Controller
         $t = $s['tecnica']   ?? 50;
         $d = $s['defensa']   ?? 50;
         $k = $s['foco']      ?? 50;
+        $bonos = method_exists($char, 'sableBonos')
+            ? $char->sableBonos()
+            : ['ataque' => 0, 'defensa' => 0, 'punteria' => 0, 'movimiento' => 0, 'iniciativa' => 0, 'vida' => 0, 'escudo' => 0];
         return [
-            'vida'       => $char->vida       ?? (30 + (int) round($f * 1.5)),
-            'escudo'     => $char->escudo     ?? (10 + (int) round($t * 0.4)),
-            'ataque'     => $char->ataque     ?? (int) round($f * 0.8),
-            'defensa'    => $char->defensa    ?? (int) round($d * 0.8),
-            'movimiento' => $char->movimiento ?? (int) round($v * 0.8),
-            'iniciativa' => $char->iniciativa ?? (int) round(($v + $k) / 2 * 0.5),
-            'punteria'   => $char->punteria   ?? (int) round(($t + $k) / 2 * 0.5),
+            'vida'       => ($char->vida       ?? (30 + (int) round($f * 1.5))) + $bonos['vida'],
+            'escudo'     => ($char->escudo     ?? (10 + (int) round($t * 0.4))) + $bonos['escudo'],
+            'ataque'     => ($char->ataque     ?? (int) round($f * 0.8)) + $bonos['ataque'],
+            'defensa'    => ($char->defensa    ?? (int) round($d * 0.8)) + $bonos['defensa'],
+            'movimiento' => ($char->movimiento ?? (int) round($v * 0.8)) + $bonos['movimiento'],
+            'iniciativa' => ($char->iniciativa ?? (int) round(($v + $k) / 2 * 0.5)) + $bonos['iniciativa'],
+            'punteria'   => ($char->punteria   ?? (int) round(($t + $k) / 2 * 0.5)) + $bonos['punteria'],
         ];
     }
 

@@ -52,6 +52,7 @@ const isEffective = (atkForma, defForma) => {
 
 const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
+const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
 
 export default function PvpCombatScreen({ combat: initialCombat, userId, onClose, lugarImagen }) {
   const [combat, setCombat]             = useState(initialCombat);
@@ -164,17 +165,19 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     { l: 'ATQ', v: effMyStat('ataque'),    c: '#ff7043', bonus: countBuff(myBuffs, 'ataque')   > 0, dim: countBuff(myDebuffs, 'ataque')   > 0 },
     { l: 'DEF', v: effMyStat('defensa') + (myDefBonus || 0), c: '#38cdf0', bonus: countBuff(myBuffs, 'defensa') > 0 },
     { l: 'PNT', v: effMyStat('punteria'),  c: '#10b981', bonus: countBuff(myBuffs, 'punteria') > 0 },
-    { l: 'INI', v: me.stats?.iniciativa ?? 0, c: '#E6B325' },
+    { l: 'MOV', v: effMyStat('movimiento'), c: '#a78bfa', bonus: countBuff(myBuffs, 'movimiento') > 0, dim: countBuff(myDebuffs, 'movimiento') > 0 },
   ];
+  const myIni = me.stats?.iniciativa ?? 0;
   const oppBadges = [
     { l: 'ATQ', v: effOppStat('ataque'),   c: '#ff7043', dim: countBuff(oppDebuffs, 'ataque')   > 0 },
     { l: 'DEF', v: effOppStat('defensa') + (oppDefBonus || 0), c: '#38cdf0', dim: countBuff(oppDebuffs, 'defensa') > 0 },
     { l: 'PNT', v: effOppStat('punteria'), c: '#10b981', dim: countBuff(oppDebuffs, 'punteria') > 0 },
-    { l: 'INI', v: opp.stats?.iniciativa ?? 0, c: '#E6B325' },
+    { l: 'MOV', v: effOppStat('movimiento'), c: '#a78bfa', dim: countBuff(oppDebuffs, 'movimiento') > 0 },
     ...(oppLastForma > 0 ? [{ l: `F${formaLabel(oppLastForma)}`, v: null, c: 'rgba(200,200,255,0.5)' }] : []),
   ];
+  const oppIni = opp.stats?.iniciativa ?? 0;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, align }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -187,7 +190,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         gap: isMobile ? 8 : 14, alignItems: 'flex-start',
       }}>
         <div style={{
-          width: isMobile ? 40 : 64, height: isMobile ? 40 : 64, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          width: isMobile ? 52 : 84, height: isMobile ? 68 : 122, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
           border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
           display: 'grid', placeItems: 'center',
         }}>
@@ -197,7 +200,16 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           }
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 2, textAlign: rev ? 'right' : 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+          <div style={{ display: 'flex', flexDirection: rev ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nombre}</div>
+            <span style={{
+              fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
+              background: 'rgba(230,179,37,0.12)', border: '1px solid rgba(230,179,37,0.4)', color: '#E6B325',
+              display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 9, lineHeight: 1 }}>⚡</span>{ini}
+            </span>
+          </div>
           <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', textAlign: rev ? 'right' : 'left', marginBottom: 8 }}>@{handle}</div>
           {maxEscudo > 0 && (
             <div style={{ marginBottom: 5 }}>
@@ -219,14 +231,18 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               <div style={{ height: '100%', width: `${vPct}%`, background: vc, borderRadius: 5, transition: 'width 0.4s ease' }} />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: rev ? 'flex-end' : 'flex-start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: 4, justifyContent: rev ? 'end' : 'start' }}>
             {badges.map(b => (
               <span key={b.l} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
                 fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
                 background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
                 opacity: b.dim ? 0.55 : 1,
                 ...(b.bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
-              }}>{b.l}{b.v !== null ? ` ${b.v}` : ''}{b.bonus ? ' ▲' : b.dim ? ' ▼' : ''}</span>
+              }}>
+                {BADGE_ICON[b.l] && <Icon name={BADGE_ICON[b.l]} size={9} />}
+                {b.l}{b.v !== null ? ` ${b.v}` : ''}{b.bonus ? ' ▲' : b.dim ? ' ▼' : ''}
+              </span>
             ))}
           </div>
         </div>
@@ -262,7 +278,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(200px, 36%, 320px)' }}>
           <HUD
             hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
-            nombre={opp.name} handle={opp.handle} photoUrl={opp.photo_url}
+            nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
             borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
           />
         </div>
@@ -271,7 +287,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(200px, 36%, 320px)' }}>
           <HUD
             hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
-            nombre={me.name} handle={me.handle} photoUrl={me.photo_url}
+            nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
             borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
           />
         </div>
@@ -497,7 +513,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
                 >
                   <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
-                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>F{myCurrentForma}</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[myCurrentForma - 1] ?? `F${myCurrentForma}`}</span>
                   <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
                 </button>
 

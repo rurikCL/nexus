@@ -22,11 +22,26 @@ class RolObjeto extends Model
         'imagen',
         'costo',
         'activo',
+        'bono_ataque',
+        'bono_defensa',
+        'bono_punteria',
+        'bono_movimiento',
+        'bono_iniciativa',
+        'bono_vida',
+        'bono_escudo',
+        'color_hoja',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
         'dano'   => 'integer',
+        'bono_ataque'     => 'integer',
+        'bono_defensa'    => 'integer',
+        'bono_punteria'   => 'integer',
+        'bono_movimiento' => 'integer',
+        'bono_iniciativa' => 'integer',
+        'bono_vida'       => 'integer',
+        'bono_escudo'     => 'integer',
     ];
 
     public function characters(): BelongsToMany
