@@ -2105,8 +2105,15 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1200,
       background: 'rgba(2,5,12,0.88)', backdropFilter: 'blur(8px)',
-      display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
       animation: 'nx-fade-up 0.3s ease both',
+    }}>
+    <div className="nx-panel solid nx-panel-glow" style={{
+      width: '100%', maxWidth: 920,
+      height: '100%', maxHeight: 680,
+      borderRadius: 16, overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', alignItems: 'stretch',
     }}>
       {/* barra superior — retrato del NPC */}
       <div style={{
@@ -2451,6 +2458,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
         )}
 
       </div>
+    </div>
 
       {showMisionPopup && misionInfo && (
         <MisionOfrecidaPopup
