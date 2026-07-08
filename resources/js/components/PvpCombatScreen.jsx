@@ -72,7 +72,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const oppEscudo   = combat.i_am_attacker ? combat.defender_escudo    : combat.attacker_escudo;
   const oppDefBonus = combat.i_am_attacker ? combat.defender_def_bonus : combat.attacker_def_bonus;
 
-  const myFuerza   = combat.my_fuerza    ?? 0;
+  const myFuerza    = combat.my_fuerza     ?? 0;
+  const myFuerzaMax = combat.my_fuerza_max ?? 10;
   const myCooldowns = combat.my_cooldowns ?? {};
   const myBuffs    = combat.my_buffs     ?? [];
   const myDebuffs  = combat.my_debuffs   ?? [];
@@ -392,7 +393,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', flexShrink: 0 }}>FUERZA</span>
                 <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-                  {Array.from({ length: 10 }, (_, i) => (
+                  {Array.from({ length: myFuerzaMax }, (_, i) => (
                     <div key={i} style={{
                       flex: 1, height: 6, borderRadius: 2,
                       background: i < myFuerza ? '#38cdf0' : 'rgba(56,205,240,0.12)',
@@ -400,7 +401,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                     }} />
                   ))}
                 </div>
-                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{myFuerza}/10</span>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{myFuerza}/{myFuerzaMax}</span>
               </div>
 
               {/* Botones de habilidades */}

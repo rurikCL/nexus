@@ -29,7 +29,7 @@ class CharacterSable extends Model
         'activo' => 'boolean',
     ];
 
-    protected $appends = ['dano', 'tipo_ataque', 'color_hoja'];
+    protected $appends = ['dano', 'critico', 'tipo_ataque', 'color_hoja'];
 
     /** Daño base del ataque cuerpo a cuerpo con un sable de luz armado. */
     const DANO_BASE = 6;
@@ -98,10 +98,19 @@ class CharacterSable extends Model
         return collect(array_keys(self::SLOTS))->sum(fn ($slot) => $this->{$slot}?->{$campo} ?? 0);
     }
 
-    /** Un sable armado siempre golpea cuerpo a cuerpo con daño fijo. */
+    /** Daño base más el bono de daño de los componentes instalados. */
     public function getDanoAttribute(): int
     {
-        return self::DANO_BASE;
+        return self::DANO_BASE + $this->sumaBono('bono_dano');
+    }
+
+    /**
+     * Crítico (CRT): cuánto se resta a 20 para el umbral de golpe crítico.
+     * CRT 2 = crítico con 20, 19 o 18 natural en el dado de ataque.
+     */
+    public function getCriticoAttribute(): int
+    {
+        return $this->sumaBono('bono_critico');
     }
 
     public function getTipoAtaqueAttribute(): string

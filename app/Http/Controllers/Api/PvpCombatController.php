@@ -15,7 +15,14 @@ class PvpCombatController extends Controller
 {
     private const WITHS = [
         'attacker.character.armaEquipada', 'defender.character.armaEquipada',
+        'attacker.character.sableActivo.nucleo', 'defender.character.sableActivo.nucleo',
         'attacker.character.sableActivo.cristal', 'defender.character.sableActivo.cristal',
+        'attacker.character.sableActivo.lente', 'defender.character.sableActivo.lente',
+        'attacker.character.sableActivo.emisor', 'defender.character.sableActivo.emisor',
+        'attacker.character.sableActivo.estabilizador', 'defender.character.sableActivo.estabilizador',
+        'attacker.character.sableActivo.empunadura', 'defender.character.sableActivo.empunadura',
+        'attacker.character.sableActivo.modulo', 'defender.character.sableActivo.modulo',
+        'attacker.character.sableActivo.accesorio', 'defender.character.sableActivo.accesorio',
     ];
 
     /* Tabla de efectividad: forma atacante → formas que supera */
@@ -69,8 +76,10 @@ class PvpCombatController extends Controller
         $defChar = $defender->character;
 
         /* Pre-recuperar fuerza para quien actúa primero */
-        $attackerFuerza = $firstTurn === $attacker->id ? 2 : 0;
-        $defenderFuerza = $firstTurn === $defender->id ? 2 : 0;
+        $attackerFuerzaCfg = self::fuerzaConfig($attacker->character);
+        $defenderFuerzaCfg = self::fuerzaConfig($defChar);
+        $attackerFuerza = $firstTurn === $attacker->id ? $attackerFuerzaCfg['gen'] : 0;
+        $defenderFuerza = $firstTurn === $defender->id ? $defenderFuerzaCfg['gen'] : 0;
 
         $combat = PvpCombat::create([
             'attacker_id'            => $attacker->id,
@@ -217,6 +226,9 @@ class PvpCombatController extends Controller
         $opponentUser = $isAttacker ? $combat->defender            : $combat->attacker;
         $opponentChar = $opponentUser->character;
 
+        $attackerFuerzaCfg = self::fuerzaConfig($combat->attacker->character);
+        $defenderFuerzaCfg = self::fuerzaConfig($combat->defender->character);
+
         /* Estado actual del actor */
         $myFuerza     = ($isAttacker ? $combat->attacker_fuerza    : $combat->defender_fuerza)    ?? 0;
         $myCooldowns  = ($isAttacker ? $combat->attacker_cooldowns : $combat->defender_cooldowns)  ?? [];
@@ -272,13 +284,17 @@ class PvpCombatController extends Controller
             $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
             $atkVal      = $esDistancia ? $actorStats['punteria']    : $actorStats['ataque'];
             $defVal      = $esDistancia ? $opponentStats['movimiento'] : $opponentStats['defensa'];
-            $atkRoll     = random_int(1, 20) + $atkVal;
-            $defRoll     = random_int(1, 20) + $defVal;
+            $atkDado     = random_int(1, 20);
+            $defDado     = random_int(1, 20);
+            $atkRoll     = $atkDado + $atkVal;
+            $defRoll     = $defDado + $defVal;
+            $critico     = $arma['critico'] ?? 0;
+            $esCritico   = $atkDado >= (20 - $critico);
             $accion      = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
             $entry['messages'][] = "{$actorChar->name} {$accion}: 1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
 
-            if ($atkRoll > $defRoll) {
-                $dmg = $arma['dano'] ?? 3;
+            if ($esCritico || $atkRoll > $defRoll) {
+                $dmg = ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0);
                 if ($isAttacker) {
                     [$combat->defender_hp, $combat->defender_escudo] =
                         self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg);
@@ -286,7 +302,7 @@ class PvpCombatController extends Controller
                     [$combat->attacker_hp, $combat->attacker_escudo] =
                         self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg);
                 }
-                $entry['messages'][] = "¡Impacto! −{$dmg} daño";
+                $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) −{$dmg} daño" : "¡Impacto! −{$dmg} daño";
             } else {
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
             }
@@ -411,8 +427,8 @@ class PvpCombatController extends Controller
                 /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
                 $combat->ronda_turno  = 1;
                 $combat->current_turn = $opponentUser->id;
-                if ($isAttacker) $defenderFuerzaFinal = min(10, $defenderFuerzaFinal + 2);
-                else             $attackerFuerzaFinal = min(10, $attackerFuerzaFinal + 2);
+                if ($isAttacker) $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
+                else             $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
             } else {
                 /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
                 $combat->ronda      += 1;
@@ -436,8 +452,8 @@ class PvpCombatController extends Controller
                     ? "¡{$combat->attacker->character->name} actúa primero!"
                     : "¡{$combat->defender->character->name} actúa primero!";
 
-                if ($roll['gana_atacante']) $attackerFuerzaFinal = min(10, $attackerFuerzaFinal + 2);
-                else                        $defenderFuerzaFinal = min(10, $defenderFuerzaFinal + 2);
+                if ($roll['gana_atacante']) $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
+                else                        $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
             }
         }
 
@@ -513,6 +529,7 @@ class PvpCombatController extends Controller
             'log'             => $c->log ?? [],
             /* Estado de habilidades desde perspectiva del jugador */
             'my_fuerza'      => $isAtt ? $c->attacker_fuerza    : $c->defender_fuerza,
+            'my_fuerza_max'  => $isAtt ? self::fuerzaConfig($att->character)['max'] : self::fuerzaConfig($def->character)['max'],
             'my_cooldowns'   => ($isAtt ? $c->attacker_cooldowns : $c->defender_cooldowns) ?? [],
             'my_buffs'       => ($isAtt ? $c->attacker_buffs     : $c->defender_buffs)     ?? [],
             'my_debuffs'     => ($isAtt ? $c->attacker_debuffs   : $c->defender_debuffs)   ?? [],
@@ -598,6 +615,19 @@ class PvpCombatController extends Controller
             'movimiento' => ($char->movimiento ?? (int) round($v * 0.8)) + $bonos['movimiento'],
             'iniciativa' => ($char->iniciativa ?? (int) round(($v + $k) / 2 * 0.5)) + $bonos['iniciativa'],
             'punteria'   => ($char->punteria   ?? (int) round(($t + $k) / 2 * 0.5)) + $bonos['punteria'],
+        ];
+    }
+
+    /** Fuerza máxima (10 + bono del sable) y generación por turno (2 + bono del sable) */
+    private static function fuerzaConfig(?object $char): array
+    {
+        $bonos = ($char && method_exists($char, 'sableBonos'))
+            ? $char->sableBonos()
+            : ['fuerza' => 0, 'generacion_fuerza' => 0];
+
+        return [
+            'max' => 10 + ($bonos['fuerza'] ?? 0),
+            'gen' => 2 + ($bonos['generacion_fuerza'] ?? 0),
         ];
     }
 

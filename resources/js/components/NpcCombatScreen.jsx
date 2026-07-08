@@ -38,6 +38,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const npcIni = Math.max(npc.iniciativa, 1);
   const npcPnt = npc.punteria ?? 0;
 
+  const maxFuerza      = player.maxFuerza      ?? 10;
+  const fuerzaPorTurno = player.fuerzaPorTurno ?? 2;
+
   const [playerHp,     setPlayerHp]     = useState(initialState?.playerHp ?? { vida: maxPlayer.vida, escudo: maxPlayer.escudo });
   const [npcHp,        setNpcHp]        = useState(initialState?.npcHp    ?? { vida: maxNpc.vida,    escudo: maxNpc.escudo    });
   const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
@@ -121,7 +124,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       setPhase('battle');
       setCurrTurn(first);
       /* Pre-recuperar fuerza si el jugador actúa primero */
-      if (first === 'player') setPlayerFuerza(2);
+      if (first === 'player') setPlayerFuerza(fuerzaPorTurno);
     }, 500);
   }, []);
 
@@ -132,7 +135,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       const next = actor === 'player' ? 'npc' : 'player';
       setRondaTurno(1);
       setCurrTurn(next);
-      if (next === 'player') setPlayerFuerza(p => Math.min(10, p + 2));
+      if (next === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
     } else {
       /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
       const pR = d20(); const nR = d20();
@@ -145,7 +148,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       setRonda(r => r + 1);
       setRondaTurno(0);
       setCurrTurn(first);
-      if (first === 'player') setPlayerFuerza(p => Math.min(10, p + 2));
+      if (first === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
     }
   };
 
@@ -296,7 +299,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     const [aR, dR] = [d20(), d20()];
     const [aT, dT] = [aR + atkVal, dR + defVal];
-    const hit = aT > dT;
+    const critico   = arma?.critico ?? 0;
+    const esCritico = aR >= (20 - critico);
+    const hit = esCritico || aT > dT;
     const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
 
     const entries = [{
@@ -306,9 +311,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     let newNpcHp = { ...npcHp };
     if (hit) {
-      const dmg = arma?.dano ?? 3;
+      const dmg = (arma?.dano ?? 3) + (esCritico ? 1 : 0);
       newNpcHp = applyDmg(dmg, npcHp);
-      entries.push({ text: `¡Impacto! −${dmg} daño`, type: 'success' });
+      entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) −${dmg} daño` : `¡Impacto! −${dmg} daño`, type: 'success' });
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
@@ -548,7 +553,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', flexShrink: 0 }}>FUERZA</span>
                 <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-                  {Array.from({ length: 10 }, (_, i) => (
+                  {Array.from({ length: maxFuerza }, (_, i) => (
                     <div key={i} style={{
                       flex: 1, height: 6, borderRadius: 2,
                       background: i < playerFuerza ? '#38cdf0' : 'rgba(56,205,240,0.12)',
@@ -556,7 +561,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                     }} />
                   ))}
                 </div>
-                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{playerFuerza}/10</span>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{playerFuerza}/{maxFuerza}</span>
               </div>
 
               {/* Botones de habilidades */}

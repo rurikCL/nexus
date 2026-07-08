@@ -1730,7 +1730,7 @@ function getPlayerCombatStats(character) {
   const t = s.tecnica   ?? 50;
   const d = s.defensa   ?? 50;
   const k = s.foco      ?? 50;
-  const bonos = character?.sable_bonos ?? { ataque: 0, defensa: 0, punteria: 0, movimiento: 0, iniciativa: 0, vida: 0, escudo: 0 };
+  const bonos = character?.sable_bonos ?? { ataque: 0, defensa: 0, punteria: 0, movimiento: 0, iniciativa: 0, vida: 0, escudo: 0, fuerza: 0, generacion_fuerza: 0 };
   return {
     vida:       (character?.vida       ?? (30 + Math.round(f * 1.5))) + (bonos.vida ?? 0),
     escudo:     (character?.escudo     ?? (10 + Math.round(t * 0.4))) + (bonos.escudo ?? 0),
@@ -1741,10 +1741,13 @@ function getPlayerCombatStats(character) {
     punteria:   (character?.punteria   ?? Math.round((t + k) / 2 * 0.5)) + (bonos.punteria ?? 0),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
+    maxFuerza:      10 + (bonos.fuerza ?? 0),
+    fuerzaPorTurno: 2 + (bonos.generacion_fuerza ?? 0),
     arma_equipada: character?.arma_efectiva
       ? {
           nombre: character.arma_efectiva.nombre,
           dano: character.arma_efectiva.dano,
+          critico: character.arma_efectiva.critico ?? 0,
           tipo_ataque: character.arma_efectiva.tipo_ataque,
           es_sable: character.arma_efectiva.es_sable ?? false,
           color_hoja: character.arma_efectiva.color_hoja ?? null,

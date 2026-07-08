@@ -29,6 +29,10 @@ class RolObjeto extends Model
         'bono_iniciativa',
         'bono_vida',
         'bono_escudo',
+        'bono_dano',
+        'bono_critico',
+        'bono_fuerza',
+        'bono_generacion_fuerza',
         'color_hoja',
     ];
 
@@ -42,6 +46,10 @@ class RolObjeto extends Model
         'bono_iniciativa' => 'integer',
         'bono_vida'       => 'integer',
         'bono_escudo'     => 'integer',
+        'bono_dano'       => 'integer',
+        'bono_critico'    => 'integer',
+        'bono_fuerza'     => 'integer',
+        'bono_generacion_fuerza' => 'integer',
     ];
 
     public function characters(): BelongsToMany

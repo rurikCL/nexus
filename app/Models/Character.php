@@ -142,6 +142,7 @@ class Character extends Model
                 'nombre'      => $sable->nombre,
                 'tipo_ataque' => $sable->tipo_ataque,
                 'dano'        => $sable->dano,
+                'critico'     => $sable->critico,
                 'es_sable'    => true,
                 'color_hoja'  => $sable->color_hoja,
             ];
@@ -154,6 +155,7 @@ class Character extends Model
                 'nombre'      => $arma->nombre,
                 'tipo_ataque' => $arma->tipo_ataque,
                 'dano'        => $arma->dano,
+                'critico'     => 0,
                 'es_sable'    => false,
                 'color_hoja'  => null,
             ];
@@ -167,6 +169,7 @@ class Character extends Model
         $vacio = [
             'ataque' => 0, 'defensa' => 0, 'punteria' => 0, 'movimiento' => 0,
             'iniciativa' => 0, 'vida' => 0, 'escudo' => 0,
+            'fuerza' => 0, 'generacion_fuerza' => 0,
         ];
 
         $sable = $this->sableActivo()->with(array_keys(CharacterSable::SLOTS))->first();
@@ -182,6 +185,8 @@ class Character extends Model
             'iniciativa' => $sable->sumaBono('bono_iniciativa'),
             'vida'       => $sable->sumaBono('bono_vida'),
             'escudo'     => $sable->sumaBono('bono_escudo'),
+            'fuerza'             => $sable->sumaBono('bono_fuerza'),
+            'generacion_fuerza'  => $sable->sumaBono('bono_generacion_fuerza'),
         ];
     }
 
