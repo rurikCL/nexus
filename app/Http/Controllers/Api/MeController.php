@@ -56,7 +56,10 @@ class MeController extends Controller
         $character = $user->character;
 
         if ($character) {
-            $character->load(['mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada']);
+            $character->load([
+                'mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada',
+                'sableActivo' => fn ($q) => $q->with(array_keys(\App\Models\CharacterSable::SLOTS)),
+            ]);
         }
 
         $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
@@ -103,6 +106,8 @@ class MeController extends Controller
                 'all_habilidades_data'  => $this->resolveAllHabilidades($character),
                 'rol_objetos'   => $character->rolObjetos->values(),
                 'arma_equipada' => $character->armaEquipada,
+                'sable_activo'  => $character->sableActivo,
+                'arma_efectiva' => $character->armaEfectiva(),
                 'gold'                  => $character->gold,
                 'photo_url'    => $character->photo
                     ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp

@@ -145,6 +145,7 @@ const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
+  { id: 'armado-sable', label: 'Sable de Luz', icon: 'sword' },
   { id: 'sesiones', label: 'Sesiones', icon: 'calendar' },
   { id: 'entrenamiento', label: 'Bitácora', icon: 'calendar' },
   { id: 'modulos-entrenamiento', label: 'Módulos', icon: 'target' },
@@ -391,7 +392,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
   const VIEWS = {
     comando: <ComandoView S={S} go={go} user={user} onGoToCombat={(combat) => { setCombatToView(combat); go('combates'); }} />,
-    personaje: <PersonajeView S={S} user={user} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
+    personaje: <PersonajeView S={S} user={user} go={go} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     sesiones: <SesionesView user={user} />,
     entrenamiento: <TrainingView S={S} user={user} />,
     'modulos-entrenamiento': <ModulosEntrenamientoView user={user} />,

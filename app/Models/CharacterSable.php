@@ -29,6 +29,11 @@ class CharacterSable extends Model
         'activo' => 'boolean',
     ];
 
+    protected $appends = ['dano', 'tipo_ataque', 'color_hoja'];
+
+    /** Daño base del ataque cuerpo a cuerpo con un sable de luz armado. */
+    const DANO_BASE = 6;
+
     /**
      * Mapa slot => tipo de rol_objeto esperado en ese slot.
      */
@@ -91,5 +96,22 @@ class CharacterSable extends Model
     public function sumaBono(string $campo): int
     {
         return collect(array_keys(self::SLOTS))->sum(fn ($slot) => $this->{$slot}?->{$campo} ?? 0);
+    }
+
+    /** Un sable armado siempre golpea cuerpo a cuerpo con daño fijo. */
+    public function getDanoAttribute(): int
+    {
+        return self::DANO_BASE;
+    }
+
+    public function getTipoAtaqueAttribute(): string
+    {
+        return 'melee';
+    }
+
+    /** Color de la hoja, heredado del cristal Kyber instalado. */
+    public function getColorHojaAttribute(): ?string
+    {
+        return $this->cristal?->color_hoja;
     }
 }

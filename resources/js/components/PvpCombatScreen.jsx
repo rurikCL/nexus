@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
+import { NX } from '../data/seed.js';
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
@@ -496,7 +497,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
                 >
                   <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
-                  <span style={{ fontSize: 7, color: '#ff9955', fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{
+                    fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                    maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis',
+                    color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
+                  }}>
                     {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
                   </span>
                   <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
+import { NX } from '../data/seed.js';
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
@@ -636,7 +637,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                   hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={58}
                 >
                   <span style={{ fontSize: 16, lineHeight: 1 }}>{player.arma_equipada ? '🗡' : '✊'}</span>
-                  <span style={{ fontSize: 7, color: '#ff9955', fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{
+                    fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                    maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis',
+                    color: (player.arma_equipada?.es_sable && NX.SABERS[player.arma_equipada.color_hoja]) || '#ff9955',
+                  }}>
                     {player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
                   </span>
                   <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {player.arma_equipada?.dano ?? 3}</span>

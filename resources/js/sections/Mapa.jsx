@@ -1741,8 +1741,14 @@ function getPlayerCombatStats(character) {
     punteria:   (character?.punteria   ?? Math.round((t + k) / 2 * 0.5)) + (bonos.punteria ?? 0),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
-    arma_equipada: character?.arma_equipada
-      ? { nombre: character.arma_equipada.nombre, dano: character.arma_equipada.dano, tipo_ataque: character.arma_equipada.tipo_ataque }
+    arma_equipada: character?.arma_efectiva
+      ? {
+          nombre: character.arma_efectiva.nombre,
+          dano: character.arma_efectiva.dano,
+          tipo_ataque: character.arma_efectiva.tipo_ataque,
+          es_sable: character.arma_efectiva.es_sable ?? false,
+          color_hoja: character.arma_efectiva.color_hoja ?? null,
+        }
       : null,
     current_forma:         character?.current_forma ?? 1,
     habilidades_por_forma: character?.habilidades_por_forma ?? {},

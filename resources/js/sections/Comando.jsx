@@ -1011,7 +1011,7 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
   );
 }
 
-export function PersonajeView({ S, user, onCharacterCreated }) {
+export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
@@ -1064,6 +1064,10 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
   }, [user?.character?.id, user?.character?.arma_equipada?.id]);
 
   const armasDisponibles = (user?.character?.rol_objetos ?? []).filter(o => o.tipo === 'arma');
+
+  // Sable de luz armado (arma equipable prioritaria en combate)
+  const sableActivo   = user?.character?.sable_activo ?? null;
+  const sableColorHex = NX.SABERS[sableActivo?.color_hoja] || NX.SABERS.azul;
 
   const handleEquiparArma = async () => {
     setEquipandoArma(true);
@@ -1423,6 +1427,38 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
           slotIndex={slotPicker}
         />
 
+        {/* Sable de luz armado */}
+        <Panel kicker="Equipo" title="Sable de Luz" icon="sword"
+          right={<Btn kind="ghost" icon="sword" sm onClick={() => go?.('armado-sable')}>Gestionar sable</Btn>}>
+          {sableActivo ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                background: `color-mix(in srgb, ${sableColorHex} 18%, rgba(4,9,18,0.9))`,
+                border: `1px solid color-mix(in srgb, ${sableColorHex} 55%, transparent)`,
+              }}>
+                <Icon name="sword" size={22} style={{ color: sableColorHex, filter: `drop-shadow(0 0 6px ${sableColorHex})` }} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{sableActivo.nombre}</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+                  <Chip tone="green" icon="check">Armado</Chip>
+                  <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+                    <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {sableActivo.dano} DMG melee
+                  </span>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)', flexBasis: '100%' }}>
+                Tu sable armado ataca cuerpo a cuerpo en combate y tiene prioridad sobre cualquier arma equipada.
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+              No tienes ningún sable de luz armado. Ensambla y activa uno en «Armado de Sable» para usarlo en combate.
+            </div>
+          )}
+        </Panel>
+
         {/* Arma equipada */}
         <Panel kicker="Equipo" title="Arma Equipada" icon="sword"
           right={
@@ -1430,6 +1466,11 @@ export function PersonajeView({ S, user, onCharacterCreated }) {
               {equipandoArma ? 'Equipando...' : 'Equipar'}
             </Btn>
           }>
+          {sableActivo && (
+            <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '4px 0 10px' }}>
+              Tienes un sable de luz armado — se usará en combate en lugar de esta arma mientras esté activo.
+            </div>
+          )}
           {armasDisponibles.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
               No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.

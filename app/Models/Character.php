@@ -127,6 +127,41 @@ class Character extends Model
         return $this->hasOne(CharacterSable::class)->where('activo', true);
     }
 
+    /**
+     * Arma que se usa realmente en el ataque básico de combate: el sable
+     * armado tiene prioridad sobre el arma clásica equipada.
+     */
+    public function armaEfectiva(): ?array
+    {
+        $sable = $this->relationLoaded('sableActivo')
+            ? $this->sableActivo
+            : $this->sableActivo()->with('cristal')->first();
+        if ($sable) {
+            return [
+                'id'          => null,
+                'nombre'      => $sable->nombre,
+                'tipo_ataque' => $sable->tipo_ataque,
+                'dano'        => $sable->dano,
+                'es_sable'    => true,
+                'color_hoja'  => $sable->color_hoja,
+            ];
+        }
+
+        $arma = $this->armaEquipada;
+        if ($arma) {
+            return [
+                'id'          => $arma->id,
+                'nombre'      => $arma->nombre,
+                'tipo_ataque' => $arma->tipo_ataque,
+                'dano'        => $arma->dano,
+                'es_sable'    => false,
+                'color_hoja'  => null,
+            ];
+        }
+
+        return null;
+    }
+
     public function sableBonos(): array
     {
         $vacio = [

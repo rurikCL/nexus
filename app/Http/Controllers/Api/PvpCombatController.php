@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\Storage;
 
 class PvpCombatController extends Controller
 {
-    private const WITHS = ['attacker.character.armaEquipada', 'defender.character.armaEquipada'];
+    private const WITHS = [
+        'attacker.character.armaEquipada', 'defender.character.armaEquipada',
+        'attacker.character.sableActivo.cristal', 'defender.character.sableActivo.cristal',
+    ];
 
     /* Tabla de efectividad: forma atacante → formas que supera */
     private const BEATS = [
@@ -263,19 +266,19 @@ class PvpCombatController extends Controller
             else             $combat->defender_current_forma = $forma;
             $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
 
-        /* ─── Ataque básico (con arma equipada o desarmado) ─────────────── */
+        /* ─── Ataque básico (sable armado > arma equipada > desarmado) ──── */
         } elseif ($skill === 'unarmed') {
-            $arma        = $actorChar->armaEquipada;
-            $esDistancia = $arma?->tipo_ataque === 'distancia';
+            $arma        = $actorChar->armaEfectiva();
+            $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
             $atkVal      = $esDistancia ? $actorStats['punteria']    : $actorStats['ataque'];
             $defVal      = $esDistancia ? $opponentStats['movimiento'] : $opponentStats['defensa'];
             $atkRoll     = random_int(1, 20) + $atkVal;
             $defRoll     = random_int(1, 20) + $defVal;
-            $accion      = $arma ? "ataca con {$arma->nombre}" : 'ataca desarmado';
+            $accion      = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
             $entry['messages'][] = "{$actorChar->name} {$accion}: 1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
 
             if ($atkRoll > $defRoll) {
-                $dmg = $arma?->dano ?? 3;
+                $dmg = $arma['dano'] ?? 3;
                 if ($isAttacker) {
                     [$combat->defender_hp, $combat->defender_escudo] =
                         self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg);
@@ -542,12 +545,7 @@ class PvpCombatController extends Controller
             'stats'        => self::getCombatStats($ch),
             'habilidades'  => $habilidades,
             'current_forma' => $currentForma,
-            'arma_equipada' => $ch?->armaEquipada ? [
-                'id'          => $ch->armaEquipada->id,
-                'nombre'      => $ch->armaEquipada->nombre,
-                'tipo_ataque' => $ch->armaEquipada->tipo_ataque,
-                'dano'        => $ch->armaEquipada->dano,
-            ] : null,
+            'arma_equipada' => $ch?->armaEfectiva(),
         ];
     }
 
