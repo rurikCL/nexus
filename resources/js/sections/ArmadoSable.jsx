@@ -114,7 +114,104 @@ function ComponentPickerModal({ slot, opciones, onAssign, onClear, onClose }) {
   );
 }
 
-export function ArmadoSableView({ user }) {
+/* ─── modal de confirmación al ensamblar (crear) un sable ──── */
+function ConfirmCrearModal({ nombre, componentes, saving, onConfirm, onClose }) {
+  return (
+    <div onMouseDown={onClose} className="nx-saber-modal-backdrop">
+      <div onMouseDown={(e) => e.stopPropagation()} className="nx-panel solid nx-panel-glow nx-saber-modal">
+        <header className="nx-panel-head">
+          <span style={{ color: 'var(--holo)' }}><Icon name="zap" size={15} /></span>
+          <div style={{ flex: 1 }}>
+            <div className="nx-kicker" style={{ marginBottom: 1 }}>ENSAMBLAR SABLE</div>
+            <div className="nx-display" style={{ fontSize: 13 }}>{nombre || 'Sable'}</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 5 }}><Icon name="x" size={13} /></button>
+        </header>
+        <div className="nx-panel-body nx-saber-modal-list">
+          <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 10, lineHeight: 1.5 }}>
+            Al ensamblar el sable se <strong>consumirán permanentemente</strong> del inventario los siguientes componentes:
+          </div>
+          {componentes.length === 0 && (
+            <div className="nx-saber-modal-empty">No has instalado ningún componente todavía.</div>
+          )}
+          {componentes.map(({ slot, objeto }) => (
+            <div key={slot.key} className="nx-saber-modal-item" style={{ cursor: 'default' }}>
+              <div className="nx-saber-modal-icon"><Icon name={slot.icon} size={16} style={{ color: 'var(--holo)' }} /></div>
+              <div className="nx-saber-modal-meta">
+                <div className="nx-saber-modal-name">{objeto.nombre}</div>
+                <div className="nx-saber-modal-bonus">{slot.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, padding: '0 16px 16px' }}>
+          <Btn onClick={onClose}>Cancelar</Btn>
+          <Btn kind="accent" icon="check" onClick={onConfirm} disabled={saving}>{saving ? 'Ensamblando…' : 'Sí, ensamblar'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── modal de desarmado: el cristal siempre se recupera, se elige 1 más ──── */
+function DesarmarModal({ sable, recuperarId, onSelect, saving, onConfirm, onClose }) {
+  const cristal = sable.cristal ?? null;
+  const otros = SLOTS.filter((s) => s.key !== 'cristal' && sable[s.key]);
+  return (
+    <div onMouseDown={onClose} className="nx-saber-modal-backdrop">
+      <div onMouseDown={(e) => e.stopPropagation()} className="nx-panel solid nx-panel-glow nx-saber-modal">
+        <header className="nx-panel-head">
+          <span style={{ color: '#ff6b6b' }}><Icon name="x" size={15} /></span>
+          <div style={{ flex: 1 }}>
+            <div className="nx-kicker" style={{ marginBottom: 1 }}>DESARMAR SABLE</div>
+            <div className="nx-display" style={{ fontSize: 13 }}>{sable.nombre}</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 5 }}><Icon name="x" size={13} /></button>
+        </header>
+        <div className="nx-panel-body nx-saber-modal-list">
+          <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 10, lineHeight: 1.5 }}>
+            Al desarmar este sable se pierden sus componentes. El <strong>cristal se recupera siempre</strong>; además puedes elegir <strong>1 componente</strong> para recuperar — el resto se pierde.
+          </div>
+          {cristal && (
+            <div className="nx-saber-modal-item" style={{ cursor: 'default', opacity: 0.9 }}>
+              <div className="nx-saber-modal-icon"><Icon name="star" size={16} style={{ color: 'var(--holo)' }} /></div>
+              <div className="nx-saber-modal-meta">
+                <div className="nx-saber-modal-name">{cristal.nombre}</div>
+                <div className="nx-saber-modal-bonus" style={{ color: '#10b981' }}>Se recupera siempre</div>
+              </div>
+            </div>
+          )}
+          {otros.length === 0 && (
+            <div className="nx-saber-modal-empty">Este sable no tiene más componentes instalados.</div>
+          )}
+          {otros.map((slot) => {
+            const objeto = sable[slot.key];
+            const selected = recuperarId === objeto.id;
+            return (
+              <button key={slot.key} onClick={() => onSelect(selected ? null : objeto.id)}
+                className="nx-saber-modal-item"
+                style={selected ? { borderColor: 'var(--holo)', background: 'rgba(56,205,240,0.08)' } : undefined}>
+                <div className="nx-saber-modal-icon">
+                  <Icon name={slot.icon} size={16} style={{ color: selected ? 'var(--holo)' : undefined }} />
+                </div>
+                <div className="nx-saber-modal-meta">
+                  <div className="nx-saber-modal-name">{objeto.nombre}</div>
+                  <div className="nx-saber-modal-bonus">{slot.label}{selected ? ' · a recuperar' : ''}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: 8, padding: '0 16px 16px' }}>
+          <Btn onClick={onClose}>Cancelar</Btn>
+          <Btn kind="accent" icon="x" onClick={onConfirm} disabled={saving}>{saving ? 'Desarmando…' : 'Confirmar desarmado'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ArmadoSableView({ user, onUserUpdate }) {
   const inventario = user?.character?.rol_objetos ?? [];
 
   const porTipo = useMemo(() => {
@@ -130,6 +227,15 @@ export function ArmadoSableView({ user }) {
   const [form, setForm]         = useState(emptyForm());
   const [saving, setSaving]     = useState(false);
   const [pickerSlot, setPickerSlot] = useState(null);
+  const [confirmCrear, setConfirmCrear] = useState(false);
+  const [desarmarSable, setDesarmarSable] = useState(null);
+  const [recuperarId, setRecuperarId] = useState(null);
+  const [desarmando, setDesarmando] = useState(false);
+
+  const actualizarInventario = (nuevoInventario) => {
+    if (!nuevoInventario || !onUserUpdate) return;
+    onUserUpdate({ ...user, character: { ...user.character, rol_objetos: nuevoInventario } });
+  };
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -175,7 +281,8 @@ export function ArmadoSableView({ user }) {
         const d = await apiSend('POST', '/sable/sables', payload);
         setSables((prev) => [d.sable, ...prev]);
         cargarParaEditar(d.sable);
-        toast('Sable guardado', { tone: 'success', icon: 'check' });
+        actualizarInventario(d.rol_objetos);
+        toast('Sable ensamblado — componentes consumidos', { tone: 'success', icon: 'check' });
       }
     } catch (e) {
       toast(e?.message ?? 'Error al guardar', { tone: 'error', icon: 'x' });
@@ -194,14 +301,19 @@ export function ArmadoSableView({ user }) {
     }
   };
 
-  const eliminar = async (id) => {
+  const desarmar = async (id, idRecuperar) => {
+    setDesarmando(true);
     try {
-      await apiSend('DELETE', `/sable/sables/${id}`);
+      const d = await apiSend('DELETE', `/sable/sables/${id}`, { recuperar_id: idRecuperar ?? null });
       setSables((prev) => prev.filter((s) => s.id !== id));
       if (form.id === id) nuevo();
-      toast('Sable eliminado', { tone: 'dim', icon: 'x' });
+      actualizarInventario(d.rol_objetos);
+      toast('Sable desarmado', { tone: 'dim', icon: 'x' });
+      setDesarmarSable(null);
     } catch (e) {
-      toast(e?.message ?? 'Error al eliminar', { tone: 'error', icon: 'x' });
+      toast(e?.message ?? 'Error al desarmar', { tone: 'error', icon: 'x' });
+    } finally {
+      setDesarmando(false);
     }
   };
 
@@ -308,7 +420,9 @@ export function ArmadoSableView({ user }) {
             </div>
           </div>
           <div className="nx-saber-actions-row">
-            <Btn kind="accent" icon={form.id ? 'check' : 'plus'} onClick={guardar} disabled={saving}>
+            <Btn kind="accent" icon={form.id ? 'check' : 'plus'}
+              onClick={() => (form.id ? guardar() : setConfirmCrear(true))}
+              disabled={saving}>
               {saving ? 'Guardando…' : form.id ? 'Actualizar sable' : 'Guardar como nuevo'}
             </Btn>
             {form.id && <Btn onClick={nuevo}>Nuevo sable en blanco</Btn>}
@@ -342,7 +456,7 @@ export function ArmadoSableView({ user }) {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {!s.activo && <Btn sm icon="zap" onClick={() => activar(s.id)}>Activar</Btn>}
                     <Btn sm icon="edit" onClick={() => cargarParaEditar(s)}>Editar</Btn>
-                    <Btn sm icon="x" onClick={() => eliminar(s.id)}>Eliminar</Btn>
+                    <Btn sm icon="x" onClick={() => { setDesarmarSable(s); setRecuperarId(null); }}>Desarmar</Btn>
                   </div>
                 </div>
               );
@@ -358,6 +472,30 @@ export function ArmadoSableView({ user }) {
           onAssign={(o) => { setSlot(pickerSlot.key, o.id); setPickerSlot(null); }}
           onClear={() => { setSlot(pickerSlot.key, null); setPickerSlot(null); }}
           onClose={() => setPickerSlot(null)}
+        />
+      )}
+
+      {confirmCrear && (
+        <ConfirmCrearModal
+          nombre={form.nombre}
+          componentes={SLOTS
+            .filter((s) => form[`${s.key}_id`])
+            .map((s) => ({ slot: s, objeto: objetoPorId(form[`${s.key}_id`]) }))
+            .filter((c) => c.objeto)}
+          saving={saving}
+          onConfirm={async () => { await guardar(); setConfirmCrear(false); }}
+          onClose={() => setConfirmCrear(false)}
+        />
+      )}
+
+      {desarmarSable && (
+        <DesarmarModal
+          sable={desarmarSable}
+          recuperarId={recuperarId}
+          onSelect={setRecuperarId}
+          saving={desarmando}
+          onConfirm={() => desarmar(desarmarSable.id, recuperarId)}
+          onClose={() => setDesarmarSable(null)}
         />
       )}
     </div>

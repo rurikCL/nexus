@@ -72,20 +72,36 @@ class SableController extends Controller
         return response()->json(['sables' => $sables]);
     }
 
+    /**
+     * Al ensamblar un sable, los componentes utilizados se consumen del
+     * inventario del personaje (se eliminan de rol_character_objeto).
+     */
     public function store(Request $request): JsonResponse
     {
         $character = $this->character($request);
         $data      = $request->validate($this->slotRules());
         $slots     = $this->validarSlots($character, $data);
 
-        $sable = $character->sables()->create(array_merge($slots, [
-            'nombre' => $data['nombre'] ?? 'Sable',
-            'activo' => false,
-        ]));
+        $sable = DB::transaction(function () use ($character, $slots, $data) {
+            $sable = $character->sables()->create(array_merge($slots, [
+                'nombre' => $data['nombre'] ?? 'Sable',
+                'activo' => false,
+            ]));
+
+            $usados = array_values(array_filter($slots));
+            if ($usados) {
+                $character->rolObjetos()->detach($usados);
+            }
+
+            return $sable;
+        });
 
         $sable->load(array_keys(CharacterSable::SLOTS));
 
-        return response()->json(['sable' => $sable], 201);
+        return response()->json([
+            'sable'       => $sable,
+            'rol_objetos' => $character->rolObjetos()->get(),
+        ], 201);
     }
 
     public function update(Request $request, CharacterSable $sable): JsonResponse
@@ -105,14 +121,49 @@ class SableController extends Controller
         return response()->json(['sable' => $sable]);
     }
 
+    /**
+     * Desarmar un sable: el cristal siempre vuelve al inventario del
+     * personaje; además puede recuperarse un único componente a elección
+     * (`recuperar_id`). El resto de las piezas se pierde.
+     */
     public function destroy(Request $request, CharacterSable $sable): JsonResponse
     {
         $character = $this->character($request);
         $this->autorizar($character, $sable);
 
-        $sable->delete();
+        $data = $request->validate([
+            'recuperar_id' => 'nullable|integer',
+        ]);
 
-        return response()->json(['ok' => true]);
+        DB::transaction(function () use ($character, $sable, $data) {
+            $recuperar = [];
+            if ($sable->cristal_id) {
+                $recuperar[] = $sable->cristal_id;
+            }
+
+            $otrosSlots = collect(CharacterSable::SLOTS)
+                ->keys()
+                ->reject(fn ($slot) => $slot === 'cristal')
+                ->map(fn ($slot) => $sable->{"{$slot}_id"})
+                ->filter()
+                ->values();
+
+            $recuperarId = $data['recuperar_id'] ?? null;
+            if ($recuperarId && $otrosSlots->contains($recuperarId)) {
+                $recuperar[] = $recuperarId;
+            }
+
+            if ($recuperar) {
+                $character->rolObjetos()->syncWithoutDetaching($recuperar);
+            }
+
+            $sable->delete();
+        });
+
+        return response()->json([
+            'ok'          => true,
+            'rol_objetos' => $character->rolObjetos()->get(),
+        ]);
     }
 
     public function activar(Request $request, CharacterSable $sable): JsonResponse
