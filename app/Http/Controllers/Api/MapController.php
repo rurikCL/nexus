@@ -82,10 +82,10 @@ class MapController extends Controller
             ->with([
                 'zona.planeta.sistema',
                 'npcs'                => fn($q) => $q->where('visible', true),
-                'norte:id,nombre',
-                'sur:id,nombre',
-                'este:id,nombre',
-                'oeste:id,nombre',
+                'norte:id,nombre,imagen',
+                'sur:id,nombre,imagen',
+                'este:id,nombre,imagen',
+                'oeste:id,nombre,imagen',
                 'presentesPersonajes' => $this->presentes('map_lugar_id'),
             ])
             ->findOrFail($id);

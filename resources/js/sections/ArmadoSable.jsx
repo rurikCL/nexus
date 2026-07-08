@@ -37,7 +37,7 @@ const SLOTS = [
   { key: 'accesorio',     tipo: 'accesorio',          label: 'Accesorio',            hint: 'Mejora adicional',          icon: 'crown' },
 ];
 
-const BONUS_FIELDS = [
+export const BONUS_FIELDS = [
   { key: 'bono_ataque',     label: 'ATQ', color: '#ff7043', icon: 'sword'  },
   { key: 'bono_defensa',    label: 'DEF', color: '#38cdf0', icon: 'shield' },
   { key: 'bono_punteria',   label: 'PNT', color: '#10b981', icon: 'eye'    },

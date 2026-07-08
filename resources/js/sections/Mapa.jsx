@@ -1553,49 +1553,60 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         <div style={{ marginBottom: 24 }}>
           <div className="nx-kicker" style={{ marginBottom: 10 }}>ACCESOS — {DIRS.length}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
-            {DIRS.map(({ key, label, icon, data }) => (
-              <button key={key} onClick={() => navigateTo(data)}
-                style={{
-                  background: 'rgba(56,205,240,0.05)',
-                  border: '1px solid rgba(56,205,240,0.22)',
-                  borderRadius: 10, padding: '12px 14px',
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'all 0.2s', color: 'var(--txt)',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(56,205,240,0.13)';
-                  e.currentTarget.style.borderColor = 'var(--holo)';
-                  e.currentTarget.style.boxShadow = '0 0 16px -4px var(--holo)';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(56,205,240,0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(56,205,240,0.22)';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.transform = 'none';
-                }}
-              >
-                <div style={{
-                  width: 38, height: 38, borderRadius: 8, flexShrink: 0,
-                  background: 'rgba(56,205,240,0.10)',
-                  border: '1px solid rgba(56,205,240,0.30)',
-                  display: 'grid', placeItems: 'center',
-                  fontSize: 18, color: 'var(--holo)',
-                }}>
-                  {icon}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 2 }}>
-                    {label.toUpperCase()}
+            {DIRS.map(({ key, label, icon, data }) => {
+              const thumb = mediaUrl(data.imagen);
+              return (
+                <button key={key} onClick={() => navigateTo(data)}
+                  style={{
+                    background: 'rgba(56,205,240,0.05)',
+                    border: '1px solid rgba(56,205,240,0.22)',
+                    borderRadius: 10, padding: '12px 14px',
+                    cursor: 'pointer', textAlign: 'left',
+                    transition: 'all 0.2s', color: 'var(--txt)',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(56,205,240,0.13)';
+                    e.currentTarget.style.borderColor = 'var(--holo)';
+                    e.currentTarget.style.boxShadow = '0 0 16px -4px var(--holo)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(56,205,240,0.05)';
+                    e.currentTarget.style.borderColor = 'rgba(56,205,240,0.22)';
+                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.transform = 'none';
+                  }}
+                >
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 8, flexShrink: 0,
+                    background: thumb ? `url(${thumb}) center/cover` : 'rgba(56,205,240,0.10)',
+                    border: '1px solid rgba(56,205,240,0.30)',
+                    display: 'grid', placeItems: 'center',
+                    fontSize: 18, color: 'var(--holo)',
+                    position: 'relative', overflow: 'hidden',
+                  }}>
+                    {!thumb && icon}
+                    {thumb && (
+                      <span style={{
+                        position: 'absolute', bottom: 1, right: 1, lineHeight: 1, fontSize: 9,
+                        background: 'rgba(2,6,16,0.72)', color: 'var(--holo)',
+                        borderRadius: 3, padding: '1px 3px',
+                      }}>{icon}</span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {data.nombre}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 2 }}>
+                      {label.toUpperCase()}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {data.nombre}
+                    </div>
                   </div>
-                </div>
-                <Icon name="arrow" size={12} style={{ color: 'var(--holo)', opacity: 0.6, flexShrink: 0 }} />
-              </button>
-            ))}
+                  <Icon name="arrow" size={12} style={{ color: 'var(--holo)', opacity: 0.6, flexShrink: 0 }} />
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

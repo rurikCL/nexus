@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, cloneElement } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
+import { BONUS_FIELDS } from './ArmadoSable.jsx';
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
 
@@ -761,6 +762,69 @@ function WeaponCard({ objeto, selected, onClick }) {
   );
 }
 
+/* ===================== INVENTARIO (pestañas por tipo) ===================== */
+const ITEM_TYPES = [
+  { value: 'arma',              label: 'Armas',                  icon: 'sword'    },
+  { value: 'nucleo_energia',    label: 'Núcleos de Energía',     icon: 'zap'      },
+  { value: 'cristal',           label: 'Cristales',              icon: 'star'     },
+  { value: 'lente_enfoque',     label: 'Lentes de Enfoque',      icon: 'eye'      },
+  { value: 'emisor',            label: 'Emisores',               icon: 'sword'    },
+  { value: 'estabilizador',     label: 'Estabilizadores',        icon: 'shield'   },
+  { value: 'empunadura',        label: 'Empuñaduras',            icon: 'anvil'    },
+  { value: 'modulo_activacion', label: 'Módulos de Activación',  icon: 'tasks'    },
+  { value: 'accesorio',         label: 'Accesorios',             icon: 'crown'    },
+];
+
+/* Tarjeta informativa para objetos que no son armas: no son equipables aquí,
+   se instalan en «Armado de Sable» en su lugar. */
+function InventoryItemCard({ objeto, icon = 'star' }) {
+  const img = mediaUrl(objeto.imagen);
+  const bonos = BONUS_FIELDS
+    .filter((b) => objeto[b.key])
+    .map((b) => `${objeto[b.key] > 0 ? '+' : ''}${objeto[b.key]} ${b.label}`);
+
+  return (
+    <div className="nx-panel solid" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'stretch' }}>
+      <div style={{
+        width: 60, height: 60, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: 'color-mix(in srgb, var(--holo) 5%, rgba(4,9,18,0.9))',
+        borderRight: '1px solid var(--holo-line)',
+      }}>
+        {img ? (
+          <img src={img} alt={objeto.nombre} style={{ width: 44, height: 44, objectFit: 'contain', filter: 'brightness(0.85) saturate(0.85)' }} />
+        ) : (
+          <Icon name={icon} size={24} style={{ color: 'var(--txt-faint)', opacity: 0.6 }} />
+        )}
+      </div>
+      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+        <div className="nx-display" style={{ fontSize: 12, color: 'var(--txt)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {objeto.nombre}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {objeto.rareza && (
+            <span className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', textTransform: 'capitalize' }}>{objeto.rareza}</span>
+          )}
+          {objeto.tipo === 'nucleo_energia' && !!objeto.energia_maxima && (
+            <span className="nx-data" style={{ fontSize: 10, color: '#ffb020' }}>Máx {objeto.energia_maxima} EN</span>
+          )}
+          {!!objeto.consumo_energia && (
+            <span className="nx-data" style={{ fontSize: 10, color: '#ffb020' }}>Consumo {objeto.consumo_energia} EN</span>
+          )}
+          {objeto.tipo === 'cristal' && objeto.color_hoja && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: NX.SABERS[objeto.color_hoja] || '#38cdf0' }} />
+              {objeto.color_hoja}
+            </span>
+          )}
+        </div>
+        {bonos.length > 0 && (
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-dim)' }}>{bonos.join(' · ')}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HabilidadSlot({ slot, habilidad, onClick }) {
   const isEmpty = !habilidad;
   return (
@@ -1063,7 +1127,12 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
     setArmaEquipadaId(user?.character?.arma_equipada?.id ?? '');
   }, [user?.character?.id, user?.character?.arma_equipada?.id]);
 
-  const armasDisponibles = (user?.character?.rol_objetos ?? []).filter(o => o.tipo === 'arma');
+  const inventario = user?.character?.rol_objetos ?? [];
+  const armasDisponibles = inventario.filter(o => o.tipo === 'arma');
+
+  // Inventario clasificado por tipo (pestañas) — solo las armas son equipables
+  const [invTab, setInvTab] = useState('arma');
+  const itemsDeTab = inventario.filter(o => o.tipo === invTab);
 
   // Sable de luz armado (arma equipable prioritaria en combate)
   const sableActivo   = user?.character?.sable_activo ?? null;
@@ -1459,27 +1528,64 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           )}
         </Panel>
 
-        {/* Arma equipada */}
-        <Panel kicker="Equipo" title="Arma Equipada" icon="sword"
-          right={
+        {/* Inventario — objetos clasificados por tipo, solo las armas son equipables */}
+        <Panel kicker="Equipo" title="Inventario" icon="roster"
+          right={invTab === 'arma' ? (
             <Btn kind="accent" icon="check" sm disabled={equipandoArma || (armaEquipadaId ?? '') === (user?.character?.arma_equipada?.id ?? '')} onClick={handleEquiparArma}>
               {equipandoArma ? 'Equipando...' : 'Equipar'}
             </Btn>
-          }>
-          {sableActivo && (
-            <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '4px 0 10px' }}>
-              Tienes un sable de luz armado — se usará en combate en lugar de esta arma mientras esté activo.
-            </div>
-          )}
-          {armasDisponibles.length === 0 ? (
+          ) : null}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {ITEM_TYPES.map(t => {
+              const count = inventario.filter(o => o.tipo === t.value).length;
+              const active = invTab === t.value;
+              return (
+                <button key={t.value} onClick={() => setInvTab(t.value)} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
+                  fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+                  background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+                  border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  color: active ? 'var(--holo)' : 'var(--txt-faint)',
+                  boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
+                  transition: 'all .14s',
+                }}>
+                  <Icon name={t.icon} size={12} />
+                  {t.label}
+                  <span style={{ opacity: 0.7 }}>({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {invTab === 'arma' ? (
+            <>
+              {sableActivo && (
+                <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '0 0 10px' }}>
+                  Tienes un sable de luz armado — se usará en combate en lugar de esta arma mientras esté activo.
+                </div>
+              )}
+              {armasDisponibles.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                  No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                  <WeaponCard objeto={null} selected={!armaEquipadaId} onClick={() => setArmaEquipadaId('')} />
+                  {armasDisponibles.map(o => (
+                    <WeaponCard key={o.id} objeto={o} selected={armaEquipadaId === o.id} onClick={() => setArmaEquipadaId(o.id)} />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : itemsDeTab.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
-              No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
+              No posees objetos de este tipo. Los componentes de sable se instalan desde «Armado de Sable».
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-              <WeaponCard objeto={null} selected={!armaEquipadaId} onClick={() => setArmaEquipadaId('')} />
-              {armasDisponibles.map(o => (
-                <WeaponCard key={o.id} objeto={o} selected={armaEquipadaId === o.id} onClick={() => setArmaEquipadaId(o.id)} />
+              {itemsDeTab.map(o => (
+                <InventoryItemCard key={o.id} objeto={o} icon={ITEM_TYPES.find(t => t.value === invTab)?.icon} />
               ))}
             </div>
           )}
