@@ -123,15 +123,15 @@ function ComunidadCard({ mision, userId }) {
       border: completada ? '1px solid rgba(230,179,37,0.6)' : '1px solid rgba(230,179,37,0.3)',
       boxShadow: completada ? '0 0 14px -6px rgba(230,179,37,0.5)' : 'none',
     }}>
-      {mision.foto_mision && (
-        <div style={{
-          height: 120, background: `url(${mediaUrl(mision.foto_mision)}) center/cover no-repeat`,
-          opacity: 0.65, borderBottom: '1px solid rgba(230,179,37,0.3)',
-        }} />
-      )}
       <div style={{ padding: '14px 16px' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10 }}>
+          {mision.foto_mision && (
+            <img src={mediaUrl(mision.foto_mision)} alt={mision.nombre} style={{
+              width: 110, height: 110, objectFit: 'cover', borderRadius: 10,
+              border: '1px solid rgba(230,179,37,0.35)', flexShrink: 0,
+            }} />
+          )}
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
               <span style={{ fontWeight: 700, fontSize: 15 }}>{mision.nombre}</span>
@@ -313,9 +313,12 @@ function IndividualCard({ mision, completed, onReload }) {
     }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
-        {npc?.imagen_mini && (
-          <img src={npc.imagen_mini} alt={npc.nombre}
-            style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--holo-line)', flexShrink: 0 }} />
+        {(mision.foto_mision || npc?.imagen_mini) && (
+          <img
+            src={mision.foto_mision ? mediaUrl(mision.foto_mision) : mediaUrl(npc.imagen_mini)}
+            alt={mision.nombre}
+            style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--holo-line)', flexShrink: 0 }}
+          />
         )}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>

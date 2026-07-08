@@ -125,18 +125,12 @@ class MisionController extends Controller
 
         $userMisionIds = $user->misiones()->pluck('misiones.id');
 
-        // Active individual missions either assigned to this user or not yet completed
+        // Solo misiones individuales que el usuario ya pidió al NPC (tiene registro en mision_user),
+        // sin importar el estado (pendiente, en-curso o completada).
         $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'npc.lugar'])
             ->where('tipo_mision', 'individual')
             ->where('activa', true)
-            ->where(function ($q) use ($userMisionIds, $user) {
-                // Already has a pivot record
-                $q->whereIn('id', $userMisionIds)
-                  // Or not yet completed (so the user can discover it)
-                  ->orWhereNotIn('id', $user->misiones()
-                      ->wherePivot('status', 'completada')
-                      ->pluck('misiones.id'));
-            })
+            ->whereIn('id', $userMisionIds)
             ->orderBy('orden')
             ->get()
             ->map(function ($m) use ($user) {
