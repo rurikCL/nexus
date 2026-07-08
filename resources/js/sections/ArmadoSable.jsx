@@ -38,13 +38,13 @@ const SLOTS = [
 ];
 
 const BONUS_FIELDS = [
-  { key: 'bono_ataque',     label: 'ATQ', color: '#ff7043' },
-  { key: 'bono_defensa',    label: 'DEF', color: '#38cdf0' },
-  { key: 'bono_punteria',   label: 'PNT', color: '#10b981' },
-  { key: 'bono_movimiento', label: 'MOV', color: '#a78bfa' },
-  { key: 'bono_iniciativa', label: 'INI', color: '#E6B325' },
-  { key: 'bono_vida',       label: 'VID', color: '#ff2d45' },
-  { key: 'bono_escudo',     label: 'ESC', color: '#26e3e3' },
+  { key: 'bono_ataque',     label: 'ATQ', color: '#ff7043', icon: 'sword'  },
+  { key: 'bono_defensa',    label: 'DEF', color: '#38cdf0', icon: 'shield' },
+  { key: 'bono_punteria',   label: 'PNT', color: '#10b981', icon: 'eye'    },
+  { key: 'bono_movimiento', label: 'MOV', color: '#a78bfa', icon: 'zap'    },
+  { key: 'bono_iniciativa', label: 'INI', color: '#E6B325', icon: 'star'   },
+  { key: 'bono_vida',       label: 'VID', color: '#ff2d45', icon: 'zap'    },
+  { key: 'bono_escudo',     label: 'ESC', color: '#26e3e3', icon: 'shield' },
 ];
 
 const emptyForm = () => ({
@@ -70,58 +70,11 @@ function sumaBonos(fuente, resolver) {
   return totales;
 }
 
-/* ─── cuadro de componente (estilo slot de habilidad) ────── */
-function ComponentTile({ slot, objeto, onClick }) {
-  const isEmpty = !objeto;
-  const preview = objeto ? bonusPreview(objeto) : '';
-  return (
-    <button onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-      padding: '9px 12px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s', position: 'relative',
-      background: isEmpty ? 'rgba(255,255,255,0.025)' : 'color-mix(in srgb, var(--holo) 8%, transparent)',
-      border: `1px solid ${isEmpty ? 'var(--holo-line)' : 'var(--holo)'}`,
-      boxShadow: isEmpty ? 'none' : '0 0 14px -6px var(--holo)',
-    }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = isEmpty ? 'var(--holo-line)' : 'var(--holo)'; }}
-    >
-      <div style={{
-        width: 46, height: 46, borderRadius: 9, flexShrink: 0, display: 'grid', placeItems: 'center', overflow: 'hidden',
-        background: isEmpty ? 'rgba(255,255,255,0.04)' : 'rgba(56,205,240,0.14)',
-        border: `1px ${isEmpty ? 'dashed' : 'solid'} ${isEmpty ? 'var(--holo-line)' : 'var(--holo)'}`,
-      }}>
-        {objeto?.imagen
-          ? <img src={mediaUrl(objeto.imagen)} alt={objeto.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <Icon name={isEmpty ? 'plus' : slot.icon} size={18} style={{ color: isEmpty ? 'var(--txt-faint)' : 'var(--holo)' }} />
-        }
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2, color: 'var(--txt-faint)' }}>{slot.label.toUpperCase()}</div>
-        {objeto ? (
-          <>
-            <div className="nx-display" style={{ fontSize: 12, color: 'var(--txt)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{objeto.nombre}</div>
-            <div style={{ fontSize: 10, color: 'var(--txt-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview || slot.hint}</div>
-          </>
-        ) : (
-          <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>{slot.hint} — vacío</div>
-        )}
-      </div>
-    </button>
-  );
-}
-
 /* ─── modal selector de componente ──────────────────────── */
 function ComponentPickerModal({ slot, opciones, onAssign, onClear, onClose }) {
   return (
-    <div onMouseDown={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 1400,
-      background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(6px)',
-      display: 'grid', placeItems: 'center', padding: 20,
-      animation: 'nx-fade-up 0.2s ease both',
-    }}>
-      <div onMouseDown={(e) => e.stopPropagation()} className="nx-panel solid nx-panel-glow" style={{
-        width: 420, maxWidth: '100%', maxHeight: '80vh', overflowY: 'auto',
-      }}>
+    <div onMouseDown={onClose} className="nx-saber-modal-backdrop">
+      <div onMouseDown={(e) => e.stopPropagation()} className="nx-panel solid nx-panel-glow nx-saber-modal">
         <header className="nx-panel-head">
           <span style={{ color: 'var(--holo)' }}><Icon name={slot.icon} size={15} /></span>
           <div style={{ flex: 1 }}>
@@ -130,37 +83,27 @@ function ComponentPickerModal({ slot, opciones, onAssign, onClear, onClose }) {
           </div>
           <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 5 }}><Icon name="x" size={13} /></button>
         </header>
-        <div className="nx-panel-body" style={{ display: 'grid', gap: 8 }}>
+        <div className="nx-panel-body nx-saber-modal-list">
           {opciones.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '20px 10px', color: 'var(--txt-faint)', fontSize: 12 }}>
+            <div className="nx-saber-modal-empty">
               No posees componentes de este tipo.
             </div>
           )}
           {opciones.map((o) => (
-            <button key={o.id} onClick={() => onAssign(o)} style={{
-              display: 'flex', alignItems: 'center', gap: 10, padding: 9, borderRadius: 8,
-              textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s',
-              background: 'rgba(255,255,255,0.03)', border: '1px solid var(--holo-line)',
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
-            >
-              <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'grid', placeItems: 'center' }}>
+            <button key={o.id} onClick={() => onAssign(o)} className="nx-saber-modal-item">
+              <div className="nx-saber-modal-icon">
                 {o.imagen
-                  ? <img src={mediaUrl(o.imagen)} alt={o.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={mediaUrl(o.imagen)} alt={o.nombre} className="nx-saber-slot-image" />
                   : <Icon name={slot.icon} size={16} style={{ color: 'var(--holo)' }} />
                 }
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600 }}>{o.nombre}</div>
-                {bonusPreview(o) && <div style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{bonusPreview(o)}</div>}
+              <div className="nx-saber-modal-meta">
+                <div className="nx-saber-modal-name">{o.nombre}</div>
+                {bonusPreview(o) && <div className="nx-saber-modal-bonus">{bonusPreview(o)}</div>}
               </div>
             </button>
           ))}
-          <button onClick={onClear} style={{
-            textAlign: 'center', padding: '8px', borderRadius: 8, cursor: 'pointer', marginTop: 4,
-            background: 'transparent', border: '1px dashed var(--holo-line)', color: 'var(--txt-faint)', fontSize: 11,
-          }}>Vaciar slot</button>
+          <button onClick={onClear} className="nx-saber-modal-clear">Vaciar slot</button>
         </div>
       </div>
     </div>
@@ -267,111 +210,142 @@ export function ArmadoSableView({ user }) {
   }
 
   return (
-    <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
-      <Panel kicker="Taller" title="Armado de Sable de Luz" icon="zap">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 24 }}>
-          {/* Constructor: hoja + pieza por pieza, de la punta al pomo */}
-          <div>
-            <div style={{ marginBottom: 14 }}>
-              <label className="nx-kicker" style={{ display: 'block', marginBottom: 6 }}>NOMBRE DEL SABLE</label>
-              <input className="nx-input" value={form.nombre}
-                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                placeholder="Ej: Sable de duelo" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: 14 }}>
-              {/* Hoja: se extiende visualmente desde el emisor (primer cuadro) */}
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{
-                  width: 10, alignSelf: 'stretch', borderRadius: 5, minHeight: 40,
-                  background: hexHoja ?? 'rgba(255,255,255,0.05)',
-                  boxShadow: hexHoja ? `0 0 22px 4px ${hexHoja}` : 'none',
-                  border: hexHoja ? 'none' : '1px dashed var(--holo-line)',
-                  transition: 'background 0.2s ease',
-                }} />
+    <div className="nx-fade nx-saber-workbench">
+      <div className="nx-saber-layout nx-saber-layout-2col">
+        <Panel kicker="Taller" title="Armado de Sable de Luz" icon="zap">
+          <div className="nx-saber-main">
+            <div className="nx-saber-header-row">
+              <div className="nx-saber-input-wrap">
+                <label className="nx-kicker" style={{ display: 'block', marginBottom: 6 }}>NOMBRE DEL SABLE</label>
+                <input className="nx-input" value={form.nombre}
+                  onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
+                  placeholder="Ej: Sable de duelo" />
               </div>
-
-              {/* Pila de componentes: emisor → ... → accesorio (pomo) */}
-              <div style={{ display: 'grid', gap: 8 }}>
-                {SLOTS.map((slot) => (
-                  <ComponentTile
-                    key={slot.key}
-                    slot={slot}
-                    objeto={objetoPorId(form[`${slot.key}_id`])}
-                    onClick={() => setPickerSlot(slot)}
-                  />
-                ))}
-              </div>
+              {cristalSeleccionado && <Chip tone="holo">Cristal {cristalSeleccionado.nombre}</Chip>}
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <Btn kind="accent" icon={form.id ? 'check' : 'plus'} onClick={guardar} disabled={saving}>
-                {saving ? 'Guardando…' : form.id ? 'Actualizar sable' : 'Guardar como nuevo'}
-              </Btn>
-              {form.id && <Btn onClick={nuevo}>Nuevo sable en blanco</Btn>}
-            </div>
-          </div>
+            <div className="nx-saber-preview-panel">
+              <div className="nx-kicker" style={{ marginBottom: 8 }}>VISTA ENSAMBLADA</div>
+              <div className="nx-saber-preview-canvas">
+                {/* Resplandor dinámico de la hoja */}
+                {hexHoja && (
+                  <div className="nx-saber-glow-bg" style={{
+                    background: `radial-gradient(ellipse 280px 220px at 82% 6%, ${hexHoja}45, transparent 70%)`,
+                  }} />
+                )}
+                <div className="nx-saber-canvas-scanlines" />
 
-          {/* Bonos totales */}
-          <div>
-            <div className="nx-kicker" style={{ marginBottom: 8 }}>BONOS TOTALES</div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              {BONUS_FIELDS.map((b) => (
-                <div key={b.key} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '7px 10px', borderRadius: 6,
-                  background: `${b.color}14`, border: `1px solid ${b.color}45`,
-                }}>
-                  <span style={{ fontSize: 10, color: b.color, fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>{b.label}</span>
-                  <span className="nx-num" style={{ fontSize: 15, color: b.color }}>
-                    {totalBonos[b.key] > 0 ? '+' : ''}{totalBonos[b.key]}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Panel>
-
-      <Panel kicker="Loadouts" title="Sables Guardados" icon="roster">
-        {loading && <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando…</div>}
-        {!loading && sables.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Aún no has guardado ningún sable.</div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px,1fr))', gap: 12 }}>
-          {sables.map((s) => {
-            const color = s.cristal?.color_hoja ? NX.SABERS[s.cristal.color_hoja] : null;
-            const bonos = sumaBonos(s, (sable, slot) => sable[slot.key]);
-            return (
-              <div key={s.id} className="nx-panel solid" style={{
-                padding: 14,
-                border: s.activo ? '1px solid rgba(16,185,129,0.5)' : '1px solid var(--holo-line)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  {color && <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0 }} />}
-                  <span style={{ fontWeight: 700, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}</span>
-                  {s.activo && <Chip tone="green">Activo</Chip>}
-                </div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 12 }}>
+                {/* Bonos horizontales en la parte superior */}
+                <div className="nx-saber-bonos-overlay">
                   {BONUS_FIELDS.map((b) => (
-                    bonos[b.key] !== 0 && (
-                      <span key={b.key} style={{
-                        fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
-                        background: `${b.color}14`, border: `1px solid ${b.color}45`, color: b.color,
-                      }}>{b.label} {bonos[b.key] > 0 ? '+' : ''}{bonos[b.key]}</span>
-                    )
+                    <div key={b.key} className="nx-saber-bono-chip">
+                      <span className="nx-saber-bono-label" style={{ color: b.color }}>
+                        <Icon name={b.icon} size={10} />{b.label}
+                      </span>
+                      <span className="nx-saber-bono-val" style={{ color: b.color }}>
+                        {totalBonos[b.key] > 0 ? '+' : ''}{totalBonos[b.key]}
+                      </span>
+                    </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {!s.activo && <Btn sm icon="zap" onClick={() => activar(s.id)}>Activar</Btn>}
-                  <Btn sm icon="edit" onClick={() => cargarParaEditar(s)}>Editar</Btn>
-                  <Btn sm icon="x" onClick={() => eliminar(s.id)}>Eliminar</Btn>
+
+                {/* Sable diagonal — arte CSS */}
+                <div className="nx-saber-diag-container">
+                  {/* Hoja */}
+                  <div
+                    className={`nx-saber-diag-blade ${hexHoja ? 'is-on' : ''}`}
+                    style={hexHoja ? {
+                      background: `linear-gradient(180deg, transparent 0%, color-mix(in srgb, ${hexHoja} 12%, #fff) 22%, #ffffff 52%, ${hexHoja} 100%)`,
+                      boxShadow: `0 0 14px 5px ${hexHoja}, 0 0 38px ${hexHoja}, 0 0 75px color-mix(in srgb, ${hexHoja} 40%, transparent)`,
+                    } : {}}
+                  />
+                  {/* Conector emisor */}
+                  <div
+                    className="nx-saber-demitter"
+                    style={hexHoja ? { boxShadow: `0 0 12px ${hexHoja}, 0 0 24px ${hexHoja}70` } : {}}
+                  />
+                  {/* Anillos del emisor */}
+                  <div className="nx-saber-drings">
+                    {[0,1,2,3,4].map(i => (
+                      <div key={i} className={`nx-saber-dring${i % 2 === 1 ? ' gold' : ''}`} />
+                    ))}
+                  </div>
+                  {/* Cuerpo principal */}
+                  <div className="nx-saber-dhilt-body">
+                    <div className="nx-saber-dhilt-btn" />
+                    <div className="nx-saber-dhilt-groove" />
+                  </div>
+                  {/* Pomo */}
+                  <div className="nx-saber-dhilt-pommel">
+                    <div className="nx-saber-dhilt-mesh" />
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </Panel>
+
+              {/* Slots como grid compacto debajo del canvas */}
+              <div className="nx-saber-slot-grid">
+                {SLOTS.map((slot) => {
+                  const pieza = objetoPorId(form[`${slot.key}_id`]);
+                  return (
+                    <button
+                      key={slot.key}
+                      className={`nx-saber-slot-compact ${pieza ? 'is-filled' : ''}`}
+                      onClick={() => setPickerSlot(slot)}
+                      title={slot.hint}
+                    >
+                      <Icon name={slot.icon} size={12} />
+                      <span className="nx-saber-slot-compact-label">
+                        {pieza ? pieza.nombre : slot.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <div className="nx-saber-actions-row">
+            <Btn kind="accent" icon={form.id ? 'check' : 'plus'} onClick={guardar} disabled={saving}>
+              {saving ? 'Guardando…' : form.id ? 'Actualizar sable' : 'Guardar como nuevo'}
+            </Btn>
+            {form.id && <Btn onClick={nuevo}>Nuevo sable en blanco</Btn>}
+          </div>
+        </Panel>
+
+
+        <Panel kicker="Loadouts" title="Sables Guardados" icon="roster" className="nx-saber-saved-panel">
+          {loading && <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando...</div>}
+          {!loading && sables.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Aún no has guardado ningún sable.</div>
+          )}
+          <div className="nx-saber-saved-grid">
+            {sables.map((s) => {
+              const color = s.cristal?.color_hoja ? NX.SABERS[s.cristal.color_hoja] : null;
+              const bonos = sumaBonos(s, (sable, slot) => sable[slot.key]);
+              return (
+                <div key={s.id} className={`nx-panel solid nx-saber-saved-card ${s.activo ? 'is-active' : ''}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    {color && <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0 }} />}
+                    <span style={{ fontWeight: 700, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.nombre}</span>
+                    {s.activo && <Chip tone="green">Activo</Chip>}
+                  </div>
+                  <div className="nx-saber-saved-badges">
+                    {BONUS_FIELDS.map((b) => (
+                      bonos[b.key] !== 0 && (
+                        <span key={b.key} className="nx-saber-saved-badge" style={{ background: `${b.color}14`, borderColor: `${b.color}45`, color: b.color }}>{b.label} {bonos[b.key] > 0 ? '+' : ''}{bonos[b.key]}</span>
+                      )
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {!s.activo && <Btn sm icon="zap" onClick={() => activar(s.id)}>Activar</Btn>}
+                    <Btn sm icon="edit" onClick={() => cargarParaEditar(s)}>Editar</Btn>
+                    <Btn sm icon="x" onClick={() => eliminar(s.id)}>Eliminar</Btn>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </div>
 
       {pickerSlot && (
         <ComponentPickerModal

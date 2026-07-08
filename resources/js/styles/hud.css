@@ -256,6 +256,530 @@ a { color: var(--holo); }
   background: linear-gradient(180deg, transparent, currentColor 38%, currentColor 62%, transparent);
 }
 
+/* ── Armado de sable ──────────────────────────────────────── */
+.nx-saber-workbench { display: grid; gap: 18px; }
+
+.nx-saber-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 22px;
+}
+
+.nx-saber-layout-3col {
+  grid-template-columns: minmax(0, 1.15fr) minmax(210px, 0.55fr) minmax(300px, 0.9fr);
+  align-items: start;
+}
+
+.nx-saber-layout-2col {
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.85fr);
+  align-items: start;
+}
+
+.nx-saber-main { min-width: 0; }
+
+.nx-saber-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.nx-saber-input-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.nx-saber-preview-panel {
+  padding: 10px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--holo-line);
+  background: linear-gradient(180deg, rgba(10, 20, 44, 0.85), rgba(7, 15, 30, 0.9));
+}
+
+/* Bonos horizontales superpuestos en la parte superior del canvas */
+.nx-saber-bonos-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  padding: 10px 8px 16px;
+  background: linear-gradient(180deg, rgba(4, 8, 18, 0.88) 55%, transparent 100%);
+  z-index: 3;
+  gap: 2px;
+}
+
+.nx-saber-bono-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nx-saber-bono-label {
+  font-family: var(--font-data);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0.85;
+}
+
+.nx-saber-bono-val {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* Canvas sable diagonal */
+.nx-saber-preview-canvas {
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 420px;
+  background: linear-gradient(140deg, #070d1a 0%, #09101f 55%, #050a14 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.nx-saber-glow-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nx-saber-canvas-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 4px);
+  mix-blend-mode: screen;
+  z-index: 2;
+}
+
+/* Contenedor rotado -45° para el sable diagonal */
+.nx-saber-diag-container {
+  position: absolute;
+  top: 50%;
+  left: 52%;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1;
+}
+
+/* Hoja */
+.nx-saber-diag-blade {
+  width: 9px;
+  height: 185px;
+  border-radius: 5px 5px 1px 1px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  transition: all 0.35s ease;
+  flex-shrink: 0;
+}
+
+.nx-saber-diag-blade.is-on {
+  border: none;
+}
+
+/* Conector emisor — pieza que une hoja con empuñadura */
+.nx-saber-demitter {
+  width: 18px;
+  height: 11px;
+  background: linear-gradient(90deg, #202838, #6878a0, #4a5878, #202838);
+  border-radius: 2px;
+  flex-shrink: 0;
+  transition: box-shadow 0.35s ease;
+}
+
+/* Bloque de anillos del emisor */
+.nx-saber-drings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+/* Anillo base (metálico) */
+.nx-saber-dring {
+  width: 32px;
+  height: 9px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #2a3348 0%, #8898b0 40%, #a0b0c8 55%, #7888a8 75%, #2a3348 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 3px rgba(0,0,0,0.65);
+  flex-shrink: 0;
+}
+
+/* Anillo dorado (posiciones 1 y 3) */
+.nx-saber-dring.gold {
+  height: 5px;
+  background: linear-gradient(90deg, #3a2008, #b08828, #e0b840, #c0a030, #b08828, #3a2008);
+  box-shadow: inset 0 1px 0 rgba(255,230,80,0.2), 0 1px 3px rgba(0,0,0,0.6);
+}
+
+/* Cuerpo principal de la empuñadura */
+.nx-saber-dhilt-body {
+  width: 28px;
+  height: 130px;
+  background: linear-gradient(90deg, #1e2838 0%, #7888a0 30%, #9aacbc 52%, #6878a0 72%, #1e2838 100%);
+  border-radius: 1px;
+  position: relative;
+  flex-shrink: 0;
+  box-shadow:
+    inset 2px 0 4px rgba(255,255,255,0.06),
+    inset -2px 0 4px rgba(0,0,0,0.3);
+}
+
+/* Botón de activación dorado */
+.nx-saber-dhilt-btn {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f0d060, #8a6010);
+  border: 1px solid #c09020;
+  box-shadow: 0 0 7px rgba(210,160,0,0.7), inset 0 1px 1px rgba(255,245,140,0.4);
+  top: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Ranura lateral */
+.nx-saber-dhilt-groove {
+  position: absolute;
+  width: 2px;
+  height: 65px;
+  background: rgba(0,0,0,0.5);
+  top: 22px;
+  right: 5px;
+  border-radius: 1px;
+  box-shadow: -1px 0 2px rgba(255,255,255,0.06);
+}
+
+/* Pomo */
+.nx-saber-dhilt-pommel {
+  width: 28px;
+  height: 22px;
+  background: linear-gradient(90deg, #101520, #2c3444, #1e2a38, #101520);
+  border-radius: 0 0 7px 7px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Textura de malla del pomo */
+.nx-saber-dhilt-mesh {
+  position: absolute;
+  inset: 2px;
+  background-image:
+    linear-gradient(0deg, rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px);
+  background-size: 4px 4px;
+  border-radius: 0 0 5px 5px;
+}
+
+/* ── Grid de slots compacto debajo del canvas ─────────── */
+.nx-saber-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.nx-saber-slot-compact {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--holo-line);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  color: var(--txt-faint);
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 0;
+}
+
+.nx-saber-slot-compact:hover {
+  border-color: var(--holo);
+  color: var(--txt);
+  background: color-mix(in srgb, var(--holo) 6%, transparent);
+}
+
+.nx-saber-slot-compact.is-filled {
+  border-color: color-mix(in srgb, var(--holo) 55%, transparent);
+  background: color-mix(in srgb, var(--holo) 9%, transparent);
+  color: var(--txt);
+}
+
+.nx-saber-slot-compact-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nx-saber-slot-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nx-saber-slot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--holo-line);
+}
+
+.nx-saber-slot:hover { border-color: var(--holo); }
+
+.nx-saber-slot.is-filled {
+  background: color-mix(in srgb, var(--holo) 8%, transparent);
+  border-color: color-mix(in srgb, var(--holo) 72%, transparent);
+  box-shadow: 0 0 16px -8px var(--holo);
+}
+
+.nx-saber-slot-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed var(--holo-line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nx-saber-slot-icon.is-filled {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--holo) 70%, transparent);
+  background: color-mix(in srgb, var(--holo) 15%, transparent);
+}
+
+.nx-saber-slot-image { width: 100%; height: 100%; object-fit: cover; }
+
+.nx-saber-slot-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.nx-saber-slot-kicker {
+  font-size: 9px;
+  margin-bottom: 2px;
+  color: var(--txt-faint);
+}
+
+.nx-saber-slot-name {
+  font-size: 12px;
+  color: var(--txt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nx-saber-slot-preview {
+  font-size: 10px;
+  color: var(--txt-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nx-saber-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.nx-saber-bonus-panel { min-width: 0; }
+
+.nx-saber-bonus-panel .nx-panel-body { padding-top: 12px; }
+
+.nx-saber-bonus-list {
+  display: grid;
+  gap: 6px;
+}
+
+.nx-saber-bonus-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--holo-line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.nx-saber-saved-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.nx-saber-saved-panel .nx-panel-body {
+  max-height: 640px;
+  overflow-y: auto;
+}
+
+.nx-saber-saved-card {
+  padding: 14px;
+  border: 1px solid var(--holo-line);
+}
+
+.nx-saber-saved-card.is-active {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 16px -8px rgba(16, 185, 129, 0.8);
+}
+
+.nx-saber-saved-badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.nx-saber-saved-badge {
+  font-size: 9px;
+  font-family: var(--font-data);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--holo-line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nx-saber-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(2, 5, 12, 0.78);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: nx-fade-up 0.2s ease both;
+}
+
+.nx-saber-modal {
+  width: 440px;
+  max-width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.nx-saber-modal-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nx-saber-modal-empty {
+  text-align: center;
+  padding: 20px 10px;
+  color: var(--txt-faint);
+  font-size: 12px;
+}
+
+.nx-saber-modal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border-radius: 9px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--holo-line);
+}
+
+.nx-saber-modal-item:hover {
+  border-color: var(--holo);
+  background: rgba(56, 205, 240, 0.08);
+}
+
+.nx-saber-modal-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  display: grid;
+  place-items: center;
+}
+
+.nx-saber-modal-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.nx-saber-modal-name {
+  font-size: 13px;
+  color: var(--txt);
+  font-weight: 600;
+}
+
+.nx-saber-modal-bonus {
+  font-size: 10px;
+  color: var(--txt-faint);
+}
+
+.nx-saber-modal-clear {
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 4px;
+  background: transparent;
+  border: 1px dashed var(--holo-line);
+  color: var(--txt-faint);
+  font-size: 11px;
+}
+
+@media (max-width: 1024px) {
+  .nx-saber-layout-3col,
+  .nx-saber-layout-2col { grid-template-columns: 1fr; }
+  .nx-saber-bonus-panel { order: 0; }
+  .nx-saber-saved-panel { order: 1; }
+  .nx-saber-bonus-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nx-saber-saved-panel .nx-panel-body { max-height: none; overflow-y: visible; }
+}
+
+@media (max-width: 768px) {
+  .nx-saber-preview-canvas { min-height: 330px; }
+  .nx-saber-blade { height: 110px; }
+  .nx-saber-header-row { flex-direction: column; align-items: stretch; }
+  .nx-saber-bonus-list { grid-template-columns: 1fr; }
+}
+
 /* ============================================================
    RESPONSIVE — Layout principal
    ============================================================ */
