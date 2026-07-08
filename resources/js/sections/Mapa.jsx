@@ -1887,29 +1887,30 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
   const showNpcMsg = (text) => setTypingInMsg({ text, visibleChars: 0 });
 
-  const npcTipo  = (npc.tipo ?? '').toLowerCase();
-  const isAliado = npcTipo === 'aliado';
-  const isHostil = npcTipo === 'hostil';
-  const isNeutral = !isAliado && !isHostil;
+  const npcTipo      = (npc.tipo ?? '').toLowerCase();
+  const isAliado     = npcTipo === 'aliado';
+  const isHostil     = npcTipo === 'hostil';
+  const isEntrenador = npcTipo === 'entrenador';
+  const isNeutral    = !isAliado && !isHostil && !isEntrenador;
 
-  const startCombat = useCallback(() => { onCombatStart?.(isHostil); onClose(); }, [isHostil]);
+  const startCombat = useCallback(() => { onCombatStart?.(npcTipo); onClose(); }, [npcTipo]);
 
   const attackNeutral = useCallback(() => {
     postReputation(-50);
     toast('−50 reputación por atacar a un neutral', { tone: 'error', icon: 'shield' });
-    onCombatStart?.(false);
+    onCombatStart?.(npcTipo);
     onClose();
-  }, []);
+  }, [npcTipo]);
 
   const checkHostileAttack = useCallback(() => {
     if (!isHostil) return;
     if (Math.floor(Math.random() * 6) + 1 >= 4) {
       setTimeout(() => {
         showNpcMsg(`*${npc.nombre} adopta una postura amenazante y ataca*`);
-        setTimeout(() => { onCombatStart?.(isHostil); onClose(); }, 900);
+        setTimeout(() => { onCombatStart?.(npcTipo); onClose(); }, 900);
       }, 1100);
     }
-  }, [isHostil, npc.nombre]);
+  }, [isHostil, npc.nombre, npcTipo]);
 
   /* Parsea "- keyword[misionId]: respuesta" o "- keyword: respuesta" */
   const npcOptions = useMemo(() => {
@@ -2165,10 +2166,12 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   ? { background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981' }
                   : isHostil
                   ? { background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.35)', color: '#ff6b6b' }
+                  : isEntrenador
+                  ? { background: 'rgba(56,205,240,0.14)', border: '1px solid rgba(56,205,240,0.35)', color: '#38cdf0' }
                   : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
                 ),
               }}>
-                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : '◈ NEUTRAL'}
+                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR' : '◈ NEUTRAL'}
               </span>
             )}
           </div>
@@ -3415,8 +3418,8 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           userCharacter={userCharacter}
           lugarImagen={lugarImagen}
           onClose={() => setDialogNpc(null)}
-          onCombatStart={(isHostil) => {
-            const session = { npc: dialogNpc, player: getPlayerCombatStats(userCharacter), lugarImagen, isHostil };
+          onCombatStart={(npcTipo) => {
+            const session = { npc: dialogNpc, player: getPlayerCombatStats(userCharacter), lugarImagen, npcTipo };
             localStorage.setItem('nx-npc-combat', JSON.stringify(session));
             setActiveNpcCombat(session);
           }}
@@ -3442,8 +3445,13 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           initialState={activeNpcCombat.state}
           onVictory={() => {
             localStorage.removeItem('nx-npc-combat');
-            if (activeNpcCombat.isHostil) { postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' }); }
-            else { postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' }); }
+            if (activeNpcCombat.npcTipo === 'entrenador') {
+              // Los entrenadores no otorgan ni quitan reputación.
+            } else if (activeNpcCombat.npcTipo === 'hostil') {
+              postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' });
+            } else {
+              postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' });
+            }
             if (activeNpcCombat.npc?.id) postNpcVictory(activeNpcCombat.npc.id);
             setActiveNpcCombat(null);
           }}

@@ -48,7 +48,7 @@ const TIPO_OBJETO_OPTS = [
   { value: 'modulo_activacion',  label: 'Módulo de Activación' },
   { value: 'accesorio',          label: 'Accesorio' },
 ];
-const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'mercader', { value: 'mision', label: 'misión' }, 'jefe'];
+const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'entrenador', 'mercader', { value: 'mision', label: 'misión' }, 'jefe'];
 const TIPO_LUGAR_OPTS = ['exterior', 'interior'];
 
 const H_COLOR = {
@@ -178,7 +178,7 @@ const ENTITY_CONFIG = {
     fields: [
       { key: 'LugarID',       label: 'Lugar',            type: 'relatedSelect', related: 'lugares', required: true, span: 2 },
       { key: 'nombre',        label: 'Nombre',           type: 'text', required: true },
-      { key: 'tipo',          label: 'Tipo',             type: 'select', options: TIPO_NPC_OPTS },
+      { key: 'tipo',          label: 'Tipo',             type: 'select', options: TIPO_NPC_OPTS, hint: 'hostil: atacable, +25 rep al vencerlo · entrenador: atacable, sin efecto en reputación · el resto: atacarlo penaliza reputación' },
       { key: 'profesion',     label: 'Profesión',        type: 'text' },
       { key: 'faccion',       label: 'Facción',          type: 'text' },
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
