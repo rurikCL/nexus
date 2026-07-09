@@ -13,6 +13,7 @@ class ModuloEntrenamientoController extends Controller
     private const ADMIN_TIERS  = ['caballero', 'maestro', 'granmaestro'];
     private const NIVELES      = ['basico', 'intermedio', 'avanzado', 'experto'];
     private const ESTADOS      = ['pendiente', 'revision', 'confirmado'];
+    private const RANGOS       = ['iniciado', 'padawan', 'caballero', 'maestro'];
     private const FOCOS        = ['Técnica', 'Cardio', 'Sparring', 'Footwork', 'Fuerza', 'Estudio', 'Recuperación'];
     private const FORMAS       = ['forma1', 'forma2', 'forma3', 'forma4', 'forma5', 'forma6', 'forma7'];
 
@@ -42,6 +43,7 @@ class ModuloEntrenamientoController extends Controller
             'video'            => $m->video,
             'nivel_dificultad' => $m->nivel_dificultad,
             'estado'           => $m->estado,
+            'rango'            => $m->rango,
             'creado_por'       => $m->creadoPor ? [
                 'id'     => $m->creadoPor->id,
                 'name'   => $m->creadoPor->name,
@@ -113,6 +115,7 @@ class ModuloEntrenamientoController extends Controller
             'video'            => 'nullable|string|max:500',
             'nivel_dificultad' => 'nullable|string|in:' . implode(',', self::NIVELES),
             'estado'           => 'nullable|string|in:' . implode(',', self::ESTADOS),
+            'rango'            => 'nullable|string|in:' . implode(',', self::RANGOS),
             'revisado_por'     => 'nullable|integer|exists:users,id',
         ]);
 
@@ -153,6 +156,7 @@ class ModuloEntrenamientoController extends Controller
             'video'            => 'nullable|string|max:500',
             'nivel_dificultad' => 'nullable|string|in:' . implode(',', self::NIVELES),
             'estado'           => 'nullable|string|in:' . implode(',', self::ESTADOS),
+            'rango'            => 'nullable|string|in:' . implode(',', self::RANGOS),
             'revisado_por'     => 'nullable|integer|exists:users,id',
         ]);
 

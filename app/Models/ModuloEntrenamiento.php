@@ -20,6 +20,7 @@ class ModuloEntrenamiento extends Model
         'video',
         'nivel_dificultad',
         'estado',
+        'rango',
         'creado_por',
         'revisado_por',
     ];
