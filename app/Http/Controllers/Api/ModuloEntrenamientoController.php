@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ModuloEntrenamiento;
+use App\Models\ModuloFoto;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -117,6 +118,8 @@ class ModuloEntrenamientoController extends Controller
             'estado'           => 'nullable|string|in:' . implode(',', self::ESTADOS),
             'rango'            => 'nullable|string|in:' . implode(',', self::RANGOS),
             'revisado_por'     => 'nullable|integer|exists:users,id',
+            'fotos_generadas_ids'   => 'nullable|array',
+            'fotos_generadas_ids.*' => 'integer|exists:modulos_fotos,id',
         ]);
 
         if (!empty($data['revisado_por'])) {
@@ -126,6 +129,9 @@ class ModuloEntrenamientoController extends Controller
             }
         }
 
+        $fotosGeneradasIds = $data['fotos_generadas_ids'] ?? [];
+        unset($data['fotos_generadas_ids']);
+
         $modulo = ModuloEntrenamiento::create([
             ...$data,
             'creado_por'       => $request->user()->id,
@@ -133,6 +139,12 @@ class ModuloEntrenamientoController extends Controller
             'esfuerzo'         => $data['esfuerzo'] ?? 5,
             'estado'           => $data['estado'] ?? 'pendiente',
         ]);
+
+        if (!empty($fotosGeneradasIds)) {
+            ModuloFoto::whereIn('id', $fotosGeneradasIds)
+                ->where('creado_por', $request->user()->id)
+                ->update(['modulo_entrenamiento_id' => $modulo->id]);
+        }
 
         return response()->json(['modulo' => $this->format($modulo->load(['creadoPor.character', 'revisadoPor.character']))], 201);
     }

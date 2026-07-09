@@ -77,6 +77,12 @@ const api = {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${TOKEN()}` },
     }).then(r => r.json()),
+  generarFoto: (body) =>
+    fetch('/api/modulos-entrenamiento/fotos/generar', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json()),
 };
 
 /* ---- Tarjeta de módulo ---- */
@@ -329,6 +335,9 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
   const [objInput, setObjInput] = useState('');
   const [fotoInput, setFotoInput] = useState('');
   const [revisores, setRevisores] = useState([]);
+  const [descripcionIA, setDescripcionIA] = useState('');
+  const [generandoFoto, setGenerandoFoto] = useState(false);
+  const [fotosGeneradasIds, setFotosGeneradasIds] = useState([]);
 
   useEffect(() => {
     api.revisores().then(d => setRevisores(d.revisores ?? [])).catch(() => {});
@@ -354,11 +363,36 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
 
   const removeFoto = (i) => set('fotos', form.fotos.filter((_, idx) => idx !== i));
 
+  const generarFotoIA = async () => {
+    const descripcion = descripcionIA.trim() || form.descripcion.trim();
+    if (!descripcion) { toast('Escribe una descripción para generar la imagen', { tone: 'red', icon: 'alert' }); return; }
+    if (form.fotos.length >= 6) { toast('Ya alcanzaste el máximo de 6 fotos', { tone: 'red', icon: 'alert' }); return; }
+
+    setGenerandoFoto(true);
+    try {
+      const d = await api.generarFoto({
+        descripcion,
+        modulo_entrenamiento_id: initial?.id ?? null,
+      });
+      if (d.foto?.url) {
+        set('fotos', [...form.fotos, d.foto.url]);
+        if (!initial) setFotosGeneradasIds(ids => [...ids, d.foto.id]);
+        setDescripcionIA('');
+        toast('Imagen generada', { tone: 'success', icon: 'check' });
+      } else {
+        toast(d.message ?? 'Error al generar la imagen', { tone: 'red', icon: 'alert' });
+      }
+    } finally {
+      setGenerandoFoto(false);
+    }
+  };
+
   const handleSubmit = () => {
     if (!form.nombre.trim()) { toast('El nombre es obligatorio', { tone: 'red', icon: 'alert' }); return; }
     onSave({
       ...form,
       revisado_por: form.revisado_por ? Number(form.revisado_por) : null,
+      fotos_generadas_ids: fotosGeneradasIds,
     });
   };
 
@@ -449,6 +483,22 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
               placeholder="https://..." />
             <Btn sm icon="image" onClick={addFoto} disabled={form.fotos.length >= 6}>Agregar</Btn>
           </div>
+
+          {/* Generar con IA */}
+          <div style={{
+            display: 'flex', gap: 8, marginBottom: 8, padding: 10,
+            background: 'rgba(255,255,255,.03)', border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-md)',
+          }}>
+            <input className="nx-input" style={{ flex: 1 }} value={descripcionIA}
+              onChange={e => setDescripcionIA(e.target.value)}
+              placeholder="Describe la imagen a generar (o déjalo vacío para usar la descripción del módulo)"
+              disabled={generandoFoto || form.fotos.length >= 6} />
+            <Btn sm kind="accent" icon={generandoFoto ? 'loader' : 'star'} onClick={generarFotoIA}
+              disabled={generandoFoto || form.fotos.length >= 6}>
+              {generandoFoto ? 'Generando…' : 'Generar con IA'}
+            </Btn>
+          </div>
+
           {form.fotos.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {form.fotos.map((src, i) => (

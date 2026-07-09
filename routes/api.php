@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\TemporadaController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\WidgetLayoutController;
 use App\Http\Controllers\Api\ModuloEntrenamientoController;
+use App\Http\Controllers\Api\ModuloFotoController;
 use App\Http\Controllers\Api\InstagramController;
 use App\Http\Controllers\Api\SesionEntrenamientoController;
 use App\Http\Controllers\Api\RolHabilidadController;
@@ -105,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/modulos-entrenamiento',                          [ModuloEntrenamientoController::class, 'index']);
     Route::post('/modulos-entrenamiento',                         [ModuloEntrenamientoController::class, 'store']);
     Route::get('/modulos-entrenamiento/revisores',                [ModuloEntrenamientoController::class, 'revisores']);
+    Route::post('/modulos-entrenamiento/fotos/generar',           [ModuloFotoController::class, 'store']);
     Route::get('/modulos-entrenamiento/{moduloEntrenamiento}',    [ModuloEntrenamientoController::class, 'show']);
     Route::put('/modulos-entrenamiento/{moduloEntrenamiento}',    [ModuloEntrenamientoController::class, 'update']);
     Route::delete('/modulos-entrenamiento/{moduloEntrenamiento}', [ModuloEntrenamientoController::class, 'destroy']);
