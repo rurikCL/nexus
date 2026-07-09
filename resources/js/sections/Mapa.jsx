@@ -1341,7 +1341,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId, refreshToken }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId, refreshToken, onNpcsUpdated }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1383,7 +1383,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
     return () => { cancelled = true; };
   }, [currentId]);
 
-  /* refresco silencioso (sin spinner) cuando cambia el estado de una misión */
+  /* refresco silencioso (sin spinner) cuando cambia el estado de una misión o se obtiene un hito */
   const skipFirstRefresh = useRef(true);
   useEffect(() => {
     if (skipFirstRefresh.current) { skipFirstRefresh.current = false; return; }
@@ -1393,6 +1393,12 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
       .catch(() => {});
     return () => { cancelled = true; };
   }, [refreshToken]);
+
+  /* Notifica NPCs frescos al padre para resincronizar un diálogo ya abierto
+     (p.ej. una misión que se completó sin cerrar el diálogo del NPC). */
+  useEffect(() => {
+    if (lugar) onNpcsUpdated?.(lugar.npcs ?? []);
+  }, [lugar, onNpcsUpdated]);
 
   const navigateTo = (conn) => onTravel('vehiculo', () => setNavStack((prev) => [...prev, conn.id]));
 
@@ -1789,7 +1795,7 @@ function postReputation(delta) {
 
 function postNpcVictory(npcId) {
   const token = localStorage.getItem('nx-token');
-  fetch('/api/character/npc-victory', {
+  return fetch('/api/character/npc-victory', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
     body: JSON.stringify({ npc_id: npcId }),
@@ -1859,6 +1865,13 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
   const [misionInfo, setMisionInfo]   = useState(npc.mision_disponible ?? null);
   const [showMisionPopup, setShowMisionPopup] = useState(false);
+
+  /* Si el NPC se resincroniza desde el padre (lugar refrescado tras completar
+     una misión u obtener un hito), refleja su misión disponible actualizada
+     sin necesidad de cerrar y reabrir el diálogo. */
+  useEffect(() => {
+    setMisionInfo(npc.mision_disponible ?? null);
+  }, [npc]);
   const [misionBusy, setMisionBusy]   = useState(false);
 
   /* Carga el retraso_texto_npc desde configuraciones */
@@ -2098,8 +2111,11 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     if (!misionInfo) return;
     setMisionBusy(true);
     try {
-      await apiPost(`/misiones/${misionInfo.id}/completar`, {});
+      const d = await apiPost(`/misiones/${misionInfo.id}/completar`, {});
       toast('¡Misión completada!', { tone: 'success', icon: 'check' });
+      (d?.hitos_otorgados ?? []).forEach((hito) => {
+        toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
+      });
       setMisionInfo(prev => ({ ...prev, estado: 'completada' }));
       setShowMisionPopup(false);
       onMisionChange?.();
@@ -3328,6 +3344,12 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const selectLugar   = (l) => { setLugar(l);   setNivel('lugar'); };
   const selectNpc     = (n) => setDialogNpc(n);
 
+  /* Cuando el lugar refresca (misión completada / hito obtenido), resincroniza
+     el NPC del diálogo abierto para que refleje datos frescos sin recargar. */
+  const handleNpcsUpdated = useCallback((npcs) => {
+    setDialogNpc((prev) => (prev ? (npcs.find((n) => n.id === prev.id) ?? prev) : prev));
+  }, []);
+
   const handleLugarChange = useCallback((lugarId, lugarNombre) => {
     updateLocation({
       sistema_id: sistema?.id ?? null,
@@ -3408,6 +3430,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onAttack={handleAttackUser}
           myUserId={userId}
           refreshToken={lugarRefreshKey}
+          onNpcsUpdated={handleNpcsUpdated}
         />
       )}
 
@@ -3443,7 +3466,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           player={activeNpcCombat.player ?? getPlayerCombatStats(userCharacter)}
           lugarImagen={activeNpcCombat.lugarImagen || lugarImagen}
           initialState={activeNpcCombat.state}
-          onVictory={() => {
+          onVictory={async () => {
             localStorage.removeItem('nx-npc-combat');
             if (activeNpcCombat.npcTipo === 'entrenador') {
               // Los entrenadores no otorgan ni quitan reputación.
@@ -3452,7 +3475,9 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
             } else {
               postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' });
             }
-            if (activeNpcCombat.npc?.id) postNpcVictory(activeNpcCombat.npc.id);
+            if (activeNpcCombat.npc?.id) await postNpcVictory(activeNpcCombat.npc.id);
+            // Refresca el lugar: un hito recién obtenido puede desbloquear NPCs/misiones sin recargar la página.
+            setLugarRefreshKey((k) => k + 1);
             setActiveNpcCombat(null);
           }}
           onDefeat={() => { localStorage.removeItem('nx-npc-combat'); setActiveNpcCombat(null); }}
