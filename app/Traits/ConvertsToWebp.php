@@ -26,4 +26,19 @@ trait ConvertsToWebp
 
         return "{$directory}/{$filename}";
     }
+
+    private function saveContentsAsWebp(string $contents, string $directory, int $quality = 82): string
+    {
+        $filename = Str::uuid() . '.webp';
+        $fullPath = storage_path("app/public/{$directory}/{$filename}");
+
+        Storage::disk('public')->makeDirectory($directory);
+
+        (new ImageManager(new Driver()))
+            ->read($contents)
+            ->toWebp($quality)
+            ->save($fullPath);
+
+        return "{$directory}/{$filename}";
+    }
 }

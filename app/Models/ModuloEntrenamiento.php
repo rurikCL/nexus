@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ModuloEntrenamiento extends Model
 {
@@ -20,6 +21,7 @@ class ModuloEntrenamiento extends Model
         'video',
         'nivel_dificultad',
         'estado',
+        'rango',
         'creado_por',
         'revisado_por',
     ];
@@ -38,5 +40,10 @@ class ModuloEntrenamiento extends Model
     public function revisadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'revisado_por');
+    }
+
+    public function fotosGeneradas(): HasMany
+    {
+        return $this->hasMany(ModuloFoto::class, 'modulo_entrenamiento_id');
     }
 }

@@ -8,6 +8,7 @@ const FOCOS        = ['Técnica', 'Cardio', 'Sparring', 'Footwork', 'Fuerza', 'E
 const FORMAS       = NX.CLASSES.map(c => ({ id: c.id, label: `${c.num} · ${c.name}` }));
 const NIVELES      = ['basico', 'intermedio', 'avanzado', 'experto'];
 const ESTADOS      = ['pendiente', 'revision', 'confirmado'];
+const RANGOS       = ['iniciado', 'padawan', 'caballero', 'maestro'];
 const ADMIN_TIERS  = ['caballero', 'maestro', 'granmaestro'];
 
 const NIVEL_COLOR = {
@@ -36,6 +37,20 @@ const ESTADO_LABEL = {
   confirmado:  'Confirmado',
 };
 
+const RANGO_COLOR = {
+  iniciado:    'var(--tier-iniciado, #a0a0b0)',
+  padawan:     'var(--tier-padawan, #38cdf0)',
+  caballero:   'var(--tier-caballero, #10b981)',
+  maestro:     'var(--tier-maestro, #E6B325)',
+};
+
+const RANGO_LABEL = {
+  iniciado:    'Iniciados',
+  padawan:     'Padawan',
+  caballero:   'Caballeros',
+  maestro:     'Maestros',
+};
+
 const TOKEN = () => localStorage.getItem('nx-token');
 
 const api = {
@@ -61,6 +76,12 @@ const api = {
     fetch(`/api/modulos-entrenamiento/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${TOKEN()}` },
+    }).then(r => r.json()),
+  generarFoto: (body) =>
+    fetch('/api/modulos-entrenamiento/fotos/generar', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     }).then(r => r.json()),
 };
 
@@ -119,6 +140,19 @@ function ModuloCard({ modulo, isAdmin, onEdit, onDelete, onClick }) {
                   padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap',
                 }}>
                   {ESTADO_LABEL[modulo.estado] ?? modulo.estado}
+                </span>
+              );
+            })()}
+            {modulo.rango && (() => {
+              const rc = RANGO_COLOR[modulo.rango] ?? '#a0a0b0';
+              return (
+                <span style={{
+                  fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.1em',
+                  color: rc, background: `color-mix(in srgb, ${rc} 14%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${rc} 35%, transparent)`,
+                  padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap',
+                }}>
+                  {RANGO_LABEL[modulo.rango] ?? modulo.rango}
                 </span>
               );
             })()}
@@ -229,6 +263,7 @@ function ModuloDetailModal({ modulo, onClose }) {
           })()}
           {modulo.foco && <Chip>{modulo.foco}</Chip>}
           {forma && <Chip tone="holo">{forma.num} · {forma.name}</Chip>}
+          {modulo.rango && <Chip>{RANGO_LABEL[modulo.rango] ?? modulo.rango}</Chip>}
           {modulo.esfuerzo && (
             <span className="nx-data" style={{ fontSize: 10, color: 'var(--pompeyo-naranja)' }}>
               Esfuerzo {modulo.esfuerzo}/10
@@ -290,7 +325,7 @@ function ModuloDetailModal({ modulo, onClose }) {
 /* ---- Formulario (crear / editar) ---- */
 const EMPTY_FORM = {
   nombre: '', descripcion: '', objetivos: [], foco: '', esfuerzo: 5,
-  forma: '', fotos: [], video: '', nivel_dificultad: 'basico', estado: 'pendiente', revisado_por: '',
+  forma: '', fotos: [], video: '', nivel_dificultad: 'basico', estado: 'pendiente', rango: '', revisado_por: '',
 };
 
 function ModuloForm({ initial, onSave, onClose, saving }) {
@@ -300,6 +335,9 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
   const [objInput, setObjInput] = useState('');
   const [fotoInput, setFotoInput] = useState('');
   const [revisores, setRevisores] = useState([]);
+  const [descripcionIA, setDescripcionIA] = useState('');
+  const [generandoFoto, setGenerandoFoto] = useState(false);
+  const [fotosGeneradasIds, setFotosGeneradasIds] = useState([]);
 
   useEffect(() => {
     api.revisores().then(d => setRevisores(d.revisores ?? [])).catch(() => {});
@@ -325,11 +363,36 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
 
   const removeFoto = (i) => set('fotos', form.fotos.filter((_, idx) => idx !== i));
 
+  const generarFotoIA = async () => {
+    const descripcion = descripcionIA.trim() || form.descripcion.trim();
+    if (!descripcion) { toast('Escribe una descripción para generar la imagen', { tone: 'red', icon: 'alert' }); return; }
+    if (form.fotos.length >= 6) { toast('Ya alcanzaste el máximo de 6 fotos', { tone: 'red', icon: 'alert' }); return; }
+
+    setGenerandoFoto(true);
+    try {
+      const d = await api.generarFoto({
+        descripcion,
+        modulo_entrenamiento_id: initial?.id ?? null,
+      });
+      if (d.foto?.url) {
+        set('fotos', [...form.fotos, d.foto.url]);
+        if (!initial) setFotosGeneradasIds(ids => [...ids, d.foto.id]);
+        setDescripcionIA('');
+        toast('Imagen generada', { tone: 'success', icon: 'check' });
+      } else {
+        toast(d.message ?? 'Error al generar la imagen', { tone: 'red', icon: 'alert' });
+      }
+    } finally {
+      setGenerandoFoto(false);
+    }
+  };
+
   const handleSubmit = () => {
     if (!form.nombre.trim()) { toast('El nombre es obligatorio', { tone: 'red', icon: 'alert' }); return; }
     onSave({
       ...form,
       revisado_por: form.revisado_por ? Number(form.revisado_por) : null,
+      fotos_generadas_ids: fotosGeneradasIds,
     });
   };
 
@@ -349,7 +412,7 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
           <textarea className="nx-textarea" value={form.descripcion} onChange={e => set('descripcion', e.target.value)} rows={3} placeholder="Descripción general del módulo..." />
         </div>
 
-        {/* Foco / Forma / Nivel / Esfuerzo */}
+        {/* Foco / Forma / Nivel / Rango / Esfuerzo */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
             <label className="nx-label">Foco</label>
@@ -369,6 +432,13 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
             <select className="nx-select" value={form.forma} onChange={e => set('forma', e.target.value)}>
               <option value="">— Sin forma —</option>
               {FORMAS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="nx-label">Rango requerido</label>
+            <select className="nx-select" value={form.rango} onChange={e => set('rango', e.target.value)}>
+              <option value="">— Sin rango —</option>
+              {RANGOS.map(r => <option key={r} value={r}>{RANGO_LABEL[r]}</option>)}
             </select>
           </div>
           <div>
@@ -413,6 +483,22 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
               placeholder="https://..." />
             <Btn sm icon="image" onClick={addFoto} disabled={form.fotos.length >= 6}>Agregar</Btn>
           </div>
+
+          {/* Generar con IA */}
+          <div style={{
+            display: 'flex', gap: 8, marginBottom: 8, padding: 10,
+            background: 'rgba(255,255,255,.03)', border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-md)',
+          }}>
+            <input className="nx-input" style={{ flex: 1 }} value={descripcionIA}
+              onChange={e => setDescripcionIA(e.target.value)}
+              placeholder="Describe la imagen a generar (o déjalo vacío para usar la descripción del módulo)"
+              disabled={generandoFoto || form.fotos.length >= 6} />
+            <Btn sm kind="accent" icon={generandoFoto ? 'loader' : 'star'} onClick={generarFotoIA}
+              disabled={generandoFoto || form.fotos.length >= 6}>
+              {generandoFoto ? 'Generando…' : 'Generar con IA'}
+            </Btn>
+          </div>
+
           {form.fotos.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {form.fotos.map((src, i) => (
@@ -479,6 +565,8 @@ export function ModulosEntrenamientoView({ user }) {
   const [saving, setSaving]    = useState(false);
   const [filtro, setFiltro]    = useState('');
   const [filtroNivel, setFiltroNivel] = useState('');
+  const [filtroRango, setFiltroRango] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
 
   const isAdmin = ADMIN_TIERS.includes(user?.tier ?? '');
 
@@ -531,8 +619,13 @@ export function ModulosEntrenamientoView({ user }) {
     const q = filtro.toLowerCase();
     const matchQ = !q || m.nombre.toLowerCase().includes(q) || (m.descripcion ?? '').toLowerCase().includes(q);
     const matchN = !filtroNivel || m.nivel_dificultad === filtroNivel;
-    return matchQ && matchN;
+    const matchR = !filtroRango || m.rango === filtroRango;
+    const matchE = !filtroEstado || m.estado === filtroEstado;
+    return matchQ && matchN && matchR && matchE;
   });
+
+  const hayFiltros = filtro || filtroNivel || filtroRango || filtroEstado;
+  const limpiarFiltros = () => { setFiltro(''); setFiltroNivel(''); setFiltroRango(''); setFiltroEstado(''); };
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 20 }}>
@@ -540,12 +633,27 @@ export function ModulosEntrenamientoView({ user }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <input className="nx-input" style={{ flex: 1, minWidth: 200 }} value={filtro}
           onChange={e => setFiltro(e.target.value)} placeholder="Buscar módulo..." />
+        {isAdmin && (
+          <Btn kind="accent" icon="plus" onClick={() => setEditing(false)}>Nuevo módulo</Btn>
+        )}
+      </div>
+
+      {/* Barra de filtros */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <select className="nx-select" style={{ width: 160 }} value={filtroNivel} onChange={e => setFiltroNivel(e.target.value)}>
           <option value="">Todos los niveles</option>
           {NIVELES.map(n => <option key={n} value={n}>{NIVEL_LABEL[n]}</option>)}
         </select>
-        {isAdmin && (
-          <Btn kind="accent" icon="plus" onClick={() => setEditing(false)}>Nuevo módulo</Btn>
+        <select className="nx-select" style={{ width: 160 }} value={filtroRango} onChange={e => setFiltroRango(e.target.value)}>
+          <option value="">Todos los rangos</option>
+          {RANGOS.map(r => <option key={r} value={r}>{RANGO_LABEL[r]}</option>)}
+        </select>
+        <select className="nx-select" style={{ width: 160 }} value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+          <option value="">Todos los estados</option>
+          {ESTADOS.map(e => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
+        </select>
+        {hayFiltros && (
+          <Btn sm icon="x" onClick={limpiarFiltros}>Limpiar filtros</Btn>
         )}
       </div>
 
@@ -577,8 +685,8 @@ export function ModulosEntrenamientoView({ user }) {
       ) : visible.length === 0 ? (
         <Panel title="Sin módulos">
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
-            {filtro || filtroNivel ? 'No hay módulos con ese filtro.' : 'No hay módulos registrados aún.'}
-            {isAdmin && !filtro && !filtroNivel && (
+            {hayFiltros ? 'No hay módulos con ese filtro.' : 'No hay módulos registrados aún.'}
+            {isAdmin && !hayFiltros && (
               <div style={{ marginTop: 16 }}>
                 <Btn kind="accent" icon="plus" onClick={() => setEditing(false)}>Crear primer módulo</Btn>
               </div>
