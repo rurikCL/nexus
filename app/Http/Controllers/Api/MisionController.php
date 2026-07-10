@@ -66,7 +66,7 @@ class MisionController extends Controller
             return response()->json(['misiones' => []]);
         }
 
-        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users', 'npc']);
 
         if ($request->filled('tipo')) {
             $query->where('tipo_mision', $request->tipo);
@@ -524,6 +524,9 @@ class MisionController extends Controller
             'fecha_termino'        => $mision->fecha_termino?->format('Y-m-d'),
             'hito_requerimiento'   => $mision->hito_requerimiento,
             'entregar_hito'        => $mision->entregar_hito,
+            'npc'               => $mision->relationLoaded('npc') && $mision->npc
+                ? ['id' => $mision->npc->id, 'nombre' => $mision->npc->nombre, 'imagen_mini' => $mision->npc->imagen_mini]
+                : null,
             'objetivos'         => $mision->relationLoaded('objetivos')
                 ? $mision->objetivos->map(fn ($o) => [
                     'id'           => $o->id,

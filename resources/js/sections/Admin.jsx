@@ -1877,6 +1877,25 @@ function MisionesAdmin() {
                       </span>
                     )}
                   </div>
+                  {m.tipo_mision === 'individual' && (m.npc || m.hito_requerimiento || m.entregar_hito) && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 5 }}>
+                      {m.npc && (
+                        <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                          <Icon name="user" size={9} /> {m.npc.nombre}
+                        </span>
+                      )}
+                      {m.hito_requerimiento && (
+                        <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                          Requiere: <span style={{ color: 'var(--txt-dim)' }}>{m.hito_requerimiento}</span>
+                        </span>
+                      )}
+                      {m.entregar_hito && (
+                        <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                          Entrega: <span style={{ color: 'var(--txt-dim)' }}>{m.entregar_hito}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button onClick={() => openEdit(m)} style={{ background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.2)', color: 'var(--holo)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11 }}>
