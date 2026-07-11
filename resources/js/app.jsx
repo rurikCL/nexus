@@ -8,8 +8,16 @@ import App from './App.jsx';
 import Login from './Login.jsx';
 import TutorialWizard from './components/TutorialWizard.jsx';
 import { TransmisionOverlay } from './components/TransmisionOverlay.jsx';
+import PublicProfilePage from './PublicProfilePage.jsx';
+
+const PUBLIC_PROFILE_MATCH = location.pathname.match(/^\/c\/([^/]+)\/?$/);
 
 function Root() {
+  // Vista pública de perfil (/c/:handle) — no requiere sesión, se resuelve antes de cualquier chequeo de auth
+  if (PUBLIC_PROFILE_MATCH) {
+    return <PublicProfilePage handle={decodeURIComponent(PUBLIC_PROFILE_MATCH[1])} />;
+  }
+
   const [user, setUser]       = useState(null);
   const [checking, setChecking] = useState(true);
 

@@ -39,6 +39,9 @@ Route::post('/register', [AuthController::class, 'register']);
 // Instagram OAuth callback (pública — Meta redirige aquí sin Bearer token)
 Route::get('/instagram/callback', [InstagramController::class, 'callback']);
 
+// Perfil público de combatiente (pública — usada por la vista /c/{handle} y el QR de Comando)
+Route::get('/public/combatants/{handle}', [CombatantController::class, 'showPublic']);
+
 // Broadcasting auth para SPAs con Sanctum (Bearer token en lugar de sesión web)
 Route::post('/broadcasting/auth', function (Request $request) {
     return Broadcast::auth($request);

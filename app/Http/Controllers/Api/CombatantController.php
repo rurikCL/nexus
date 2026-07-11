@@ -32,6 +32,18 @@ class CombatantController extends Controller
         return response()->json(['combatant' => $this->formatCombatant($character)]);
     }
 
+    public function showPublic(Request $request, string $handle): JsonResponse
+    {
+        $character = Character::with('user.tutor.character')
+            ->where('handle', $handle)
+            ->firstOrFail();
+
+        $combatant = $this->formatCombatant($character);
+        unset($combatant['credits']);
+
+        return response()->json(['combatant' => $combatant]);
+    }
+
     private function formatCombatant(Character $character): array
     {
         $stats = StatsTemporada::totalsForUser($character->user_id);

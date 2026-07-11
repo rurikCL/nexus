@@ -150,7 +150,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
-  const publicProfileUrl = `https://nexus.orbital/c/${ch.handle}`;
+  const publicProfileUrl = `${window.location.origin}/c/${encodeURIComponent(ch.handle)}`;
   const isMobile = useWindowWidth() < 640;
   const myTasks = S.tasks.filter(t => t.pupil === 'you' && t.status !== 'completada');
   const nextCombat = S.combats.find(m => m.a === 'you' || m.b === 'you');

@@ -116,7 +116,11 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'color-mix(in srgb, var(--holo) 12%, transparent)', borderBottom: '1px solid var(--holo-line)' }}>
           <span className="nx-kicker" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="link" size={13} /> Vista pública · perfil externo</span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Btn sm icon="link" onClick={() => toast('Link público copiado', { tone: 'success', icon: 'link', desc: `nexus.orbital/c/${c.handle}` })}>Copiar link</Btn>
+            <Btn sm icon="link" onClick={() => {
+              const url = `${window.location.origin}/c/${encodeURIComponent(c.handle)}`;
+              navigator.clipboard?.writeText(url).catch(() => {});
+              toast('Link público copiado', { tone: 'success', icon: 'link', desc: url.replace(/^https?:\/\//, '') });
+            }}>Copiar link</Btn>
             <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onClose} style={{ padding: 7 }}><Icon name="x" size={14} /></button>
           </div>
         </div>
@@ -245,8 +249,8 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
             </div>
           )}
 
-          {c.id !== 'you' && (
-            <Btn kind="accent" icon="swords" onClick={() => onChallenge?.(c)} style={{ justifyContent: 'center' }}>
+          {c.id !== 'you' && onChallenge && (
+            <Btn kind="accent" icon="swords" onClick={() => onChallenge(c)} style={{ justifyContent: 'center' }}>
               Retar a {c.name.split(' ')[0]}
             </Btn>
           )}
