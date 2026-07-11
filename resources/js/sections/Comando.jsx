@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, cloneElement } from 'react';
+import QRCode from 'qrcode';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { BONUS_FIELDS } from './ArmadoSable.jsx';
@@ -85,7 +86,53 @@ const WIDGET_DEFAULT_ORDER = [
   { id: 'tareas',     cols: 1 },
   { id: 'eventos',    cols: 1 },
   { id: 'ranking',    cols: 1 },
+  { id: 'qr',         cols: 1 },
 ];
+
+/* ---- Widget: QR de perfil público ---- */
+function QrWidget({ url, handle, right, style }) {
+  const [dataUrl, setDataUrl] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: '#eaf9ff', light: '#00000000' } })
+      .then((d) => { if (!cancelled) setDataUrl(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [url]);
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(url).catch(() => {});
+    toast('Link público copiado', { tone: 'success', icon: 'link', desc: url.replace(/^https?:\/\//, '') });
+  };
+
+  const download = () => {
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `nexus-qr-${handle}.png`;
+    a.click();
+  };
+
+  return (
+    <Panel title="Mi Código QR" kicker="Perfil público · escanear para ver" icon="link" right={right} style={style}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 168, height: 168, borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,.03)', display: 'grid', placeItems: 'center', padding: 10, flexShrink: 0 }}>
+          {dataUrl
+            ? <img src={dataUrl} alt="Código QR del perfil público" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            : <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>Generando...</span>}
+        </div>
+        <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', textAlign: 'center' }}>
+          {url.replace(/^https?:\/\//, '')}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn sm icon="link" onClick={copyLink}>Copiar link</Btn>
+          <Btn sm icon="download" onClick={download} disabled={!dataUrl}>Descargar</Btn>
+        </div>
+      </div>
+    </Panel>
+  );
+}
 
 const PODIO_CMD = [
   { key: 'primer_lugar',  color: 'var(--pompeyo-oro)', num: '1' },
@@ -103,6 +150,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
+  const publicProfileUrl = `https://nexus.orbital/c/${ch.handle}`;
   const isMobile = useWindowWidth() < 640;
   const myTasks = S.tasks.filter(t => t.pupil === 'you' && t.status !== 'completada');
   const nextCombat = S.combats.find(m => m.a === 'you' || m.b === 'you');
@@ -461,6 +509,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
                 </div>
               </Panel>
             ),
+            qr: <QrWidget url={publicProfileUrl} handle={ch.handle} right={panelRight(null)} />,
           })[id];
 
           return (
