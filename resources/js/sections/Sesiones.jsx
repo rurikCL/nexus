@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import QrScanner from 'qr-scanner';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 
 /* ─── AUTH ─────────────────────────────────────────────────── */
@@ -202,6 +203,157 @@ function PlanEditor({ initialNodes, sesionId, modulos, onSaved }) {
         </Btn>
       </div>
     </div>
+  );
+}
+
+/* ─── ESCANEO DE ASISTENCIA (QR) ──────────────────────────────── */
+function extractHandle(raw) {
+  const m = raw.match(/\/c\/([^/?#]+)/);
+  return (m ? decodeURIComponent(m[1]) : raw).trim();
+}
+
+const SCAN_STATUS_LABEL = {
+  marcado:       { label: 'Marcado · +75 cr', tone: 'green' },
+  ya_marcado:    { label: 'Ya tenía asistencia', tone: 'dim' },
+  no_encontrado: { label: 'Combatiente no encontrado', tone: 'orange' },
+  es_encargado:  { label: 'Eres tú (encargado)', tone: 'dim' },
+};
+
+function AttendanceScanModal({ sesionId, onClose }) {
+  const videoRef    = useRef(null);
+  const scannerRef  = useRef(null);
+  const scannedRef  = useRef([]);   // espejo de `scanned` para leer el valor actual dentro del callback del scanner
+  const lastSeenRef = useRef(null); // último código leído, para no repetir el aviso mientras la cámara sigue apuntando al mismo QR
+  const [scanned, setScanned]   = useState([]); // [{ handle, raw }]
+  const [flash, setFlash]       = useState(null); // { handle, dup }
+  const [camError, setCamError] = useState('');
+  const [finalizing, setFinalizing] = useState(false);
+  const [results, setResults]   = useState(null);
+
+  useEffect(() => { scannedRef.current = scanned; }, [scanned]);
+
+  useEffect(() => {
+    const qs = new QrScanner(
+      videoRef.current,
+      (result) => {
+        const raw = typeof result === 'string' ? result : result.data;
+        const handle = extractHandle(raw);
+        if (!handle) return;
+
+        const key = handle.toLowerCase();
+        if (lastSeenRef.current === key) return; // mismo QR aún en cuadro, no repetir el aviso
+        lastSeenRef.current = key;
+
+        const isDup = scannedRef.current.some(p => p.handle.toLowerCase() === key);
+        if (isDup) {
+          setFlash({ handle, dup: true });
+          toast('Combatiente ya escaneado', { tone: 'info', icon: 'check', desc: `@${handle} ya está en la lista de esta sesión` });
+          return;
+        }
+
+        setScanned(prev => [...prev, { handle, raw }]);
+        setFlash({ handle, dup: false });
+      },
+      { highlightScanRegion: true, highlightCodeOutline: true, maxScansPerSecond: 5 }
+    );
+    scannerRef.current = qs;
+    qs.start().catch(err => setCamError(err?.message ?? 'No se pudo acceder a la cámara.'));
+    return () => { qs.stop(); qs.destroy(); };
+  }, []);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 1200);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const removeOne = (handle) => {
+    setScanned(prev => prev.filter(p => p.handle !== handle));
+    if (lastSeenRef.current === handle.toLowerCase()) lastSeenRef.current = null;
+  };
+
+  const finalize = async () => {
+    setFinalizing(true);
+    try {
+      const res = await api('POST', `/sesiones/${sesionId}/attend-scan`, { codes: scanned.map(s => s.raw) });
+      scannerRef.current?.stop();
+      setResults(res);
+      toast('Asistencia registrada', {
+        tone: 'success', icon: 'check',
+        desc: `${res.marked} asistente(s) · +${res.encargado_credits} créditos para ti`,
+      });
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} kicker="ESCANEO DE ASISTENCIA" title="Escanear QR de asistentes" width={480}>
+      {results ? (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div className="nx-num" style={{ fontSize: 30, color: 'var(--holo)' }}>+{results.encargado_credits}</div>
+            <div className="nx-kicker">créditos para ti · {results.marked} asistente(s) marcados</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+            {results.results.map(r => {
+              const s = SCAN_STATUS_LABEL[r.status] ?? { label: r.status, tone: 'dim' };
+              return (
+                <div key={r.handle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ flex: 1, fontSize: 12 }}>
+                    {r.name ?? '—'} <span style={{ color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>@{r.handle}</span>
+                  </span>
+                  <Chip tone={s.tone} style={{ fontSize: 9 }}>{s.label}</Chip>
+                </div>
+              );
+            })}
+          </div>
+          <Btn kind="accent" onClick={onClose} style={{ justifyContent: 'center' }}>Listo</Btn>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 14 }}>
+          <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#000', aspectRatio: '1' }}>
+            <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted playsInline />
+            {flash && (
+              <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: flash.dup ? 'rgba(255,176,32,0.25)' : 'rgba(16,185,129,0.25)', pointerEvents: 'none' }}>
+                <Chip tone={flash.dup ? 'orange' : 'green'} icon="check">
+                  {flash.dup ? `Ya escaneado · @${flash.handle}` : `@${flash.handle}`}
+                </Chip>
+              </div>
+            )}
+          </div>
+          {camError && <div style={{ fontSize: 12, color: '#ff6b6b' }}>{camError}</div>}
+
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>Escaneados · {scanned.length}</div>
+            {scanned.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--txt-faint)', textAlign: 'center', padding: '10px 0' }}>
+                Apunta la cámara al código QR del perfil de cada asistente
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                {scanned.map(s => (
+                  <div key={s.handle} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#10b981', flexShrink: 0 }}><Icon name="check" size={12} /></span>
+                    <span style={{ flex: 1, fontSize: 12, fontFamily: 'var(--font-data)' }}>@{s.handle}</span>
+                    <button onClick={() => removeOne(s.handle)} style={{ background: 'none', border: 'none', color: 'var(--txt-faint)', cursor: 'pointer', fontSize: 11 }}>quitar</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+            <Btn kind="ghost" onClick={onClose} disabled={finalizing}>Cancelar</Btn>
+            <Btn kind="accent" icon="check" onClick={finalize} disabled={finalizing}>
+              {finalizing ? 'Registrando...' : 'Finalizar'}
+            </Btn>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -431,6 +583,7 @@ function SesionDetalle({ id, user, onBack }) {
   const [editPlan, setEditPlan] = useState(false);
   const [modulos, setModulos]   = useState([]);
   const [showClose, setShowClose] = useState(false);
+  const [showScan, setShowScan]   = useState(false);
   const [actioning, setActioning] = useState(false);
 
   const load = useCallback(async () => {
@@ -465,19 +618,7 @@ function SesionDetalle({ id, user, onBack }) {
   const isEnc    = sesion.i_am_encargado;
   const myId     = user?.id;
   const iAttended = sesion.attendance.some(a => a.user_id === myId);
-
-  const attend = async () => {
-    setActioning(true);
-    try {
-      await api('POST', `/sesiones/${id}/attend`);
-      toast('Asistencia marcada', { tone: 'success', icon: 'check', desc: '+75 créditos' });
-      load();
-    } catch (err) {
-      toast(err.message, { tone: 'error' });
-    } finally {
-      setActioning(false);
-    }
-  };
+  const canMark   = isEnc || TRAINER_TIERS.includes(user?.tier ?? '');
 
   const unattend = async () => {
     setActioning(true);
@@ -608,21 +749,26 @@ function SesionDetalle({ id, user, onBack }) {
 
           {/* Asistencia */}
           <Panel kicker={`ASISTENCIA · ${sesion.attendance.length}`} title="Lista de Asistentes" icon="check">
-            {/* Mi asistencia */}
+            {/* Marcaje por QR (encargado / caballero / maestro) + estado propio */}
             {!isClosed && (
-              <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--holo-line)' }}>
+              <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--holo-line)', display: 'grid', gap: 10 }}>
+                {canMark && (
+                  <Btn kind="accent" sm icon="camera" onClick={() => setShowScan(true)} style={{ width: '100%', justifyContent: 'center' }}>
+                    Escanear asistencia (QR)
+                  </Btn>
+                )}
                 {iAttended ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Chip tone="green" icon="check">Asistencia marcada</Chip>
+                    <Chip tone="green" icon="check">Tu asistencia está marcada</Chip>
                     <button onClick={unattend} disabled={actioning}
                       style={{ background: 'none', border: 'none', color: 'var(--txt-faint)', cursor: 'pointer', fontSize: 11 }}>
                       retirar
                     </button>
                   </div>
-                ) : (
-                  <Btn kind="accent" sm icon="check" onClick={attend} disabled={actioning} style={{ width: '100%', justifyContent: 'center' }}>
-                    {actioning ? 'Marcando...' : 'Marcar mi asistencia (+75 cr)'}
-                  </Btn>
+                ) : !canMark && (
+                  <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+                    Pide al encargado que escanee tu código QR (widget «Mi Código QR» en Comando) para registrar tu asistencia.
+                  </div>
                 )}
               </div>
             )}
@@ -669,6 +815,13 @@ function SesionDetalle({ id, user, onBack }) {
           sesion={sesion}
           onClose={() => setShowClose(false)}
           onClosed={updated => { setSesion(s => ({ ...s, ...updated, is_closed: true })); setShowClose(false); }}
+        />
+      )}
+
+      {showScan && (
+        <AttendanceScanModal
+          sesionId={id}
+          onClose={() => { setShowScan(false); load(); }}
         />
       )}
     </div>

@@ -186,6 +186,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sesiones/{id}/plan',        [SesionEntrenamientoController::class, 'savePlan']);
     Route::post('/sesiones/{id}/attend',      [SesionEntrenamientoController::class, 'attend']);
     Route::delete('/sesiones/{id}/attend',    [SesionEntrenamientoController::class, 'unattend']);
+    Route::post('/sesiones/{id}/attend-scan', [SesionEntrenamientoController::class, 'attendScan']);
     Route::post('/sesiones/{id}/close',       [SesionEntrenamientoController::class, 'close']);
 
     // Combate PvP

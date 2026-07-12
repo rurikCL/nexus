@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Character;
 use App\Models\Training;
 use App\Models\TrainingDay;
 use App\Models\TrainingPlanNode;
@@ -42,6 +43,29 @@ class SesionEntrenamientoController extends Controller
     private function isEncargado(Training $training, int $userId): bool
     {
         return $training->encargados()->where('user_id', $userId)->exists();
+    }
+
+    private function canMarkAttendance(Training $training, $user): bool
+    {
+        return $this->isEncargado($training, $user->id) || in_array($user->tier, self::TRAINER_TIERS);
+    }
+
+    /**
+     * Extrae el handle desde un código QR escaneado. El QR contiene la URL del
+     * perfil público (".../c/{handle}"), pero también se acepta un handle plano.
+     */
+    private function extractHandle(string $code): ?string
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+
+        if (preg_match('~/c/([^/?#]+)~', $code, $matches)) {
+            return urldecode($matches[1]);
+        }
+
+        return $code;
     }
 
     // -------------------------------------------------------------------------
@@ -305,6 +329,10 @@ class SesionEntrenamientoController extends Controller
         $training = Training::findOrFail($id);
         $user     = $request->user();
 
+        if (!$this->canMarkAttendance($training, $user)) {
+            return response()->json(['message' => 'Solo el encargado o un rango caballero/maestro puede marcar asistencia.'], 403);
+        }
+
         if ($training->isClosed()) {
             return response()->json(['message' => 'La sesión ya está cerrada.'], 422);
         }
@@ -372,6 +400,123 @@ class SesionEntrenamientoController extends Controller
         }
 
         return response()->json(['message' => 'Asistencia retirada correctamente.']);
+    }
+
+    // -------------------------------------------------------------------------
+    // attendScan
+    // -------------------------------------------------------------------------
+
+    /**
+     * POST /api/sesiones/{id}/attend-scan
+     * El encargado (o un rango caballero/maestro/granmaestro) escanea los QR de
+     * perfil público de los asistentes y finaliza en un solo lote. Cada asistente
+     * nuevo recibe 75 créditos. El encargado recibe 75 créditos por su propia
+     * asistencia (si no la tenía ya) + 10 créditos por cada asistente marcado.
+     */
+    public function attendScan(Request $request, int $id): JsonResponse
+    {
+        $training = Training::findOrFail($id);
+        $user     = $request->user();
+
+        if (!$this->canMarkAttendance($training, $user)) {
+            return response()->json(['message' => 'Solo el encargado o un rango caballero/maestro puede marcar asistencia.'], 403);
+        }
+
+        if ($training->isClosed()) {
+            return response()->json(['message' => 'La sesión ya está cerrada.'], 422);
+        }
+
+        $data = $request->validate([
+            'codes'   => 'array',
+            'codes.*' => 'string',
+        ]);
+
+        // Extrae y deduplica handles (case-insensitive) preservando el escaneado
+        $handles = [];
+        $seen    = [];
+        foreach ($data['codes'] ?? [] as $code) {
+            $handle = $this->extractHandle($code);
+            if ($handle === null) {
+                continue;
+            }
+            $key = mb_strtolower($handle);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $handles[]  = $handle;
+        }
+
+        $results     = [];
+        $markedCount = 0;
+
+        foreach ($handles as $handle) {
+            $character = Character::where('handle', $handle)->first();
+
+            if (!$character) {
+                $results[] = ['handle' => $handle, 'name' => null, 'status' => 'no_encontrado'];
+                continue;
+            }
+
+            if ($character->user_id === $user->id) {
+                $results[] = ['handle' => $handle, 'name' => $character->name, 'status' => 'es_encargado'];
+                continue;
+            }
+
+            $existing = TrainingDay::where('training_id', $training->id)
+                ->where('user_id', $character->user_id)
+                ->where('type', 'personal')
+                ->first();
+
+            if ($existing) {
+                $results[] = ['handle' => $handle, 'name' => $character->name, 'status' => 'ya_marcado'];
+                continue;
+            }
+
+            TrainingDay::create([
+                'user_id'     => $character->user_id,
+                'training_id' => $training->id,
+                'type'        => 'personal',
+                'date'        => $training->fecha->format('Y-m-d'),
+            ]);
+            $character->increment('credits', 75);
+            $markedCount++;
+            $results[] = ['handle' => $handle, 'name' => $character->name, 'status' => 'marcado'];
+        }
+
+        // Asistencia + créditos del encargado que realiza el escaneo
+        $encargadoCharacter = $user->character;
+        $encargadoCredits   = 0;
+
+        $encargadoExisting = TrainingDay::where('training_id', $training->id)
+            ->where('user_id', $user->id)
+            ->where('type', 'personal')
+            ->first();
+
+        if (!$encargadoExisting) {
+            TrainingDay::create([
+                'user_id'     => $user->id,
+                'training_id' => $training->id,
+                'type'        => 'personal',
+                'date'        => $training->fecha->format('Y-m-d'),
+            ]);
+            if ($encargadoCharacter) {
+                $encargadoCharacter->increment('credits', 75);
+                $encargadoCredits += 75;
+            }
+        }
+
+        $bonus = $markedCount * 10;
+        if ($encargadoCharacter && $bonus > 0) {
+            $encargadoCharacter->increment('credits', $bonus);
+            $encargadoCredits += $bonus;
+        }
+
+        return response()->json([
+            'marked'            => $markedCount,
+            'results'           => $results,
+            'encargado_credits' => $encargadoCredits,
+        ]);
     }
 
     // -------------------------------------------------------------------------

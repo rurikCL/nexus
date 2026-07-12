@@ -25,6 +25,7 @@
         "vite": "^7.0.7"
     },
     "dependencies": {
+        "qr-scanner": "^1.4.2",
         "qrcode": "^1.5.4"
     }
 }
