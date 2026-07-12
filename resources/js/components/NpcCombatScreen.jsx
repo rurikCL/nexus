@@ -25,6 +25,7 @@ const mediaUrl = (path) => {
 
 const NPC_COMBAT_LS = 'nx-npc-combat';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
+const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
 
 /* Fondo espacial autocontenido (estrellas + planetas) para combates navales */
 function pseudoRandom(seed) {
@@ -35,11 +36,11 @@ function pseudoRandom(seed) {
 function useSpaceStarsCSS() {
   return useMemo(() => {
     const dot = (x, y, r, a) =>
-      `radial-gradient(circle at ${x}% ${y}%, rgba(219,230,245,${a}) 0px, rgba(219,230,245,${a}) ${r}px, transparent ${(r + 0.5).toFixed(2)}px)`;
+      `radial-gradient(circle at ${x}% ${y}%, rgba(219,230,245,${a}) 0px, rgba(219,230,245,${a}) ${r.toFixed(2)}px, transparent ${(r + 0.5).toFixed(2)}px)`;
     return Array.from({ length: 160 }, (_, i) => {
       const x = (pseudoRandom(i * 12.9898 + 1) * 100).toFixed(2);
       const y = (pseudoRandom(i * 78.233 + 3) * 100).toFixed(2);
-      const r = (pseudoRandom(i * 37.719 + 5) * 0.9 + 0.3).toFixed(2);
+      const r = pseudoRandom(i * 37.719 + 5) * 0.9 + 0.3;
       const a = (pseudoRandom(i * 91.345 + 7) * 0.5 + 0.35).toFixed(2);
       return dot(x, y, r, a);
     }).join(', ');
@@ -118,6 +119,28 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     return slotIds.filter(Boolean).map(id => habPool[String(id)]).filter(Boolean);
   }, [currentForma]);
 
+  /* Agrupa el log plano en tarjetas de ronda → tarjetas de turno (por actor consecutivo) */
+  const logRounds = useMemo(() => {
+    const rounds = [];
+    let curRound = null;
+    let curTurn = null;
+    log.forEach(entry => {
+      const r = entry.ronda ?? 1;
+      if (!curRound || curRound.ronda !== r) {
+        curRound = { ronda: r, turns: [] };
+        rounds.push(curRound);
+        curTurn = null;
+      }
+      const actor = entry.actor ?? 'system';
+      if (!curTurn || curTurn.actor !== actor) {
+        curTurn = { actor, entries: [] };
+        curRound.turns.push(curTurn);
+      }
+      curTurn.entries.push(entry);
+    });
+    return rounds;
+  }, [log]);
+
   /* Stats efectivos considerando buffs/debuffs */
   const countBuff    = (stat) => playerBuffs.filter(b => b.stat === stat).length;
   const countNpcDeb  = (stat) => npcDebuffs.filter(d => d.stat === stat).length;
@@ -161,9 +184,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     const first = pT >= nT ? 'player' : 'npc';
     setTimeout(() => {
       setLog([
-        { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0 },
-        { text: `Ronda 1 — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: 1 },
-        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2 },
+        { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
+        { text: `Ronda 1 — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
+        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2, ronda: 1, actor: 'system' },
       ]);
       setPhase('battle');
       setCurrTurn(first);
@@ -186,8 +209,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
       setLog(prev => [...prev,
-        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: prev.length },
-        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1 },
+        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
+        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: ronda + 1, actor: 'system' },
       ]);
       setRonda(r => r + 1);
       setRondaTurno(0);
@@ -234,6 +257,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Golpe! −${effNpcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
       }
+      entries = entries.map(e => ({ ...e, ronda, actor: 'npc' }));
 
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
       setPlayerHp(newHp);
@@ -247,7 +271,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
       setNpcBusy(false);
       if (newHp.vida <= 0) {
-        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length }]);
+        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
         setPhase('defeat');
       } else {
         endTurnAfter('npc');
@@ -287,7 +311,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     if (hab.objetivo === 'self') {
       const buffDesc = habBuff.map(s => `+1 ${s}`).join(', ');
       entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
-      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
+      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       endTurnAfter('player');
       return;
     }
@@ -321,11 +345,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
+    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
 
     if (newNpcHp.vida <= 0) {
-      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
+      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
       setPhase('victory');
     } else {
       endTurnAfter('player');
@@ -362,11 +386,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
+    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
 
     if (newNpcHp.vida <= 0) {
-      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length }]);
+      setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
       setPhase('victory');
     } else {
       endTurnAfter('player');
@@ -396,20 +420,50 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const npcBadges    = naveMode ? npcBadgesFull.filter(naveBadgeFilter)    : npcBadgesFull;
   const playerBadges = naveMode ? playerBadgesFull.filter(naveBadgeFilter) : playerBadgesFull;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user' }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [] }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
     const rev  = align === 'right';
-    return (
+    const effects = Object.values(
+      [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
+        .reduce((acc, e) => {
+          const key = `${e.kind}-${e.stat}`;
+          acc[key] = acc[key]
+            ? { ...acc[key], amount: acc[key].amount + 1, turns: Math.max(acc[key].turns, e.turns) }
+            : { kind: e.kind, stat: e.stat, amount: 1, turns: e.turns };
+          return acc;
+        }, {})
+    );
+    const effectsColumn = effects.length > 0 && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, justifyContent: 'center' }}>
+        {effects.map((e, i) => {
+          const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
+          const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
+          return (
+            <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} turno${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
+              fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
+              background: `${c}18`, border: `1px solid ${c}55`, color: c, fontWeight: 700,
+            }}>
+              {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
+              {e.kind === 'buff' ? '+' : '−'}{e.amount} {abbr}
+              <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}t</span>
+            </span>
+          );
+        })}
+      </div>
+    );
+
+    const card = (
       <div style={{
         background: 'rgba(6,12,26,0.92)', backdropFilter: 'blur(16px)',
         border: `1px solid ${borderColor}`, borderRadius: 14,
         padding: isMobile ? 8 : 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
-        gap: isMobile ? 8 : 14, alignItems: 'flex-start',
+        gap: isMobile ? 8 : 14, alignItems: 'flex-start', flex: 1, minWidth: 0,
       }}>
         <div style={{
-          width: isMobile ? 52 : 84, height: isMobile ? 68 : 122, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
           border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
         }}>
           {photoUrl
@@ -467,6 +521,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
       </div>
     );
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+        {rev ? <>{card}{effectsColumn}</> : <>{effectsColumn}{card}</>}
+      </div>
+    );
   };
 
   const ActionBtn = ({ onClick, disabled, bg, border, hoverBg, hoverBorder, children, minW = 56 }) => (
@@ -510,22 +570,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
         {/* NPC HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(190px, 36%, 260px)' }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(220px, 38%, 300px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
             borderColor="rgba(255,45,69,0.40)" badges={npcBadges} align="left"
             fallbackIcon={naveMode ? 'ship' : 'user'}
+            debuffs={npcDebuffs}
           />
         </div>
 
         {/* Jugador HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(190px, 36%, 260px)' }}>
+        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(220px, 38%, 300px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
             borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
             fallbackIcon={naveMode ? 'ship' : 'user'}
+            buffs={playerBuffs}
           />
         </div>
 
@@ -553,15 +615,48 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             <span style={{ fontSize: 11, color: 'rgba(150,200,255,0.4)', flexShrink: 0 }}>{logCollapsed ? '›' : '‹'}</span>
           </div>
           {!logCollapsed && (
-            <div ref={logRef} style={{ overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-              {log.map(e => (
-                <div key={e.id} style={{
-                  fontSize: 10, color: LOG_C[e.type] ?? 'rgba(200,225,255,0.75)',
-                  fontFamily: 'var(--font-data)', letterSpacing: '0.03em', lineHeight: 1.45,
-                  borderLeft: e.type === 'system' ? '2px solid #38cdf0' : 'none',
-                  paddingLeft: e.type === 'system' ? 6 : 0,
-                  animation: 'nx-fade-up 0.2s ease both',
-                }}>{e.text}</div>
+            <div ref={logRef} style={{ overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+              {logRounds.map(round => (
+                <div key={round.ronda} style={{
+                  border: '1px solid rgba(56,205,240,0.16)', borderRadius: 8,
+                  background: 'rgba(56,205,240,0.035)', padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 4,
+                }}>
+                  <div style={{
+                    fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+                    fontWeight: 700, opacity: 0.85,
+                  }}>RONDA {round.ronda}</div>
+                  {round.turns.map((turn, ti) => {
+                    const isSystem = turn.actor === 'system';
+                    const isNpc    = turn.actor === 'npc';
+                    const label    = isSystem ? null : isNpc ? npc.nombre : (player.nombre || 'Tú');
+                    const accent   = isSystem ? 'rgba(150,200,255,0.35)' : isNpc ? 'rgba(255,45,69,0.35)' : 'rgba(56,205,240,0.35)';
+                    return (
+                      <div key={ti} style={{
+                        display: 'flex', flexDirection: 'column', gap: 2,
+                        ...(isSystem ? {} : {
+                          border: `1px solid ${accent}`, borderRadius: 6,
+                          background: isNpc ? 'rgba(255,45,69,0.05)' : 'rgba(56,205,240,0.05)',
+                          padding: '4px 6px',
+                        }),
+                      }}>
+                        {label && (
+                          <div style={{ fontSize: 7, color: accent.replace('0.35', '0.85'), fontFamily: 'var(--font-data)', letterSpacing: '0.08em', fontWeight: 700 }}>
+                            {isNpc ? '👤 ' : '⚔ '}{label.toUpperCase()}
+                          </div>
+                        )}
+                        {turn.entries.map(e => (
+                          <div key={e.id} style={{
+                            fontSize: 10, color: LOG_C[e.type] ?? 'rgba(200,225,255,0.75)',
+                            fontFamily: 'var(--font-data)', letterSpacing: '0.03em', lineHeight: 1.4,
+                            paddingLeft: isSystem ? 6 : 0,
+                            borderLeft: isSystem ? '2px solid #38cdf0' : 'none',
+                            animation: 'nx-fade-up 0.2s ease both',
+                          }}>{e.text}</div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
               ))}
               {npcBusy && (
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 3 }}>
@@ -763,7 +858,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                       setStancePicker(false);
                       setLog(prev => [...prev, {
                         text: `🔄 Cambias a Forma ${f} (${label})`,
-                        type: 'info', id: prev.length,
+                        type: 'info', id: prev.length, ronda, actor: 'player',
                       }]);
                       endTurnAfter('player');
                     }} style={{
