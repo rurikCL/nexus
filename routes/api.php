@@ -187,6 +187,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sesiones',                  [SesionEntrenamientoController::class, 'store']);
     Route::get('/sesiones/{id}',              [SesionEntrenamientoController::class, 'show']);
     Route::post('/sesiones/{id}/plan',        [SesionEntrenamientoController::class, 'savePlan']);
+    Route::post('/sesiones/{id}/plan/adicional',            [SesionEntrenamientoController::class, 'addAdicional']);
+    Route::delete('/sesiones/{id}/plan/adicional/{nodeId}', [SesionEntrenamientoController::class, 'removeAdicional']);
     Route::post('/sesiones/{id}/attend',      [SesionEntrenamientoController::class, 'attend']);
     Route::delete('/sesiones/{id}/attend',    [SesionEntrenamientoController::class, 'unattend']);
     Route::post('/sesiones/{id}/attend-scan', [SesionEntrenamientoController::class, 'attendScan']);

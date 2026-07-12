@@ -50,6 +50,32 @@ class SesionEntrenamientoController extends Controller
         return $training->canBeMarkedBy($user);
     }
 
+    private function formatPlanNode(TrainingPlanNode $node): array
+    {
+        return [
+            'id'           => $node->id,
+            'type'         => $node->type,
+            'orden'        => $node->orden,
+            'modulo_id'    => $node->modulo_id,
+            'modulo'       => $node->modulo ? [
+                'id'               => $node->modulo->id,
+                'nombre'           => $node->modulo->nombre,
+                'foco'             => $node->modulo->foco,
+                'nivel_dificultad' => $node->modulo->nivel_dificultad,
+                'esfuerzo'         => $node->modulo->esfuerzo,
+            ] : null,
+            'titulo'       => $node->titulo,
+            'contenido'    => $node->contenido,
+            'es_adicional' => $node->es_adicional,
+            'created_by'   => $node->created_by,
+            'creador'      => $node->creador ? [
+                'id'     => $node->creador->id,
+                'name'   => $node->creador->name,
+                'handle' => $node->creador->character->handle ?? null,
+            ] : null,
+        ];
+    }
+
     /**
      * Extrae el handle desde un código QR escaneado. El QR contiene la URL del
      * perfil público (".../c/{handle}"), pero también se acepta un handle plano.
@@ -197,26 +223,20 @@ class SesionEntrenamientoController extends Controller
         $training = Training::with([
             'encargados.character',
             'planNodes.modulo',
+            'planNodes.creador.character',
             'attendance.user.character',
         ])->findOrFail($id);
 
-        $authUserId = $request->user()->id;
+        $authUser   = $request->user();
+        $authUserId = $authUser->id;
 
-        $planNodes = $training->planNodes->map(fn(TrainingPlanNode $node) => [
-            'id'        => $node->id,
-            'type'      => $node->type,
-            'orden'     => $node->orden,
-            'modulo_id' => $node->modulo_id,
-            'modulo'    => $node->modulo ? [
-                'id'               => $node->modulo->id,
-                'nombre'           => $node->modulo->nombre,
-                'foco'             => $node->modulo->foco,
-                'nivel_dificultad' => $node->modulo->nivel_dificultad,
-                'esfuerzo'         => $node->modulo->esfuerzo,
-            ] : null,
-            'titulo'    => $node->titulo,
-            'contenido' => $node->contenido,
-        ])->values();
+        $planNodes = $training->planNodes->where('es_adicional', false)
+            ->map(fn(TrainingPlanNode $node) => $this->formatPlanNode($node))
+            ->values();
+
+        $planNodesAdicionales = $training->planNodes->where('es_adicional', true)
+            ->map(fn(TrainingPlanNode $node) => $this->formatPlanNode($node))
+            ->values();
 
         $attendanceList = $training->attendance->map(fn(TrainingDay $day) => [
             'user_id'   => $day->user_id,
@@ -242,7 +262,9 @@ class SesionEntrenamientoController extends Controller
                 'name'      => $u->name,
                 'character' => $u->character ? ['handle' => $u->character->handle] : null,
             ])->values(),
-            'plan_nodes'       => $planNodes,
+            'plan_nodes'              => $planNodes,
+            'plan_nodes_adicionales'  => $planNodesAdicionales,
+            'puede_agregar_adicional' => $training->canAddAdicional($authUser),
             'attendance'       => $attendanceList,
             'global_note'      => $globalNote ? [
                 'focus'  => $globalNote->focus,
@@ -283,37 +305,99 @@ class SesionEntrenamientoController extends Controller
             'nodes.*.orden'      => 'nullable|integer|min:0',
         ]);
 
-        // Replace all existing nodes
-        $training->planNodes()->delete();
+        // Replace only the main-plan nodes — los nodos "Adicional" no se tocan.
+        $training->mainPlanNodes()->delete();
 
-        $nodes = [];
         foreach ($data['nodes'] as $index => $nodeData) {
-            $nodes[] = $training->planNodes()->create([
-                'type'      => $nodeData['type'],
-                'modulo_id' => $nodeData['modulo_id'] ?? null,
-                'titulo'    => $nodeData['titulo'] ?? null,
-                'contenido' => $nodeData['contenido'] ?? null,
-                'orden'     => $nodeData['orden'] ?? $index,
+            $training->planNodes()->create([
+                'type'         => $nodeData['type'],
+                'modulo_id'    => $nodeData['modulo_id'] ?? null,
+                'titulo'       => $nodeData['titulo'] ?? null,
+                'contenido'    => $nodeData['contenido'] ?? null,
+                'orden'        => $nodeData['orden'] ?? $index,
+                'es_adicional' => false,
             ]);
         }
 
-        $updatedNodes = $training->planNodes()->with('modulo')->get()->map(fn(TrainingPlanNode $node) => [
-            'id'        => $node->id,
-            'type'      => $node->type,
-            'orden'     => $node->orden,
-            'modulo_id' => $node->modulo_id,
-            'modulo'    => $node->modulo ? [
-                'id'               => $node->modulo->id,
-                'nombre'           => $node->modulo->nombre,
-                'foco'             => $node->modulo->foco,
-                'nivel_dificultad' => $node->modulo->nivel_dificultad,
-                'esfuerzo'         => $node->modulo->esfuerzo,
-            ] : null,
-            'titulo'    => $node->titulo,
-            'contenido' => $node->contenido,
-        ])->values();
+        $updatedNodes = $training->mainPlanNodes()->with('modulo')->get()
+            ->map(fn(TrainingPlanNode $node) => $this->formatPlanNode($node))
+            ->values();
 
         return response()->json(['plan_nodes' => $updatedNodes]);
+    }
+
+    // -------------------------------------------------------------------------
+    // addAdicional / removeAdicional
+    // -------------------------------------------------------------------------
+
+    /**
+     * POST /api/sesiones/{id}/plan/adicional
+     * Cualquier caballero/maestro/granmaestro (sea o no encargado) puede aportar
+     * un nodo al plan, marcado como "Adicional" y atribuido a su autor.
+     */
+    public function addAdicional(Request $request, int $id): JsonResponse
+    {
+        $training = Training::findOrFail($id);
+        $user     = $request->user();
+
+        if (!$training->canAddAdicional($user)) {
+            return response()->json(['message' => 'Solo un rango caballero/maestro puede agregar nodos adicionales.'], 403);
+        }
+
+        if ($training->isClosed()) {
+            return response()->json(['message' => 'No se puede agregar nodos a una sesión cerrada.'], 422);
+        }
+
+        $data = $request->validate([
+            'type'      => 'required|in:module,text',
+            'modulo_id' => 'nullable|integer|exists:modulos_entrenamiento,id',
+            'titulo'    => 'nullable|string|max:255',
+            'contenido' => 'nullable|string',
+        ]);
+
+        $siguienteOrden = ((int) $training->adicionalNodes()->max('orden')) + 1;
+
+        $node = $training->planNodes()->create([
+            'type'         => $data['type'],
+            'modulo_id'    => $data['modulo_id'] ?? null,
+            'titulo'       => $data['titulo'] ?? null,
+            'contenido'    => $data['contenido'] ?? null,
+            'orden'        => $siguienteOrden,
+            'es_adicional' => true,
+            'created_by'   => $user->id,
+        ]);
+
+        $node->load(['modulo', 'creador.character']);
+
+        return response()->json(['node' => $this->formatPlanNode($node)], 201);
+    }
+
+    /**
+     * DELETE /api/sesiones/{id}/plan/adicional/{nodeId}
+     * Solo el autor del nodo o un encargado de la sesión puede eliminarlo.
+     */
+    public function removeAdicional(Request $request, int $id, int $nodeId): JsonResponse
+    {
+        $training = Training::findOrFail($id);
+        $user     = $request->user();
+
+        $node = $training->planNodes()->where('id', $nodeId)->where('es_adicional', true)->first();
+
+        if (!$node) {
+            return response()->json(['message' => 'Nodo adicional no encontrado.'], 404);
+        }
+
+        if ($node->created_by !== $user->id && !$this->isEncargado($training, $user->id)) {
+            return response()->json(['message' => 'Solo el autor del nodo o un encargado puede eliminarlo.'], 403);
+        }
+
+        if ($training->isClosed()) {
+            return response()->json(['message' => 'No se puede editar el plan de una sesión cerrada.'], 422);
+        }
+
+        $node->delete();
+
+        return response()->json(['message' => 'Nodo adicional eliminado.']);
     }
 
     // -------------------------------------------------------------------------
