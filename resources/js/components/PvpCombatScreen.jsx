@@ -2,6 +2,37 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
+import { useDiceRoller } from './DiceRoller.jsx';
+
+/* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
+   Soporta el formato "1d20+X=Y" (habilidades/ataque básico) y "1d20(D)+X=Y" (iniciativa). */
+function diceValuesFromMessage(msg) {
+  const rx = /1d20(?:\((\d+)\))?\+(-?\d+)=(-?\d+)/g;
+  const out = [];
+  let m;
+  while ((m = rx.exec(msg))) {
+    const dado = m[1] !== undefined ? Number(m[1]) : Number(m[3]) - Number(m[2]);
+    out.push(Math.max(1, Math.min(20, dado)));
+  }
+  return out;
+}
+
+/* Agrupa las tiradas de una entrada de log en pares [rollA, rollB] con su color/label,
+   en el orden en que aparecen (acción propia primero, reroll de iniciativa después si lo hay). */
+function extractRollGroups(entry, { myId, attackerId }) {
+  const groups = [];
+  for (const msg of entry.messages ?? []) {
+    const vals = diceValuesFromMessage(msg);
+    if (vals.length < 2) continue;
+    const isIniciativa = /^Ronda \d+ —/.test(msg);
+    const aIsMe = isIniciativa ? myId === attackerId : entry.actor_id === myId;
+    groups.push([
+      { key: 'a', color: aIsMe ? '#38cdf0' : '#ff6b6b', label: aIsMe ? 'TÚ' : 'RIVAL', value: vals[0] },
+      { key: 'b', color: aIsMe ? '#ff6b6b' : '#38cdf0', label: aIsMe ? 'RIVAL' : 'TÚ', value: vals[1] },
+    ]);
+  }
+  return groups;
+}
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
@@ -87,6 +118,23 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [stancePicker, setStancePicker] = useState(false);
   const isMobile = useIsMobile();
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
+  const { diceOverlay, rollDice } = useDiceRoller();
+
+  /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
+  const combatLogLenRef = useRef((combat.log ?? []).length);
+  useEffect(() => { combatLogLenRef.current = (combat.log ?? []).length; }, [combat]);
+
+  /* Anima con dados las tiradas de las entradas nuevas antes de revelar el estado actualizado */
+  const revealWithDice = async (newCombat) => {
+    const prevLen = combatLogLenRef.current;
+    const newEntries = (newCombat.log ?? []).slice(prevLen);
+    const attackerId = newCombat.attacker?.id;
+    for (const entry of newEntries) {
+      const groups = extractRollGroups(entry, { myId: userId, attackerId });
+      for (const g of groups) await rollDice(g);
+    }
+    setCombat(newCombat);
+  };
 
   /* Fondo */
   useEffect(() => {
@@ -115,7 +163,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     if (!shouldPoll) return;
     pollRef.current = setInterval(() => {
       apiFetch(`/pvp/${combat.id}`)
-        .then(d => { if (d?.combat) setCombat(d.combat); })
+        .then(d => { if (d?.combat) revealWithDice(d.combat); })
         .catch(() => {});
     }, 4000);
     return () => clearInterval(pollRef.current);
@@ -130,7 +178,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     setBusy(true);
     try {
       const d = await apiPost(`/pvp/${combat.id}/action`, { skill: String(skillId) });
-      if (d?.combat) setCombat(d.combat);
+      if (d?.combat) await revealWithDice(d.combat);
     } catch { /* toast shown by apiPost */ }
     finally { setBusy(false); }
   };
@@ -141,7 +189,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     setBusy(true);
     try {
       const d = await apiPost(`/pvp/${combat.id}/action`, { skill: 'stance', forma });
-      if (d?.combat) setCombat(d.combat);
+      if (d?.combat) await revealWithDice(d.combat);
     } catch { /* ignore */ }
     finally { setBusy(false); }
   };
@@ -339,8 +387,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
+        {diceOverlay}
+
         {/* Oponente HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(230px, 38%, 340px)' }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
           <HUD
             hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
             nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
@@ -350,7 +400,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         </div>
 
         {/* Mi HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(230px, 38%, 340px)' }}>
+        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
           <HUD
             hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
             nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}

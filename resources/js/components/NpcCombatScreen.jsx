@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
+import { useDiceRoller } from './DiceRoller.jsx';
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
@@ -110,6 +113,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [currentForma,  setCurrentForma]  = useState(initialState?.currentForma ?? player.current_forma ?? 1);
   const [stancePicker,  setStancePicker]  = useState(false);
   const isMobile = useIsMobile();
+  const { diceOverlay, rollDice, rolling } = useDiceRoller();
 
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 
@@ -182,7 +186,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     const pR = d20(); const nR = d20();
     const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
     const first = pT >= nT ? 'player' : 'npc';
-    setTimeout(() => {
+    (async () => {
+      await sleep(300);
+      await rollDice([
+        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', value: pR },
+        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: nR },
+      ]);
       setLog([
         { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
         { text: `Ronda 1 — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
@@ -192,11 +201,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       setCurrTurn(first);
       /* Pre-recuperar fuerza si el jugador actúa primero */
       if (first === 'player') setPlayerFuerza(fuerzaPorTurno);
-    }, 500);
+    })();
   }, []);
 
   /* Termina el turno de quien actuó — decide si sigue la ronda o se tira nueva iniciativa */
-  const endTurnAfter = (actor) => {
+  const endTurnAfter = async (actor) => {
     if (rondaTurno === 0) {
       /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
       const next = actor === 'player' ? 'npc' : 'player';
@@ -208,6 +217,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       const pR = d20(); const nR = d20();
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
+      await rollDice([
+        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', value: pR },
+        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: nR },
+      ]);
       setLog(prev => [...prev,
         { text: `Ronda ${ronda + 1} — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
         { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: ronda + 1, actor: 'system' },
@@ -232,15 +245,28 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   useEffect(() => {
     if (currTurn !== 'npc' || phase !== 'battle') return;
     setNpcBusy(true);
-    const t = setTimeout(() => {
+    let cancelled = false;
+    const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
+    (async () => {
+      await sleep(700);
+      if (cancelled) return;
+
       /* Leer stats efectivos ahora (closure over current state at render time) */
       const useRanged = effNpcPnt > 0 && Math.random() > 0.5;
-      let entries = [];
-      let newHp;
+      const [aR, dR] = [d20(), d20()];
+      const [aT, dT] = useRanged
+        ? [aR + effNpcPnt, dR + effPlayerMov]
+        : [aR + effNpcAtk, dR + effPlayerDef];
 
+      await rollDice([
+        { key: 'npc', color: '#ff6b6b', label: npcLabel, value: aR },
+        { key: 'ply', color: '#38cdf0', label: 'TÚ', value: dR },
+      ]);
+      if (cancelled) return;
+
+      let entries;
+      let newHp;
       if (useRanged) {
-        const [aR, dR] = [d20(), d20()];
-        const [aT, dT] = [aR + effNpcPnt, dR + effPlayerMov];
         entries = [
           { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info' },
           { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info' },
@@ -248,8 +274,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         newHp = aT > dT ? applyDmg(effNpcPnt, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcPnt} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
       } else {
-        const [aR, dR] = [d20(), d20()];
-        const [aT, dT] = [aR + effNpcAtk, dR + effPlayerDef];
         entries = [
           { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info' },
           { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info' },
@@ -276,15 +300,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       } else {
         endTurnAfter('npc');
       }
-    }, 1500);
-    return () => clearTimeout(t);
+    })();
+    return () => { cancelled = true; };
   }, [currTurn, phase, ronda]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
   /* Ejecutar habilidad del jugador */
-  const doPlayerSkill = (hab) => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy) return;
+  const doPlayerSkill = async (hab) => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
     const habId = String(hab.id);
     if ((cooldowns[habId] ?? 0) > 0) return;
     if (playerFuerza < hab.costo_fuerza) return;
@@ -325,6 +349,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const hit = aT > dT;
 
+    await rollDice([
+      { key: 'ply', color: '#38cdf0', label: 'TÚ', value: aR },
+      { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: dR },
+    ]);
+
     entries.push({
       text: `${player.nombre} usa "${hab.nombre}": 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
       type: 'info',
@@ -357,8 +386,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   };
 
   /* Ataque básico: arma equipada o desarmado */
-  const doPlayerBasicAttack = () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy) return;
+  const doPlayerBasicAttack = async () => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
 
     const arma        = player.arma_equipada;
     const esDistancia = arma?.tipo_ataque === 'distancia';
@@ -371,6 +400,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     const esCritico = aR >= (20 - critico);
     const hit = esCritico || aT > dT;
     const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
+
+    await rollDice([
+      { key: 'ply', color: '#38cdf0', label: 'TÚ', value: aR },
+      { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: dR },
+    ]);
 
     const entries = [{
       text: `${player.nombre} ${accion}: 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
@@ -397,7 +431,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     }
   };
 
-  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy;
+  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling;
 
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
@@ -569,8 +603,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         }
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
+        {diceOverlay}
+
         {/* NPC HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(220px, 38%, 300px)' }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
@@ -581,7 +617,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
 
         {/* Jugador HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(220px, 38%, 300px)' }}>
+        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
