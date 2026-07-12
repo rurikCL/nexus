@@ -1934,7 +1934,7 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
 /* ─── TIENDA DE NPC VENDEDOR (naves u objetos, con interés ya aplicado) ── */
-function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
+function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
   const isNaves = tipo === 'vendedor_naves';
   const [items, setItems]         = useState([]);
   const [inventario, setInventario] = useState(null); // { ocupado, capacidad } — solo objetos
@@ -1995,61 +1995,98 @@ function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
     }
   };
 
+  const inventarioLleno = !isNaves && inventario && espacioDisponible === 0;
+
   return (
     <Modal open onClose={onClose} title={npc.nombre} kicker={isNaves ? 'VENDEDOR DE NAVES' : 'VENDEDOR'} width={560}>
+      {/* Retrato del vendedor */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+        <div style={{
+          width: 60, height: 60, borderRadius: 12, flexShrink: 0, overflow: 'hidden',
+          background: 'rgba(56,205,240,0.08)', border: '1px solid var(--holo-line)',
+          display: 'grid', placeItems: 'center',
+        }}>
+          {(npc.imagen || npc.imagen_mini)
+            ? <img src={mediaUrl(npc.imagen || npc.imagen_mini)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Icon name="user" size={24} style={{ color: 'var(--holo)' }} />}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="nx-display" style={{ fontSize: 15 }}>{npc.nombre}</div>
+          {npc.profesion && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 2 }}>{npc.profesion}</div>}
+        </div>
+      </div>
+
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 12px',
-        borderRadius: 'var(--radius-md)', background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)',
+        borderRadius: 'var(--radius-md)',
+        background: inventarioLleno ? 'rgba(255,45,69,0.1)' : 'rgba(230,179,37,0.08)',
+        border: `1px solid ${inventarioLleno ? 'rgba(255,45,69,0.35)' : 'rgba(230,179,37,0.25)'}`,
       }}>
-        <Icon name="coin" size={16} style={{ color: 'var(--holocron-oro)', flexShrink: 0 }} />
-        <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>
-          Los precios ya incluyen el interés que {npc.nombre} aplica sobre cada {isNaves ? 'nave' : 'objeto'}.
-          {!isNaves && inventario && ` Inventario: ${inventario.ocupado}/${inventario.capacidad} espacios usados.`}
+        <Icon name={inventarioLleno ? 'x' : 'coin'} size={16} style={{ color: inventarioLleno ? '#ff6b6b' : 'var(--holocron-oro)', flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: inventarioLleno ? '#ff6b6b' : 'var(--txt-dim)' }}>
+          {inventarioLleno
+            ? `Tu inventario está lleno (${inventario.ocupado}/${inventario.capacidad}). Libera espacio para poder comprar objetos.`
+            : <>Los precios ya incluyen el interés que {npc.nombre} aplica sobre cada {isNaves ? 'nave' : 'objeto'}.
+              {!isNaves && inventario && ` Inventario: ${inventario.ocupado}/${inventario.capacidad} espacios usados.`}</>}
         </span>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }}>Cargando tienda...</div>
-      ) : items.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>
-          Este vendedor no tiene nada en existencia por ahora.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
-          {items.map((item) => (
-            <div key={item.id} className="nx-panel" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
-                display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
-              }}>
-                {item.imagen
-                  ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="nx-display" style={{ fontSize: 12 }}>{item.nombre}</div>
-                {isNaves ? (
-                  <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                    <span>Vida {item.vida}</span><span>Escudo {item.escudo}</span><span>Ataque {item.ataque}</span><span>{item.capacidad_salto} saltos</span>
-                  </div>
-                ) : (
-                  item.tipo && (
-                    <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginTop: 3, textTransform: 'capitalize' }}>
-                      {item.tipo.replace(/_/g, ' ')}
-                    </div>
-                  )
-                )}
-              </div>
-              <Btn kind="gold" sm icon="coin"
-                onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
-                disabled={busy === item.id || (!isNaves && espacioDisponible === 0)}
-              >
-                {busy === item.id ? '...' : `${item.precio_final} cr`}
-              </Btn>
+      <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+        {lugarImagen && (
+          <>
+            <div style={{
+              position: 'absolute', inset: 0,
+              backgroundImage: `url(${lugarImagen})`, backgroundSize: 'cover', backgroundPosition: 'center',
+              opacity: 0.28,
+            }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(4,7,15,0.6), rgba(4,7,15,0.88))' }} />
+          </>
+        )}
+        <div style={{ position: 'relative', padding: lugarImagen ? 10 : 0 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }}>Cargando tienda...</div>
+          ) : items.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>
+              Este vendedor no tiene nada en existencia por ahora.
             </div>
-          ))}
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
+              {items.map((item) => (
+                <div key={item.id} className="nx-panel solid" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                    display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+                  }}>
+                    {item.imagen
+                      ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nx-display" style={{ fontSize: 12 }}>{item.nombre}</div>
+                    {isNaves ? (
+                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
+                        <span>Vida {item.vida}</span><span>Escudo {item.escudo}</span><span>Ataque {item.ataque}</span><span>{item.capacidad_salto} saltos</span>
+                      </div>
+                    ) : (
+                      item.tipo && (
+                        <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginTop: 3, textTransform: 'capitalize' }}>
+                          {item.tipo.replace(/_/g, ' ')}
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <Btn kind="gold" sm icon="coin"
+                    onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
+                    disabled={busy === item.id}
+                  >
+                    {busy === item.id ? '...' : `${item.precio_final} cr`}
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {confirmItem && (
         <Modal open onClose={cerrarConfirmacion} title="Confirmar compra" kicker={npc.nombre} width={420}>
@@ -2099,7 +2136,16 @@ function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
             </div>
           </div>
 
-          {espacioDisponible != null && (
+          {espacioDisponible === 0 ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 14,
+              borderRadius: 'var(--radius-md)', background: 'rgba(255,45,69,0.1)', border: '1px solid rgba(255,45,69,0.35)',
+              color: '#ff6b6b', fontSize: 12,
+            }}>
+              <Icon name="x" size={14} style={{ flexShrink: 0 }} />
+              Tu inventario está lleno. No puedes comprar hasta liberar espacio.
+            </div>
+          ) : espacioDisponible != null && (
             <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 14 }}>
               Espacio disponible en tu inventario: {espacioDisponible}
             </div>
@@ -2825,6 +2871,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
         <TiendaModal
           npc={npc}
           tipo={isVendedorNaves ? 'vendedor_naves' : 'vendedor'}
+          lugarImagen={lugarImagen}
           onClose={() => setShowTienda(false)}
           onCreditsChange={onCreditsChange}
         />
