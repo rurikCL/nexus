@@ -63,7 +63,7 @@ class AdminController extends Controller
             'planetas'   => ['sistema:id,nombre'],
             'zonas'      => ['planeta:id,nombre'],
             'lugares'    => ['zona:id,nombre'],
-            'npcs'       => ['lugar:id,nombre'],
+            'npcs'       => ['lugar:id,nombre', 'naves', 'objetos'],
             'usuarios'   => ['tutor:id,name', 'roles:id,name,label'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
@@ -78,6 +78,26 @@ class AdminController extends Controller
             'rol_objetos'     => ['tipo', 'rareza'],
             default           => [],
         };
+    }
+
+    /**
+     * Extrae del payload un array tipo [{id, interes}, ...] (o su versión JSON-string,
+     * como llega dentro de un FormData) para sincronizar como pivot de venta de un NPC.
+     * Devuelve null si la clave no vino en el payload (no tocar el pivot existente).
+     */
+    private function extractVentaPivot(array &$data, string $key): ?array
+    {
+        if (!array_key_exists($key, $data)) {
+            return null;
+        }
+
+        $raw   = $data[$key];
+        $items = is_string($raw) ? (json_decode($raw, true) ?? []) : ($raw ?? []);
+        unset($data[$key]);
+
+        return collect($items)->mapWithKeys(
+            fn($item) => [(int) $item['id'] => ['interes' => (int) ($item['interes'] ?? 0)]]
+        )->all();
     }
 
     public function index(Request $request, string $entity): JsonResponse
@@ -126,10 +146,19 @@ class AdminController extends Controller
             unset($data['roles']);
         }
 
+        $naves   = $entity === 'npcs' ? $this->extractVentaPivot($data, 'naves')   : null;
+        $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
+
         $record = $model::create($data);
 
         if ($roles !== null && method_exists($record, 'roles')) {
             $record->roles()->sync($roles);
+        }
+        if ($naves !== null) {
+            $record->naves()->sync($naves);
+        }
+        if ($objetos !== null) {
+            $record->objetos()->sync($objetos);
         }
 
         $fresh = $record->fresh();
@@ -158,10 +187,19 @@ class AdminController extends Controller
             unset($data['roles']);
         }
 
+        $naves   = $entity === 'npcs' ? $this->extractVentaPivot($data, 'naves')   : null;
+        $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
+
         $record->update($data);
 
         if ($roles !== null && method_exists($record, 'roles')) {
             $record->roles()->sync($roles);
+        }
+        if ($naves !== null) {
+            $record->naves()->sync($naves);
+        }
+        if ($objetos !== null) {
+            $record->objetos()->sync($objetos);
         }
 
         $fresh = $record->fresh();

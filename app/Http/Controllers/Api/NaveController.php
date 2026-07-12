@@ -36,36 +36,6 @@ class NaveController extends Controller
         ]);
     }
 
-    /** POST /naves/{id}/comprar */
-    public function comprar(Request $request, int $id): JsonResponse
-    {
-        $character = $request->user()->character;
-        if (! $character) {
-            return response()->json(['error' => 'Sin personaje'], 404);
-        }
-
-        $nave = MapNave::findOrFail($id);
-
-        if ($character->credits < $nave->costo) {
-            return response()->json(['error' => 'No tienes suficientes créditos para comprar esta nave.'], 422);
-        }
-
-        $character->decrement('credits', $nave->costo);
-
-        $owned = CharacterNave::create([
-            'character_id'       => $character->id,
-            'nave_id'            => $nave->id,
-            'combustible_actual' => $nave->capacidad_salto,
-            'vida_actual'        => $nave->vida,
-            'escudo_actual'      => $nave->escudo,
-        ]);
-
-        return response()->json([
-            'nave'             => $owned->load('nave'),
-            'credits_remaining' => $character->fresh()->credits,
-        ], 201);
-    }
-
     /** POST /naves/{ownedId}/equipar */
     public function equipar(Request $request, int $ownedId): JsonResponse
     {

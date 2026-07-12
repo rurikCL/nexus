@@ -48,7 +48,11 @@ const TIPO_OBJETO_OPTS = [
   { value: 'modulo_activacion',  label: 'Módulo de Activación' },
   { value: 'accesorio',          label: 'Accesorio' },
 ];
-const TIPO_NPC_OPTS   = ['aliado', 'neutral', 'hostil', 'entrenador', 'mercader', { value: 'mision', label: 'misión' }, 'jefe'];
+const TIPO_NPC_OPTS   = [
+  'aliado', 'neutral', 'hostil', 'entrenador', 'mercader', { value: 'mision', label: 'misión' }, 'jefe',
+  { value: 'vendedor', label: 'Vendedor' },
+  { value: 'vendedor_naves', label: 'Vendedor de Naves' },
+];
 const TIPO_LUGAR_OPTS = ['exterior', 'interior'];
 
 const H_COLOR = {
@@ -276,6 +280,7 @@ const ENTITY_CONFIG = {
       { key: 'nombre', label: 'Nombre', bold: true },
       { key: 'tipo', label: 'Tipo', dim: true },
       { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'costo', label: 'Costo', dim: true },
       { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
     ],
     fields: [
@@ -284,6 +289,7 @@ const ENTITY_CONFIG = {
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
+      { key: 'costo',       label: 'Costo (cr)',  type: 'number', min: 0, hint: 'Costo base usado por NPCs vendedores (se le aplica el interés de cada uno)' },
       { key: 'activo',      label: 'Activo',      type: 'toggle' },
       { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
       { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
@@ -747,6 +753,248 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
   );
 }
 
+/* ─── NPC — imagen compacta para el panel lateral ────────── */
+function NpcImageField({ label, value, onChange, height = 110 }) {
+  const isFile = value instanceof File;
+  const previewUrl = isFile
+    ? URL.createObjectURL(value)
+    : (value ? (String(value).startsWith('http') ? value : `/storage/${value}`) : null);
+
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      <label className="nx-label">{label}</label>
+      <div style={{
+        height, borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)',
+        background: previewUrl ? `url(${previewUrl}) center/cover no-repeat` : 'rgba(255,255,255,0.03)',
+        display: previewUrl ? 'block' : 'grid', placeItems: 'center', overflow: 'hidden',
+      }}>
+        {!previewUrl && <Icon name="camera" size={22} style={{ color: 'var(--txt-faint)' }} />}
+      </div>
+      <input type="file" accept="image/*" onChange={e => onChange(e.target.files[0])}
+        style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}
+      />
+    </div>
+  );
+}
+
+/* ─── NPC vendedor — picker de naves/objetos con interés por ítem ── */
+function VentaPicker({ label, catalog, selected, onChange }) {
+  const selMap = new Map((selected ?? []).map(s => [s.id, s.interes]));
+
+  const toggle = (id) => {
+    if (selMap.has(id)) onChange((selected ?? []).filter(s => s.id !== id));
+    else onChange([...(selected ?? []), { id, interes: 0 }]);
+  };
+  const setInteres = (id, interes) => {
+    onChange((selected ?? []).map(s => s.id === id ? { ...s, interes } : s));
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <label className="nx-label">{label}</label>
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto',
+        border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-md)', padding: 8,
+      }}>
+        {catalog.length === 0 && (
+          <span style={{ fontSize: 11, color: 'var(--txt-faint)', padding: 8 }}>Cargando catálogo...</span>
+        )}
+        {catalog.map(item => {
+          const on      = selMap.has(item.id);
+          const interes = selMap.get(item.id) ?? 0;
+          const costo   = item.costo ?? 0;
+          const precioFinal = Math.round(costo * (1 + interes / 100));
+          const img = item.imagen ? (String(item.imagen).startsWith('http') ? item.imagen : `/storage/${item.imagen}`) : null;
+          return (
+            <div key={item.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 'var(--radius-sm)',
+              background: on ? 'color-mix(in srgb, var(--holo) 8%, transparent)' : 'rgba(255,255,255,0.02)',
+              border: `1px solid ${on ? 'var(--holo)' : 'transparent'}`,
+            }}>
+              <button type="button" onClick={() => toggle(item.id)} title={on ? 'Quitar de la tienda' : 'Agregar a la tienda'}
+                style={{
+                  width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer', padding: 0,
+                  border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  background: on ? 'var(--holo)' : 'transparent', color: '#04070f',
+                  display: 'grid', placeItems: 'center', fontSize: 11, lineHeight: 1,
+                }}
+              >{on && '✓'}</button>
+
+              {img
+                ? <img src={img} style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                : <div style={{ width: 28, height: 28, borderRadius: 4, flexShrink: 0, background: 'rgba(255,255,255,0.05)' }} />}
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.nombre}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>Costo base {costo} cr</div>
+              </div>
+
+              {on && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <input type="number" className="nx-input" min={0} style={{ width: 58, fontSize: 11, padding: '4px 6px' }}
+                      value={interes}
+                      onChange={e => setInteres(item.id, e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>% interés</span>
+                  </div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', color: 'var(--holocron-oro)', minWidth: 66, textAlign: 'right', flexShrink: 0 }}>
+                    {precioFinal} cr
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── NPC — modal ancho con panel lateral (imágenes + atributos) y tiendas ── */
+const NPC_SIDEBAR_KEYS = ['imagen_mini', 'imagen', 'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
+
+function NpcCrudModal({ config, record, relatedOptions, onSave, onClose }) {
+  const isEdit = !!record?.id;
+  const [form, setForm] = useState(() => {
+    const base = { ...(config.defaults ?? {}), ...(record ?? {}) };
+    base.naves   = (record?.naves ?? []).map(n => ({ id: n.id, interes: n.pivot?.interes ?? 0 }));
+    base.objetos = (record?.objetos ?? []).map(o => ({ id: o.id, interes: o.pivot?.interes ?? 0 }));
+    return base;
+  });
+  const [saving, setSaving] = useState(false);
+  const [navesCatalog, setNavesCatalog] = useState([]);
+  const [objetosCatalog, setObjetosCatalog] = useState([]);
+
+  useEffect(() => {
+    api('GET', '/admin/naves?per_page=100').then(r => setNavesCatalog(r.data ?? [])).catch(() => {});
+    api('GET', '/admin/rol_objetos?per_page=100').then(r => setObjetosCatalog(r.data ?? [])).catch(() => {});
+  }, []);
+
+  const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const mainFields        = config.fields.filter(f => !NPC_SIDEBAR_KEYS.includes(f.key));
+  const sidebarStatFields = config.fields.filter(f => NPC_SIDEBAR_KEYS.includes(f.key) && f.type === 'number');
+
+  const isVendedorNaves  = form.tipo === 'vendedor_naves';
+  const isVendedorObjeto = form.tipo === 'vendedor';
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const path = isEdit ? `/admin/npcs/${record.id}` : `/admin/npcs`;
+      const hasFiles = ['imagen_mini', 'imagen'].some(k => form[k] instanceof File);
+
+      let payload;
+      if (hasFiles) {
+        payload = new FormData();
+        Object.entries(form).forEach(([key, val]) => {
+          if (val !== null && val !== undefined) {
+            if (typeof val === 'boolean') payload.append(key, val ? '1' : '0');
+            else if (Array.isArray(val)) payload.append(key, JSON.stringify(val));
+            else payload.append(key, val);
+          }
+        });
+        if (isEdit) payload.append('_method', 'PATCH');
+      } else {
+        payload = form;
+      }
+
+      const method = (isEdit && hasFiles) ? 'POST' : (isEdit ? 'PATCH' : 'POST');
+      await api(method, path, payload);
+      toast(isEdit ? 'Registro actualizado' : 'Registro creado', { tone: 'success', icon: 'check' });
+      onSave();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      kicker={isEdit ? 'EDITAR · NPC' : 'NUEVO · NPC'}
+      title={isEdit ? `Editando #${record.id}` : 'Crear NPC'}
+      width={980}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+        {/* Columna principal */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }}>
+          {mainFields.map(field => (
+            <div key={field.key}
+              style={{ gridColumn: field.span === 2 ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}
+            >
+              <label className="nx-label">
+                {field.label}
+                {field.required && <span style={{ color: 'var(--holocron-naranja)', marginLeft: 2 }}>*</span>}
+              </label>
+              <FieldInput
+                field={field}
+                value={form[field.key]}
+                onChange={val => setField(field.key, val)}
+                relatedOptions={relatedOptions}
+              />
+              {field.hint && field.type !== 'textarea' && (
+                <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{field.hint}</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Panel lateral: retrato + atributos de combate */}
+        <div className="nx-panel solid" style={{ padding: 14, display: 'grid', gap: 12 }}>
+          <div className="nx-kicker">Retrato</div>
+          <NpcImageField label="Miniatura" value={form.imagen_mini} onChange={v => setField('imagen_mini', v)} height={80} />
+          <NpcImageField label="Imagen principal" value={form.imagen} onChange={v => setField('imagen', v)} height={150} />
+          <hr className="nx-divider" style={{ margin: '2px 0' }} />
+          <div className="nx-kicker">Atributos de combate</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {sidebarStatFields.map(field => (
+              <div key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label className="nx-label" style={{ fontSize: 9 }}>{field.label}</label>
+                <FieldInput field={field} value={form[field.key]} onChange={val => setField(field.key, val)} relatedOptions={relatedOptions} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {isVendedorNaves && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+          <VentaPicker
+            label={`Naves en venta · ${(form.naves ?? []).length}`}
+            catalog={navesCatalog}
+            selected={form.naves}
+            onChange={v => setField('naves', v)}
+          />
+        </div>
+      )}
+
+      {isVendedorObjeto && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+          <VentaPicker
+            label={`Objetos en venta · ${(form.objetos ?? []).length}`}
+            catalog={objetosCatalog}
+            selected={form.objetos}
+            onChange={v => setField('objetos', v)}
+          />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+        <Btn kind="ghost" onClick={onClose} disabled={saving}>Cancelar</Btn>
+        <Btn kind="accent" icon="check" onClick={handleSave} disabled={saving}>
+          {saving ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear registro'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─── CELL RENDERER ─────────────────────────────────────── */
 function CellValue({ col, record }) {
   const raw = col.resolve ? col.resolve(record) : record[col.key];
@@ -1074,14 +1322,24 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
 
       {/* modal crear/editar */}
       {editRecord !== null && (
-        <CrudModal
-          entityKey={entityKey}
-          config={config}
-          record={editRecord?.id ? editRecord : null}
-          relatedOptions={relatedOptions}
-          onSave={handleSaved}
-          onClose={() => setEditRecord(null)}
-        />
+        entityKey === 'npcs' ? (
+          <NpcCrudModal
+            config={config}
+            record={editRecord?.id ? editRecord : null}
+            relatedOptions={relatedOptions}
+            onSave={handleSaved}
+            onClose={() => setEditRecord(null)}
+          />
+        ) : (
+          <CrudModal
+            entityKey={entityKey}
+            config={config}
+            record={editRecord?.id ? editRecord : null}
+            relatedOptions={relatedOptions}
+            onSave={handleSaved}
+            onClose={() => setEditRecord(null)}
+          />
+        )
       )}
     </div>
   );

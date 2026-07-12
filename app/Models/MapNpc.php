@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MapNpc extends Model
@@ -61,5 +62,21 @@ class MapNpc extends Model
     public function mision(): BelongsTo
     {
         return $this->belongsTo(Mision::class, 'MisionID');
+    }
+
+    /** Naves que este NPC (tipo "vendedor_naves") tiene a la venta. */
+    public function naves(): BelongsToMany
+    {
+        return $this->belongsToMany(MapNave::class, 'map_npc_naves', 'npc_id', 'nave_id')
+            ->withPivot('interes')
+            ->withTimestamps();
+    }
+
+    /** Objetos que este NPC (tipo "vendedor") tiene a la venta. */
+    public function objetos(): BelongsToMany
+    {
+        return $this->belongsToMany(RolObjeto::class, 'map_npc_objetos', 'npc_id', 'rol_objeto_id')
+            ->withPivot('interes')
+            ->withTimestamps();
     }
 }

@@ -1124,6 +1124,144 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
   );
 }
 
+/* ===================== NAVE EQUIPADA (Mi Personaje) ===================== */
+const fmtCr = (n) => `${Math.round(n ?? 0).toLocaleString('es-CL')} cr`;
+
+function NaveMiniStatBar({ label, value, max, color }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 9, fontFamily: 'var(--font-data)', color: 'var(--txt-faint)', width: 66, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', width: 44, textAlign: 'right', flexShrink: 0 }}>{value}/{max}</span>
+    </div>
+  );
+}
+
+function NaveEquipadaPanel() {
+  const [naves, setNaves] = useState([]);
+  const [naveEquipadaId, setNaveEquipadaId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/naves/mias', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setNaves(d.naves ?? []); setNaveEquipadaId(d.nave_equipada_id ?? null); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const runAction = async (id, path, successMsg) => {
+    setBusy(id);
+    try {
+      const res = await fetch(`/api${path}`, { method: 'POST', headers: authHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? 'No se pudo completar la acción.');
+      if (successMsg) toast(successMsg, { tone: 'success', icon: 'check' });
+      load();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo completar la acción', { tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const equipar     = (owned) => runAction(owned.id, `/naves/${owned.id}/equipar`, `${owned.nave?.nombre ?? 'Nave'} equipada`);
+  const desequipar  = ()      => runAction('unequip', '/naves/desequipar');
+  const reabastecer = (owned) => runAction(`fuel-${owned.id}`, `/naves/${owned.id}/reabastecer`, 'Combustible reabastecido');
+  const reparar     = (owned) => runAction(`fix-${owned.id}`,  `/naves/${owned.id}/reparar`,     'Nave reparada');
+
+  const equipada = naves.find(n => n.id === naveEquipadaId);
+  const otras    = naves.filter(n => n.id !== naveEquipadaId);
+
+  return (
+    <Panel kicker="Equipo" title="Nave Equipada" icon="ship">
+      {loading ? (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>Cargando naves...</div>
+      ) : naves.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+          No posees ninguna nave. Consigue una hablando con un vendedor de naves en el Mapa Galáctico.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {equipada ? (
+            <div className="nx-panel solid" style={{ padding: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                  background: 'color-mix(in srgb, var(--holo) 18%, rgba(4,9,18,0.9))',
+                  border: '1px solid var(--holo-line)', overflow: 'hidden',
+                }}>
+                  {equipada.nave?.imagen
+                    ? <img src={mediaUrl(equipada.nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Icon name="ship" size={22} style={{ color: 'var(--holo)' }} />}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{equipada.nave?.nombre}</div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    <Chip tone="green" icon="check">Equipada</Chip>
+                    <Chip tone="dim">+{equipada.nave?.capacidad_carga ?? 0} carga</Chip>
+                  </div>
+                </div>
+                <Btn kind="ghost" sm onClick={desequipar} disabled={busy === 'unequip'}>Desequipar</Btn>
+              </div>
+              <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+                <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.nave?.vida ?? 0}            color="#4ade80" />
+                <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.nave?.escudo ?? 0}          color="#38cdf0" />
+                <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.nave?.capacidad_salto ?? 0} color="var(--holocron-oro)" />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <Btn kind="ghost" sm icon="fuel" onClick={() => reabastecer(equipada)}
+                  disabled={busy === `fuel-${equipada.id}` || equipada.combustible_actual >= (equipada.nave?.capacidad_salto ?? 0)}>
+                  Reabastecer ({fmtCr(equipada.nave?.costo_combustible)})
+                </Btn>
+                <Btn kind="ghost" sm icon="shield" onClick={() => reparar(equipada)}
+                  disabled={busy === `fix-${equipada.id}` || (equipada.vida_actual >= (equipada.nave?.vida ?? 0) && equipada.escudo_actual >= (equipada.nave?.escudo ?? 0))}>
+                  Reparar ({fmtCr(equipada.nave?.costo_reparacion)})
+                </Btn>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+              No tienes ninguna nave equipada. Elige una de tus naves abajo.
+            </div>
+          )}
+
+          {otras.length > 0 && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div className="nx-kicker" style={{ fontSize: 9 }}>Otras naves propias</div>
+              {otras.map(owned => (
+                <div key={owned.id} className="nx-panel" style={{ padding: 11, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                    display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+                  }}>
+                    {owned.nave?.imagen
+                      ? <img src={mediaUrl(owned.nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Icon name="ship" size={16} style={{ color: 'var(--holo)' }} />}
+                  </div>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{owned.nave?.nombre}</span>
+                  <Btn kind="accent" sm onClick={() => equipar(owned)} disabled={busy === owned.id}>
+                    {busy === owned.id ? '...' : 'Equipar'}
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
   const me = S.byId('you') ?? {};
@@ -1576,6 +1714,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
             </div>
           )}
         </Panel>
+
+        {/* Nave equipada */}
+        <NaveEquipadaPanel />
 
         {/* Inventario — objetos clasificados por tipo, solo las armas son equipables */}
         <Panel kicker="Equipo" title="Inventario" icon="roster"

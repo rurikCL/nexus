@@ -1933,8 +1933,99 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
-function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange }) {
+/* ─── TIENDA DE NPC VENDEDOR (naves u objetos, con interés ya aplicado) ── */
+function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
+  const isNaves = tipo === 'vendedor_naves';
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy]       = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const path = isNaves ? `/npcs/${npc.id}/tienda-naves` : `/npcs/${npc.id}/tienda-objetos`;
+    apiFetch(path)
+      .then((d) => setItems(isNaves ? (d.naves ?? []) : (d.objetos ?? [])))
+      .catch(() => toast('No se pudo cargar la tienda', { tone: 'error', icon: 'x' }))
+      .finally(() => setLoading(false));
+  }, [npc.id, isNaves]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const comprar = async (item) => {
+    setBusy(item.id);
+    try {
+      const path = isNaves
+        ? `/npcs/${npc.id}/naves/${item.id}/comprar`
+        : `/npcs/${npc.id}/objetos/${item.id}/comprar`;
+      const d = await apiPost(path, {});
+      if (d?.credits !== undefined) onCreditsChange?.(d.credits);
+      toast(`${item.nombre} adquirida`, { tone: 'success', icon: 'coin', desc: `-${item.precio_final} cr` });
+      load();
+    } catch (err) {
+      toast(err?.message || 'No se pudo completar la compra', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={npc.nombre} kicker={isNaves ? 'VENDEDOR DE NAVES' : 'VENDEDOR'} width={560}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 12px',
+        borderRadius: 'var(--radius-md)', background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)',
+      }}>
+        <Icon name="coin" size={16} style={{ color: 'var(--holocron-oro)', flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>
+          Los precios ya incluyen el interés que {npc.nombre} aplica sobre cada {isNaves ? 'nave' : 'objeto'}.
+        </span>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }}>Cargando tienda...</div>
+      ) : items.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>
+          Este vendedor no tiene nada en existencia por ahora.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
+          {items.map((item) => (
+            <div key={item.id} className="nx-panel" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+              }}>
+                {item.imagen
+                  ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="nx-display" style={{ fontSize: 12 }}>{item.nombre}</div>
+                {isNaves ? (
+                  <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
+                    <span>Vida {item.vida}</span><span>Escudo {item.escudo}</span><span>Ataque {item.ataque}</span><span>{item.capacidad_salto} saltos</span>
+                  </div>
+                ) : (
+                  item.tipo && (
+                    <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginTop: 3, textTransform: 'capitalize' }}>
+                      {item.tipo.replace(/_/g, ' ')}
+                    </div>
+                  )
+                )}
+              </div>
+              <Btn kind="gold" sm icon="coin" onClick={() => comprar(item)} disabled={busy === item.id}>
+                {busy === item.id ? '...' : `${item.precio_final} cr`}
+              </Btn>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange, onCreditsChange }) {
   const isAI = Boolean(npc.prompt);
+  const [showTienda, setShowTienda] = useState(false);
   const [messages, setMessages]   = useState([]);
   const [phase, setPhase]         = useState('greeting');
   const [typing, setTyping]       = useState(false);
@@ -1985,6 +2076,8 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
   const isAliado     = npcTipo === 'aliado';
   const isHostil     = npcTipo === 'hostil';
   const isEntrenador = npcTipo === 'entrenador';
+  const isVendedor       = npcTipo === 'vendedor';
+  const isVendedorNaves  = npcTipo === 'vendedor_naves';
   const isNeutral    = !isAliado && !isHostil && !isEntrenador;
 
   const startCombat = useCallback(() => { onCombatStart?.(npcTipo); onClose(); }, [npcTipo]);
@@ -2268,7 +2361,8 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
                 ),
               }}>
-                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR' : '◈ NEUTRAL'}
+                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR'
+                  : isVendedorNaves ? '⛁ VENDEDOR DE NAVES' : isVendedor ? '⛁ VENDEDOR' : '◈ NEUTRAL'}
               </span>
             )}
           </div>
@@ -2428,6 +2522,24 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
               </div>
             )}
             <div style={{ flex: 1 }} />
+            {(isVendedor || isVendedorNaves) && (
+              <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(230,179,37,0.15)' }}>
+                <button onClick={() => setShowTienda(true)} style={{
+                  width: '100%', textAlign: 'left', background: 'rgba(230,179,37,0.10)',
+                  border: '1px solid rgba(230,179,37,0.35)', borderRadius: 8, padding: '9px 11px',
+                  cursor: 'pointer', fontSize: 12, color: 'var(--holocron-oro)',
+                  display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
+                >
+                  <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                    <Icon name="coin" size={11} />
+                  </span>
+                  <span>Comprar{isVendedorNaves ? ' naves' : ''}</span>
+                </button>
+              </div>
+            )}
             {!isAliado && npc.ataque > 0 && (
               <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,45,69,0.15)' }}>
                 <button onClick={isNeutral ? attackNeutral : startCombat} style={{
@@ -2523,6 +2635,22 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   <span>Consultar por misión</span>
                 </button>
               )}
+              {(isVendedor || isVendedorNaves) && (
+                <button onClick={() => setShowTienda(true)} style={{
+                  width: '100%', textAlign: 'left', background: 'rgba(230,179,37,0.10)',
+                  border: '1px solid rgba(230,179,37,0.35)', borderRadius: 8, padding: '9px 11px',
+                  cursor: 'pointer', fontSize: 12, color: 'var(--holocron-oro)',
+                  display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
+                >
+                  <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                    <Icon name="coin" size={11} />
+                  </span>
+                  <span>Comprar{isVendedorNaves ? ' naves' : ''}</span>
+                </button>
+              )}
               {!isAliado && npc.ataque > 0 && (
                 <button onClick={isNeutral ? attackNeutral : startCombat} style={{
                   width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
@@ -2588,6 +2716,15 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
           onClose={() => setShowMisionPopup(false)}
           onAceptar={handleAceptarMision}
           onCompletar={handleCompletarMision}
+        />
+      )}
+
+      {showTienda && (
+        <TiendaModal
+          npc={npc}
+          tipo={isVendedorNaves ? 'vendedor_naves' : 'vendedor'}
+          onClose={() => setShowTienda(false)}
+          onCreditsChange={onCreditsChange}
         />
       )}
 
@@ -3253,218 +3390,10 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
   );
 }
 
-/* ─── HANGAR — gestión de naves ──────────────────────────── */
-const fmtCr = (n) => `${Math.round(n ?? 0).toLocaleString('es-CL')} cr`;
-
-function NaveStatBar({ label, value, max, color }) {
-  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{
-        fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-faint)',
-        width: 80, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.06em',
-      }}>{label}</span>
-      <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
-      </div>
-      <span style={{ fontSize: 11, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', width: 50, textAlign: 'right', flexShrink: 0 }}>
-        {value}/{max}
-      </span>
-    </div>
-  );
-}
-
-function NaveCatalogRow({ nave, credits, busy, onComprar }) {
-  const puedeComprar = credits >= nave.costo;
-  return (
-    <div className="nx-panel" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
-        display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
-      }}>
-        {nave.imagen
-          ? <img src={mediaUrl(nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <Icon name="ship" size={20} style={{ color: 'var(--holo)' }} />}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="nx-display" style={{ fontSize: 12 }}>{nave.nombre}</div>
-        <div style={{
-          fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
-          display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 3,
-        }}>
-          <span>Vida {nave.vida}</span>
-          <span>Escudo {nave.escudo}</span>
-          <span>Ataque {nave.ataque}</span>
-          <span>Maniobra {nave.maniobrabilidad}</span>
-          <span>Velocidad {nave.velocidad}</span>
-          <span>{nave.capacidad_salto} saltos</span>
-          <span>+{nave.capacidad_carga} carga</span>
-        </div>
-      </div>
-      <Btn kind="gold" sm icon="coin" onClick={() => onComprar(nave)} disabled={!puedeComprar || busy === `buy-${nave.id}`}>
-        {busy === `buy-${nave.id}` ? '...' : fmtCr(nave.costo)}
-      </Btn>
-    </div>
-  );
-}
-
-function NaveOwnedRow({ owned, isEquipada, busy, onEquipar, onDesequipar, onReabastecer, onReparar }) {
-  const nave = owned.nave;
-  if (!nave) return null;
-  const combustibleLleno = owned.combustible_actual >= nave.capacidad_salto;
-  const vidaLlena = owned.vida_actual >= nave.vida && owned.escudo_actual >= nave.escudo;
-  const isBusy = busy === owned.id;
-  return (
-    <div className="nx-panel" style={{
-      padding: 12, display: 'flex', flexDirection: 'column', gap: 9,
-      border: isEquipada ? '1px solid var(--holo)' : undefined,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
-          display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
-        }}>
-          {nave.imagen
-            ? <img src={mediaUrl(nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="ship" size={18} style={{ color: 'var(--holo)' }} />}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="nx-display" style={{ fontSize: 12 }}>{nave.nombre}</div>
-          {isEquipada && <Chip tone="green" style={{ marginTop: 3 }}>EQUIPADA</Chip>}
-        </div>
-        {isEquipada
-          ? <Btn kind="ghost" sm onClick={onDesequipar} disabled={isBusy}>Desequipar</Btn>
-          : <Btn kind="accent" sm onClick={() => onEquipar(owned)} disabled={isBusy}>Equipar</Btn>}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <NaveStatBar label="Vida"        value={owned.vida_actual}        max={nave.vida}           color="#4ade80" />
-        <NaveStatBar label="Escudo"      value={owned.escudo_actual}      max={nave.escudo}          color="#38cdf0" />
-        <NaveStatBar label="Combustible" value={owned.combustible_actual} max={nave.capacidad_salto}  color="var(--holocron-oro)" />
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Btn kind="ghost" sm icon="fuel" onClick={() => onReabastecer(owned)} disabled={isBusy || combustibleLleno}>
-          Reabastecer ({fmtCr(nave.costo_combustible)})
-        </Btn>
-        <Btn kind="ghost" sm icon="shield" onClick={() => onReparar(owned)} disabled={isBusy || vidaLlena}>
-          Reparar ({fmtCr(nave.costo_reparacion)})
-        </Btn>
-      </div>
-    </div>
-  );
-}
-
-function HangarModal({ open, onClose, onCreditsChange }) {
-  const [catalogo, setCatalogo]             = useState([]);
-  const [misNaves, setMisNaves]             = useState([]);
-  const [naveEquipadaId, setNaveEquipadaId] = useState(null);
-  const [capacidadCarga, setCapacidadCarga] = useState(10);
-  const [credits, setCredits]               = useState(0);
-  const [loading, setLoading]               = useState(true);
-  const [busy, setBusy]                     = useState(null);
-  const [tab, setTab]                       = useState('mias');
-
-  const refresh = useCallback(() => {
-    setLoading(true);
-    Promise.all([apiFetch('/naves'), apiFetch('/naves/mias')])
-      .then(([cat, mias]) => {
-        setCatalogo(cat.naves ?? []);
-        setMisNaves(mias.naves ?? []);
-        setNaveEquipadaId(mias.nave_equipada_id ?? null);
-        setCapacidadCarga(mias.capacidad_carga ?? 10);
-        if (mias.credits !== undefined) {
-          setCredits(mias.credits);
-          onCreditsChange?.(mias.credits);
-        }
-      })
-      .catch(() => toast('Error cargando el hangar', { tone: 'error', icon: 'x' }))
-      .finally(() => setLoading(false));
-  }, [onCreditsChange]);
-
-  useEffect(() => { if (open) refresh(); }, [open, refresh]);
-
-  const runAction = async (id, fn, successMsg) => {
-    setBusy(id);
-    try {
-      const d = await fn();
-      if (d?.credits_remaining !== undefined) {
-        setCredits(d.credits_remaining);
-        onCreditsChange?.(d.credits_remaining);
-      }
-      if (successMsg) toast(successMsg, { tone: 'success', icon: 'check' });
-      await refresh();
-    } catch (err) {
-      toast(err?.message || 'No se pudo completar la acción', { tone: 'error', icon: 'x' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const comprar     = (nave)  => runAction(`buy-${nave.id}`, () => apiPost(`/naves/${nave.id}/comprar`, {}), `${nave.nombre} adquirida`);
-  const equipar     = (owned) => runAction(owned.id, () => apiPost(`/naves/${owned.id}/equipar`, {}), `${owned.nave?.nombre ?? 'Nave'} equipada`);
-  const desequipar  = ()      => runAction('unequip', () => apiPost('/naves/desequipar', {}));
-  const reabastecer = (owned) => runAction(owned.id, () => apiPost(`/naves/${owned.id}/reabastecer`, {}), 'Combustible reabastecido');
-  const reparar     = (owned) => runAction(owned.id, () => apiPost(`/naves/${owned.id}/reparar`, {}), 'Nave reparada');
-
-  return (
-    <Modal open={open} onClose={onClose} title="HANGAR" kicker="GESTIÓN DE NAVES" width={640}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Btn kind={tab === 'mias' ? 'primary' : 'ghost'} sm onClick={() => setTab('mias')}>Mis naves ({misNaves.length})</Btn>
-          <Btn kind={tab === 'catalogo' ? 'primary' : 'ghost'} sm onClick={() => setTab('catalogo')}>Catálogo</Btn>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div className="nx-kicker">Créditos</div>
-          <div className="nx-num" style={{ fontSize: 14, color: 'var(--holocron-oro)' }}>{fmtCr(credits)}</div>
-        </div>
-      </div>
-
-      <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginBottom: 12, lineHeight: 1.6 }}>
-        Capacidad de carga total: <strong style={{ color: 'var(--txt)' }}>{capacidadCarga}</strong> ítems
-        {naveEquipadaId ? ' (10 base + bono de la nave equipada).' : ' (10 base, sin nave equipada).'}
-        {' '}Sin nave equipada, saltar entre sistemas se cobra en créditos según el costo de viaje del sistema destino.
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }}>Cargando...</div>
-      ) : tab === 'mias' ? (
-        misNaves.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>
-            No posees ninguna nave. Visita el catálogo para comprar una.
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {misNaves.map((owned) => (
-              <NaveOwnedRow
-                key={owned.id}
-                owned={owned}
-                isEquipada={owned.id === naveEquipadaId}
-                busy={busy}
-                onEquipar={equipar}
-                onDesequipar={desequipar}
-                onReabastecer={reabastecer}
-                onReparar={reparar}
-              />
-            ))}
-          </div>
-        )
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {catalogo.length === 0
-            ? <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>No hay naves disponibles en el catálogo.</div>
-            : catalogo.map((nave) => (
-              <NaveCatalogRow key={nave.id} nave={nave} credits={credits} busy={busy} onComprar={comprar} />
-            ))}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
 export default function MapaView({ S, setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
-  const [hangarOpen, setHangarOpen] = useState(false);
   const syncCredits = useCallback((c) => { S?.setCredits?.(c); }, [S]);
   const [sistema, setSistema]     = useState(null);
   const [planeta, setPlaneta]     = useState(null);
@@ -3534,8 +3463,10 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
       const mias = await apiFetch('/naves/mias');
       const equipada = (mias.naves ?? []).find((n) => n.id === mias.nave_equipada_id);
       if (!equipada) {
-        toast('Necesitas una nave equipada para el combate espacial', { tone: 'error', icon: 'ship' });
-        setHangarOpen(true);
+        toast('Necesitas una nave equipada para el combate espacial', {
+          tone: 'error', icon: 'ship',
+          desc: 'Consíguela con un vendedor de naves y equípala en Mi Personaje.',
+        });
         return;
       }
       const player = getNaveCombatPlayerStats(equipada);
@@ -3697,19 +3628,6 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
 
   return (
     <div className="nx-fade" style={{ paddingBottom: 40 }}>
-      {/* Botón flotante de acceso al hangar de naves */}
-      <button
-        className="nx-btn nx-btn-ghost"
-        onClick={() => setHangarOpen(true)}
-        style={{
-          position: 'fixed', top: 84, right: 18, zIndex: 60,
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'rgba(4,7,15,0.78)', backdropFilter: 'blur(6px)',
-        }}
-      >
-        <Icon name="ship" size={14} /> Hangar
-      </button>
-
       {nivel === 'galaxy'  && <GalaxiaView onSelectSistema={selectSistema} />}
       {nivel === 'sistema' && sistema && (
         <SistemaView
@@ -3778,6 +3696,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
             setActiveNpcCombat(session);
           }}
           onMisionChange={() => setLugarRefreshKey((k) => k + 1)}
+          onCreditsChange={syncCredits}
         />
       )}
 
@@ -3877,12 +3796,6 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
         />
       )}
 
-      {/* Hangar de naves */}
-      <HangarModal
-        open={hangarOpen}
-        onClose={() => setHangarOpen(false)}
-        onCreditsChange={syncCredits}
-      />
     </div>
   );
 }

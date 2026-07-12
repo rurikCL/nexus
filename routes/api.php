@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\NpcVendedorController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
 use App\Http\Controllers\Api\EmblemUploadController;
@@ -172,7 +173,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Naves
     Route::get('/naves',                    [NaveController::class, 'catalogo']);
     Route::get('/naves/mias',               [NaveController::class, 'mias']);
-    Route::post('/naves/{id}/comprar',      [NaveController::class, 'comprar']);
     Route::post('/naves/desequipar',        [NaveController::class, 'desequipar']);
     Route::post('/naves/{ownedId}/equipar',     [NaveController::class, 'equipar']);
     Route::post('/naves/{ownedId}/reabastecer', [NaveController::class, 'reabastecer']);
@@ -201,6 +201,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/npcs/refs',             [NpcChatController::class, 'refs']);
     Route::get('/npcs/{id}/chat/status', [NpcChatController::class, 'status']);
     Route::post('/npcs/{id}/chat',       [NpcChatController::class, 'chat']);
+
+    // Tiendas de NPCs vendedores (naves y objetos con interés aplicado)
+    Route::get('/npcs/{npcId}/tienda-naves',           [NpcVendedorController::class, 'tiendaNaves']);
+    Route::post('/npcs/{npcId}/naves/{naveId}/comprar', [NpcVendedorController::class, 'comprarNave']);
+    Route::get('/npcs/{npcId}/tienda-objetos',         [NpcVendedorController::class, 'tiendaObjetos']);
+    Route::post('/npcs/{npcId}/objetos/{objetoId}/comprar', [NpcVendedorController::class, 'comprarObjeto']);
 
     // Admin CRUD
     Route::prefix('admin')->group(function () {
