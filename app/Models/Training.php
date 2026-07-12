@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Training extends Model
 {
+    /** Rangos que pueden marcar asistencia en cualquier sesión, sean o no encargados de ella. */
+    public const TRAINER_TIERS = ['caballero', 'maestro', 'granmaestro'];
+
     protected $fillable = ['titulo', 'fecha', 'created_by', 'closed_at', 'closed_by'];
 
     protected $casts = [
@@ -43,5 +46,12 @@ class Training extends Model
     public function isClosed(): bool
     {
         return $this->closed_at !== null;
+    }
+
+    /** ¿Puede este usuario marcar asistencia (propia o de terceros) en esta sesión? */
+    public function canBeMarkedBy(User $user): bool
+    {
+        return $this->encargados()->where('user_id', $user->id)->exists()
+            || in_array($user->tier, self::TRAINER_TIERS);
     }
 }

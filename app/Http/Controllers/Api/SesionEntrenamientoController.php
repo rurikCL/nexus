@@ -47,7 +47,7 @@ class SesionEntrenamientoController extends Controller
 
     private function canMarkAttendance(Training $training, $user): bool
     {
-        return $this->isEncargado($training, $user->id) || in_array($user->tier, self::TRAINER_TIERS);
+        return $training->canBeMarkedBy($user);
     }
 
     /**

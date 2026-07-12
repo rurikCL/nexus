@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 
@@ -23,9 +23,9 @@ async function apiGet(path) {
   return res.ok ? res.json() : Promise.reject();
 }
 
-async function apiPost(path, body) {
+async function apiPatch(path, body) {
   const res = await fetch(`/api${path}`, {
-    method: 'POST',
+    method: 'PATCH',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` },
     body: JSON.stringify(body),
   });
@@ -34,16 +34,32 @@ async function apiPost(path, body) {
   return json;
 }
 
-export function TrainingView({ S, user }) {
+export function TrainingView({ S, user, go }) {
   const NX_TODAY = getNxToday();
   const month = getCurrentMonth();
+  const [yr, mo] = month.split('-').map(Number);
 
   const [sel, setSel] = useState(NX_TODAY);
   const [sesionesDisp, setSesionesDisp] = useState([]); // [{id, fecha, titulo, closed}]
-  const [miAsistencia, setMiAsistencia] = useState({}); // {sesionId: true}
-  const logged = S.training.logged;
-  const days = Object.keys(logged).map(Number);
-  const creditsEarned = days.length * S.training.creditsPerSession;
+  const [loggedByDay, setLoggedByDay] = useState({});   // { [día]: training_day real del backend }
+
+  // Carga la asistencia/bitácora real (creada por auto-asistencia o por el escaneo QR del encargado)
+  const loadLog = useCallback(() => {
+    apiGet(`/training?month=${month}`)
+      .then(r => {
+        const byDay = {};
+        Object.entries(r.logged ?? {}).forEach(([dateStr, rec]) => {
+          byDay[parseInt(dateStr.split('-')[2], 10)] = rec;
+        });
+        setLoggedByDay(byDay);
+      })
+      .catch(() => {});
+  }, [month]);
+
+  useEffect(() => { loadLog(); }, [loadLog]);
+
+  const days = Object.keys(loggedByDay).map(Number);
+  const creditsEarned = days.length * 75;
 
   // racha de asistencia (días consecutivos terminando en el último marcado)
   const streak = (() => {
@@ -68,7 +84,6 @@ export function TrainingView({ S, user }) {
   });
 
   // grid del mes
-  const [yr, mo] = month.split('-').map(Number);
   const firstDow  = new Date(yr, mo - 1, 1).getDay();
   const daysInMonth = new Date(yr, mo, 0).getDate();
   const offset = (firstDow + 6) % 7;
@@ -76,21 +91,9 @@ export function TrainingView({ S, user }) {
   for (let i = 0; i < offset; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  const entry = logged[sel];
+  const entry = loggedByDay[sel];
   const sesionSel = sesionPorDia[sel];
-  const iAttendedSel = sesionSel ? miAsistencia[sesionSel.id] : false;
-
-  const markAttendance = async () => {
-    if (!sesionSel) return;
-    try {
-      await apiPost(`/sesiones/${sesionSel.id}/attend`, {});
-      setMiAsistencia(prev => ({ ...prev, [sesionSel.id]: true }));
-      S.logDay(sel);
-      toast('Asistencia marcada', { tone: 'success', icon: 'check', desc: `+${S.training.creditsPerSession} créditos · bitácora desbloqueada` });
-    } catch (err) {
-      toast(err.message, { tone: 'error' });
-    }
-  };
+  const dateKey = (d) => `${yr}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
   return (
     <div className="nx-fade nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr', gap: 18, alignItems: 'start' }}>
@@ -104,7 +107,7 @@ export function TrainingView({ S, user }) {
             ))}
             {cells.map((d, i) => {
               if (!d) return <div key={i} />;
-              const isLogged   = !!logged[d];
+              const isLogged   = !!loggedByDay[d];
               const isToday    = d === NX_TODAY;
               const isFuture   = d > NX_TODAY;
               const isSel      = d === sel;
@@ -152,7 +155,7 @@ export function TrainingView({ S, user }) {
         <div className="nx-panel" style={{ padding: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ color: 'var(--holo)' }}><Icon name="zap" size={18} /></span>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)' }}>
-            Solo los días con <b style={{ color: 'var(--holo)' }}>sesión programada</b> están disponibles para marcar asistencia.
+            El encargado registra tu asistencia escaneando tu <b style={{ color: 'var(--holo)' }}>código QR</b> en la página Sesiones. Una vez marcada, tu bitácora de ese día se desbloquea aquí.
           </div>
         </div>
       </div>
@@ -170,49 +173,86 @@ export function TrainingView({ S, user }) {
           </div>
         ) : !entry ? (
           <div style={{ textAlign: 'center', padding: '34px 18px' }}>
-            <div style={{ color: 'var(--txt-faint)', display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Icon name="calendar" size={36} /></div>
-            <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>Sesión disponible</div>
+            <div style={{ color: 'var(--txt-faint)', display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Icon name="camera" size={36} /></div>
+            <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>Bitácora bloqueada</div>
             <p style={{ fontSize: 13, color: 'var(--txt-dim)', maxWidth: 320, margin: '0 auto 18px' }}>
               {sesionSel.closed
-                ? 'Esta sesión ya está cerrada.'
-                : 'Marca tu asistencia para registrar este día y ganar créditos.'}
+                ? 'Esta sesión ya está cerrada y no registra asistencia.'
+                : 'Aún no tienes asistencia registrada. Pide al encargado que escanee tu código QR (widget «Mi Código QR» en Comando) en la página Sesiones.'}
             </p>
-            {!sesionSel.closed && (
-              <Btn kind="accent" icon="check" onClick={markAttendance} style={{ margin: '0 auto' }}>
-                Marcar asistencia (+{S.training.creditsPerSession} cr)
+            {!sesionSel.closed && go && (
+              <Btn kind="accent" icon="camera" onClick={() => go('sesiones')} style={{ margin: '0 auto' }}>
+                Ir a Sesiones
               </Btn>
             )}
           </div>
         ) : (
-          <BitacoraEditor S={S} day={sel} entry={entry} />
+          <BitacoraEditor S={S} day={sel} dateStr={dateKey(sel)} entry={entry}
+            onSaved={(updated) => setLoggedByDay(p => ({ ...p, [sel]: updated }))}
+          />
         )}
       </Panel>
     </div>
   );
 }
 
-export function BitacoraEditor({ S, day, entry }) {
-  const upd = (patch) => S.updateLog(day, patch);
+export function BitacoraEditor({ S, day, dateStr, entry, onSaved }) {
+  const [form, setForm] = useState({
+    focus:  entry.focus  ?? NX_FOCUS[0],
+    effort: entry.effort ?? 6,
+    note:   entry.note   ?? '',
+    tags:   entry.tags   ?? [],
+    tasks:  entry.tasks  ?? [],
+  });
+  const [saving, setSaving] = useState(false);
+  const upd = (patch) => setForm(f => ({ ...f, ...patch }));
+
+  useEffect(() => {
+    setForm({
+      focus:  entry.focus  ?? NX_FOCUS[0],
+      effort: entry.effort ?? 6,
+      note:   entry.note   ?? '',
+      tags:   entry.tags   ?? [],
+      tasks:  entry.tasks  ?? [],
+    });
+  }, [entry.id]);
+
   const myTasks = S.tasks.filter(t => t.pupil === 'you');
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await apiPatch(`/training/${dateStr}`, {
+        focus: form.focus, effort: form.effort, note: form.note, tags: form.tags,
+      });
+      toast('Bitácora guardada', { tone: 'success', icon: 'check', desc: `Día ${day} actualizado` });
+      onSaved?.(res.training_day ?? { ...entry, ...form });
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div>
           <label className="nx-label">Foco de la sesión</label>
-          <select className="nx-select" value={entry.focus} onChange={(e) => upd({ focus: e.target.value })}>
+          <select className="nx-select" value={form.focus} onChange={(e) => upd({ focus: e.target.value })}>
             {NX_FOCUS.map((f) => <option key={f}>{f}</option>)}
           </select>
         </div>
         <div>
-          <label className="nx-label">Esfuerzo · {entry.effort}/10</label>
-          <input type="range" min="1" max="10" value={entry.effort} onChange={(e) => upd({ effort: +e.target.value })}
+          <label className="nx-label">Esfuerzo · {form.effort}/10</label>
+          <input type="range" min="1" max="10" value={form.effort} onChange={(e) => upd({ effort: +e.target.value })}
             style={{ width: '100%', accentColor: 'var(--holocron-naranja)', marginTop: 8 }} />
         </div>
       </div>
 
       <div>
         <label className="nx-label">¿Qué hiciste hoy?</label>
-        <textarea className="nx-textarea" value={entry.note} placeholder="Describe la sesión, qué funcionó, qué corregir..."
+        <textarea className="nx-textarea" value={form.note} placeholder="Describe la sesión, qué funcionó, qué corregir..."
           onChange={(e) => upd({ note: e.target.value })} />
       </div>
 
@@ -220,9 +260,9 @@ export function BitacoraEditor({ S, day, entry }) {
         <label className="nx-label">Etiquetas</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
           {NX_TAGS.map((tag) => {
-            const on = entry.tags.includes(tag);
+            const on = form.tags.includes(tag);
             return (
-              <button key={tag} onClick={() => upd({ tags: on ? entry.tags.filter(t => t !== tag) : [...entry.tags, tag] })}
+              <button key={tag} onClick={() => upd({ tags: on ? form.tags.filter(t => t !== tag) : [...form.tags, tag] })}
                 className={`nx-chip ${on ? '' : 'dim'}`} style={{ cursor: 'pointer', borderColor: on ? 'var(--holo)' : undefined }}>
                 {on && <Icon name="check" size={10} />}{tag}
               </button>
@@ -251,9 +291,9 @@ export function BitacoraEditor({ S, day, entry }) {
           <label className="nx-label">Vincular tareas trabajadas</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
             {myTasks.map((t) => {
-              const on = (entry.tasks || []).includes(t.id);
+              const on = form.tasks.includes(t.id);
               return (
-                <button key={t.id} onClick={() => upd({ tasks: on ? entry.tasks.filter(x => x !== t.id) : [...(entry.tasks || []), t.id] })}
+                <button key={t.id} onClick={() => upd({ tasks: on ? form.tasks.filter(x => x !== t.id) : [...form.tasks, t.id] })}
                   className={`nx-chip ${on ? 'orange' : 'dim'}`} style={{ cursor: 'pointer' }}>
                   <Icon name="tasks" size={10} />{t.title}
                 </button>
@@ -264,7 +304,9 @@ export function BitacoraEditor({ S, day, entry }) {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        <Btn kind="accent" icon="check" onClick={() => toast('Bitácora guardada', { tone: 'success', icon: 'check', desc: `Día ${day} actualizado` })}>Guardar bitácora</Btn>
+        <Btn kind="accent" icon="check" onClick={save} disabled={saving}>
+          {saving ? 'Guardando...' : 'Guardar bitácora'}
+        </Btn>
       </div>
     </div>
   );

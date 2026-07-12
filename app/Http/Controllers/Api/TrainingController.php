@@ -23,6 +23,7 @@ class TrainingController extends Controller
 
         $days = $request->user()->trainingDays()
             ->with('media')
+            ->where('type', 'personal')
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('date')
             ->get()
@@ -55,6 +56,10 @@ class TrainingController extends Controller
         $training = \App\Models\Training::where('fecha', $data['day'])->whereNull('closed_at')->first();
         if (!$training) {
             return response()->json(['message' => 'No hay una sesión de entrenamiento programada para este día.'], 422);
+        }
+
+        if (!$training->canBeMarkedBy($user)) {
+            return response()->json(['message' => 'Solo el encargado o un rango caballero/maestro puede marcar asistencia.'], 403);
         }
 
         $day = $user->trainingDays()->create([
@@ -90,6 +95,7 @@ class TrainingController extends Controller
 
         $trainingDay = $request->user()->trainingDays()
             ->where('date', $day)
+            ->where('type', 'personal')
             ->firstOrFail();
 
         $trainingDay->update($data);

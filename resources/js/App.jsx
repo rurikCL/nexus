@@ -393,7 +393,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     comando: <ComandoView S={S} go={go} user={user} onGoToCombat={(combat) => { setCombatToView(combat); go('combates'); }} />,
     personaje: <PersonajeView S={S} user={user} go={go} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     sesiones: <SesionesView user={user} />,
-    entrenamiento: <TrainingView S={S} user={user} />,
+    entrenamiento: <TrainingView S={S} user={user} go={go} />,
     'modulos-entrenamiento': <ModulosEntrenamientoView user={user} />,
     tareas: <TareasView S={S} user={user} />,
     eventos: <EventosView S={S} go={go} user={user} />,
