@@ -26,7 +26,9 @@ class NaveController extends Controller
             return response()->json(['error' => 'Sin personaje'], 404);
         }
 
-        $naves = $character->naves()->with('nave')->get();
+        $naves = $character->naves()
+            ->with(['nave.habilidad1', 'nave.habilidad2', 'nave.habilidad3', 'nave.habilidad4'])
+            ->get();
 
         return response()->json([
             'naves'            => $naves,

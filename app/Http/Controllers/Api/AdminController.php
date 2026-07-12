@@ -41,6 +41,9 @@ class AdminController extends Controller
             'rol_objetos'        => RolObjeto::class,
             'rol_character_objeto' => RolCharacterObjeto::class,
             'rol_habilidades'    => RolHabilidad::class,
+            // Alias interno: mismo modelo que 'rol_habilidades', pre-filtrado a tipo=nave.
+            // Usado solo por options() para los selectores de habilidad de las naves.
+            'rol_habilidades_nave' => RolHabilidad::class,
             'configuraciones'    => Configuracion::class,
             default            => abort(404, "Entidad no reconocida: {$entity}"),
         };
@@ -100,10 +103,22 @@ class AdminController extends Controller
         )->all();
     }
 
-    public function index(Request $request, string $entity): JsonResponse
+    /** Query base de la entidad, con el scope por defecto de los alias internos (p.ej. rol_habilidades_nave). */
+    private function baseQuery(string $entity)
     {
         $model = $this->model($entity);
         $query = $model::query();
+
+        if ($entity === 'rol_habilidades_nave') {
+            $query->where('tipo', 'nave');
+        }
+
+        return $query;
+    }
+
+    public function index(Request $request, string $entity): JsonResponse
+    {
+        $query = $this->baseQuery($entity);
 
         if ($q = $request->input('q')) {
             $label = $this->labelField($entity);
@@ -232,13 +247,13 @@ class AdminController extends Controller
 
     public function options(string $entity): JsonResponse
     {
-        $model = $this->model($entity);
         $label = $this->labelField($entity);
         $extras = $this->optionExtraFields($entity);
 
         $select = array_merge(['id', "{$label} as label"], $extras);
 
-        $options = $model::select($select)
+        $options = $this->baseQuery($entity)
+            ->select($select)
             ->orderBy($label)
             ->get();
 

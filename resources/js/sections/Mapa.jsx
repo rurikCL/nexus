@@ -1849,16 +1849,27 @@ function postNaveEspacioVictory(npcEspacioId) {
 function getNaveCombatPlayerStats(owned) {
   const nave = owned?.nave;
   if (!nave) return null;
+
+  /* Habilidades de tipo "nave" asignadas en los 4 slots de la nave — se usan
+     como si fueran las de la "forma 1" (las naves no tienen estancias). */
+  const habs = [nave.habilidad1, nave.habilidad2, nave.habilidad3, nave.habilidad4].filter(Boolean);
+  const allHabilidadesData = Object.fromEntries(habs.map((h) => [String(h.id), h]));
+
   return {
     vida: nave.vida, escudo: nave.escudo,
     ataque: nave.ataque, defensa: nave.maniobrabilidad,
     movimiento: nave.maniobrabilidad, iniciativa: nave.velocidad, punteria: nave.ataque,
     nombre: nave.nombre, photo: mediaUrl(nave.imagen),
     maxFuerza: 10, fuerzaPorTurno: 2,
-    arma_equipada: { nombre: 'Armamento de la nave', dano: nave.ataque, critico: 0, tipo_ataque: 'distancia', es_sable: false, color_hoja: null },
-    current_forma: 1, habilidades_por_forma: {}, all_habilidades_data: {}, habilidades: [],
+    arma_equipada: null,
+    current_forma: 1,
+    habilidades_por_forma: { 1: habs.map((h) => h.id) },
+    all_habilidades_data: allHabilidadesData,
   };
 }
+
+/* Los combates espaciales siempre enfrentan al jugador contra una nave pirata genérica. */
+const NAVE_ENEMIGA_NOMBRE = 'Pirata Espacial';
 
 function getNaveEncuentroStats(npcEspacio) {
   const naveEnemiga = npcEspacio?.nave;
@@ -1869,7 +1880,7 @@ function getNaveEncuentroStats(npcEspacio) {
       vida: naveEnemiga.vida, escudo: naveEnemiga.escudo,
       ataque: naveEnemiga.ataque, defensa: naveEnemiga.maniobrabilidad,
       movimiento: naveEnemiga.maniobrabilidad, iniciativa: naveEnemiga.velocidad, punteria: naveEnemiga.ataque,
-      nombre: npcEspacio.nombre, imagen: naveEnemiga.imagen ?? null,
+      nombre: NAVE_ENEMIGA_NOMBRE, imagen: naveEnemiga.imagen ?? null,
     };
   }
   if (npcEnemigo) {
@@ -1877,12 +1888,12 @@ function getNaveEncuentroStats(npcEspacio) {
       vida: npcEnemigo.vida, escudo: npcEnemigo.escudo,
       ataque: npcEnemigo.ataque, defensa: npcEnemigo.defensa,
       movimiento: npcEnemigo.movimiento, iniciativa: npcEnemigo.iniciativa, punteria: npcEnemigo.punteria,
-      nombre: npcEspacio.nombre, imagen: npcEnemigo.imagen_mini ?? npcEnemigo.imagen ?? null,
+      nombre: NAVE_ENEMIGA_NOMBRE, imagen: npcEnemigo.imagen_mini ?? npcEnemigo.imagen ?? null,
     };
   }
   return {
     vida: 30, escudo: 10, ataque: 8, defensa: 6, movimiento: 6, iniciativa: 8, punteria: 8,
-    nombre: npcEspacio?.nombre ?? 'Hostil espacial', imagen: null,
+    nombre: NAVE_ENEMIGA_NOMBRE, imagen: null,
   };
 }
 
@@ -3637,7 +3648,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
       const equipada = (mias.naves ?? []).find((n) => n.id === mias.nave_equipada_id);
       if (!equipada) return; // el backend ya lo valida; esto es solo defensivo
       const player = getNaveCombatPlayerStats(equipada);
-      const npc = getNaveEncuentroStats({ nombre: `${d.pirata.nombre} (pirata)`, nave: d.pirata });
+      const npc = getNaveEncuentroStats({ nave: d.pirata });
       toast('¡Emboscada pirata!', { tone: 'error', icon: 'ship', desc: `${d.pirata.nombre} te intercepta` });
       setActiveNaveCombat({ npcEspacio: null, pirataEncuentroId: d.encuentro_id, player, npc });
     } catch {
@@ -3908,6 +3919,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
         <NpcCombatScreen
           npc={activeNaveCombat.npc}
           player={activeNaveCombat.player}
+          naveMode
           onVictory={async () => {
             if (activeNaveCombat.pirataEncuentroId) {
               try {
