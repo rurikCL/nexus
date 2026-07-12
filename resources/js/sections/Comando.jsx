@@ -824,6 +824,13 @@ const ITEM_TYPES = [
   { value: 'accesorio',         label: 'Accesorios',             icon: 'crown'    },
 ];
 
+/* Pestañas del cajón lateral de Equipo */
+const EQUIP_TABS = [
+  { value: 'inventario', label: 'Inventario',   icon: 'roster' },
+  { value: 'sable',      label: 'Sable de Luz', icon: 'sword'  },
+  { value: 'nave',       label: 'Nave',         icon: 'ship'   },
+];
+
 /* Tarjeta informativa para objetos que no son armas: no son equipables aquí,
    se instalan en «Armado de Sable» en su lugar. */
 function InventoryItemCard({ objeto, icon = 'star' }) {
@@ -1319,6 +1326,10 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
 
   // Inventario clasificado por tipo (pestañas) — solo las armas son equipables
   const [invTab, setInvTab] = useState('arma');
+
+  // Cajón lateral de Equipo (Inventario / Sable de luz / Nave)
+  const [equipOpen, setEquipOpen] = useState(false);
+  const [equipTab, setEquipTab]   = useState('inventario');
   const itemsDeTab = inventario.filter(o => o.tipo === invTab);
 
   // Sable de luz armado (arma equipable prioritaria en combate)
@@ -1434,6 +1445,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   };
 
   return (
+    <>
     <div className="nx-fade nx-personaje-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '340px 1fr', gap: 18, alignItems: 'start' }}>
       {/* Retrato */}
       <div style={{ display: 'grid', gap: 18 }}>
@@ -1683,104 +1695,6 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           slotIndex={slotPicker}
         />
 
-        {/* Sable de luz armado */}
-        <Panel kicker="Equipo" title="Sable de Luz" icon="sword"
-          right={<Btn kind="ghost" icon="sword" sm onClick={() => go?.('armado-sable')}>Gestionar sable</Btn>}>
-          {sableActivo ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
-                background: `color-mix(in srgb, ${sableColorHex} 18%, rgba(4,9,18,0.9))`,
-                border: `1px solid color-mix(in srgb, ${sableColorHex} 55%, transparent)`,
-              }}>
-                <Icon name="sword" size={22} style={{ color: sableColorHex, filter: `drop-shadow(0 0 6px ${sableColorHex})` }} />
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{sableActivo.nombre}</div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
-                  <Chip tone="green" icon="check">Armado</Chip>
-                  <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
-                    <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {sableActivo.dano} DMG melee
-                  </span>
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--txt-faint)', flexBasis: '100%' }}>
-                Tu sable armado ataca cuerpo a cuerpo en combate y tiene prioridad sobre cualquier arma equipada.
-              </div>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
-              No tienes ningún sable de luz armado. Ensambla y activa uno en «Armado de Sable» para usarlo en combate.
-            </div>
-          )}
-        </Panel>
-
-        {/* Nave equipada */}
-        <NaveEquipadaPanel />
-
-        {/* Inventario — objetos clasificados por tipo, solo las armas son equipables */}
-        <Panel kicker="Equipo" title="Inventario" icon="roster"
-          right={invTab === 'arma' ? (
-            <Btn kind="accent" icon="check" sm disabled={equipandoArma || (armaEquipadaId ?? '') === (user?.character?.arma_equipada?.id ?? '')} onClick={handleEquiparArma}>
-              {equipandoArma ? 'Equipando...' : 'Equipar'}
-            </Btn>
-          ) : null}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-            {ITEM_TYPES.map(t => {
-              const count = inventario.filter(o => o.tipo === t.value).length;
-              const active = invTab === t.value;
-              return (
-                <button key={t.value} onClick={() => setInvTab(t.value)} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
-                  fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
-                  background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
-                  border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
-                  color: active ? 'var(--holo)' : 'var(--txt-faint)',
-                  boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
-                  transition: 'all .14s',
-                }}>
-                  <Icon name={t.icon} size={12} />
-                  {t.label}
-                  <span style={{ opacity: 0.7 }}>({count})</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {invTab === 'arma' ? (
-            <>
-              {sableActivo && (
-                <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '0 0 10px' }}>
-                  Tienes un sable de luz armado — se usará en combate en lugar de esta arma mientras esté activo.
-                </div>
-              )}
-              {armasDisponibles.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
-                  No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-                  <WeaponCard objeto={null} selected={!armaEquipadaId} onClick={() => setArmaEquipadaId('')} />
-                  {armasDisponibles.map(o => (
-                    <WeaponCard key={o.id} objeto={o} selected={armaEquipadaId === o.id} onClick={() => setArmaEquipadaId(o.id)} />
-                  ))}
-                </div>
-              )}
-            </>
-          ) : itemsDeTab.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
-              No posees objetos de este tipo. Los componentes de sable se instalan desde «Armado de Sable».
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-              {itemsDeTab.map(o => (
-                <InventoryItemCard key={o.id} objeto={o} icon={ITEM_TYPES.find(t => t.value === invTab)?.icon} />
-              ))}
-            </div>
-          )}
-        </Panel>
-
         <Panel kicker="Atributos" title="Distribución de Stats" icon="trending"
           right={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip><Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>Asignar</Btn></div>}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -1811,6 +1725,175 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
         </Panel>
       </div>
     </div>
+
+    {/* ── Cajón lateral de Equipo (Inventario / Sable de luz / Nave) ── */}
+    <button
+      onClick={() => setEquipOpen(o => !o)}
+      style={{
+        position: 'fixed', top: '50%', right: equipOpen ? 400 : 0, transform: 'translateY(-50%)',
+        zIndex: 41, cursor: 'pointer',
+        background: 'rgba(5,10,22,0.92)', backdropFilter: 'blur(6px)',
+        border: '1px solid var(--holo-line)', borderRight: equipOpen ? '1px solid var(--holo-line)' : 'none',
+        borderRadius: '8px 0 0 8px',
+        padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        color: 'var(--holo)', transition: 'right 0.28s var(--ease-standard)',
+      }}
+    >
+      <Icon name="chevron" size={13} style={{ transform: equipOpen ? 'rotate(0deg)' : 'rotate(180deg)' }} />
+      <span style={{ writingMode: 'vertical-rl', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>EQUIPO</span>
+    </button>
+
+    <div onClick={() => setEquipOpen(false)} style={{
+      position: 'fixed', inset: 0, zIndex: 39,
+      background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(2px)',
+      opacity: equipOpen ? 1 : 0, pointerEvents: equipOpen ? 'auto' : 'none',
+      transition: 'opacity 0.25s',
+    }} />
+
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 40,
+      width: 400, maxWidth: '100vw',
+      background: 'rgba(5,10,22,0.97)',
+      borderLeft: '1px solid var(--holo-line)',
+      backdropFilter: 'blur(14px)',
+      display: 'flex', flexDirection: 'column',
+      transform: equipOpen ? 'translateX(0)' : 'translateX(100%)',
+      transition: 'transform 0.28s var(--ease-standard)',
+      boxShadow: equipOpen ? '-20px 0 60px -10px rgba(0,0,0,0.7)' : 'none',
+    }}>
+      <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ flex: 1 }}>
+          <div className="nx-kicker">EQUIPO</div>
+          <div className="nx-display" style={{ fontSize: 15 }}>{ch.name}</div>
+        </div>
+        <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={() => setEquipOpen(false)} style={{ padding: 6 }}>
+          <Icon name="x" size={14} />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, padding: '14px 20px 0', flexShrink: 0 }}>
+        {EQUIP_TABS.map(t => {
+          const active = equipTab === t.value;
+          return (
+            <button key={t.value} onClick={() => setEquipTab(t.value)} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center',
+              padding: '7px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
+              fontFamily: 'var(--font-data)', letterSpacing: '0.05em',
+              background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+              border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+              color: active ? 'var(--holo)' : 'var(--txt-faint)',
+              boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
+              transition: 'all .14s',
+            }}>
+              <Icon name={t.icon} size={12} />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'grid', gap: 18 }}>
+        {equipTab === 'sable' && (
+          <Panel kicker="Equipo" title="Sable de Luz" icon="sword"
+            right={<Btn kind="ghost" icon="sword" sm onClick={() => { setEquipOpen(false); go?.('armado-sable'); }}>Gestionar sable</Btn>}>
+            {sableActivo ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                  background: `color-mix(in srgb, ${sableColorHex} 18%, rgba(4,9,18,0.9))`,
+                  border: `1px solid color-mix(in srgb, ${sableColorHex} 55%, transparent)`,
+                }}>
+                  <Icon name="sword" size={22} style={{ color: sableColorHex, filter: `drop-shadow(0 0 6px ${sableColorHex})` }} />
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{sableActivo.nombre}</div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+                    <Chip tone="green" icon="check">Armado</Chip>
+                    <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+                      <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {sableActivo.dano} DMG melee
+                    </span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--txt-faint)', flexBasis: '100%' }}>
+                  Tu sable armado ataca cuerpo a cuerpo en combate y tiene prioridad sobre cualquier arma equipada.
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                No tienes ningún sable de luz armado. Ensambla y activa uno en «Armado de Sable» para usarlo en combate.
+              </div>
+            )}
+          </Panel>
+        )}
+
+        {equipTab === 'nave' && <NaveEquipadaPanel />}
+
+        {equipTab === 'inventario' && (
+          <Panel kicker="Equipo" title="Inventario" icon="roster"
+            right={invTab === 'arma' ? (
+              <Btn kind="accent" icon="check" sm disabled={equipandoArma || (armaEquipadaId ?? '') === (user?.character?.arma_equipada?.id ?? '')} onClick={handleEquiparArma}>
+                {equipandoArma ? 'Equipando...' : 'Equipar'}
+              </Btn>
+            ) : null}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              {ITEM_TYPES.map(t => {
+                const count = inventario.filter(o => o.tipo === t.value).length;
+                const active = invTab === t.value;
+                return (
+                  <button key={t.value} onClick={() => setInvTab(t.value)} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
+                    fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+                    background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+                    border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                    color: active ? 'var(--holo)' : 'var(--txt-faint)',
+                    boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
+                    transition: 'all .14s',
+                  }}>
+                    <Icon name={t.icon} size={12} />
+                    {t.label}
+                    <span style={{ opacity: 0.7 }}>({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {invTab === 'arma' ? (
+              <>
+                {sableActivo && (
+                  <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '0 0 10px' }}>
+                    Tienes un sable de luz armado — se usará en combate en lugar de esta arma mientras esté activo.
+                  </div>
+                )}
+                {armasDisponibles.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                    No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                    <WeaponCard objeto={null} selected={!armaEquipadaId} onClick={() => setArmaEquipadaId('')} />
+                    {armasDisponibles.map(o => (
+                      <WeaponCard key={o.id} objeto={o} selected={armaEquipadaId === o.id} onClick={() => setArmaEquipadaId(o.id)} />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : itemsDeTab.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                No posees objetos de este tipo. Los componentes de sable se instalan desde «Armado de Sable».
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                {itemsDeTab.map(o => (
+                  <InventoryItemCard key={o.id} objeto={o} icon={ITEM_TYPES.find(t => t.value === invTab)?.icon} />
+                ))}
+              </div>
+            )}
+          </Panel>
+        )}
+      </div>
+    </div>
+    </>
   );
 }
 
