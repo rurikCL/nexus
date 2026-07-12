@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { useDiceRoller } from './DiceRoller.jsx';
+import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -268,15 +268,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       let newHp;
       if (useRanged) {
         entries = [
-          { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info' },
-          { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
+          { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
         newHp = aT > dT ? applyDmg(effNpcPnt, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcPnt} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
       } else {
         entries = [
-          { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info' },
-          { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
+          { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
         newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Golpe! −${effNpcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
@@ -687,7 +687,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                             paddingLeft: isSystem ? 6 : 0,
                             borderLeft: isSystem ? '2px solid #38cdf0' : 'none',
                             animation: 'nx-fade-up 0.2s ease both',
-                          }}>{e.text}</div>
+                          }}>{renderDiceText(e.text, e.diceColors)}</div>
                         ))}
                       </div>
                     );

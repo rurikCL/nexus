@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { useDiceRoller } from './DiceRoller.jsx';
+import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 
 /* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
    Soporta el formato "1d20+X=Y" (habilidades/ataque básico) y "1d20(D)+X=Y" (iniciativa). */
@@ -448,6 +448,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                     const isOpp    = turn.actorId === opp.id;
                     const label    = isSystem ? null : isOpp ? opp.name : (me.name || 'Tú');
                     const accent   = isSystem ? 'rgba(150,200,255,0.35)' : isOpp ? 'rgba(255,45,69,0.35)' : 'rgba(56,205,240,0.35)';
+                    const diceColors = isSystem
+                      ? (combat.i_am_attacker ? ['#38cdf0', '#ff6b6b'] : ['#ff6b6b', '#38cdf0'])
+                      : (isOpp ? ['#ff6b6b', '#38cdf0'] : ['#38cdf0', '#ff6b6b']);
                     return (
                       <div key={turn.key} style={{
                         display: 'flex', flexDirection: 'column', gap: 2,
@@ -469,7 +472,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                             paddingLeft: isSystem ? 6 : 0,
                             borderLeft: isSystem ? '2px solid #38cdf0' : 'none',
                             animation: 'nx-fade-up 0.2s ease both',
-                          }}>{m}</div>
+                          }}>{renderDiceText(m, diceColors)}</div>
                         ))}
                       </div>
                     );
