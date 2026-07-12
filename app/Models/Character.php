@@ -108,6 +108,7 @@ class Character extends Model
     public function rolObjetos(): BelongsToMany
     {
         return $this->belongsToMany(RolObjeto::class, 'rol_character_objeto')
+            ->withPivot('cantidad')
             ->withTimestamps();
     }
 
@@ -134,9 +135,15 @@ class Character extends Model
         return self::CAPACIDAD_CARGA_BASE + ($nave?->nave?->capacidad_carga ?? 0);
     }
 
+    /** Suma de unidades de todos los objetos poseídos (un objeto comprado 3 veces ocupa 3 espacios). */
+    public function inventarioOcupado(): int
+    {
+        return (int) $this->rolObjetos()->sum('rol_character_objeto.cantidad');
+    }
+
     public function inventarioLleno(): bool
     {
-        return $this->rolObjetos()->count() >= $this->capacidadCarga();
+        return $this->inventarioOcupado() >= $this->capacidadCarga();
     }
 
     public function hitos(): HasMany

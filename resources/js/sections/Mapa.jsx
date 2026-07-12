@@ -1936,28 +1936,34 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 /* ─── TIENDA DE NPC VENDEDOR (naves u objetos, con interés ya aplicado) ── */
 function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
   const isNaves = tipo === 'vendedor_naves';
-  const [items, setItems]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy]       = useState(null);
+  const [items, setItems]         = useState([]);
+  const [inventario, setInventario] = useState(null); // { ocupado, capacidad } — solo objetos
+  const [loading, setLoading]     = useState(true);
+  const [busy, setBusy]           = useState(null);
+  const [confirmItem, setConfirmItem] = useState(null); // objeto pendiente de confirmar
+  const [cantidad, setCantidad]   = useState(1);
+  const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
     const path = isNaves ? `/npcs/${npc.id}/tienda-naves` : `/npcs/${npc.id}/tienda-objetos`;
     apiFetch(path)
-      .then((d) => setItems(isNaves ? (d.naves ?? []) : (d.objetos ?? [])))
+      .then((d) => {
+        setItems(isNaves ? (d.naves ?? []) : (d.objetos ?? []));
+        setInventario(d.inventario ?? null);
+      })
       .catch(() => toast('No se pudo cargar la tienda', { tone: 'error', icon: 'x' }))
       .finally(() => setLoading(false));
   }, [npc.id, isNaves]);
 
   useEffect(() => { load(); }, [load]);
 
-  const comprar = async (item) => {
+  const espacioDisponible = inventario ? Math.max(0, inventario.capacidad - inventario.ocupado) : null;
+
+  const comprarNave = async (item) => {
     setBusy(item.id);
     try {
-      const path = isNaves
-        ? `/npcs/${npc.id}/naves/${item.id}/comprar`
-        : `/npcs/${npc.id}/objetos/${item.id}/comprar`;
-      const d = await apiPost(path, {});
+      const d = await apiPost(`/npcs/${npc.id}/naves/${item.id}/comprar`, {});
       if (d?.credits !== undefined) onCreditsChange?.(d.credits);
       toast(`${item.nombre} adquirida`, { tone: 'success', icon: 'coin', desc: `-${item.precio_final} cr` });
       load();
@@ -1965,6 +1971,27 @@ function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
       toast(err?.message || 'No se pudo completar la compra', { tone: 'error', icon: 'x' });
     } finally {
       setBusy(null);
+    }
+  };
+
+  const abrirConfirmacion = (item) => { setConfirmItem(item); setCantidad(1); };
+  const cerrarConfirmacion = () => { setConfirmItem(null); setCantidad(1); };
+
+  const confirmarCompraObjeto = async () => {
+    if (!confirmItem) return;
+    setConfirming(true);
+    try {
+      const d = await apiPost(`/npcs/${npc.id}/objetos/${confirmItem.id}/comprar`, { cantidad });
+      if (d?.credits !== undefined) onCreditsChange?.(d.credits);
+      toast(`${confirmItem.nombre} x${cantidad} adquirido${cantidad > 1 ? 's' : ''}`, {
+        tone: 'success', icon: 'coin', desc: `-${d?.precio_pagado ?? confirmItem.precio_final * cantidad} cr`,
+      });
+      cerrarConfirmacion();
+      load();
+    } catch (err) {
+      toast(err?.message || 'No se pudo completar la compra', { tone: 'error', icon: 'x' });
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -1977,6 +2004,7 @@ function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
         <Icon name="coin" size={16} style={{ color: 'var(--holocron-oro)', flexShrink: 0 }} />
         <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>
           Los precios ya incluyen el interés que {npc.nombre} aplica sobre cada {isNaves ? 'nave' : 'objeto'}.
+          {!isNaves && inventario && ` Inventario: ${inventario.ocupado}/${inventario.capacidad} espacios usados.`}
         </span>
       </div>
 
@@ -2012,12 +2040,86 @@ function TiendaModal({ npc, tipo, onClose, onCreditsChange }) {
                   )
                 )}
               </div>
-              <Btn kind="gold" sm icon="coin" onClick={() => comprar(item)} disabled={busy === item.id}>
+              <Btn kind="gold" sm icon="coin"
+                onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
+                disabled={busy === item.id || (!isNaves && espacioDisponible === 0)}
+              >
                 {busy === item.id ? '...' : `${item.precio_final} cr`}
               </Btn>
             </div>
           ))}
         </div>
+      )}
+
+      {confirmItem && (
+        <Modal open onClose={cerrarConfirmacion} title="Confirmar compra" kicker={npc.nombre} width={420}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+              display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+            }}>
+              {confirmItem.imagen
+                ? <img src={mediaUrl(confirmItem.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <Icon name="star" size={22} style={{ color: 'var(--holo)' }} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="nx-display" style={{ fontSize: 13 }}>{confirmItem.nombre}</div>
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>
+                {confirmItem.precio_final} cr c/u
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <label className="nx-label" style={{ margin: 0 }}>Cantidad</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+                style={{
+                  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--txt)', cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                }}
+              >−</button>
+              <input type="number" className="nx-input" min={1} max={espacioDisponible ?? 99}
+                value={cantidad}
+                onChange={(e) => {
+                  const v = Math.max(1, Number(e.target.value) || 1);
+                  setCantidad(espacioDisponible != null ? Math.min(v, Math.max(1, espacioDisponible)) : v);
+                }}
+                style={{ width: 56, textAlign: 'center', padding: '4px 6px' }}
+              />
+              <button type="button"
+                onClick={() => setCantidad((c) => (espacioDisponible != null ? Math.min(espacioDisponible, c + 1) : c + 1))}
+                disabled={espacioDisponible != null && cantidad >= espacioDisponible}
+                style={{
+                  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--txt)', cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                  opacity: (espacioDisponible != null && cantidad >= espacioDisponible) ? 0.4 : 1,
+                }}
+              >+</button>
+            </div>
+          </div>
+
+          {espacioDisponible != null && (
+            <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 14 }}>
+              Espacio disponible en tu inventario: {espacioDisponible}
+            </div>
+          )}
+
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px',
+            background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)', borderRadius: 'var(--radius-md)', marginBottom: 18,
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>Total a pagar</span>
+            <span className="nx-num" style={{ fontSize: 18, color: 'var(--holocron-oro)' }}>{confirmItem.precio_final * cantidad} cr</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Btn kind="ghost" onClick={cerrarConfirmacion} disabled={confirming}>Cancelar</Btn>
+            <Btn kind="accent" icon="check" onClick={confirmarCompraObjeto} disabled={confirming || espacioDisponible === 0}>
+              {confirming ? 'Comprando...' : 'Confirmar compra'}
+            </Btn>
+          </div>
+        </Modal>
       )}
     </Modal>
   );

@@ -14,6 +14,7 @@ class RolCharacterObjeto extends Model
     protected $fillable = [
         'character_id',
         'rol_objeto_id',
+        'cantidad',
     ];
 
     public function character(): BelongsTo

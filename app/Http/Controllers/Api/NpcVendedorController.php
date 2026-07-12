@@ -88,7 +88,7 @@ class NpcVendedorController extends Controller
     }
 
     /** GET /npcs/{npc}/tienda-objetos */
-    public function tiendaObjetos(int $npcId): JsonResponse
+    public function tiendaObjetos(Request $request, int $npcId): JsonResponse
     {
         $npc = MapNpc::with('objetos')->findOrFail($npcId);
 
@@ -104,7 +104,13 @@ class NpcVendedorController extends Controller
             'precio_final' => $this->precioFinal((int) ($o->costo ?? 0), (int) $o->pivot->interes),
         ])->values();
 
-        return response()->json(['objetos' => $objetos]);
+        $character  = $request->user()->character;
+        $inventario = $character ? [
+            'ocupado'   => $character->inventarioOcupado(),
+            'capacidad' => $character->capacidadCarga(),
+        ] : null;
+
+        return response()->json(['objetos' => $objetos, 'inventario' => $inventario]);
     }
 
     /** POST /npcs/{npc}/objetos/{objeto}/comprar */
@@ -117,32 +123,47 @@ class NpcVendedorController extends Controller
             return response()->json(['message' => 'Este vendedor no tiene ese objeto a la venta.'], 404);
         }
 
+        $data     = $request->validate(['cantidad' => 'nullable|integer|min:1|max:99']);
+        $cantidad = $data['cantidad'] ?? 1;
+
         $character = $request->user()->character;
         if (!$character) {
             return response()->json(['message' => 'No tienes un personaje.'], 422);
         }
 
-        if ($character->rolObjetos()->where('rol_objetos.id', $objeto->id)->exists()) {
-            return response()->json(['message' => 'Ya posees este objeto.'], 409);
+        $espacioDisponible = $character->capacidadCarga() - $character->inventarioOcupado();
+        if ($cantidad > $espacioDisponible) {
+            return response()->json([
+                'message' => $espacioDisponible > 0
+                    ? "No tienes espacio suficiente: solo te quedan {$espacioDisponible} espacio(s) de inventario."
+                    : 'Tu inventario está lleno, no tienes espacio para más objetos.',
+            ], 422);
         }
 
-        if ($character->inventarioLleno()) {
-            return response()->json(['message' => 'Tu inventario está lleno.'], 422);
-        }
+        $precioUnitario = $this->precioFinal((int) ($objeto->costo ?? 0), (int) $objeto->pivot->interes);
+        $total          = $precioUnitario * $cantidad;
 
-        $precio = $this->precioFinal((int) ($objeto->costo ?? 0), (int) $objeto->pivot->interes);
-
-        if ($character->credits < $precio) {
+        if ($character->credits < $total) {
             return response()->json(['message' => 'No tienes créditos suficientes.'], 422);
         }
 
-        $character->decrement('credits', $precio);
-        $character->rolObjetos()->attach($objeto->id);
+        $character->decrement('credits', $total);
+
+        $owned = $character->rolObjetos()->where('rol_objetos.id', $objeto->id)->first();
+        if ($owned) {
+            $character->rolObjetos()->updateExistingPivot($objeto->id, [
+                'cantidad' => $owned->pivot->cantidad + $cantidad,
+            ]);
+        } else {
+            $character->rolObjetos()->attach($objeto->id, ['cantidad' => $cantidad]);
+        }
 
         return response()->json([
-            'objeto'        => $objeto,
-            'precio_pagado' => $precio,
-            'credits'       => $character->credits,
+            'objeto'          => $objeto,
+            'cantidad'        => $cantidad,
+            'precio_unitario' => $precioUnitario,
+            'precio_pagado'   => $total,
+            'credits'         => $character->credits,
         ], 201);
     }
 }
