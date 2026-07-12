@@ -219,7 +219,7 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',           label: 'Nombre',               type: 'text', required: true, span: 2 },
-      { key: 'tipo',             label: 'Tipo',                 type: 'text' },
+      { key: 'tipo',             label: 'Tipo',                 type: 'text', hint: "Usa 'pirata' para que esta nave pueda aparecer en emboscadas aleatorias al viajar entre planetas de sistemas hostiles" },
       { key: 'rareza',           label: 'Rareza',               type: 'select', options: RAREZA_OPTS },
       { key: 'descripcion',      label: 'Descripción',          type: 'textarea', span: 2 },
       { key: 'capacidad_carga',  label: 'Capacidad de carga',   type: 'number', min: 0 },
@@ -919,11 +919,11 @@ function NpcCrudModal({ config, record, relatedOptions, onSave, onClose }) {
       onClose={onClose}
       kicker={isEdit ? 'EDITAR · NPC' : 'NUEVO · NPC'}
       title={isEdit ? `Editando #${record.id}` : 'Crear NPC'}
-      width={980}
+      width="100%"
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
         {/* Columna principal */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '14px 18px' }}>
           {mainFields.map(field => (
             <div key={field.key}
               style={{ gridColumn: field.span === 2 ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}

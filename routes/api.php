@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\NpcVendedorController;
+use App\Http\Controllers\Api\PirataEncuentroController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
 use App\Http\Controllers\Api\EmblemUploadController;
@@ -168,6 +169,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/map/lugares/{id}',      [MapController::class, 'lugar']);
     Route::get('/map/npcs/{id}',         [MapController::class, 'npc']);
     Route::get('/map/npcs-espacio/{id}', [MapController::class, 'naveEspacio']);
+    Route::post('/map/planetas/{planetaId}/pirata-encuentro', [PirataEncuentroController::class, 'check']);
+    Route::post('/pirata-encuentros/{encuentroId}/victoria',  [PirataEncuentroController::class, 'victoria']);
     Route::post('/map/location',         [MapController::class, 'updateLocation']);
 
     // Naves

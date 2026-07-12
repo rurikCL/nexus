@@ -3477,6 +3477,25 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     }
   }, []);
 
+  /* Al viajar a un planeta de un sistema hostil, hay una chance de emboscada
+     pirata. El chequeo (probabilidad, nave del pirata) se resuelve en el
+     servidor para que no pueda manipularse desde el cliente. */
+  const checkPirataAmbush = useCallback(async (planetaId) => {
+    try {
+      const d = await apiPost(`/map/planetas/${planetaId}/pirata-encuentro`, {});
+      if (!d?.ambush) return;
+      const mias = await apiFetch('/naves/mias');
+      const equipada = (mias.naves ?? []).find((n) => n.id === mias.nave_equipada_id);
+      if (!equipada) return; // el backend ya lo valida; esto es solo defensivo
+      const player = getNaveCombatPlayerStats(equipada);
+      const npc = getNaveEncuentroStats({ nombre: `${d.pirata.nombre} (pirata)`, nave: d.pirata });
+      toast('¡Emboscada pirata!', { tone: 'error', icon: 'ship', desc: `${d.pirata.nombre} te intercepta` });
+      setActiveNaveCombat({ npcEspacio: null, pirataEncuentroId: d.encuentro_id, player, npc });
+    } catch {
+      // silencioso: si el chequeo falla simplemente no hay emboscada
+    }
+  }, []);
+
   const handleStartPvp = async () => {
     if (!pvpAttackTarget || pvpChallenging) return;
     setPvpChallenging(true);
@@ -3587,7 +3606,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   };
 
   const selectSistema = (s) => { goSistema(s); };
-  const selectPlaneta = (p) => { setPlaneta(p); goPlaneta(p); };
+  const selectPlaneta = (p) => { setPlaneta(p); goPlaneta(p); checkPirataAmbush(p.id); };
   const selectZona    = (z) => { setZona(z);    goZona(z);    };
   const selectLugar   = (l) => { setLugar(l);   setNivel('lugar'); };
   const selectNpc     = (n) => setDialogNpc(n);
@@ -3741,8 +3760,18 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           npc={activeNaveCombat.npc}
           player={activeNaveCombat.player}
           onVictory={async () => {
-            postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' });
-            if (activeNaveCombat.npcEspacio?.id) await postNaveEspacioVictory(activeNaveCombat.npcEspacio.id);
+            if (activeNaveCombat.pirataEncuentroId) {
+              try {
+                const d = await apiPost(`/pirata-encuentros/${activeNaveCombat.pirataEncuentroId}/victoria`, {});
+                if (d?.credits !== undefined) syncCredits(d.credits);
+                toast('Pirata derrotado', { tone: 'success', icon: 'coin', desc: `+${d?.credits_awarded ?? 0} créditos` });
+              } catch {
+                toast('No se pudo cobrar la recompensa del encuentro', { tone: 'error', icon: 'x' });
+              }
+            } else {
+              postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' });
+              if (activeNaveCombat.npcEspacio?.id) await postNaveEspacioVictory(activeNaveCombat.npcEspacio.id);
+            }
             setActiveNaveCombat(null);
           }}
           onDefeat={() => setActiveNaveCombat(null)}
