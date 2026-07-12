@@ -38,6 +38,18 @@ class Training extends Model
         return $this->hasMany(TrainingPlanNode::class)->orderBy('orden');
     }
 
+    /** Nodos del plan principal, editable únicamente por los encargados. */
+    public function mainPlanNodes(): HasMany
+    {
+        return $this->hasMany(TrainingPlanNode::class)->where('es_adicional', false)->orderBy('orden');
+    }
+
+    /** Nodos "Adicional" aportados por caballeros/maestros/granmaestros, sean o no encargados. */
+    public function adicionalNodes(): HasMany
+    {
+        return $this->hasMany(TrainingPlanNode::class)->where('es_adicional', true)->orderBy('orden');
+    }
+
     public function attendance(): HasMany
     {
         return $this->hasMany(TrainingDay::class)->where('type', 'personal');
@@ -53,5 +65,11 @@ class Training extends Model
     {
         return $this->encargados()->where('user_id', $user->id)->exists()
             || in_array($user->tier, self::TRAINER_TIERS);
+    }
+
+    /** ¿Puede este usuario agregar nodos "Adicional" al plan (sin ser encargado)? */
+    public function canAddAdicional(User $user): bool
+    {
+        return in_array($user->tier, self::TRAINER_TIERS);
     }
 }

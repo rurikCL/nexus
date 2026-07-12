@@ -206,6 +206,94 @@ function PlanEditor({ initialNodes, sesionId, modulos, onSaved }) {
   );
 }
 
+/* ─── NODO ADICIONAL (aporte de caballero/maestro, fuera del plan principal) ── */
+function AdicionalNodeRow({ node, index, total, canRemove, onRemove }) {
+  return (
+    <div>
+      <PlanNode node={node} index={index} total={total} isEdit={false} modulos={[]} />
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '4px 4px 2px', fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
+      }}>
+        <span>
+          Aportado por {node.creador?.name ?? 'alguien'}
+          {node.creador?.handle && <> · @{node.creador.handle}</>}
+        </span>
+        {canRemove && (
+          <button onClick={onRemove} style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer' }}>
+            quitar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── FORMULARIO PARA AGREGAR UN NODO ADICIONAL ───────────────── */
+function AdicionalForm({ sesionId, modulos, onAdded }) {
+  const [type, setType]           = useState(null); // null | 'module' | 'text'
+  const [moduloId, setModuloId]   = useState(null);
+  const [titulo, setTitulo]       = useState('');
+  const [contenido, setContenido] = useState('');
+  const [saving, setSaving]       = useState(false);
+
+  const reset = () => { setType(null); setModuloId(null); setTitulo(''); setContenido(''); };
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const res = await api('POST', `/sesiones/${sesionId}/plan/adicional`, {
+        type, modulo_id: moduloId ?? null, titulo: titulo || null, contenido: contenido || null,
+      });
+      toast('Nodo adicional agregado', { tone: 'success', icon: 'check' });
+      onAdded(res.node);
+      reset();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!type) {
+    return (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Btn kind="ghost" sm icon="target" onClick={() => setType('module')}>+ Módulo</Btn>
+        <Btn kind="ghost" sm icon="edit"   onClick={() => setType('text')}>+ Nota</Btn>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ border: '1px dashed var(--holo-line)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+      {type === 'module' ? (
+        <select className="nx-select" style={{ fontSize: 12 }}
+          value={moduloId ?? ''}
+          onChange={e => setModuloId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">— Seleccionar módulo —</option>
+          {modulos.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input className="nx-input" style={{ fontSize: 12 }}
+            placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)}
+          />
+          <textarea className="nx-textarea" rows={2} style={{ fontSize: 12, resize: 'vertical' }}
+            placeholder="Contenido..." value={contenido} onChange={e => setContenido(e.target.value)}
+          />
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+        <Btn kind="ghost" sm onClick={reset} disabled={saving}>Cancelar</Btn>
+        <Btn kind="accent" sm icon="check" onClick={submit} disabled={saving || (type === 'module' && !moduloId)}>
+          {saving ? 'Agregando...' : 'Agregar'}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
 /* ─── ESCANEO DE ASISTENCIA (QR) ──────────────────────────────── */
 function extractHandle(raw) {
   const m = raw.match(/\/c\/([^/?#]+)/);
@@ -619,6 +707,8 @@ function SesionDetalle({ id, user, onBack }) {
   const myId     = user?.id;
   const iAttended = sesion.attendance.some(a => a.user_id === myId);
   const canMark   = isEnc || TRAINER_TIERS.includes(user?.tier ?? '');
+  const canAddAdicional  = !isClosed && (sesion.puede_agregar_adicional ?? TRAINER_TIERS.includes(user?.tier ?? ''));
+  const planAdicionales  = sesion.plan_nodes_adicionales ?? [];
 
   const unattend = async () => {
     setActioning(true);
@@ -630,6 +720,16 @@ function SesionDetalle({ id, user, onBack }) {
       toast(err.message, { tone: 'error' });
     } finally {
       setActioning(false);
+    }
+  };
+
+  const removeAdicional = async (nodeId) => {
+    try {
+      await api('DELETE', `/sesiones/${id}/plan/adicional/${nodeId}`);
+      setSesion(s => ({ ...s, plan_nodes_adicionales: (s.plan_nodes_adicionales ?? []).filter(n => n.id !== nodeId) }));
+      toast('Nodo adicional eliminado', { tone: 'info' });
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
     }
   };
 
@@ -656,67 +756,94 @@ function SesionDetalle({ id, user, onBack }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }}>
 
         {/* ── Plan ── */}
-        <Panel kicker="PLAN DE ENTRENAMIENTO" title="Nodos del Plan" icon="target"
-          right={isEnc && !isClosed && (
-            <Btn kind="ghost" sm onClick={() => setEditPlan(e => !e)}>
-              {editPlan ? 'Ver plan' : 'Editar plan'}
-            </Btn>
-          )}
-        >
-          {editPlan ? (
-            <PlanEditor
-              initialNodes={sesion.plan_nodes}
-              sesionId={id}
-              modulos={modulos}
-              onSaved={nodes => { setSesion(s => ({ ...s, plan_nodes: nodes })); setEditPlan(false); }}
-            />
-          ) : sesion.plan_nodes.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--txt-faint)', fontSize: 13 }}>
-              {isEnc && !isClosed
-                ? <>Sin nodos. <button onClick={() => setEditPlan(true)} style={{ background: 'none', border: 'none', color: 'var(--holo)', cursor: 'pointer', textDecoration: 'underline' }}>Agregar plan →</button></>
-                : 'Esta sesión no tiene plan definido.'}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {sesion.plan_nodes.map((n, i) => (
-                <PlanNode key={n.id ?? i} node={n} index={i} total={sesion.plan_nodes.length}
-                  isEdit={false} modulos={modulos}
-                />
-              ))}
-            </div>
-          )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Panel kicker="PLAN DE ENTRENAMIENTO" title="Nodos del Plan" icon="target"
+            right={isEnc && !isClosed && (
+              <Btn kind="ghost" sm onClick={() => setEditPlan(e => !e)}>
+                {editPlan ? 'Ver plan' : 'Editar plan'}
+              </Btn>
+            )}
+          >
+            {editPlan ? (
+              <PlanEditor
+                initialNodes={sesion.plan_nodes}
+                sesionId={id}
+                modulos={modulos}
+                onSaved={nodes => { setSesion(s => ({ ...s, plan_nodes: nodes })); setEditPlan(false); }}
+              />
+            ) : sesion.plan_nodes.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--txt-faint)', fontSize: 13 }}>
+                {isEnc && !isClosed
+                  ? <>Sin nodos. <button onClick={() => setEditPlan(true)} style={{ background: 'none', border: 'none', color: 'var(--holo)', cursor: 'pointer', textDecoration: 'underline' }}>Agregar plan →</button></>
+                  : 'Esta sesión no tiene plan definido.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {sesion.plan_nodes.map((n, i) => (
+                  <PlanNode key={n.id ?? i} node={n} index={i} total={sesion.plan_nodes.length}
+                    isEdit={false} modulos={modulos}
+                  />
+                ))}
+              </div>
+            )}
 
-          {/* Global closing note */}
-          {sesion.global_note && (
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
-              <div className="nx-kicker" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Icon name="edit" size={11} /> BITÁCORA DE CIERRE
-              </div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-                {sesion.global_note.focus && (
-                  <span style={{ fontSize: 11, color: FOCO_C[sesion.global_note.focus] ?? 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
-                    {sesion.global_note.focus}
-                  </span>
+            {/* Global closing note */}
+            {sesion.global_note && (
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+                <div className="nx-kicker" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="edit" size={11} /> BITÁCORA DE CIERRE
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                  {sesion.global_note.focus && (
+                    <span style={{ fontSize: 11, color: FOCO_C[sesion.global_note.focus] ?? 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                      {sesion.global_note.focus}
+                    </span>
+                  )}
+                  {sesion.global_note.effort && (
+                    <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                      Esfuerzo {sesion.global_note.effort}/10
+                    </span>
+                  )}
+                </div>
+                {sesion.global_note.note && (
+                  <div style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                    {sesion.global_note.note}
+                  </div>
                 )}
-                {sesion.global_note.effort && (
-                  <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
-                    Esfuerzo {sesion.global_note.effort}/10
-                  </span>
+                {sesion.global_note.tags?.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                    {sesion.global_note.tags.map(t => <Chip key={t} tone="dim" style={{ fontSize: 9 }}>{t}</Chip>)}
+                  </div>
                 )}
               </div>
-              {sesion.global_note.note && (
-                <div style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                  {sesion.global_note.note}
+            )}
+          </Panel>
+
+          {/* ── Plan Adicional: aportes de caballeros/maestros, fuera del plan principal ── */}
+          {(planAdicionales.length > 0 || canAddAdicional) && (
+            <Panel kicker="APORTES DE LA COMUNIDAD" title="Adicional" icon="plus">
+              {planAdicionales.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--txt-faint)', fontSize: 12, marginBottom: canAddAdicional ? 12 : 0 }}>
+                  Sin nodos adicionales aún.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: canAddAdicional ? 14 : 0 }}>
+                  {planAdicionales.map((n, i) => (
+                    <AdicionalNodeRow key={n.id} node={n} index={i} total={planAdicionales.length}
+                      canRemove={!isClosed && (n.created_by === myId || isEnc)}
+                      onRemove={() => removeAdicional(n.id)}
+                    />
+                  ))}
                 </div>
               )}
-              {sesion.global_note.tags?.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                  {sesion.global_note.tags.map(t => <Chip key={t} tone="dim" style={{ fontSize: 9 }}>{t}</Chip>)}
-                </div>
+              {canAddAdicional && (
+                <AdicionalForm sesionId={id} modulos={modulos}
+                  onAdded={node => setSesion(s => ({ ...s, plan_nodes_adicionales: [...(s.plan_nodes_adicionales ?? []), node] }))}
+                />
               )}
-            </div>
+            </Panel>
           )}
-        </Panel>
+        </div>
 
         {/* ── Sidebar ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
