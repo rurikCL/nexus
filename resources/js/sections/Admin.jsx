@@ -28,6 +28,7 @@ const GROUPS = ['MAPA GALÁCTICO', 'ROL', 'COMPETITIVO', 'SISTEMA'];
 /* ─── OPCIONES ESTÁTICAS ─────────────────────────────────── */
 const RAREZA_OPTS     = ['comun', 'poco_comun', 'raro', 'epico', 'legendario'];
 const HABILIDAD_TIPO_OPTS  = ['melee', 'distancia'];
+const HABILIDAD_ROL_TIPO_OPTS = ['melee', 'distancia', { value: 'nave', label: 'Nave (combate espacial)' }];
 const HABILIDAD_OBJETIVO_OPTS = ['target', 'self'];
 const BUFF_STATS  = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
 const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
@@ -229,6 +230,10 @@ const ENTITY_CONFIG = {
       { key: 'ataque',           label: 'Ataque',               type: 'number', min: 0 },
       { key: 'maniobrabilidad',  label: 'Maniobrabilidad',      type: 'number', min: 0 },
       { key: 'capacidad_salto',  label: 'Capacidad de salto',   type: 'number', min: 0 },
+      { key: 'habilidad_1',      label: 'Habilidad — Slot 1',   type: 'relatedSelect', related: 'rol_habilidades_nave', span: 2, hint: 'Habilidades de combate espacial (tipo "nave") que esta nave puede usar en batalla' },
+      { key: 'habilidad_2',      label: 'Habilidad — Slot 2',   type: 'relatedSelect', related: 'rol_habilidades_nave', span: 2 },
+      { key: 'habilidad_3',      label: 'Habilidad — Slot 3',   type: 'relatedSelect', related: 'rol_habilidades_nave', span: 2 },
+      { key: 'habilidad_4',      label: 'Habilidad — Slot 4',   type: 'relatedSelect', related: 'rol_habilidades_nave', span: 2 },
       { key: 'costo',            label: 'Costo (cr)',           type: 'number', min: 0 },
       { key: 'costo_reparacion', label: 'Costo reparación (cr)',type: 'number', min: 0 },
       { key: 'imagen',           label: 'Imagen de la nave',    type: 'file', span: 2 },
@@ -240,7 +245,7 @@ const ENTITY_CONFIG = {
   rol_habilidades: {
     label: 'Habilidades de Rol', icon: 'zap', group: 'ROL',
     filters: [
-      { key: 'tipo',  label: 'Tipo',  options: [{ value: 'melee', label: 'Melee' }, { value: 'distancia', label: 'Distancia' }] },
+      { key: 'tipo',  label: 'Tipo',  options: [{ value: 'melee', label: 'Melee' }, { value: 'distancia', label: 'Distancia' }, { value: 'nave', label: 'Nave' }] },
       { key: 'forma', label: 'Forma', options: [0,1,2,3,4,5,6,7].map(n => ({ value: String(n), label: n === 0 ? 'Universal (0)' : `Forma ${n}` })) },
     ],
     columns: [
@@ -256,7 +261,7 @@ const ENTITY_CONFIG = {
     fields: [
       { key: 'nombre',       label: 'Nombre',                type: 'text',      required: true },
       { key: 'icono',        label: 'Icono',                 type: 'file' },
-      { key: 'tipo',         label: 'Tipo',                  type: 'select',    options: HABILIDAD_TIPO_OPTS, required: true, hint: 'melee = cuerpo a cuerpo · distancia = ataque a distancia' },
+      { key: 'tipo',         label: 'Tipo',                  type: 'select',    options: HABILIDAD_ROL_TIPO_OPTS, required: true, hint: 'melee = cuerpo a cuerpo · distancia = ataque a distancia · nave = exclusiva de combate espacial' },
       { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
       { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
       { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },

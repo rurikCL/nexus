@@ -26,7 +26,51 @@ const mediaUrl = (path) => {
 const NPC_COMBAT_LS = 'nx-npc-combat';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
 
-export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee, initialState }) {
+/* Fondo espacial autocontenido (estrellas + planetas) para combates navales */
+function pseudoRandom(seed) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+function useSpaceStarsCSS() {
+  return useMemo(() => {
+    const dot = (x, y, r, a) =>
+      `radial-gradient(circle at ${x}% ${y}%, rgba(219,230,245,${a}) 0px, rgba(219,230,245,${a}) ${r}px, transparent ${(r + 0.5).toFixed(2)}px)`;
+    return Array.from({ length: 160 }, (_, i) => {
+      const x = (pseudoRandom(i * 12.9898 + 1) * 100).toFixed(2);
+      const y = (pseudoRandom(i * 78.233 + 3) * 100).toFixed(2);
+      const r = (pseudoRandom(i * 37.719 + 5) * 0.9 + 0.3).toFixed(2);
+      const a = (pseudoRandom(i * 91.345 + 7) * 0.5 + 0.35).toFixed(2);
+      return dot(x, y, r, a);
+    }).join(', ');
+  }, []);
+}
+
+function SpaceBackground() {
+  const starsCSS = useSpaceStarsCSS();
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 25%, #0c1e42, #020810 75%)' }}>
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: starsCSS }} />
+      {/* planetas decorativos */}
+      <div style={{
+        position: 'absolute', top: '6%', right: '8%', width: 150, height: 150, borderRadius: '50%',
+        background: 'radial-gradient(circle at 35% 30%, #7bc8d4dd, #386185aa 55%, #0c1e4233 85%, transparent)',
+        boxShadow: '0 0 70px 6px rgba(56,205,240,0.10)',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '10%', left: '5%', width: 78, height: 78, borderRadius: '50%',
+        background: 'radial-gradient(circle at 35% 30%, #d4a76add, #8a6a4aaa 55%, #2a1f1533 85%, transparent)',
+        boxShadow: '0 0 40px 4px rgba(212,167,106,0.10)',
+      }} />
+      <div style={{
+        position: 'absolute', top: '38%', left: '14%', width: 26, height: 26, borderRadius: '50%',
+        background: 'radial-gradient(circle at 35% 30%, #a8b8d4dd, #5a6a8aaa 60%, transparent)',
+      }} />
+    </div>
+  );
+}
+
+export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false }) {
   const d20 = () => Math.floor(Math.random() * 20) + 1;
 
   const maxPlayer = { vida: player.vida, escudo: player.escudo };
@@ -91,9 +135,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const effPlayerIni = player.iniciativa + countBuff('iniciativa');
   const effNpcIni     = Math.max(1, npcIni - countNpcDeb('iniciativa'));
 
-  /* Fondo desde el lugar del NPC */
+  /* Fondo desde el lugar del NPC (no aplica a combates navales: usan fondo espacial fijo) */
   useEffect(() => {
-    if (bgImg || !npc.LugarID) return;
+    if (naveMode || bgImg || !npc.LugarID) return;
     const token = localStorage.getItem('nx-token');
     fetch(`/api/map/lugares/${npc.LugarID}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -335,21 +379,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
   const LOG_C = { info: 'rgba(200,225,255,0.78)', success: '#10b981', danger: '#ff6b6b', miss: 'rgba(150,180,220,0.5)', system: '#38cdf0' };
 
-  /* Badges para HUDs */
-  const npcBadges = [
+  /* Badges para HUDs — en combate naval solo se muestran ATQ y MOV (maniobrabilidad) */
+  const npcBadgesFull = [
     { l: 'ATQ', v: effNpcAtk, c: '#ff7043', dim: effNpcAtk < npcAtk },
     { l: 'DEF', v: effNpcDef, c: '#38cdf0', dim: effNpcDef < npcDef },
     ...(npcPnt > 0 ? [{ l: 'PNT', v: effNpcPnt, c: '#10b981', dim: effNpcPnt < npcPnt }] : []),
     { l: 'MOV', v: effNpcMov, c: '#a78bfa', dim: effNpcMov < npcMov },
   ];
-  const playerBadges = [
+  const playerBadgesFull = [
     { l: 'ATQ', v: effPlayerAtk, c: '#ff7043', bonus: effPlayerAtk > player.ataque },
     { l: 'DEF', v: effPlayerDef, c: '#38cdf0', bonus: effPlayerDef > player.defensa },
     ...(player.punteria > 0 ? [{ l: 'PNT', v: effPlayerPnt, c: '#10b981', bonus: effPlayerPnt > player.punteria }] : []),
     { l: 'MOV', v: effPlayerMov, c: '#a78bfa', bonus: effPlayerMov > player.movimiento },
   ];
+  const naveBadgeFilter = (b) => b.l === 'ATQ' || b.l === 'MOV';
+  const npcBadges    = naveMode ? npcBadgesFull.filter(naveBadgeFilter)    : npcBadgesFull;
+  const playerBadges = naveMode ? playerBadgesFull.filter(naveBadgeFilter) : playerBadgesFull;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user' }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -367,7 +414,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         }}>
           {photoUrl
             ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
+            : <Icon name={fallbackIcon} size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
           }
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -454,7 +501,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(56,205,240,0.18)',
       }}>
         {/* Fondo */}
-        {bgImg
+        {naveMode
+          ? <SpaceBackground />
+          : bgImg
           ? <img src={bgImg} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
           : <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, #0c1e42, #020810)' }} />
         }
@@ -466,6 +515,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
             borderColor="rgba(255,45,69,0.40)" badges={npcBadges} align="left"
+            fallbackIcon={naveMode ? 'ship' : 'user'}
           />
         </div>
 
@@ -475,6 +525,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
             borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
+            fallbackIcon={naveMode ? 'ship' : 'user'}
           />
         </div>
 
@@ -634,35 +685,43 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                   })
                 )}
 
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+                {!naveMode && (
+                  <>
+                    <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-                <ActionBtn onClick={() => isPlayerTurn && doPlayerBasicAttack()}
-                  disabled={!isPlayerTurn}
-                  bg="rgba(255,140,0,0.07)" border="rgba(255,140,0,0.22)"
-                  hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={58}
-                >
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>{player.arma_equipada ? '🗡' : '✊'}</span>
-                  <span style={{
-                    fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
-                    maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis',
-                    color: (player.arma_equipada?.es_sable && NX.SABERS[player.arma_equipada.color_hoja]) || '#ff9955',
-                  }}>
-                    {player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
-                  </span>
-                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {player.arma_equipada?.dano ?? 3}</span>
-                </ActionBtn>
+                    <ActionBtn onClick={() => isPlayerTurn && doPlayerBasicAttack()}
+                      disabled={!isPlayerTurn}
+                      bg="rgba(255,140,0,0.07)" border="rgba(255,140,0,0.22)"
+                      hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={58}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>{player.arma_equipada ? '🗡' : '✊'}</span>
+                      <span style={{
+                        fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                        maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis',
+                        color: (player.arma_equipada?.es_sable && NX.SABERS[player.arma_equipada.color_hoja]) || '#ff9955',
+                      }}>
+                        {player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
+                      </span>
+                      <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {player.arma_equipada?.dano ?? 3}</span>
+                    </ActionBtn>
+                  </>
+                )}
 
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+                {!naveMode && (
+                  <>
+                    <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-                <ActionBtn onClick={() => isPlayerTurn && setStancePicker(true)}
-                  disabled={!isPlayerTurn}
-                  bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)"
-                  hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={54}
-                >
-                  <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
-                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1] ?? `F${currentForma}`}</span>
-                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
-                </ActionBtn>
+                    <ActionBtn onClick={() => isPlayerTurn && setStancePicker(true)}
+                      disabled={!isPlayerTurn}
+                      bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)"
+                      hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={54}
+                    >
+                      <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+                      <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1] ?? `F${currentForma}`}</span>
+                      <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+                    </ActionBtn>
+                  </>
+                )}
 
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
@@ -679,7 +738,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
 
         {/* Stance Picker Modal */}
-        {stancePicker && (
+        {stancePicker && !naveMode && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 20,
             background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(8px)',
