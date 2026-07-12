@@ -6,7 +6,7 @@ import { Empty } from './Comando.jsx';
 const TASK_STATUS = {
   pendiente:  { label: 'Pendiente',   tone: 'dim',    color: 'var(--txt-dim)' },
   'en-curso': { label: 'En curso',    tone: '',       color: 'var(--holo)' },
-  revision:   { label: 'En revisión', tone: 'orange', color: 'var(--pompeyo-naranja)' },
+  revision:   { label: 'En revisión', tone: 'orange', color: 'var(--holocron-naranja)' },
   completada: { label: 'Completada',  tone: 'green',  color: 'var(--green-500)' },
 };
 
@@ -176,7 +176,7 @@ function PupilTaskCard({ t, onUpdateProgress, onSendToReview }) {
           <span className="nx-data" style={{ fontSize: 12 }}>Aprobada · +{t.reward} créditos abonados</span>
         </div>
       ) : t.status === 'revision' ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, color: 'var(--pompeyo-naranja)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, color: 'var(--holocron-naranja)' }}>
           <Icon name="clock" size={15} />
           <span className="nx-data" style={{ fontSize: 12 }}>Esperando aprobación del tutor</span>
         </div>
@@ -384,7 +384,7 @@ function AssignModal({ pupil, allCombatants, onClose, onCreated, user }) {
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, color: 'var(--txt-dim)' }}>
           <input type="checkbox" checked={f.notify} onChange={e => setF({ ...f, notify: e.target.checked })}
-            style={{ accentColor: 'var(--pompeyo-naranja)', width: 16, height: 16 }} />
+            style={{ accentColor: 'var(--holocron-naranja)', width: 16, height: 16 }} />
           <Icon name="bell" size={14} /> Notificar al pupilo al asignar
         </label>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>

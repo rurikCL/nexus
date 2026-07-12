@@ -19,7 +19,11 @@ class Character extends Model
         'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
         'habilidades_por_forma', 'current_forma',
         'arma_equipada_id',
+        'nave_equipada_id',
     ];
+
+    /** Capacidad de carga base para un personaje sin nave equipada. */
+    public const CAPACIDAD_CARGA_BASE = 10;
 
     protected $casts = [
         'stats'          => 'array',
@@ -110,6 +114,29 @@ class Character extends Model
     public function armaEquipada(): BelongsTo
     {
         return $this->belongsTo(RolObjeto::class, 'arma_equipada_id');
+    }
+
+    public function naves(): HasMany
+    {
+        return $this->hasMany(CharacterNave::class);
+    }
+
+    public function naveEquipada(): BelongsTo
+    {
+        return $this->belongsTo(CharacterNave::class, 'nave_equipada_id');
+    }
+
+    /** Capacidad de carga total: base + la que aporte la nave equipada. */
+    public function capacidadCarga(): int
+    {
+        $nave = $this->relationLoaded('naveEquipada') ? $this->naveEquipada : $this->naveEquipada()->with('nave')->first();
+
+        return self::CAPACIDAD_CARGA_BASE + ($nave?->nave?->capacidad_carga ?? 0);
+    }
+
+    public function inventarioLleno(): bool
+    {
+        return $this->rolObjetos()->count() >= $this->capacidadCarga();
     }
 
     public function hitos(): HasMany

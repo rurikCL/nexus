@@ -54,9 +54,9 @@
 --holo-faint: rgba con 18% opacidad   /* fondos de chips/inputs */
 --holo-line:  rgba con 32% opacidad   /* bordes */
 
-/* Marca Pompeyo */
---pompeyo-naranja: #FF6B00   /* acción, combates, CTAs */
---pompeyo-oro:     #E6B325   /* élite, medallas, Gran Maestro */
+/* Marca Holocrón */
+--holocron-naranja: #FF6B00   /* acción, combates, CTAs */
+--holocron-oro:     #E6B325   /* élite, medallas, Gran Maestro */
 --azul-glow:       #0047BA   /* botón primario */
 
 /* Texto */
@@ -209,7 +209,7 @@ Tiers disponibles: `iniciado` `padawan` `caballero` `maestro` `granmaestro`
   label="Fuerza"
   value={75}
   max={100}
-  color="var(--pompeyo-naranja)"  // opcional, default: cian
+  color="var(--holocron-naranja)"  // opcional, default: cian
 />
 ```
 
@@ -580,7 +580,7 @@ export default function NuevaVistaView({ user, character, combatants }) {
 
 ```jsx
 <div style={{ textAlign: 'center', padding: '16px 0' }}>
-  <div className="nx-num" style={{ fontSize: 32, color: 'var(--pompeyo-naranja)' }}>
+  <div className="nx-num" style={{ fontSize: 32, color: 'var(--holocron-naranja)' }}>
     {valor}
   </div>
   <div className="nx-kicker" style={{ marginTop: 4 }}>

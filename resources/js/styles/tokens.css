@@ -13,20 +13,20 @@
      PRIMITIVE COLORS — raw brand palette
      ---------------------------------------------------------- */
 
-  /* Azul Pompeyo (primary) */
-  --pompeyo-azul:        #003388;   /* primary brand blue */
-  --pompeyo-azul-dark:   #002266;   /* hover / pressed */
-  --pompeyo-azul-light:  #0047BA;   /* dark-mode primary */
-  --pompeyo-azul-tint:   #e8f0fe;   /* secondary surface / badges */
+  /* Azul Holocrón (primary) */
+  --holocron-azul:        #003388;   /* primary brand blue */
+  --holocron-azul-dark:   #002266;   /* hover / pressed */
+  --holocron-azul-light:  #0047BA;   /* dark-mode primary */
+  --holocron-azul-tint:   #e8f0fe;   /* secondary surface / badges */
 
-  /* Naranja Pompeyo (accent) */
-  --pompeyo-naranja:     #FF6B00;   /* accent / action CTA */
-  --pompeyo-naranja-dark:#E55F00;
-  --pompeyo-naranja-tint:#fff1e6;
+  /* Naranja Holocrón (accent) */
+  --holocron-naranja:     #FF6B00;   /* accent / action CTA */
+  --holocron-naranja-dark:#E55F00;
+  --holocron-naranja-tint:#fff1e6;
 
-  /* Oro Pompeyo — cliente oro, gamificación premium */
-  --pompeyo-oro:         #E6B325;
-  --pompeyo-oro-light:   #F5D167;
+  /* Oro Holocrón — cliente oro, gamificación premium */
+  --holocron-oro:         #E6B325;
+  --holocron-oro-light:   #F5D167;
 
   /* Neutrals (slate-based, matches product) */
   --slate-50:  #f8f9fc;
@@ -223,11 +223,11 @@ body { font-family: var(--font-sans); background: var(--background); color: var(
 /* ============================================================
    SEMANTIC HELPER CLASSES — use in any design
    ============================================================ */
-.p-azul     { color: var(--pompeyo-azul); }
-.p-naranja  { color: var(--pompeyo-naranja); }
-.p-oro      { color: var(--pompeyo-oro); }
+.h-azul     { color: var(--holocron-azul); }
+.h-naranja  { color: var(--holocron-naranja); }
+.h-oro      { color: var(--holocron-oro); }
 
-.bg-p-azul    { background-color: var(--pompeyo-azul); color: #fff; }
-.bg-p-naranja { background-color: var(--pompeyo-naranja); color: #fff; }
-.bg-p-oro     { background-color: var(--pompeyo-oro); color: #1a1f36; }
-.bg-p-tint    { background-color: var(--pompeyo-azul-tint); color: var(--pompeyo-azul); }
+.bg-h-azul    { background-color: var(--holocron-azul); color: #fff; }
+.bg-h-naranja { background-color: var(--holocron-naranja); color: #fff; }
+.bg-h-oro     { background-color: var(--holocron-oro); color: #1a1f36; }
+.bg-h-tint    { background-color: var(--holocron-azul-tint); color: var(--holocron-azul); }

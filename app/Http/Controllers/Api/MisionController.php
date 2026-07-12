@@ -463,14 +463,19 @@ class MisionController extends Controller
         // Otorgar recompensas según su tipo
         $habilidadesAprendidas = [];
         $objetosOtorgados      = [];
+        $objetosSinEspacio     = [];
         $creditosOtorgados     = 0;
         foreach ($mision->recompensas as $recompensa) {
             if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
                 $user->habilidadesAprendidas()->syncWithoutDetaching([$recompensa->habilidad_id]);
                 $habilidadesAprendidas[] = $recompensa->habilidad_id;
             } elseif ($recompensa->tipo === 'objeto' && $recompensa->objeto_id && $character) {
-                $character->rolObjetos()->syncWithoutDetaching([$recompensa->objeto_id]);
-                $objetosOtorgados[] = $recompensa->objeto_id;
+                if ($character->inventarioLleno()) {
+                    $objetosSinEspacio[] = $recompensa->objeto_id;
+                } else {
+                    $character->rolObjetos()->syncWithoutDetaching([$recompensa->objeto_id]);
+                    $objetosOtorgados[] = $recompensa->objeto_id;
+                }
             } elseif ($recompensa->tipo === 'creditos' && $recompensa->valor && $character) {
                 $character->increment('credits', $recompensa->valor);
                 $creditosOtorgados += $recompensa->valor;
@@ -495,6 +500,7 @@ class MisionController extends Controller
             'message'                => 'Misión completada.',
             'habilidades_aprendidas' => $habilidadesAprendidas,
             'objetos_otorgados'      => $objetosOtorgados,
+            'objetos_sin_espacio'    => $objetosSinEspacio,
             'creditos_otorgados'     => $creditosOtorgados,
             'hitos_otorgados'        => $hitosOtorgados,
             'mision'                 => array_merge($this->formatMision($mision), [

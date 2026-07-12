@@ -128,7 +128,7 @@ export function TrainingView({ S, user }) {
                   <span className="nx-num" style={{ fontSize: 14 }}>{d}</span>
                   {isLogged && <span style={{ position: 'absolute', bottom: 5, width: 5, height: 5, borderRadius: '50%', background: 'var(--green-500)', boxShadow: '0 0 6px var(--green-500)' }} />}
                   {hasSesion && !isLogged && <span style={{ position: 'absolute', bottom: 5, width: 5, height: 5, borderRadius: '50%', background: 'var(--holo)', boxShadow: '0 0 6px var(--holo)', opacity: isClosed ? 0.4 : 1 }} />}
-                  {isToday && !isLogged && <span style={{ position: 'absolute', top: 3, right: 3, width: 5, height: 5, borderRadius: '50%', border: '1.5px solid var(--pompeyo-naranja)' }} />}
+                  {isToday && !isLogged && <span style={{ position: 'absolute', top: 3, right: 3, width: 5, height: 5, borderRadius: '50%', border: '1.5px solid var(--holocron-naranja)' }} />}
                 </button>
               );
             })}
@@ -138,7 +138,7 @@ export function TrainingView({ S, user }) {
             {[
               { k: 'Días', v: days.length, icon: 'calendar', tone: 'var(--holo)' },
               { k: 'Racha', v: streak, icon: 'flame', tone: 'var(--green-500)' },
-              { k: 'Créditos', v: NX.fmtCLP(creditsEarned), icon: 'coin', tone: 'var(--pompeyo-oro)' },
+              { k: 'Créditos', v: NX.fmtCLP(creditsEarned), icon: 'coin', tone: 'var(--holocron-oro)' },
             ].map((s) => (
               <div key={s.k} style={{ textAlign: 'center' }}>
                 <span style={{ color: s.tone }}><Icon name={s.icon} size={16} /></span>
@@ -206,7 +206,7 @@ export function BitacoraEditor({ S, day, entry }) {
         <div>
           <label className="nx-label">Esfuerzo · {entry.effort}/10</label>
           <input type="range" min="1" max="10" value={entry.effort} onChange={(e) => upd({ effort: +e.target.value })}
-            style={{ width: '100%', accentColor: 'var(--pompeyo-naranja)', marginTop: 8 }} />
+            style={{ width: '100%', accentColor: 'var(--holocron-naranja)', marginTop: 8 }} />
         </div>
       </div>
 

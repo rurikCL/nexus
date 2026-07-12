@@ -10,6 +10,7 @@ use App\Models\MapPlaneta;
 use App\Models\MapZona;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
+use App\Models\MapNpcEspacio;
 use App\Models\Mision;
 use App\Models\PvpCombat;
 use App\Models\User;
@@ -42,6 +43,7 @@ class MapController extends Controller
                 'presentesPersonajes' => $this->presentes('map_sistema_id'),
                 'planetas' => fn($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_planeta_id')]),
+                'npcsEspacio' => fn($q) => $q->where('visible', true)->with(['nave', 'npc']),
             ])
             ->findOrFail($id);
 
@@ -143,14 +145,56 @@ class MapController extends Controller
             ], 422);
         }
 
+        $sistemaDestinoId = $request->input('sistema_id');
+        $esSalto = $sistemaDestinoId && (int) $sistemaDestinoId !== (int) $character->map_sistema_id;
+
+        if ($esSalto) {
+            $naveEquipada = $character->naveEquipada()->with('nave')->first();
+
+            if ($naveEquipada) {
+                if ($naveEquipada->combustible_actual <= 0) {
+                    return response()->json([
+                        'ok'      => false,
+                        'blocked' => true,
+                        'message' => 'Tu nave no tiene combustible suficiente para saltar. Debes reabastecerla.',
+                    ], 422);
+                }
+
+                $naveEquipada->decrement('combustible_actual');
+            } else {
+                $costoViaje = MapSistema::find($sistemaDestinoId)?->costo_viaje ?? 0;
+
+                if ($costoViaje > 0) {
+                    if ($character->credits < $costoViaje) {
+                        return response()->json([
+                            'ok'      => false,
+                            'blocked' => true,
+                            'message' => 'Créditos insuficientes para pagar el transporte a este sistema.',
+                        ], 422);
+                    }
+
+                    $character->decrement('credits', $costoViaje);
+                }
+            }
+        }
+
         $character->update([
-            'map_sistema_id' => $request->input('sistema_id'),
+            'map_sistema_id' => $sistemaDestinoId,
             'map_planeta_id' => $request->input('planeta_id'),
             'map_zona_id'    => $request->input('zona_id'),
             'map_lugar_id'   => $request->input('lugar_id'),
         ]);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'credits' => $character->fresh()->credits]);
+    }
+
+    public function naveEspacio(int $id): JsonResponse
+    {
+        $npcEspacio = MapNpcEspacio::where('visible', true)
+            ->with(['sistema', 'nave', 'npc'])
+            ->findOrFail($id);
+
+        return response()->json(['npc_espacio' => $npcEspacio]);
     }
 
     public function npc(Request $request, int $id): JsonResponse

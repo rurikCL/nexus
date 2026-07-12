@@ -19,9 +19,14 @@ const apiPost = (path, data) =>
     method: 'POST',
     headers: { ...AUTH(), 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
-  }).then((r) => {
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+  }).then(async (r) => {
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      const err = new Error(body?.message || body?.error || `HTTP ${r.status}`);
+      err.body = body;
+      throw err;
+    }
+    return body;
   });
 
 const mediaUrl = (path) => {
@@ -700,7 +705,7 @@ function VolverHeader({ onVolver, crumbs }) {
 }
 
 /* ─── VISTA SISTEMA SOLAR ───────────────────────────────── */
-function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onAttack, myUserId }) {
+function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onAttack, onNaveEncounter, myUserId }) {
   const [sistema, setSistema] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePlaneta, setActivePlaneta] = useState(null);
@@ -894,6 +899,29 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
               })}
             </div>
           </Panel>
+
+          {(sistema.npcs_espacio ?? []).length > 0 && (
+            <Panel title="Encuentros espaciales" kicker="CONTACTOS DETECTADOS" icon="ship">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {sistema.npcs_espacio.map((ne) => {
+                  const h = hostilidadStyle(ne.hostilidad);
+                  return (
+                    <div key={ne.id} style={{
+                      background: 'rgba(255,255,255,0.02)', border: `1px solid ${h.border}55`,
+                      borderRadius: 'var(--radius-md)', padding: '10px 12px',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{ne.nombre}</div>
+                        <div style={{ fontSize: 10, color: h.text, fontFamily: 'var(--font-data)' }}>{h.label}</div>
+                      </div>
+                      <Btn kind="ghost" sm icon="swords" onClick={() => onNaveEncounter?.(ne)}>Enfrentar</Btn>
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+          )}
 
           {sistema.historia && (
             <Panel title="Historia" kicker="REGISTRO" icon="shield">
@@ -1723,15 +1751,15 @@ function NpcCard({ npc, onClick }) {
         padding: '8px 12px', borderTop: '1px solid var(--holo-line)',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
-        <Icon name="zap" size={12} style={{ color: 'var(--pompeyo-naranja)' }} />
-        <span style={{ fontSize: 10, color: 'var(--pompeyo-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+        <Icon name="zap" size={12} style={{ color: 'var(--holocron-naranja)' }} />
+        <span style={{ fontSize: 10, color: 'var(--holocron-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
           HABLAR
         </span>
         {tieneMision && (
           <>
             <span style={{ marginLeft: 'auto' }} />
-            <Icon name="star" size={11} style={{ color: 'var(--pompeyo-oro)' }} />
-            <span style={{ fontSize: 9, color: 'var(--pompeyo-oro)', fontFamily: 'var(--font-data)' }}>MISIÓN</span>
+            <Icon name="star" size={11} style={{ color: 'var(--holocron-oro)' }} />
+            <span style={{ fontSize: 9, color: 'var(--holocron-oro)', fontFamily: 'var(--font-data)' }}>MISIÓN</span>
           </>
         )}
       </div>
@@ -1803,6 +1831,59 @@ function postNpcVictory(npcId) {
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d?.hito) toast(`🏆 Hito obtenido: "${d.hito}"`, { tone: 'success', icon: 'star' }); })
     .catch(() => {});
+}
+
+function postNaveEspacioVictory(npcEspacioId) {
+  const token = localStorage.getItem('nx-token');
+  return fetch('/api/character/npc-espacio-victory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    body: JSON.stringify({ npc_espacio_id: npcEspacioId }),
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if (d?.hito) toast(`🏆 Hito obtenido: "${d.hito}"`, { tone: 'success', icon: 'star' }); })
+    .catch(() => {});
+}
+
+/* ─── STATS DE COMBATE NAVAL — nave del jugador y encuentro enemigo ── */
+function getNaveCombatPlayerStats(owned) {
+  const nave = owned?.nave;
+  if (!nave) return null;
+  return {
+    vida: nave.vida, escudo: nave.escudo,
+    ataque: nave.ataque, defensa: nave.maniobrabilidad,
+    movimiento: nave.maniobrabilidad, iniciativa: nave.velocidad, punteria: nave.ataque,
+    nombre: nave.nombre, photo: mediaUrl(nave.imagen),
+    maxFuerza: 10, fuerzaPorTurno: 2,
+    arma_equipada: { nombre: 'Armamento de la nave', dano: nave.ataque, critico: 0, tipo_ataque: 'distancia', es_sable: false, color_hoja: null },
+    current_forma: 1, habilidades_por_forma: {}, all_habilidades_data: {}, habilidades: [],
+  };
+}
+
+function getNaveEncuentroStats(npcEspacio) {
+  const naveEnemiga = npcEspacio?.nave;
+  const npcEnemigo  = npcEspacio?.npc;
+
+  if (naveEnemiga) {
+    return {
+      vida: naveEnemiga.vida, escudo: naveEnemiga.escudo,
+      ataque: naveEnemiga.ataque, defensa: naveEnemiga.maniobrabilidad,
+      movimiento: naveEnemiga.maniobrabilidad, iniciativa: naveEnemiga.velocidad, punteria: naveEnemiga.ataque,
+      nombre: npcEspacio.nombre, imagen: naveEnemiga.imagen ?? null,
+    };
+  }
+  if (npcEnemigo) {
+    return {
+      vida: npcEnemigo.vida, escudo: npcEnemigo.escudo,
+      ataque: npcEnemigo.ataque, defensa: npcEnemigo.defensa,
+      movimiento: npcEnemigo.movimiento, iniciativa: npcEnemigo.iniciativa, punteria: npcEnemigo.punteria,
+      nombre: npcEspacio.nombre, imagen: npcEnemigo.imagen_mini ?? npcEnemigo.imagen ?? null,
+    };
+  }
+  return {
+    vida: 30, escudo: 10, ataque: 8, defensa: 6, movimiento: 6, iniciativa: 8, punteria: 8,
+    nombre: npcEspacio?.nombre ?? 'Hostil espacial', imagen: null,
+  };
 }
 
 /* ─── BARRA HP + ESCUDO ─────────────────────────────────── */
@@ -2201,7 +2282,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
           }}>
             {STATS.map(s => (
               <div key={s.label} style={{ textAlign: 'center' }}>
-                <div className="nx-num" style={{ fontSize: 14, color: s.label === 'ATQ' ? 'var(--pompeyo-naranja)' : s.label === 'VID' ? '#10b981' : 'var(--holo)' }}>
+                <div className="nx-num" style={{ fontSize: 14, color: s.label === 'ATQ' ? 'var(--holocron-naranja)' : s.label === 'VID' ? '#10b981' : 'var(--holo)' }}>
                   {s.val}
                 </div>
                 <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
@@ -3172,12 +3253,219 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
   );
 }
 
+/* ─── HANGAR — gestión de naves ──────────────────────────── */
+const fmtCr = (n) => `${Math.round(n ?? 0).toLocaleString('es-CL')} cr`;
 
+function NaveStatBar({ label, value, max, color }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{
+        fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-faint)',
+        width: 80, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.06em',
+      }}>{label}</span>
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ fontSize: 11, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', width: 50, textAlign: 'right', flexShrink: 0 }}>
+        {value}/{max}
+      </span>
+    </div>
+  );
+}
+
+function NaveCatalogRow({ nave, credits, busy, onComprar }) {
+  const puedeComprar = credits >= nave.costo;
+  return (
+    <div className="nx-panel" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+        display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+      }}>
+        {nave.imagen
+          ? <img src={mediaUrl(nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <Icon name="ship" size={20} style={{ color: 'var(--holo)' }} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nx-display" style={{ fontSize: 12 }}>{nave.nombre}</div>
+        <div style={{
+          fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
+          display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 3,
+        }}>
+          <span>Vida {nave.vida}</span>
+          <span>Escudo {nave.escudo}</span>
+          <span>Ataque {nave.ataque}</span>
+          <span>Maniobra {nave.maniobrabilidad}</span>
+          <span>Velocidad {nave.velocidad}</span>
+          <span>{nave.capacidad_salto} saltos</span>
+          <span>+{nave.capacidad_carga} carga</span>
+        </div>
+      </div>
+      <Btn kind="gold" sm icon="coin" onClick={() => onComprar(nave)} disabled={!puedeComprar || busy === `buy-${nave.id}`}>
+        {busy === `buy-${nave.id}` ? '...' : fmtCr(nave.costo)}
+      </Btn>
+    </div>
+  );
+}
+
+function NaveOwnedRow({ owned, isEquipada, busy, onEquipar, onDesequipar, onReabastecer, onReparar }) {
+  const nave = owned.nave;
+  if (!nave) return null;
+  const combustibleLleno = owned.combustible_actual >= nave.capacidad_salto;
+  const vidaLlena = owned.vida_actual >= nave.vida && owned.escudo_actual >= nave.escudo;
+  const isBusy = busy === owned.id;
+  return (
+    <div className="nx-panel" style={{
+      padding: 12, display: 'flex', flexDirection: 'column', gap: 9,
+      border: isEquipada ? '1px solid var(--holo)' : undefined,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+          display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+        }}>
+          {nave.imagen
+            ? <img src={mediaUrl(nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Icon name="ship" size={18} style={{ color: 'var(--holo)' }} />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="nx-display" style={{ fontSize: 12 }}>{nave.nombre}</div>
+          {isEquipada && <Chip tone="green" style={{ marginTop: 3 }}>EQUIPADA</Chip>}
+        </div>
+        {isEquipada
+          ? <Btn kind="ghost" sm onClick={onDesequipar} disabled={isBusy}>Desequipar</Btn>
+          : <Btn kind="accent" sm onClick={() => onEquipar(owned)} disabled={isBusy}>Equipar</Btn>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <NaveStatBar label="Vida"        value={owned.vida_actual}        max={nave.vida}           color="#4ade80" />
+        <NaveStatBar label="Escudo"      value={owned.escudo_actual}      max={nave.escudo}          color="#38cdf0" />
+        <NaveStatBar label="Combustible" value={owned.combustible_actual} max={nave.capacidad_salto}  color="var(--holocron-oro)" />
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Btn kind="ghost" sm icon="fuel" onClick={() => onReabastecer(owned)} disabled={isBusy || combustibleLleno}>
+          Reabastecer ({fmtCr(nave.costo_combustible)})
+        </Btn>
+        <Btn kind="ghost" sm icon="shield" onClick={() => onReparar(owned)} disabled={isBusy || vidaLlena}>
+          Reparar ({fmtCr(nave.costo_reparacion)})
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+function HangarModal({ open, onClose, onCreditsChange }) {
+  const [catalogo, setCatalogo]             = useState([]);
+  const [misNaves, setMisNaves]             = useState([]);
+  const [naveEquipadaId, setNaveEquipadaId] = useState(null);
+  const [capacidadCarga, setCapacidadCarga] = useState(10);
+  const [credits, setCredits]               = useState(0);
+  const [loading, setLoading]               = useState(true);
+  const [busy, setBusy]                     = useState(null);
+  const [tab, setTab]                       = useState('mias');
+
+  const refresh = useCallback(() => {
+    setLoading(true);
+    Promise.all([apiFetch('/naves'), apiFetch('/naves/mias')])
+      .then(([cat, mias]) => {
+        setCatalogo(cat.naves ?? []);
+        setMisNaves(mias.naves ?? []);
+        setNaveEquipadaId(mias.nave_equipada_id ?? null);
+        setCapacidadCarga(mias.capacidad_carga ?? 10);
+        if (mias.credits !== undefined) {
+          setCredits(mias.credits);
+          onCreditsChange?.(mias.credits);
+        }
+      })
+      .catch(() => toast('Error cargando el hangar', { tone: 'error', icon: 'x' }))
+      .finally(() => setLoading(false));
+  }, [onCreditsChange]);
+
+  useEffect(() => { if (open) refresh(); }, [open, refresh]);
+
+  const runAction = async (id, fn, successMsg) => {
+    setBusy(id);
+    try {
+      const d = await fn();
+      if (d?.credits_remaining !== undefined) {
+        setCredits(d.credits_remaining);
+        onCreditsChange?.(d.credits_remaining);
+      }
+      if (successMsg) toast(successMsg, { tone: 'success', icon: 'check' });
+      await refresh();
+    } catch (err) {
+      toast(err?.message || 'No se pudo completar la acción', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const comprar     = (nave)  => runAction(`buy-${nave.id}`, () => apiPost(`/naves/${nave.id}/comprar`, {}), `${nave.nombre} adquirida`);
+  const equipar     = (owned) => runAction(owned.id, () => apiPost(`/naves/${owned.id}/equipar`, {}), `${owned.nave?.nombre ?? 'Nave'} equipada`);
+  const desequipar  = ()      => runAction('unequip', () => apiPost('/naves/desequipar', {}));
+  const reabastecer = (owned) => runAction(owned.id, () => apiPost(`/naves/${owned.id}/reabastecer`, {}), 'Combustible reabastecido');
+  const reparar     = (owned) => runAction(owned.id, () => apiPost(`/naves/${owned.id}/reparar`, {}), 'Nave reparada');
+
+  return (
+    <Modal open={open} onClose={onClose} title="HANGAR" kicker="GESTIÓN DE NAVES" width={640}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn kind={tab === 'mias' ? 'primary' : 'ghost'} sm onClick={() => setTab('mias')}>Mis naves ({misNaves.length})</Btn>
+          <Btn kind={tab === 'catalogo' ? 'primary' : 'ghost'} sm onClick={() => setTab('catalogo')}>Catálogo</Btn>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="nx-kicker">Créditos</div>
+          <div className="nx-num" style={{ fontSize: 14, color: 'var(--holocron-oro)' }}>{fmtCr(credits)}</div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginBottom: 12, lineHeight: 1.6 }}>
+        Capacidad de carga total: <strong style={{ color: 'var(--txt)' }}>{capacidadCarga}</strong> ítems
+        {naveEquipadaId ? ' (10 base + bono de la nave equipada).' : ' (10 base, sin nave equipada).'}
+        {' '}Sin nave equipada, saltar entre sistemas se cobra en créditos según el costo de viaje del sistema destino.
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }}>Cargando...</div>
+      ) : tab === 'mias' ? (
+        misNaves.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>
+            No posees ninguna nave. Visita el catálogo para comprar una.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {misNaves.map((owned) => (
+              <NaveOwnedRow
+                key={owned.id}
+                owned={owned}
+                isEquipada={owned.id === naveEquipadaId}
+                busy={busy}
+                onEquipar={equipar}
+                onDesequipar={desequipar}
+                onReabastecer={reabastecer}
+                onReparar={reparar}
+              />
+            ))}
+          </div>
+        )
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {catalogo.length === 0
+            ? <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)', fontSize: 12 }}>No hay naves disponibles en el catálogo.</div>
+            : catalogo.map((nave) => (
+              <NaveCatalogRow key={nave.id} nave={nave} credits={credits} busy={busy} onComprar={comprar} />
+            ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView({ setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
+export default function MapaView({ S, setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
+  const [hangarOpen, setHangarOpen] = useState(false);
+  const syncCredits = useCallback((c) => { S?.setCredits?.(c); }, [S]);
   const [sistema, setSistema]     = useState(null);
   const [planeta, setPlaneta]     = useState(null);
   const [zona, setZona]           = useState(null);
@@ -3187,6 +3475,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
   const [activeNpcCombat, setActiveNpcCombat] = useState(() => {
     try { const s = localStorage.getItem('nx-npc-combat'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
+  const [activeNaveCombat, setActiveNaveCombat] = useState(null);
   const [lugarImagen,   setLugarImagen]   = useState(null);
   const [zonaImagen,    setZonaImagen]    = useState(null);
   const [planetaImagen, setPlanetaImagen] = useState(null);
@@ -3240,6 +3529,23 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
 
   const handleAttackUser = (character) => setPvpAttackTarget(character);
 
+  const handleNaveEncounter = useCallback(async (npcEspacio) => {
+    try {
+      const mias = await apiFetch('/naves/mias');
+      const equipada = (mias.naves ?? []).find((n) => n.id === mias.nave_equipada_id);
+      if (!equipada) {
+        toast('Necesitas una nave equipada para el combate espacial', { tone: 'error', icon: 'ship' });
+        setHangarOpen(true);
+        return;
+      }
+      const player = getNaveCombatPlayerStats(equipada);
+      const npc = getNaveEncuentroStats(npcEspacio);
+      setActiveNaveCombat({ npcEspacio, player, npc });
+    } catch {
+      toast('No se pudo iniciar el encuentro espacial', { tone: 'error', icon: 'x' });
+    }
+  }, []);
+
   const handleStartPvp = async () => {
     if (!pvpAttackTarget || pvpChallenging) return;
     setPvpChallenging(true);
@@ -3272,9 +3578,16 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
     setPendingTravel({ kind, fn });
   }, [activePvpCombat]);
 
-  const updateLocation = useCallback((loc) => {
-    apiPost('/map/location', loc).catch(() => {});
-  }, []);
+  const updateLocation = useCallback(async (loc) => {
+    try {
+      const d = await apiPost('/map/location', loc);
+      if (d?.credits !== undefined) syncCredits(d.credits);
+      return { ok: true };
+    } catch (err) {
+      toast(err?.message || 'No se pudo completar el movimiento.', { tone: 'error', icon: 'x' });
+      return { ok: false };
+    }
+  }, [syncCredits]);
 
   /* restaura la última ubicación al volver al Mapa */
   const hasRestored = useRef(false);
@@ -3295,11 +3608,13 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
     updateLocation({ sistema_id: null, planeta_id: null, zona_id: null, lugar_id: null });
     setMapLocation?.(null);
   };
-  const goSistema = (tgt) => {
-    setNivel('sistema'); setPlaneta(null); setZona(null); setLugar(null);
-    setLugarImagen(null); setZonaImagen(null); setPlanetaImagen(null);
+  const goSistema = async (tgt) => {
     if (tgt?.id) {
-      updateLocation({ sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null });
+      /* El salto entre sistemas puede cobrar créditos (transporte pagado) o
+         combustible de la nave equipada — solo avanzamos si el servidor lo permite. */
+      const result = await updateLocation({ sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null });
+      if (!result.ok) return;
+      setSistema(tgt);
       setMapLocation?.({
         nombre: tgt.nombre, nivel: 'sistema',
         sistema_id: tgt.id, sistema_nombre: tgt.nombre,
@@ -3308,6 +3623,8 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
         lugar_id: null, lugar_nombre: null,
       });
     }
+    setNivel('sistema'); setPlaneta(null); setZona(null); setLugar(null);
+    setLugarImagen(null); setZonaImagen(null); setPlanetaImagen(null);
   };
   const goPlaneta = (tgt) => {
     setNivel('planeta'); setZona(null); setLugar(null);
@@ -3338,7 +3655,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
     }
   };
 
-  const selectSistema = (s) => { setSistema(s); goSistema(s); };
+  const selectSistema = (s) => { goSistema(s); };
   const selectPlaneta = (p) => { setPlaneta(p); goPlaneta(p); };
   const selectZona    = (z) => { setZona(z);    goZona(z);    };
   const selectLugar   = (l) => { setLugar(l);   setNivel('lugar'); };
@@ -3380,6 +3697,19 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
 
   return (
     <div className="nx-fade" style={{ paddingBottom: 40 }}>
+      {/* Botón flotante de acceso al hangar de naves */}
+      <button
+        className="nx-btn nx-btn-ghost"
+        onClick={() => setHangarOpen(true)}
+        style={{
+          position: 'fixed', top: 84, right: 18, zIndex: 60,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'rgba(4,7,15,0.78)', backdropFilter: 'blur(6px)',
+        }}
+      >
+        <Icon name="ship" size={14} /> Hangar
+      </button>
+
       {nivel === 'galaxy'  && <GalaxiaView onSelectSistema={selectSistema} />}
       {nivel === 'sistema' && sistema && (
         <SistemaView
@@ -3389,6 +3719,7 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           onTravel={triggerTravel}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
+          onNaveEncounter={handleNaveEncounter}
           myUserId={userId}
         />
       )}
@@ -3485,6 +3816,21 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
         />
       )}
 
+      {/* Combate naval activo (encuentro espacial) — overlay persistente */}
+      {activeNaveCombat && (
+        <NpcCombatScreen
+          npc={activeNaveCombat.npc}
+          player={activeNaveCombat.player}
+          onVictory={async () => {
+            postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' });
+            if (activeNaveCombat.npcEspacio?.id) await postNaveEspacioVictory(activeNaveCombat.npcEspacio.id);
+            setActiveNaveCombat(null);
+          }}
+          onDefeat={() => setActiveNaveCombat(null)}
+          onFlee={() => setActiveNaveCombat(null)}
+        />
+      )}
+
       {/* Combate PvP activo — overlay bloqueante */}
       {activePvpCombat && (
         <PvpCombatScreen
@@ -3530,6 +3876,13 @@ export default function MapaView({ setMapLocation, initialLocation, userId, user
           }}
         />
       )}
+
+      {/* Hangar de naves */}
+      <HangarModal
+        open={hangarOpen}
+        onClose={() => setHangarOpen(false)}
+        onCreditsChange={syncCredits}
+      />
     </div>
   );
 }

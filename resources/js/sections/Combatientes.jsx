@@ -62,9 +62,9 @@ export function CombatientesView({ S }) {
               </div>
               <hr className="nx-divider" style={{ margin: '12px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Mini label="Victorias" value={c.wins} tone="var(--pompeyo-naranja)" />
+                <Mini label="Victorias" value={c.wins} tone="var(--holocron-naranja)" />
                 <Mini label="Efic." value={`${c.winrate}%`} tone="var(--holo)" />
-                <Mini label="Medallas" value={c.medals.length} tone="var(--pompeyo-oro)" />
+                <Mini label="Medallas" value={c.medals.length} tone="var(--holocron-oro)" />
               </div>
             </button>
           ))}
@@ -159,7 +159,7 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
           {/* Récord */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
             {[
-              { k: 'Victorias', v: c.wins, t: 'var(--pompeyo-naranja)', i: 'trophy' },
+              { k: 'Victorias', v: c.wins, t: 'var(--holocron-naranja)', i: 'trophy' },
               { k: 'Derrotas', v: c.losses, t: 'var(--txt-dim)', i: 'x' },
               { k: 'Efectividad', v: `${c.winrate}%`, t: 'var(--holo)', i: 'trending' },
               { k: 'Racha', v: `${c.streak}W`, t: 'var(--green-500)', i: 'flame' },

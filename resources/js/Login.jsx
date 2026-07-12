@@ -12,7 +12,7 @@ const BG = (
 function ErrorBanner({ msg }) {
   if (!msg) return null;
   return (
-    <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,107,0,0.4)', background: 'rgba(255,107,0,0.1)', color: 'var(--pompeyo-naranja)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,107,0,0.4)', background: 'rgba(255,107,0,0.1)', color: 'var(--holocron-naranja)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
       <Icon name="x" size={14} />{msg}
     </div>
   );

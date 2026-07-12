@@ -16,7 +16,7 @@ const TIERS = [
 ];
 
 const PODIO_CFG = [
-  { key: 'primer_lugar',  fieldId: 'primer_lugar_id',  label: '1er Lugar', color: 'var(--pompeyo-oro)', num: '1' },
+  { key: 'primer_lugar',  fieldId: 'primer_lugar_id',  label: '1er Lugar', color: 'var(--holocron-oro)', num: '1' },
   { key: 'segundo_lugar', fieldId: 'segundo_lugar_id', label: '2do Lugar', color: '#c0c0c0',            num: '2' },
   { key: 'tercer_lugar',  fieldId: 'tercer_lugar_id',  label: '3er Lugar', color: '#cd7f32',            num: '3' },
 ];
@@ -693,7 +693,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
                   </button>
                   {isOpen && (
                     <div style={{ padding: '8px 12px 10px', display: 'grid', gap: 7 }}>
-                      <PodioRow winner={p.primer_lugar}  numColor="var(--pompeyo-oro)" num="1" />
+                      <PodioRow winner={p.primer_lugar}  numColor="var(--holocron-oro)" num="1" />
                       <PodioRow winner={p.segundo_lugar} numColor="#c0c0c0"            num="2" />
                       <PodioRow winner={p.tercer_lugar}  numColor="#cd7f32"            num="3" />
                     </div>
@@ -705,7 +705,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
         ) : (
           /* Podio global */
           <div style={{ display: 'grid', gap: 7 }}>
-            <PodioRow winner={t.primer_lugar}  numColor="var(--pompeyo-oro)" num="1" />
+            <PodioRow winner={t.primer_lugar}  numColor="var(--holocron-oro)" num="1" />
             <PodioRow winner={t.segundo_lugar} numColor="#c0c0c0"            num="2" />
             <PodioRow winner={t.tercer_lugar}  numColor="#cd7f32"            num="3" />
           </div>

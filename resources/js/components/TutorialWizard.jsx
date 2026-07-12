@@ -270,7 +270,7 @@ function StepBienvenida({ user }) {
           <span style={{ color: 'var(--holo)' }}>{firstName}</span>
         </h1>
         <p style={{ fontSize: 15, color: 'var(--txt-dim)', lineHeight: 1.75, maxWidth: 480, margin: '0 auto' }}>
-          El Holocrón de Combate NÉXUS registra a los guerreros de élite del sistema Pompeyo.
+          El Holocrón de Combate NÉXUS registra a los guerreros de élite del Sistema Holocrón.
           Antes de ingresar, debes forjar tu identidad como combatiente.
         </p>
       </div>

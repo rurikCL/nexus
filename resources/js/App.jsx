@@ -403,7 +403,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     competitivo:  <CompetitivoView S={S} user={user} />,
     temporadas:   <TemporadasView S={S} user={user} />,
     misiones:     <MisionesView S={S} user={user} />,
-    mapa: <MapaView setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
+    mapa: <MapaView S={S} setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,
     'armado-sable': <ArmadoSableView user={user} onUserUpdate={onUserUpdate} />,
@@ -506,7 +506,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
                 <button key={r} onClick={() => S.setRole(r)} title={sidebarCollapsed ? r : undefined} style={{
                   flex: 1, padding: '5px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  background: S.role === r ? 'var(--pompeyo-naranja)' : 'transparent',
+                  background: S.role === r ? 'var(--holocron-naranja)' : 'transparent',
                   color: S.role === r ? '#fff' : 'var(--txt-dim)', fontWeight: 700,
                   whiteSpace: 'nowrap', overflow: 'hidden',
                 }}>
@@ -600,8 +600,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
             </div>
           )}
           <div className="nx-panel" style={{ padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: 'var(--pompeyo-oro)' }}><Icon name="coin" size={14} /></span>
-            <span className="nx-num" style={{ fontSize: 14, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(S.credits)}</span>
+            <span style={{ color: 'var(--holocron-oro)' }}><Icon name="coin" size={14} /></span>
+            <span className="nx-num" style={{ fontSize: 14, color: 'var(--holocron-oro)' }}>{NX.fmtCLP(S.credits)}</span>
           </div>
           {unreadMsgs.length > 0 && (
             <button
@@ -619,7 +619,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={() => setNotifOpen(o => !o)}>
             <Icon name="bell" size={15} />
             {unread > 0 && (
-              <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--pompeyo-naranja)', boxShadow: '0 0 6px var(--pompeyo-naranja)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
+              <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holocron-naranja)', boxShadow: '0 0 6px var(--holocron-naranja)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
@@ -706,8 +706,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
 /* ---- Drawer lateral de notificaciones ---- */
 const TONE_COLOR = {
-  orange: 'var(--pompeyo-naranja)', green: 'var(--green-500)',
-  red: '#ff6b6b', holo: 'var(--holo)', info: 'var(--holo)', gold: 'var(--pompeyo-oro)',
+  orange: 'var(--holocron-naranja)', green: 'var(--green-500)',
+  red: '#ff6b6b', holo: 'var(--holo)', info: 'var(--holo)', gold: 'var(--holocron-oro)',
 };
 
 function groupByDate(notifications) {

@@ -305,8 +305,8 @@ export function ScoringScreen({ combat, onClose, S }) {
         {/* ── Puntaje A — arriba izquierda ── */}
         <div style={{ position: 'absolute', top: 12, left: 14 }}>
           <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
-            color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
-            textShadow: `0 0 24px ${winner === 'a' ? 'var(--pompeyo-oro)' : saberA}66` }}>
+            color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--holocron-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'a' ? 'var(--holocron-oro)' : saberA}66` }}>
             {dqA ? 'DQ' : (scoreA ?? '—')}
           </div>
           {penA > 0 && !dqA && (
@@ -317,8 +317,8 @@ export function ScoringScreen({ combat, onClose, S }) {
         {/* ── Puntaje B — arriba derecha ── */}
         <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'right' }}>
           <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
-            color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
-            textShadow: `0 0 24px ${winner === 'b' ? 'var(--pompeyo-oro)' : saberB}66` }}>
+            color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--holocron-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'b' ? 'var(--holocron-oro)' : saberB}66` }}>
             {dqB ? 'DQ' : (scoreB ?? '—')}
           </div>
           {penB > 0 && !dqB && (
@@ -330,8 +330,8 @@ export function ScoringScreen({ combat, onClose, S }) {
         <div style={{ position: 'absolute', bottom: 12, left: 14 }}>
           {winner === 'a' && (
             <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
-              textShadow: '0 0 12px var(--pompeyo-oro)' }}>◆ GANADOR</div>
+              color: 'var(--holocron-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--holocron-oro)' }}>◆ GANADOR</div>
           )}
           <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
             letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -349,8 +349,8 @@ export function ScoringScreen({ combat, onClose, S }) {
         <div style={{ position: 'absolute', bottom: 12, right: 14, textAlign: 'right' }}>
           {winner === 'b' && (
             <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
-              textShadow: '0 0 12px var(--pompeyo-oro)' }}>GANADOR ◆</div>
+              color: 'var(--holocron-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--holocron-oro)' }}>GANADOR ◆</div>
           )}
           <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
             letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -652,8 +652,8 @@ export function CombatViewScreen({ combat, onClose, S }) {
 
         <div style={{ position: 'absolute', top: 12, left: 14 }}>
           <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
-            color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
-            textShadow: `0 0 24px ${winner === 'a' ? 'var(--pompeyo-oro)' : saberA}66` }}>
+            color: dqA ? '#ff6b6b' : winner === 'a' ? 'var(--holocron-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'a' ? 'var(--holocron-oro)' : saberA}66` }}>
             {dqA ? 'DQ' : (scoreA ?? '—')}
           </div>
           {penA > 0 && !dqA && (
@@ -663,8 +663,8 @@ export function CombatViewScreen({ combat, onClose, S }) {
 
         <div style={{ position: 'absolute', top: 12, right: 14, textAlign: 'right' }}>
           <div className="nx-num" style={{ fontSize: isMobile ? 26 : 40, lineHeight: 1,
-            color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--pompeyo-oro)' : 'rgba(255,255,255,0.9)',
-            textShadow: `0 0 24px ${winner === 'b' ? 'var(--pompeyo-oro)' : saberB}66` }}>
+            color: dqB ? '#ff6b6b' : winner === 'b' ? 'var(--holocron-oro)' : 'rgba(255,255,255,0.9)',
+            textShadow: `0 0 24px ${winner === 'b' ? 'var(--holocron-oro)' : saberB}66` }}>
             {dqB ? 'DQ' : (scoreB ?? '—')}
           </div>
           {penB > 0 && !dqB && (
@@ -675,8 +675,8 @@ export function CombatViewScreen({ combat, onClose, S }) {
         <div style={{ position: 'absolute', bottom: 12, left: 14 }}>
           {winner === 'a' && (
             <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
-              textShadow: '0 0 12px var(--pompeyo-oro)' }}>◆ GANADOR</div>
+              color: 'var(--holocron-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--holocron-oro)' }}>◆ GANADOR</div>
           )}
           <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
             letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -693,8 +693,8 @@ export function CombatViewScreen({ combat, onClose, S }) {
         <div style={{ position: 'absolute', bottom: 12, right: 14, textAlign: 'right' }}>
           {winner === 'b' && (
             <div style={{ fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.18em',
-              color: 'var(--pompeyo-oro)', fontWeight: 700, marginBottom: 4,
-              textShadow: '0 0 12px var(--pompeyo-oro)' }}>GANADOR ◆</div>
+              color: 'var(--holocron-oro)', fontWeight: 700, marginBottom: 4,
+              textShadow: '0 0 12px var(--holocron-oro)' }}>GANADOR ◆</div>
           )}
           <div className="nx-display" style={{ fontSize: isMobile ? 13 : 16, lineHeight: 1,
             letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -851,12 +851,12 @@ export function RankingView({ S }) {
             const c = podium[idx]; if (!c) return <div key={idx} />;
             const place = idx + 1;
             const h = place === 1 ? 168 : place === 2 ? 138 : 116;
-            const medal = place === 1 ? 'var(--pompeyo-oro)' : place === 2 ? '#cbd5e1' : '#cd7f32';
+            const medal = place === 1 ? 'var(--holocron-oro)' : place === 2 ? '#cbd5e1' : '#cd7f32';
             return (
-              <div key={c.id} className="nx-panel solid" style={{ padding: 16, textAlign: 'center', height: h, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', borderColor: place === 1 ? 'var(--pompeyo-oro)' : undefined, boxShadow: place === 1 ? '0 0 30px -10px var(--pompeyo-oro)' : undefined }}>
+              <div key={c.id} className="nx-panel solid" style={{ padding: 16, textAlign: 'center', height: h, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', borderColor: place === 1 ? 'var(--holocron-oro)' : undefined, boxShadow: place === 1 ? '0 0 30px -10px var(--holocron-oro)' : undefined }}>
                 <div className="nx-num" style={{ position: 'absolute', top: 10, left: 0, right: 0, fontSize: place === 1 ? 30 : 22, color: medal }}>#{place}</div>
                 <Avatar c={c} size={place === 1 ? 56 : 46} ring style={{ margin: '0 auto 8px' }} />
-                <div style={{ fontWeight: 700, fontSize: place === 1 ? 15 : 13, color: c.id === 'you' ? 'var(--pompeyo-naranja)' : 'var(--txt)' }}>{c.name}</div>
+                <div style={{ fontWeight: 700, fontSize: place === 1 ? 15 : 13, color: c.id === 'you' ? 'var(--holocron-naranja)' : 'var(--txt)' }}>{c.name}</div>
                 <div className="nx-num" style={{ fontSize: 13, color: medal, marginTop: 2 }}>{c.wins}W · {c.winrate}%</div>
               </div>
             );
@@ -873,19 +873,19 @@ export function RankingView({ S }) {
           {rest.map((c, i) => {
             const isYou = c.id === 'you';
             return (
-              <div key={c.id} className="nx-panel solid" style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 70px 70px 90px', gap: 10, padding: '10px 12px', alignItems: 'center', borderColor: isYou ? 'var(--pompeyo-naranja)' : undefined, background: isYou ? 'color-mix(in srgb, var(--pompeyo-naranja) 8%, var(--space-panel-solid))' : undefined }}>
+              <div key={c.id} className="nx-panel solid" style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 70px 70px 90px', gap: 10, padding: '10px 12px', alignItems: 'center', borderColor: isYou ? 'var(--holocron-naranja)' : undefined, background: isYou ? 'color-mix(in srgb, var(--holocron-naranja) 8%, var(--space-panel-solid))' : undefined }}>
                 <span className="nx-num" style={{ fontSize: 15, color: 'var(--txt-faint)' }}>{i + 4}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <Avatar c={c} size={30} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: isYou ? 700 : 500, color: isYou ? 'var(--pompeyo-naranja)' : 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                    <div style={{ fontSize: 13, fontWeight: isYou ? 700 : 500, color: isYou ? 'var(--holocron-naranja)' : 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
                     <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>@{c.handle}</div>
                   </div>
                 </div>
                 <TierBadge tier={c.tier} sm />
                 <span className="nx-num" style={{ fontSize: 13, textAlign: 'right' }}>{c.wins}-{c.losses}</span>
                 <span className="nx-num" style={{ fontSize: 13, textAlign: 'right', color: 'var(--holo)' }}>{c.winrate}%</span>
-                <span className="nx-num" style={{ fontSize: 13, textAlign: 'right', color: 'var(--pompeyo-oro)' }}>{(c.credits / 1000).toFixed(1)}k</span>
+                <span className="nx-num" style={{ fontSize: 13, textAlign: 'right', color: 'var(--holocron-oro)' }}>{(c.credits / 1000).toFixed(1)}k</span>
               </div>
             );
           })}
@@ -942,14 +942,14 @@ export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) 
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
       {/* Header acción */}
       <div className="nx-panel" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-        <span style={{ color: 'var(--pompeyo-naranja)' }}><Icon name="swords" size={22} /></span>
+        <span style={{ color: 'var(--holocron-naranja)' }}><Icon name="swords" size={22} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div className="nx-display" style={{ fontSize: 15 }}>Arena Orbital</div>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)' }}>Apuesta con tus créditos o reta a un combatiente a un duelo oficial.</div>
         </div>
         <div className="nx-panel solid" style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: 'var(--pompeyo-oro)' }}><Icon name="coin" size={16} /></span>
-          <span className="nx-num" style={{ fontSize: 18, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(S.credits)}</span>
+          <span style={{ color: 'var(--holocron-oro)' }}><Icon name="coin" size={16} /></span>
+          <span className="nx-num" style={{ fontSize: 18, color: 'var(--holocron-oro)' }}>{NX.fmtCLP(S.credits)}</span>
         </div>
         <Btn kind="accent" icon="swords" onClick={() => setChallenge(true)}>Retar combate</Btn>
       </div>
@@ -962,7 +962,7 @@ export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) 
               const challenger = c.challenger?.character;
               const fechaProp  = c.fecha_desafio ? new Date(c.fecha_desafio).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sin fecha propuesta';
               return (
-                <div key={c.id} className="nx-panel solid" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderColor: 'color-mix(in srgb, var(--pompeyo-naranja) 40%, transparent)' }}>
+                <div key={c.id} className="nx-panel solid" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderColor: 'color-mix(in srgb, var(--holocron-naranja) 40%, transparent)' }}>
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{challenger?.name ?? 'Combatiente'} <span style={{ color: 'var(--txt-faint)', fontWeight: 400 }}>te desafía</span></div>
                     <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', marginTop: 3 }}>
@@ -1026,7 +1026,7 @@ export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) 
                     <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>{m?.event} · cuota {b.odds}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="nx-num" style={{ fontSize: 14, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(b.amount)}</div>
+                    <div className="nx-num" style={{ fontSize: 14, color: 'var(--holocron-oro)' }}>{NX.fmtCLP(b.amount)}</div>
                     <Chip tone={b.status === 'ganada' ? 'green' : b.status === 'perdida' ? 'red' : 'dim'} style={{ marginTop: 4 }}>
                       {b.status === 'abierta' ? `posible +${NX.fmtCLP(Math.round(b.amount * b.odds))}` : b.status === 'ganada' ? `ganaste +${NX.fmtCLP(Math.round(b.amount * b.odds))}` : 'perdida'}
                     </Chip>
@@ -1068,8 +1068,8 @@ export function CombatCard({ m, S, user, onBet, onScore, onView }) {
       <button disabled={m.resolved || (myBet && myBet.pick !== side)} onClick={() => onBet(side)}
         className="nx-btn" style={{
           width: '100%', justifyContent: 'center', flexDirection: 'column', gap: 2, padding: '8px',
-          borderColor: myBet && myBet.pick === side ? 'var(--pompeyo-oro)' : undefined,
-          background: myBet && myBet.pick === side ? 'color-mix(in srgb, var(--pompeyo-oro) 16%, transparent)' : undefined }}>
+          borderColor: myBet && myBet.pick === side ? 'var(--holocron-oro)' : undefined,
+          background: myBet && myBet.pick === side ? 'color-mix(in srgb, var(--holocron-oro) 16%, transparent)' : undefined }}>
         <span style={{ fontSize: 9, color: 'var(--txt-dim)' }}>CUOTA</span>
         <span className="nx-num" style={{ fontSize: 18, color: 'var(--holo)' }}>{odds.toFixed(2)}</span>
       </button>
@@ -1085,7 +1085,7 @@ export function CombatCard({ m, S, user, onBet, onScore, onView }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <Fighter c={a} side="a" odds={m.oddsA} />
-        <div className="nx-display" style={{ fontSize: 20, color: 'var(--pompeyo-naranja)', opacity: 0.8 }}>VS</div>
+        <div className="nx-display" style={{ fontSize: 20, color: 'var(--holocron-naranja)', opacity: 0.8 }}>VS</div>
         <Fighter c={b} side="b" odds={m.oddsB} />
       </div>
       {!m.resolved ? (
@@ -1136,7 +1136,7 @@ export function BetModal({ data, onClose, S }) {
           </div>
         </div>
         <div className="nx-panel" style={{ padding: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div><div className="nx-kicker">Ganancia potencial</div><div className="nx-num" style={{ fontSize: 24, color: 'var(--pompeyo-oro)' }}>{NX.fmtCLP(payout)}</div></div>
+          <div><div className="nx-kicker">Ganancia potencial</div><div className="nx-num" style={{ fontSize: 24, color: 'var(--holocron-oro)' }}>{NX.fmtCLP(payout)}</div></div>
           <div style={{ textAlign: 'right' }}><div className="nx-kicker">Tu saldo</div><div className="nx-num" style={{ fontSize: 16, color: amt > S.credits ? '#ff6b6b' : 'var(--txt)' }}>{NX.fmtCLP(S.credits)}</div></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -1282,8 +1282,8 @@ function FighterPickerModal({ open, opponents, selected, onPick, onClose }) {
               <button key={c.id} onClick={() => onPick(c.id)} className="nx-panel solid" style={{
                 padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
                 textAlign: 'left', transition: 'all .15s',
-                borderColor: active ? 'var(--pompeyo-naranja)' : undefined,
-                background: active ? 'color-mix(in srgb, var(--pompeyo-naranja) 12%, var(--space-panel-solid))' : undefined }}>
+                borderColor: active ? 'var(--holocron-naranja)' : undefined,
+                background: active ? 'color-mix(in srgb, var(--holocron-naranja) 12%, var(--space-panel-solid))' : undefined }}>
                 <Avatar c={c} size={40} ring />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div>
@@ -1292,7 +1292,7 @@ function FighterPickerModal({ open, opponents, selected, onPick, onClose }) {
                   </div>
                 </div>
                 <TierBadge tier={c.tier} sm />
-                {active && <span style={{ color: 'var(--pompeyo-naranja)' }}><Icon name="check" size={16} /></span>}
+                {active && <span style={{ color: 'var(--holocron-naranja)' }}><Icon name="check" size={16} /></span>}
               </button>
             );
           })}
@@ -1352,7 +1352,7 @@ function AcceptChallengeModal({ challenge, onClose, onAccepted, S }) {
   return (
     <Modal open={!!challenge} onClose={onClose} kicker="Responder desafío" title="Aceptar Combate" width={440}>
       <div style={{ display: 'grid', gap: 16 }}>
-        <div style={{ padding: '12px 14px', background: 'color-mix(in srgb, var(--pompeyo-naranja) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--pompeyo-naranja) 30%, transparent)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
+        <div style={{ padding: '12px 14px', background: 'color-mix(in srgb, var(--holocron-naranja) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--holocron-naranja) 30%, transparent)', borderRadius: 'var(--radius-md)', fontSize: 13 }}>
           <span style={{ fontWeight: 700 }}>{challenger?.name ?? 'Combatiente'}</span> te ha retado a duelo.
           <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
             Apuesta: {NX.fmtCLP(challenge.stake)}

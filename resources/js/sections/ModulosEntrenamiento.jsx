@@ -168,7 +168,7 @@ function ModuloCard({ modulo, isAdmin, onEdit, onDelete, onClick }) {
               {Array.from({ length: 10 }, (_, i) => (
                 <span key={i} style={{
                   display: 'block', width: 4, height: 8, borderRadius: 2,
-                  background: i < modulo.esfuerzo ? 'var(--pompeyo-naranja)' : 'rgba(255,255,255,.1)',
+                  background: i < modulo.esfuerzo ? 'var(--holocron-naranja)' : 'rgba(255,255,255,.1)',
                 }} />
               ))}
             </div>
@@ -265,7 +265,7 @@ function ModuloDetailModal({ modulo, onClose }) {
           {forma && <Chip tone="holo">{forma.num} · {forma.name}</Chip>}
           {modulo.rango && <Chip>{RANGO_LABEL[modulo.rango] ?? modulo.rango}</Chip>}
           {modulo.esfuerzo && (
-            <span className="nx-data" style={{ fontSize: 10, color: 'var(--pompeyo-naranja)' }}>
+            <span className="nx-data" style={{ fontSize: 10, color: 'var(--holocron-naranja)' }}>
               Esfuerzo {modulo.esfuerzo}/10
             </span>
           )}
@@ -444,7 +444,7 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
           <div>
             <label className="nx-label">Esfuerzo · {form.esfuerzo}/10</label>
             <input type="range" min="1" max="10" value={form.esfuerzo} onChange={e => set('esfuerzo', +e.target.value)}
-              style={{ width: '100%', accentColor: 'var(--pompeyo-naranja)', marginTop: 8 }} />
+              style={{ width: '100%', accentColor: 'var(--holocron-naranja)', marginTop: 8 }} />
           </div>
         </div>
 

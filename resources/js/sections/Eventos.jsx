@@ -219,7 +219,7 @@ function EventCard({ e, onToggleReg, onClaim }) {
                 <span className="nx-num" style={{ fontSize: 12, color: 'var(--txt-dim)' }}>{e.registered}/{e.capacity}</span>
               </div>
               <div className="nx-bar" style={{ marginBottom: 12 }}>
-                <i style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--pompeyo-naranja)' : `linear-gradient(90deg, ${banner}88, ${banner})` }} />
+                <i style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--holocron-naranja)' : `linear-gradient(90deg, ${banner}88, ${banner})` }} />
               </div>
             </>
           )}

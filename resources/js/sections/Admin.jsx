@@ -722,7 +722,7 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
           >
             <label className="nx-label">
               {field.label}
-              {field.required && <span style={{ color: 'var(--pompeyo-naranja)', marginLeft: 2 }}>*</span>}
+              {field.required && <span style={{ color: 'var(--holocron-naranja)', marginLeft: 2 }}>*</span>}
             </label>
             <FieldInput
               field={field}
@@ -2140,7 +2140,7 @@ function TorneosAdmin() {
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   {t.estado === 'inscripcion' && (
                     <button onClick={() => handleIniciar(t.id)} disabled={starting === t.id || t.inscritos_count < 2}
-                      style={{ background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)', color: 'var(--pompeyo-oro)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11, opacity: t.inscritos_count < 2 ? 0.4 : 1 }}>
+                      style={{ background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)', color: 'var(--holocron-oro)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 11, opacity: t.inscritos_count < 2 ? 0.4 : 1 }}>
                       <Icon name="crown" size={12} /> Generar Árbol
                     </button>
                   )}

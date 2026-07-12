@@ -25,6 +25,7 @@ class MapNave extends Model
         'capacidad_salto',
         'costo',
         'costo_reparacion',
+        'costo_combustible',
         'rareza',
         'imagen',
         'descripcion',
@@ -40,5 +41,6 @@ class MapNave extends Model
         'capacidad_salto' => 'integer',
         'costo' => 'integer',
         'costo_reparacion' => 'integer',
+        'costo_combustible' => 'integer',
     ];
 }

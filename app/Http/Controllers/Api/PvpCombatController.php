@@ -23,6 +23,7 @@ class PvpCombatController extends Controller
         'attacker.character.sableActivo.empunadura', 'defender.character.sableActivo.empunadura',
         'attacker.character.sableActivo.modulo', 'defender.character.sableActivo.modulo',
         'attacker.character.sableActivo.accesorio', 'defender.character.sableActivo.accesorio',
+        'attacker.character.naveEquipada.nave', 'defender.character.naveEquipada.nave',
     ];
 
     /* Tabla de efectividad: forma atacante → formas que supera */
@@ -417,6 +418,12 @@ class PvpCombatController extends Controller
             }
         }
 
+        /* ─── Persistir daño de la nave equipada (si el combate fue naval) ── */
+        if (in_array($combat->status, ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'], true)) {
+            self::persistNaveDamage($combat->attacker->character, $combat->attacker_hp, $combat->attacker_escudo);
+            self::persistNaveDamage($combat->defender->character, $combat->defender_hp, $combat->defender_escudo);
+        }
+
         /* ─── Fuerza final de cada bando (antes del pre-cobro de ronda) ──── */
         $attackerFuerzaFinal = $isAttacker ? $myFuerza : ($combat->attacker_fuerza ?? 0);
         $defenderFuerzaFinal = $isAttacker ? ($combat->defender_fuerza ?? 0) : $myFuerza;
@@ -598,6 +605,29 @@ class PvpCombatController extends Controller
             return ['vida' => 30, 'escudo' => 10, 'ataque' => 20, 'defensa' => 15,
                     'iniciativa' => 10, 'punteria' => 10, 'movimiento' => 20];
         }
+
+        /* Combate naval: si el personaje tiene una nave equipada, sus atributos
+         * reemplazan por completo a los del personaje (vida/escudo persisten el
+         * daño entre combates — requieren reparación). */
+        if (method_exists($char, 'naveEquipada')) {
+            $naveOwned = $char->relationLoaded('naveEquipada')
+                ? $char->naveEquipada
+                : $char->naveEquipada()->with('nave')->first();
+
+            if ($naveOwned && $naveOwned->nave) {
+                $nave = $naveOwned->nave;
+                return [
+                    'vida'       => $naveOwned->vida_actual,
+                    'escudo'     => $naveOwned->escudo_actual,
+                    'ataque'     => $nave->ataque,
+                    'defensa'    => $nave->maniobrabilidad,
+                    'movimiento' => $nave->maniobrabilidad,
+                    'iniciativa' => $nave->velocidad,
+                    'punteria'   => $nave->ataque,
+                ];
+            }
+        }
+
         $s = is_array($char->stats) ? $char->stats : [];
         $f = $s['fuerza']    ?? 50;
         $v = $s['velocidad'] ?? 50;
@@ -662,6 +692,18 @@ class PvpCombatController extends Controller
     {
         if ($atkForma === 0 || $defForma === 0) return false;
         return in_array($defForma, self::BEATS[$atkForma] ?? [], true);
+    }
+
+    private static function persistNaveDamage(?object $char, int $hp, int $escudo): void
+    {
+        if (!$char || !method_exists($char, 'naveEquipada')) {
+            return;
+        }
+
+        $naveOwned = $char->naveEquipada()->first();
+        if ($naveOwned) {
+            $naveOwned->update(['vida_actual' => max(0, $hp), 'escudo_actual' => max(0, $escudo)]);
+        }
     }
 
     private static function applyDamage(int $hp, int $escudo, int $dmg): array

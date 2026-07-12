@@ -24,12 +24,12 @@ const NX_FOCUS = ['Técnica', 'Cardio', 'Sparring', 'Footwork', 'Fuerza', 'Estud
 const NX_TAGS  = ['técnica', 'cardio', 'sparring', 'defensa', 'estudio', 'fuerza', 'flexibilidad'];
 
 const FOCO_C = {
-  Técnica: 'var(--holo)', Cardio: 'var(--pompeyo-naranja)', Sparring: '#ff2d45',
+  Técnica: 'var(--holo)', Cardio: 'var(--holocron-naranja)', Sparring: '#ff2d45',
   Footwork: '#10b981', Fuerza: '#E6B325', Estudio: '#8b5cf6', Recuperación: '#38cdf0',
 };
 const NIVEL_C = {
   basico: 'var(--txt-dim)', intermedio: 'var(--holo)',
-  avanzado: 'var(--pompeyo-naranja)', experto: '#ff2d45',
+  avanzado: 'var(--holocron-naranja)', experto: '#ff2d45',
 };
 
 /* ─── PLAN NODE ─────────────────────────────────────────────── */
@@ -234,7 +234,7 @@ function CloseModal({ sesion, onClose, onClosed }) {
       width={540}
     >
       <div style={{ display: 'grid', gap: 14 }}>
-        <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'rgba(255,107,0,0.08)', border: '1px solid rgba(255,107,0,0.25)', fontSize: 12, color: 'var(--pompeyo-naranja)' }}>
+        <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'rgba(255,107,0,0.08)', border: '1px solid rgba(255,107,0,0.25)', fontSize: 12, color: 'var(--holocron-naranja)' }}>
           Esta acción es irreversible. Se registrará la bitácora global y se cerrará la sesión para nuevas asistencias.
         </div>
 
@@ -249,13 +249,13 @@ function CloseModal({ sesion, onClose, onClosed }) {
             <label className="nx-label">Esfuerzo global · {form.effort}/10</label>
             <input type="range" min="1" max="10" value={form.effort}
               onChange={e => upd('effort', +e.target.value)}
-              style={{ width: '100%', accentColor: 'var(--pompeyo-naranja)', marginTop: 9 }}
+              style={{ width: '100%', accentColor: 'var(--holocron-naranja)', marginTop: 9 }}
             />
           </div>
         </div>
 
         <div>
-          <label className="nx-label">Bitácora de cierre <span style={{ color: 'var(--pompeyo-naranja)' }}>*</span></label>
+          <label className="nx-label">Bitácora de cierre <span style={{ color: 'var(--holocron-naranja)' }}>*</span></label>
           <textarea className="nx-textarea" rows={4}
             placeholder="Cómo fue la sesión, qué se trabajó, observaciones generales del grupo..."
             value={form.note} onChange={e => upd('note', e.target.value)}
@@ -283,7 +283,7 @@ function CloseModal({ sesion, onClose, onClosed }) {
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
         <Btn kind="ghost" onClick={onClose} disabled={saving}>Cancelar</Btn>
         <Btn kind="accent" icon="check" onClick={submit} disabled={saving}
-          style={{ background: 'rgba(255,107,0,0.15)', borderColor: 'var(--pompeyo-naranja)', color: 'var(--pompeyo-naranja)' }}
+          style={{ background: 'rgba(255,107,0,0.15)', borderColor: 'var(--holocron-naranja)', color: 'var(--holocron-naranja)' }}
         >
           {saving ? 'Cerrando...' : 'Cerrar sesión'}
         </Btn>
@@ -325,13 +325,13 @@ function CreateModal({ onClose, onCreated }) {
     <Modal open onClose={onClose} kicker="NUEVA SESIÓN" title="Crear Sesión de Entrenamiento" width={520}>
       <div style={{ display: 'grid', gap: 14 }}>
         <div>
-          <label className="nx-label">Tipo de sesión <span style={{ color: 'var(--pompeyo-naranja)' }}>*</span></label>
+          <label className="nx-label">Tipo de sesión <span style={{ color: 'var(--holocron-naranja)' }}>*</span></label>
           <select className="nx-select" value={form.titulo} onChange={e => upd('titulo', e.target.value)}>
             {SESION_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div>
-          <label className="nx-label">Fecha <span style={{ color: 'var(--pompeyo-naranja)' }}>*</span></label>
+          <label className="nx-label">Fecha <span style={{ color: 'var(--holocron-naranja)' }}>*</span></label>
           <input type="date" className="nx-input" value={form.fecha} onChange={e => upd('fecha', e.target.value)} />
         </div>
         <div>
@@ -651,7 +651,7 @@ function SesionDetalle({ id, user, onBack }) {
               style={{
                 width: '100%', padding: '11px 14px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
                 background: 'rgba(255,107,0,0.06)', border: '1px solid rgba(255,107,0,0.25)',
-                color: 'var(--pompeyo-naranja)', fontSize: 12, fontFamily: 'var(--font-data)',
+                color: 'var(--holocron-naranja)', fontSize: 12, fontFamily: 'var(--font-data)',
                 letterSpacing: '0.06em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 transition: 'all 0.15s',
               }}

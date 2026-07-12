@@ -1,13 +1,13 @@
 /* ============================================================
-   NÉXUS — capa HUD sci-fi sobre tokens Pompeyo
-   Azul Pompeyo = espacio profundo · Naranja = combate/acción
+   NÉXUS — capa HUD sci-fi sobre tokens Holocrón
+   Azul Holocrón = espacio profundo · Naranja = combate/acción
    Oro = medallas/élite · Cian holo = líneas de acento (oklch)
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root {
-  /* Espacio profundo derivado del azul Pompeyo */
+  /* Espacio profundo derivado del azul Holocrón */
   --space-900: #04070f;
   --space-800: #07101f;
   --space-700: #0a1830;
@@ -131,13 +131,13 @@ body {
 .nx-btn:hover { border-color: var(--holo); background: color-mix(in srgb, var(--holo) 14%, transparent); box-shadow: 0 0 18px -6px var(--holo); }
 .nx-btn:active { transform: translateY(1px); }
 .nx-btn-accent {
-  background: var(--pompeyo-naranja); border-color: var(--pompeyo-naranja); color: #fff;
+  background: var(--holocron-naranja); border-color: var(--holocron-naranja); color: #fff;
 }
-.nx-btn-accent:hover { background: var(--pompeyo-naranja-dark); box-shadow: 0 0 22px -4px var(--pompeyo-naranja); }
+.nx-btn-accent:hover { background: var(--holocron-naranja-dark); box-shadow: 0 0 22px -4px var(--holocron-naranja); }
 .nx-btn-primary { background: var(--azul-glow); border-color: var(--azul-glow); color: #fff; }
 .nx-btn-primary:hover { box-shadow: 0 0 22px -4px var(--azul-glow); }
-.nx-btn-gold { background: var(--pompeyo-oro); border-color: var(--pompeyo-oro); color: #2a1f00; }
-.nx-btn-gold:hover { box-shadow: 0 0 22px -4px var(--pompeyo-oro); }
+.nx-btn-gold { background: var(--holocron-oro); border-color: var(--holocron-oro); color: #2a1f00; }
+.nx-btn-gold:hover { box-shadow: 0 0 22px -4px var(--holocron-oro); }
 .nx-btn-ghost { background: transparent; }
 .nx-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 .nx-btn-sm { padding: 4px 9px; font-size: 10px; }
@@ -149,8 +149,8 @@ body {
   color: var(--holo); background: var(--holo-faint); display: inline-flex; align-items: center; gap: 5px;
   white-space: nowrap;
 }
-.nx-chip.gold   { color: var(--pompeyo-oro); border-color: rgba(230,179,37,0.4); background: rgba(230,179,37,0.12); }
-.nx-chip.orange { color: var(--pompeyo-naranja); border-color: rgba(255,107,0,0.4); background: rgba(255,107,0,0.12); }
+.nx-chip.gold   { color: var(--holocron-oro); border-color: rgba(230,179,37,0.4); background: rgba(230,179,37,0.12); }
+.nx-chip.orange { color: var(--holocron-naranja); border-color: rgba(255,107,0,0.4); background: rgba(255,107,0,0.12); }
 .nx-chip.green  { color: var(--green-500); border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.12); }
 .nx-chip.red    { color: #ff6b6b; border-color: rgba(220,38,38,0.45); background: rgba(220,38,38,0.14); }
 .nx-chip.dim    { color: var(--txt-dim); border-color: var(--holo-line); background: rgba(255,255,255,0.03); }

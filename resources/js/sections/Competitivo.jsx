@@ -42,7 +42,7 @@ function MiniAvatar({ name, photoUrl, size = 36, ring }) {
   const initials = (name ?? '?').trim().slice(0, 2).toUpperCase();
   const color = hashColor(name ?? '?');
   const ringStyle = ring
-    ? { border: '2px solid var(--pompeyo-oro)', boxShadow: '0 0 12px -2px var(--pompeyo-oro)' }
+    ? { border: '2px solid var(--holocron-oro)', boxShadow: '0 0 12px -2px var(--holocron-oro)' }
     : { border: '1px solid var(--holo-line)' };
   if (photoUrl) {
     return (
@@ -300,9 +300,9 @@ function ResumenTab({ torneo, isTutorUser, onOpenCombate }) {
                   <div key={p.user_id} className="nx-panel solid" style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: esCampeon ? '10px 12px' : '8px 10px',
-                    borderColor: esCampeon ? 'var(--pompeyo-oro)' : undefined,
+                    borderColor: esCampeon ? 'var(--holocron-oro)' : undefined,
                     background: esCampeon ? 'linear-gradient(135deg, rgba(230,179,37,0.16), rgba(230,179,37,0.03))' : undefined,
-                    boxShadow: esCampeon ? '0 0 18px -6px var(--pompeyo-oro)' : undefined,
+                    boxShadow: esCampeon ? '0 0 18px -6px var(--holocron-oro)' : undefined,
                   }}>
                     <MiniAvatar name={p.name} photoUrl={p.photo_url} size={esCampeon ? 42 : 30} ring={esCampeon} />
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -311,7 +311,7 @@ function ResumenTab({ torneo, isTutorUser, onOpenCombate }) {
                           fontSize: esCampeon ? 13 : 12, fontWeight: esCampeon ? 700 : 600,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>{p.name}</span>
-                        {esCampeon && <Icon name="star" size={12} fill style={{ color: 'var(--pompeyo-oro)', flexShrink: 0 }} />}
+                        {esCampeon && <Icon name="star" size={12} fill style={{ color: 'var(--holocron-oro)', flexShrink: 0 }} />}
                       </div>
                       {p.handle && <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>@{p.handle}</div>}
                     </div>
@@ -449,7 +449,7 @@ function BracketMatch({ c, clickable, onClick }) {
         {user?.name ?? (c.estado === 'bye' ? '— (bye)' : 'Por definir')}
       </span>
       {c.estado !== 'pendiente' && user && (
-        <span className="nx-num" style={{ fontSize: 12, color: isWinner ? 'var(--pompeyo-oro)' : 'var(--txt-faint)' }}>
+        <span className="nx-num" style={{ fontSize: 12, color: isWinner ? 'var(--holocron-oro)' : 'var(--txt-faint)' }}>
           {puntos}
         </span>
       )}
@@ -516,7 +516,7 @@ function ScoringForm({ combate, torneoId, onResolved, onCancel }) {
   };
 
   const Side = ({ user, puntos, setPuntos, leves, setLeves, graves, setGraves, neto, auto, isWinner }) => (
-    <div className="nx-panel solid" style={{ padding: 14, borderColor: isWinner ? 'var(--pompeyo-oro)' : undefined }}>
+    <div className="nx-panel solid" style={{ padding: 14, borderColor: isWinner ? 'var(--holocron-oro)' : undefined }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <MiniAvatar name={user.name} photoUrl={user.photo_url} size={38} />
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -543,7 +543,7 @@ function ScoringForm({ combate, torneoId, onResolved, onCancel }) {
       <hr className="nx-divider" style={{ margin: '12px 0' }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span className="nx-kicker" style={{ fontSize: 9 }}>NETO</span>
-        <span className="nx-num" style={{ fontSize: 22, color: isWinner ? 'var(--pompeyo-oro)' : 'var(--txt)' }}>{neto}</span>
+        <span className="nx-num" style={{ fontSize: 22, color: isWinner ? 'var(--holocron-oro)' : 'var(--txt)' }}>{neto}</span>
       </div>
       {auto && <div style={{ marginTop: 8 }}><Chip tone="red">Pierde por faltas</Chip></div>}
       {isWinner && <div style={{ marginTop: 8 }}><Chip tone="gold" icon="trophy">Ganador</Chip></div>}

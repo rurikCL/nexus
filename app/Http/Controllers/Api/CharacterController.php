@@ -206,4 +206,26 @@ class CharacterController extends Controller
 
         return response()->json(['hito' => $hito]);
     }
+
+    public function npcEspacioVictory(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'npc_espacio_id' => 'required|integer|exists:map_npcs_espacio,id',
+        ]);
+
+        $character = $request->user()->character;
+        if (!$character) {
+            return response()->json(['error' => 'Sin personaje'], 404);
+        }
+
+        $npcEspacio = \App\Models\MapNpcEspacio::withTrashed()->findOrFail($data['npc_espacio_id']);
+        $hito = "{$npcEspacio->nombre} derrotado en el espacio";
+
+        \App\Models\CharacterHito::firstOrCreate([
+            'character_id' => $character->id,
+            'hito'         => $hito,
+        ]);
+
+        return response()->json(['hito' => $hito]);
+    }
 }

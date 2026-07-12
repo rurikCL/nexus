@@ -135,7 +135,7 @@ function QrWidget({ url, handle, right, style }) {
 }
 
 const PODIO_CMD = [
-  { key: 'primer_lugar',  color: 'var(--pompeyo-oro)', num: '1' },
+  { key: 'primer_lugar',  color: 'var(--holocron-oro)', num: '1' },
   { key: 'segundo_lugar', color: '#c0c0c0',            num: '2' },
   { key: 'tercer_lugar',  color: '#cd7f32',            num: '3' },
 ];
@@ -160,8 +160,8 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
     : null;
 
   const KPIS = [
-    { k: 'Créditos',   v: NX.fmtCLP(S.credits),      icon: 'coin',     tone: 'var(--pompeyo-oro)' },
-    { k: 'Victorias',  v: me.wins ?? 0,               sub: `${me.winrate ?? 0}% efectividad`, icon: 'trophy', tone: 'var(--pompeyo-naranja)' },
+    { k: 'Créditos',   v: NX.fmtCLP(S.credits),      icon: 'coin',     tone: 'var(--holocron-oro)' },
+    { k: 'Victorias',  v: me.wins ?? 0,               sub: `${me.winrate ?? 0}% efectividad`, icon: 'trophy', tone: 'var(--holocron-naranja)' },
     { k: 'Racha',      v: `${me.streak ?? 0} W`,      sub: 'sin perder', icon: 'flame',    tone: 'var(--holo)' },
     { k: 'Asistencia', v: `${loggedCount} días`,      icon: 'calendar', tone: 'var(--green-500)' },
   ];
@@ -408,14 +408,14 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
                         <div style={{ display: 'grid', gap: 6 }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr', gap: 4, paddingLeft: 10, paddingRight: 8 }}>
                             <div />
-                            {[{ n: '1°', c: 'var(--pompeyo-oro)' }, { n: '2°', c: '#a0a0b0' }, { n: '3°', c: '#cd7f32' }].map(({ n, c }) => (
+                            {[{ n: '1°', c: 'var(--holocron-oro)' }, { n: '2°', c: '#a0a0b0' }, { n: '3°', c: '#cd7f32' }].map(({ n, c }) => (
                               <div key={n} style={{ textAlign: 'center', fontSize: 8, color: c, fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>{n}</div>
                             ))}
                           </div>
                           {(t.podios ?? []).filter(p => p.primer_lugar || p.segundo_lugar || p.tercer_lugar).map(p => {
                             const tierColor = TIER_COLOR[p.rango] ?? '#38cdf0';
                             const LUGARES = [
-                              { key: 'primer_lugar',  mc: 'var(--pompeyo-oro)' },
+                              { key: 'primer_lugar',  mc: 'var(--holocron-oro)' },
                               { key: 'segundo_lugar', mc: '#a0a0b0' },
                               { key: 'tercer_lugar',  mc: '#cd7f32' },
                             ];
@@ -500,9 +500,9 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
                 <div style={{ display: 'grid', gap: 8 }}>
                   {S.ranking.slice(0, 4).map((c, i) => (
                     <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span className="nx-num" style={{ fontSize: 15, width: 22, color: i === 0 ? 'var(--pompeyo-oro)' : 'var(--txt-faint)' }}>{i + 1}</span>
+                      <span className="nx-num" style={{ fontSize: 15, width: 22, color: i === 0 ? 'var(--holocron-oro)' : 'var(--txt-faint)' }}>{i + 1}</span>
                       <Avatar c={c} size={28} />
-                      <span style={{ flex: 1, fontSize: 13, fontWeight: c.id === 'you' ? 700 : 500, color: c.id === 'you' ? 'var(--pompeyo-naranja)' : 'var(--txt)' }}>{c.name}</span>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: c.id === 'you' ? 700 : 500, color: c.id === 'you' ? 'var(--holocron-naranja)' : 'var(--txt)' }}>{c.name}</span>
                       <span className="nx-num" style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{c.wins}W</span>
                     </div>
                   ))}
@@ -625,7 +625,7 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
         <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
           <Panel kicker="Identidad" title="Datos del Personaje" icon="user">
             {error && (
-              <div style={{ padding: '8px 12px', marginBottom: 10, borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,107,0,0.4)', background: 'rgba(255,107,0,0.1)', color: 'var(--pompeyo-naranja)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ padding: '8px 12px', marginBottom: 10, borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,107,0,0.4)', background: 'rgba(255,107,0,0.1)', color: 'var(--holocron-naranja)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 7 }}>
                 <Icon name="x" size={13} />{error}
               </div>
             )}

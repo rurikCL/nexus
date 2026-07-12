@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TrainingController;
 use App\Http\Controllers\Api\EmblemUploadController;
 use App\Http\Controllers\Api\MisionController;
+use App\Http\Controllers\Api\NaveController;
 use App\Http\Controllers\Api\TemporadaController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\WidgetLayoutController;
@@ -55,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
     Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
     Route::post('/character/npc-victory', [CharacterController::class, 'npcVictory']);
+    Route::post('/character/npc-espacio-victory', [CharacterController::class, 'npcEspacioVictory']);
     Route::post('/character/habilidades',        [CharacterController::class, 'updateHabilidades']);
     Route::post('/character/equipar-arma',       [CharacterController::class, 'equiparArma']);
     Route::post('/character/aprender-habilidad', [CharacterController::class, 'aprenderHabilidad']);
@@ -164,7 +166,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/map/zonas/{id}',        [MapController::class, 'zona']);
     Route::get('/map/lugares/{id}',      [MapController::class, 'lugar']);
     Route::get('/map/npcs/{id}',         [MapController::class, 'npc']);
+    Route::get('/map/npcs-espacio/{id}', [MapController::class, 'naveEspacio']);
     Route::post('/map/location',         [MapController::class, 'updateLocation']);
+
+    // Naves
+    Route::get('/naves',                    [NaveController::class, 'catalogo']);
+    Route::get('/naves/mias',               [NaveController::class, 'mias']);
+    Route::post('/naves/{id}/comprar',      [NaveController::class, 'comprar']);
+    Route::post('/naves/desequipar',        [NaveController::class, 'desequipar']);
+    Route::post('/naves/{ownedId}/equipar',     [NaveController::class, 'equipar']);
+    Route::post('/naves/{ownedId}/reabastecer', [NaveController::class, 'reabastecer']);
+    Route::post('/naves/{ownedId}/reparar',     [NaveController::class, 'reparar']);
 
     // Sesiones de entrenamiento
     Route::get('/sesiones/disponibles',       [SesionEntrenamientoController::class, 'disponibles']);
