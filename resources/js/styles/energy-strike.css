@@ -1,0 +1,246 @@
+/* ============================================================
+   NÉXUS — Golpes de energía entre dos entidades de combate
+   (atacante → objetivo): melee (arco tipo sable de luz) y a
+   distancia (mira que hace lock-on), compartiendo el mismo
+   estallido de impacto (flash/anillo/partículas).
+
+   Reglas de animación:
+   - Solo se anima transform y opacity (nunca width/height/top/left/
+     box-shadow). El único filter animado (brightness en el objetivo
+     y el blur de las capas de glow) está explícitamente pedido y es
+     tan compositable como opacity — no dispara layout ni paint del
+     árbol DOM circundante.
+   - Toda la temporización vive en custom properties (--nx-strike-*),
+     nunca como números mágicos sueltos en los keyframes.
+   - Entradas con var(--ease-out), salidas con var(--ease-in).
+   - prefers-reduced-motion: la versión completa es la mejora — bajo
+     "reduce" se colapsa a un aviso casi instantáneo (progressive
+     enhancement invertido: quitamos el movimiento decorativo, no la
+     señal de que el golpe ocurrió).
+   - will-change solo mientras dura la animación: en el overlay
+     transitorio (.nx-strike) se limpia desmontando el componente al
+     terminar; en nodos persistentes (stage/objetivo) se agrega y
+     quita por JS junto con la clase que dispara la animación.
+   ============================================================ */
+
+.nx-strike {
+  --nx-strike-color: #38cdf0;
+
+  --nx-strike-arc-dur:        140ms;
+  --nx-strike-glow-stagger:    30ms;
+  --nx-strike-fade-dur:       260ms;
+  --nx-strike-hold-dur:       120ms;
+
+  --nx-strike-flash-dur:      220ms;
+  --nx-strike-ring-dur:       500ms;
+  --nx-strike-particle-dur:   550ms;
+
+  --nx-strike-shake-dur:      120ms;
+  --nx-strike-recoil-dur:     350ms;
+
+  --nx-reticle-travel-dur:    260ms;
+  --nx-reticle-fade-dur:      140ms;
+
+  /* Cuándo ocurre el impacto (flash/anillo/partículas), relativo al
+     montaje del efecto. El golpe melee lo deja en --nx-strike-arc-dur
+     (cuando el arco termina de dibujarse); el golpe a distancia lo
+     sobreescribe inline con --nx-reticle-travel-dur (cuando la mira
+     llega al objetivo) — así el mismo estallido de impacto sirve para
+     ambos sin duplicar sus reglas. */
+  --nx-strike-impact-at: var(--nx-strike-arc-dur);
+
+  z-index: 500;
+}
+
+/* ---------------------------------------------------------
+   Arco de energía (melee) — 3 capas (exterior/media/núcleo)
+   dibujadas con stroke-dashoffset normalizado vía pathLength="100".
+   --------------------------------------------------------- */
+.nx-strike-arc {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+  will-change: stroke-dashoffset, opacity;
+  animation:
+    nx-strike-draw     var(--nx-strike-arc-dur)  var(--ease-out) forwards,
+    nx-strike-arc-fade var(--nx-strike-fade-dur) var(--ease-in)  forwards;
+  animation-delay: 0ms, calc(var(--nx-strike-impact-at) + var(--nx-strike-hold-dur));
+}
+.nx-strike-arc-mid {
+  animation-delay:
+    var(--nx-strike-glow-stagger),
+    calc(var(--nx-strike-impact-at) + var(--nx-strike-hold-dur) + var(--nx-strike-glow-stagger));
+}
+.nx-strike-arc-core {
+  animation-delay:
+    calc(var(--nx-strike-glow-stagger) * 2),
+    calc(var(--nx-strike-impact-at) + var(--nx-strike-hold-dur) + var(--nx-strike-glow-stagger) * 2);
+}
+
+@keyframes nx-strike-draw {
+  0%   { stroke-dashoffset: 100; opacity: 0; }
+  20%  { opacity: 1; }
+  100% { stroke-dashoffset: 0;   opacity: 1; }
+}
+@keyframes nx-strike-arc-fade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ---------------------------------------------------------
+   Mira (a distancia) — viaja del atacante al objetivo y hace
+   "lock-on" (translate + scale combinados, con leve rebote),
+   luego se desvanece justo cuando comienza el impacto.
+   --------------------------------------------------------- */
+.nx-reticle {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  margin-top: -17px;
+  border: 2px solid var(--nx-strike-color);
+  border-radius: 4px;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation:
+    nx-reticle-travel var(--nx-reticle-travel-dur) var(--ease-out) forwards,
+    nx-reticle-fade    var(--nx-reticle-fade-dur)   var(--ease-in)  forwards;
+  animation-delay: 0ms, var(--nx-strike-impact-at);
+}
+.nx-reticle-line {
+  position: absolute;
+  opacity: 0.85;
+}
+.nx-reticle-line-h { left: -6px; right: -6px; top: 50%; height: 1.5px; transform: translateY(-50%); }
+.nx-reticle-line-v { top: -6px; bottom: -6px; left: 50%; width: 1.5px; transform: translateX(-50%); }
+
+@keyframes nx-reticle-travel {
+  0%   { transform: translate(0, 0) scale(0.4);                opacity: 0; }
+  15%  { opacity: 1; }
+  70%  { transform: translate(var(--rx), var(--ry)) scale(1.2); }
+  85%  { transform: translate(var(--rx), var(--ry)) scale(0.9); }
+  100% { transform: translate(var(--rx), var(--ry)) scale(1);   opacity: 1; }
+}
+@keyframes nx-reticle-fade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ---------------------------------------------------------
+   Flash de impacto — gradiente radial blanco sobre el punto
+   de colisión. transform-box: fill-box para que el scale() de
+   un <circle> SVG escale desde su propio centro.
+   --------------------------------------------------------- */
+.nx-strike-flash {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: opacity, transform;
+  animation: nx-strike-flash-anim var(--nx-strike-flash-dur) var(--ease-out) forwards;
+  animation-delay: var(--nx-strike-impact-at);
+}
+@keyframes nx-strike-flash-anim {
+  0%   { opacity: 0; transform: scale(0.3); }
+  30%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* ---------------------------------------------------------
+   Anillo de energía expansivo.
+   --------------------------------------------------------- */
+.nx-strike-ring {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--nx-strike-color);
+  opacity: 0;
+  transform: scale(0.2);
+  will-change: transform, opacity;
+  animation: nx-strike-ring-anim var(--nx-strike-ring-dur) var(--ease-out) forwards;
+  animation-delay: var(--nx-strike-impact-at);
+}
+@keyframes nx-strike-ring-anim {
+  0%   { transform: scale(0.2); opacity: 0.9; }
+  100% { transform: scale(4);   opacity: 0; }
+}
+
+/* ---------------------------------------------------------
+   Partículas — explotan desde el punto de impacto. --px/--py
+   son custom properties por partícula (desplazamiento final),
+   --stagger agrega un pequeño offset aleatorio por partícula.
+   --------------------------------------------------------- */
+.nx-strike-particle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: nx-strike-particle-anim var(--nx-strike-particle-dur) var(--ease-out) forwards;
+  animation-delay: calc(var(--nx-strike-impact-at) + var(--stagger, 0ms));
+}
+@keyframes nx-strike-particle-anim {
+  0%   { transform: translate(0, 0) scale(1);                     opacity: 1; }
+  100% { transform: translate(var(--px), var(--py)) scale(0.4);   opacity: 0; }
+}
+
+/* ---------------------------------------------------------
+   Screen shake — aplicado por JS al contenedor del stage
+   durante ~120ms (clase efímera, se retira al terminar).
+   --------------------------------------------------------- */
+.nx-strike-shake {
+  animation: nx-strike-shake-anim var(--nx-strike-shake-dur) linear;
+  will-change: transform;
+}
+@keyframes nx-strike-shake-anim {
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(-6px); }
+  40%  { transform: translateX(5px); }
+  60%  { transform: translateX(-4px); }
+  80%  { transform: translateX(3px); }
+  100% { transform: translateX(0); }
+}
+
+/* ---------------------------------------------------------
+   Objetivo: retroceso oscilante + flash blanco (brightness).
+   Aplicado por JS al elemento del objetivo durante ~350ms.
+   --------------------------------------------------------- */
+.nx-strike-target-hit {
+  animation: nx-strike-recoil var(--nx-strike-recoil-dur) var(--ease-out);
+  will-change: transform, filter;
+}
+@keyframes nx-strike-recoil {
+  0%   { transform: translateX(0);    filter: brightness(1); }
+  10%  { transform: translateX(10px); filter: brightness(2.5); }
+  30%  { transform: translateX(-7px); filter: brightness(1.6); }
+  50%  { transform: translateX(4px);  filter: brightness(1.2); }
+  70%  { transform: translateX(-2px); filter: brightness(1); }
+  100% { transform: translateX(0);    filter: brightness(1); }
+}
+
+/* ---------------------------------------------------------
+   prefers-reduced-motion — se colapsa el movimiento decorativo
+   a casi-instantáneo; se retira el shake y se ocultan anillo y
+   partículas (en vez de "teletransportarlas" sin animación).
+   --------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .nx-strike-arc,
+  .nx-reticle,
+  .nx-strike-flash,
+  .nx-strike-ring,
+  .nx-strike-particle,
+  .nx-strike-target-hit {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+  .nx-strike-ring,
+  .nx-strike-particle {
+    display: none;
+  }
+  .nx-strike-shake {
+    animation: none;
+  }
+}

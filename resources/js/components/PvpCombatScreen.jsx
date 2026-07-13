@@ -3,6 +3,36 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { useDiceRoller } from './DiceRoller.jsx';
+import { getRelativeCenter } from './combatFx.jsx';
+import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
+import RangedStrikeEffect from './RangedStrikeEffect.jsx';
+
+/* Clasifica una entrada del log del servidor como golpe melee/a distancia,
+   con impacto o falla, para disparar el VFX correspondiente. El servidor no
+   envía esta clasificación estructurada, así que se infiere del texto del
+   mensaje + el arma/habilidades del lado que actuó. */
+function classifyPvpAttack(entry, combat, myId) {
+  const msgs = entry.messages ?? [];
+  const attackMsg = msgs.find((m) => / vs 1d20/.test(m));
+  if (!attackMsg) return null;
+
+  const actorIsMe = entry.actor_id === myId;
+  const actorSide = actorIsMe
+    ? (combat.i_am_attacker ? combat.attacker : combat.defender)
+    : (combat.i_am_attacker ? combat.defender : combat.attacker);
+
+  let ranged;
+  if (/ataca (con|desarmado)/.test(attackMsg)) {
+    ranged = actorSide?.arma_equipada?.tipo_ataque === 'distancia';
+  } else {
+    const nameMatch = attackMsg.match(/usa (.+?): 1d20/);
+    const hab = nameMatch ? (actorSide?.habilidades ?? []).find((h) => h.nombre === nameMatch[1]) : null;
+    ranged = hab ? hab.tipo !== 'melee' : false;
+  }
+
+  const hit = msgs.some((m) => /¡Impacto!|¡CRÍTICO!/.test(m));
+  return { actorIsMe, ranged, hit };
+}
 
 /* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
    Soporta el formato "1d20+X=Y" (habilidades/ataque básico) y "1d20(D)+X=Y" (iniciativa). */
@@ -94,6 +124,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [bgImg, setBgImg]               = useState(lugarImagen ?? null);
   const pollRef                         = useRef(null);
   const logRef                          = useRef(null);
+  const stageRef                        = useRef(null);
+  const myHudRef                        = useRef(null);
+  const oppHudRef                       = useRef(null);
+  const [strike, setStrike]             = useState(null);
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -129,10 +163,34 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const prevLen = combatLogLenRef.current;
     const newEntries = (newCombat.log ?? []).slice(prevLen);
     const attackerId = newCombat.attacker?.id;
+    let lastAttack = null;
     for (const entry of newEntries) {
       const groups = extractRollGroups(entry, { myId: userId, attackerId });
       for (const g of groups) await rollDice(g);
+      const classified = classifyPvpAttack(entry, newCombat, userId);
+      if (classified) lastAttack = classified;
     }
+
+    if (lastAttack && stageRef.current) {
+      const attackerRef = lastAttack.actorIsMe ? myHudRef : oppHudRef;
+      const targetRef    = lastAttack.actorIsMe ? oppHudRef : myHudRef;
+      const actorSide = lastAttack.actorIsMe
+        ? (newCombat.i_am_attacker ? newCombat.attacker : newCombat.defender)
+        : (newCombat.i_am_attacker ? newCombat.defender : newCombat.attacker);
+      const arma = actorSide?.arma_equipada;
+      const color = (arma?.es_sable && NX.SABERS[arma.color_hoja]) || (lastAttack.actorIsMe ? '#38cdf0' : '#ff2d45');
+
+      setStrike({
+        key: `${Date.now()}-${Math.random()}`,
+        type: lastAttack.ranged ? 'ranged' : 'melee',
+        hit: lastAttack.hit,
+        color,
+        targetRef,
+        from: getRelativeCenter(attackerRef.current, stageRef.current),
+        to: getRelativeCenter(targetRef.current, stageRef.current),
+      });
+    }
+
     setCombat(newCombat);
   };
 
@@ -385,12 +443,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         }
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <div ref={stageRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
 
         {diceOverlay}
 
         {/* Oponente HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
+        <div ref={oppHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
           <HUD
             hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
             nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
@@ -400,7 +458,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         </div>
 
         {/* Mi HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
+        <div ref={myHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
           <HUD
             hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
             nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
@@ -408,6 +466,21 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             buffs={myBuffs} debuffs={myDebuffs}
           />
         </div>
+
+        {/* Golpe de energía (melee) o mira (a distancia) sobre el stage */}
+        {strike && (strike.type === 'melee' ? (
+          <EnergyStrikeEffect key={strike.key}
+            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
+            stageRef={stageRef} targetRef={strike.targetRef}
+            onDone={() => setStrike(null)}
+          />
+        ) : (
+          <RangedStrikeEffect key={strike.key}
+            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
+            stageRef={stageRef} targetRef={strike.targetRef}
+            onDone={() => setStrike(null)}
+          />
+        ))}
 
         {/* Log de combate */}
         <div style={{
