@@ -192,7 +192,6 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [unreadMsgs, setUnreadMsgs] = useState([]);
   const [externalChatTarget, setExternalChatTarget] = useState(null);
   const prevUnreadIds = useRef(new Set());
-  const canTutor = ['caballero', 'maestro', 'granmaestro'].includes(user?.tier ?? '');
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
@@ -496,26 +495,6 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
             </span>
           </button>
         </div>
-
-        {/* Rol — solo visible para caballero, maestro y gran maestro */}
-        {canTutor && (
-          <div style={{ padding: 8, borderTop: '1px solid var(--holo-line)', overflow: 'hidden' }}>
-            {!sidebarCollapsed && <div className="nx-kicker" style={{ fontSize: 8, marginBottom: 5, paddingLeft: 2, whiteSpace: 'nowrap' }}>Modo de vista</div>}
-            <div style={{ display: 'flex', gap: 3, background: 'rgba(4,7,15,0.6)', padding: 3, borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)' }}>
-              {['pupilo', 'tutor'].map(r => (
-                <button key={r} onClick={() => S.setRole(r)} title={sidebarCollapsed ? r : undefined} style={{
-                  flex: 1, padding: '5px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  background: S.role === r ? 'var(--holocron-naranja)' : 'transparent',
-                  color: S.role === r ? '#fff' : 'var(--txt-dim)', fontWeight: 700,
-                  whiteSpace: 'nowrap', overflow: 'hidden',
-                }}>
-                  {sidebarCollapsed ? r[0].toUpperCase() : r}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Botón Configuración — solo administradores */}
         {isAdmin && <div style={{ padding: '4px 8px', borderTop: '1px solid var(--holo-line)' }}>

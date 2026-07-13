@@ -66,9 +66,12 @@ function apiCall(method, path, body) {
 }
 
 // ---------- main view ----------
+const CAN_TUTOR_TIERS = ['caballero', 'maestro', 'granmaestro'];
+
 export function TareasView({ S, user }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const canTutor = CAN_TUTOR_TIERS.includes(user?.tier ?? '');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -82,15 +85,36 @@ export function TareasView({ S, user }) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  if (loading) return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-      <span className="nx-data" style={{ color: 'var(--holo)', letterSpacing: '.15em', animation: 'nx-pulse 1.4s infinite' }}>CARGANDO TAREAS...</span>
+  return (
+    <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
+      {canTutor && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 3, background: 'rgba(4,7,15,0.6)', padding: 3, borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)' }}>
+            {['pupilo', 'tutor'].map(r => (
+              <button key={r} onClick={() => S.setRole(r)} style={{
+                padding: '5px 14px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+                fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
+                background: S.role === r ? 'var(--holocron-naranja)' : 'transparent',
+                color: S.role === r ? '#fff' : 'var(--txt-dim)', fontWeight: 700,
+              }}>
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+          <span className="nx-data" style={{ color: 'var(--holo)', letterSpacing: '.15em', animation: 'nx-pulse 1.4s infinite' }}>CARGANDO TAREAS...</span>
+        </div>
+      ) : S.role === 'tutor' ? (
+        <TareasTutor tasks={tasks} setTasks={setTasks} S={S} user={user} onReload={reload} />
+      ) : (
+        <TareasPupilo tasks={tasks} setTasks={setTasks} S={S} user={user} />
+      )}
     </div>
   );
-
-  return S.role === 'tutor'
-    ? <TareasTutor tasks={tasks} setTasks={setTasks} S={S} user={user} onReload={reload} />
-    : <TareasPupilo tasks={tasks} setTasks={setTasks} S={S} user={user} />;
 }
 
 // ---------- vista PUPILO ----------
@@ -114,7 +138,7 @@ function TareasPupilo({ tasks, setTasks, user }) {
   };
 
   return (
-    <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
+    <>
       <Panel kicker="Tu tutor asignado" title="Plan de Entrenamiento" icon="tasks"
         right={tutor ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -144,7 +168,7 @@ function TareasPupilo({ tasks, setTasks, user }) {
           </div>
         </Panel>
       )}
-    </div>
+    </>
   );
 }
 
@@ -232,7 +256,7 @@ function TareasTutor({ tasks, setTasks, S, user, onReload }) {
   const allCombatants = S.combatants.filter(c => c.id !== 'you' && c.userId);
 
   return (
-    <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
+    <>
       {reviewQueue.length > 0 && (
         <Panel kicker="Requiere tu acción" title="Cola de Revisión" icon="bell"
           right={<Chip tone="orange">{reviewQueue.length} pendientes</Chip>}>
@@ -310,7 +334,7 @@ function TareasTutor({ tasks, setTasks, S, user, onReload }) {
         onCreated={(newTask) => { setTasks(prev => [...prev, newTask]); setAssignFor(null); }}
         user={user}
       />
-    </div>
+    </>
   );
 }
 
