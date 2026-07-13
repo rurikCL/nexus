@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { SkillTooltip } from './SkillTooltip.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -114,6 +115,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [stancePicker,  setStancePicker]  = useState(false);
   const isMobile = useIsMobile();
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
+  const [hoveredHabId, setHoveredHabId] = useState(null);
 
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 
@@ -432,6 +434,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   };
 
   const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling;
+  useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
@@ -772,9 +775,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                           gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
                           position: 'relative', transition: 'all 0.13s',
                         }}
-                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } }}
-                        onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; }}
+                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                        onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
                       >
+                        {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
                         {/* Overlay de cooldown */}
                         {cdLeft > 0 && (
                           <div style={{

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { SkillTooltip } from './SkillTooltip.jsx';
 
 /* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
    Soporta el formato "1d20+X=Y" (habilidades/ataque básico) y "1d20(D)+X=Y" (iniciativa). */
@@ -119,6 +120,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const isMobile = useIsMobile();
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
   const { diceOverlay, rollDice } = useDiceRoller();
+  const [hoveredHabId, setHoveredHabId] = useState(null);
+  useEffect(() => { if (!combat.is_my_turn || busy) setHoveredHabId(null); }, [combat.is_my_turn, busy]);
 
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);
@@ -585,9 +588,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                           gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
                           position: 'relative', transition: 'all 0.13s',
                         }}
-                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } }}
-                        onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; }}
+                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                        onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
                       >
+                        {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
                         {/* Overlay de cooldown */}
                         {cdLeft > 0 && (
                           <div style={{

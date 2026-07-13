@@ -290,7 +290,7 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'text', hint: "usa 'arma' para que dano/tipo_ataque apliquen en combate · usa nucleo_energia, cristal, lente_enfoque, emisor, estabilizador, empunadura, modulo_activacion o accesorio para que sea un componente de sable de luz" },
+      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · el resto son componentes de sable de luz" },
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
