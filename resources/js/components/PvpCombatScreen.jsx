@@ -157,6 +157,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [hoveredHabId, setHoveredHabId] = useState(null);
   useEffect(() => { if (!combat.is_my_turn || busy) setHoveredHabId(null); }, [combat.is_my_turn, busy]);
 
+  /* Bloquea el scroll de la página mientras el combate está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);
   useEffect(() => { combatLogLenRef.current = (combat.log ?? []).length; }, [combat]);
@@ -429,7 +436,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
   const screen = (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 9500,
+      position: 'fixed', inset: 0, zIndex: 9500,
       background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 12,

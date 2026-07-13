@@ -468,6 +468,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling;
   useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
+  /* Bloquea el scroll de la página mientras el combate está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
   const LOG_C = { info: 'rgba(200,225,255,0.78)', success: '#10b981', danger: '#ff6b6b', miss: 'rgba(150,180,220,0.5)', system: '#38cdf0' };
@@ -616,7 +623,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
   const screen = (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 9500,
+      position: 'fixed', inset: 0, zIndex: 9500,
       background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 12,
