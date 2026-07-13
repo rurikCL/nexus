@@ -21,7 +21,7 @@ export function CombatientesView({ S }) {
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
-      <Panel kicker="Directorio de la academia" title="Combatientes" icon="roster"
+      <Panel kicker="Directorio de la academia" title="Directorio de usuarios de la fuerza" icon="roster"
         right={<Chip tone="dim" icon="roster">{S.combatants.length} registrados</Chip>}>
         {/* Filtros */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
