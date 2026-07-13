@@ -104,6 +104,28 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
+  const stageRef = useRef(null);
+  const playerHudRef = useRef(null);
+  const npcHudRef = useRef(null);
+  const [strike, setStrike] = useState(null);
+
+  /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
+  const triggerStrike = ({ playerIsAttacker, ranged, hit }) => {
+    if (!stageRef.current) return;
+    const attackerRef = playerIsAttacker ? playerHudRef : npcHudRef;
+    const targetRef    = playerIsAttacker ? npcHudRef : playerHudRef;
+    const arma = playerIsAttacker ? player.arma_equipada : null;
+    const color = playerIsAttacker
+      ? ((arma?.es_sable && NX.SABERS[arma.color_hoja]) || '#38cdf0')
+      : '#ff2d45';
+    setStrike({
+      key: `${Date.now()}-${Math.random()}`,
+      type: ranged ? 'ranged' : 'melee',
+      hit, color, targetRef,
+      from: getRelativeCenter(attackerRef.current, stageRef.current),
+      to: getRelativeCenter(targetRef.current, stageRef.current),
+    });
+  };
 
   /* Estado de habilidades del jugador */
   const [playerFuerza, setPlayerFuerza] = useState(initialState?.playerFuerza ?? 0);
@@ -366,6 +388,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       type: 'info',
     });
 
+    triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit });
+
     let newNpcHp = { ...npcHp };
     if (hit) {
       const dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
@@ -417,6 +441,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       text: `${player.nombre} ${accion}: 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
       type: 'info',
     }];
+
+    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit });
 
     let newNpcHp = { ...npcHp };
     if (hit) {
@@ -594,7 +620,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 12,
     }}>
-      <div style={{
+      <div ref={stageRef} style={{
         position: 'relative',
         width: '100%', maxWidth: 900,
         height: '100%', maxHeight: 640,
@@ -614,7 +640,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         {diceOverlay}
 
         {/* NPC HUD — arriba derecha */}
-        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
+        <div ref={npcHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
@@ -625,7 +651,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
 
         {/* Jugador HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
+        <div ref={playerHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
@@ -634,6 +660,21 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             buffs={playerBuffs}
           />
         </div>
+
+        {/* Golpe de energía (melee) o mira (a distancia) */}
+        {strike && (strike.type === 'melee' ? (
+          <EnergyStrikeEffect key={strike.key}
+            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
+            stageRef={stageRef} targetRef={strike.targetRef}
+            onDone={() => setStrike(null)}
+          />
+        ) : (
+          <RangedStrikeEffect key={strike.key}
+            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
+            stageRef={stageRef} targetRef={strike.targetRef}
+            onDone={() => setStrike(null)}
+          />
+        ))}
 
         {/* Log de combate — izquierda, colapsable */}
         <div style={{
