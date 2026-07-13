@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { useDiceRoller } from './DiceRoller.jsx';
+import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -153,6 +154,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const isMobile = useIsMobile();
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
   const { diceOverlay, rollDice } = useDiceRoller();
+  const [hoveredHabId, setHoveredHabId] = useState(null);
+  useEffect(() => { if (!combat.is_my_turn || busy) setHoveredHabId(null); }, [combat.is_my_turn, busy]);
 
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);
@@ -521,6 +524,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                     const isOpp    = turn.actorId === opp.id;
                     const label    = isSystem ? null : isOpp ? opp.name : (me.name || 'Tú');
                     const accent   = isSystem ? 'rgba(150,200,255,0.35)' : isOpp ? 'rgba(255,45,69,0.35)' : 'rgba(56,205,240,0.35)';
+                    const diceColors = isSystem
+                      ? (combat.i_am_attacker ? ['#38cdf0', '#ff6b6b'] : ['#ff6b6b', '#38cdf0'])
+                      : (isOpp ? ['#ff6b6b', '#38cdf0'] : ['#38cdf0', '#ff6b6b']);
                     return (
                       <div key={turn.key} style={{
                         display: 'flex', flexDirection: 'column', gap: 2,
@@ -542,7 +548,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                             paddingLeft: isSystem ? 6 : 0,
                             borderLeft: isSystem ? '2px solid #38cdf0' : 'none',
                             animation: 'nx-fade-up 0.2s ease both',
-                          }}>{m}</div>
+                          }}>{renderDiceText(m, diceColors)}</div>
                         ))}
                       </div>
                     );
@@ -655,9 +661,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                           gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
                           position: 'relative', transition: 'all 0.13s',
                         }}
-                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } }}
-                        onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; }}
+                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                        onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
                       >
+                        {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
                         {/* Overlay de cooldown */}
                         {cdLeft > 0 && (
                           <div style={{

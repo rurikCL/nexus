@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { useDiceRoller } from './DiceRoller.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
+import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { SkillTooltip } from './SkillTooltip.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -103,28 +104,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
-  const stageRef = useRef(null);
-  const playerHudRef = useRef(null);
-  const npcHudRef = useRef(null);
-  const [strike, setStrike] = useState(null);
-
-  /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
-  const triggerStrike = ({ playerIsAttacker, ranged, hit }) => {
-    if (!stageRef.current) return;
-    const attackerRef = playerIsAttacker ? playerHudRef : npcHudRef;
-    const targetRef    = playerIsAttacker ? npcHudRef : playerHudRef;
-    const arma = playerIsAttacker ? player.arma_equipada : null;
-    const color = playerIsAttacker
-      ? ((arma?.es_sable && NX.SABERS[arma.color_hoja]) || '#38cdf0')
-      : '#ff2d45';
-    setStrike({
-      key: `${Date.now()}-${Math.random()}`,
-      type: ranged ? 'ranged' : 'melee',
-      hit, color, targetRef,
-      from: getRelativeCenter(attackerRef.current, stageRef.current),
-      to: getRelativeCenter(targetRef.current, stageRef.current),
-    });
-  };
 
   /* Estado de habilidades del jugador */
   const [playerFuerza, setPlayerFuerza] = useState(initialState?.playerFuerza ?? 0);
@@ -139,6 +118,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const [stancePicker,  setStancePicker]  = useState(false);
   const isMobile = useIsMobile();
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
+  const [hoveredHabId, setHoveredHabId] = useState(null);
 
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 
@@ -295,15 +275,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       let newHp;
       if (useRanged) {
         entries = [
-          { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info' },
-          { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
+          { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
         newHp = aT > dT ? applyDmg(effNpcPnt, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcPnt} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
       } else {
         entries = [
-          { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info' },
-          { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info' },
+          { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
+          { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
         newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
         entries.push(aT > dT ? { text: `¡Golpe! −${effNpcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
@@ -386,8 +366,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       type: 'info',
     });
 
-    triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit });
-
     let newNpcHp = { ...npcHp };
     if (hit) {
       const dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
@@ -440,8 +418,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       type: 'info',
     }];
 
-    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit });
-
     let newNpcHp = { ...npcHp };
     if (hit) {
       const dmg = (arma?.dano ?? 3) + (esCritico ? 1 : 0);
@@ -463,6 +439,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   };
 
   const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling;
+  useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
@@ -617,7 +594,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 12,
     }}>
-      <div ref={stageRef} style={{
+      <div style={{
         position: 'relative',
         width: '100%', maxWidth: 900,
         height: '100%', maxHeight: 640,
@@ -637,7 +614,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         {diceOverlay}
 
         {/* NPC HUD — arriba derecha */}
-        <div ref={npcHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
@@ -648,7 +625,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
 
         {/* Jugador HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div ref={playerHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
+        <div style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
@@ -657,21 +634,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             buffs={playerBuffs}
           />
         </div>
-
-        {/* Golpe de energía (melee) o mira (a distancia) */}
-        {strike && (strike.type === 'melee' ? (
-          <EnergyStrikeEffect key={strike.key}
-            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
-            stageRef={stageRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
-          />
-        ) : (
-          <RangedStrikeEffect key={strike.key}
-            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
-            stageRef={stageRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
-          />
-        ))}
 
         {/* Log de combate — izquierda, colapsable */}
         <div style={{
@@ -733,7 +695,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                             paddingLeft: isSystem ? 6 : 0,
                             borderLeft: isSystem ? '2px solid #38cdf0' : 'none',
                             animation: 'nx-fade-up 0.2s ease both',
-                          }}>{e.text}</div>
+                          }}>{renderDiceText(e.text, e.diceColors)}</div>
                         ))}
                       </div>
                     );
@@ -818,9 +780,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                           gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
                           position: 'relative', transition: 'all 0.13s',
                         }}
-                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } }}
-                        onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; }}
+                        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                        onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
                       >
+                        {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
                         {/* Overlay de cooldown */}
                         {cdLeft > 0 && (
                           <div style={{
