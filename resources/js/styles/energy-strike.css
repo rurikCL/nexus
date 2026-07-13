@@ -2,14 +2,19 @@
    NÉXUS — Golpes de energía entre dos entidades de combate
    (atacante → objetivo): melee (arco tipo sable de luz) y a
    distancia (mira que hace lock-on), compartiendo el mismo
-   estallido de impacto (flash/anillo/partículas).
+   estallido de impacto (flash/anillo/partículas). También cubre
+   las reacciones de las tarjetas HUD: salto del atacante al
+   actuar, y la reacción del objetivo según el desenlace (golpe →
+   shake + overlay rojo, bloqueo → crecimiento, esquiva → salida
+   y reentrada).
 
    Reglas de animación:
    - Solo se anima transform y opacity (nunca width/height/top/left/
-     box-shadow). El único filter animado (brightness en el objetivo
-     y el blur de las capas de glow) está explícitamente pedido y es
-     tan compositable como opacity — no dispara layout ni paint del
-     árbol DOM circundante.
+     box-shadow). El único filter animado (el blur de las capas de
+     glow) está explícitamente pedido y es tan compositable como
+     opacity — no dispara layout ni paint del árbol DOM circundante.
+     El "overlay rojo" del golpe recibido también es opacity pura
+     (un pseudo-elemento, no un filter).
    - Toda la temporización vive en custom properties (--nx-strike-*),
      nunca como números mágicos sueltos en los keyframes.
    - Entradas con var(--ease-out), salidas con var(--ease-in).
@@ -22,6 +27,16 @@
      terminar; en nodos persistentes (stage/objetivo) se agrega y
      quita por JS junto con la clase que dispara la animación.
    ============================================================ */
+
+:root {
+  /* Reacciones de tarjetas HUD (atacante/objetivo) — viven en :root porque
+     las clases se aplican fuera del árbol de .nx-strike (directo sobre el
+     wrapper del HUD del atacante/objetivo en la pantalla de combate). */
+  --nx-combat-jump-dur:  280ms;
+  --nx-combat-hit-dur:   360ms;
+  --nx-combat-block-dur: 320ms;
+  --nx-combat-dodge-dur: 400ms;
+}
 
 .nx-strike {
   --nx-strike-color: #38cdf0;
@@ -36,7 +51,6 @@
   --nx-strike-particle-dur:   550ms;
 
   --nx-strike-shake-dur:      120ms;
-  --nx-strike-recoil-dur:     350ms;
 
   --nx-reticle-travel-dur:    260ms;
   --nx-reticle-fade-dur:      140ms;
@@ -205,20 +219,75 @@
 }
 
 /* ---------------------------------------------------------
-   Objetivo: retroceso oscilante + flash blanco (brightness).
-   Aplicado por JS al elemento del objetivo durante ~350ms.
+   Reacciones de las tarjetas HUD — clases efímeras que JS agrega
+   y quita (useStrikeLifecycle) directo sobre el wrapper del HUD
+   del atacante/objetivo, fuera del árbol de .nx-strike.
    --------------------------------------------------------- */
-.nx-strike-target-hit {
-  animation: nx-strike-recoil var(--nx-strike-recoil-dur) var(--ease-out);
-  will-change: transform, filter;
+
+/* Atacante: pequeño salto al realizar la acción */
+.nx-combat-atk-jump {
+  animation: nx-combat-jump-anim var(--nx-combat-jump-dur) var(--ease-out);
+  will-change: transform;
 }
-@keyframes nx-strike-recoil {
-  0%   { transform: translateX(0);    filter: brightness(1); }
-  10%  { transform: translateX(10px); filter: brightness(2.5); }
-  30%  { transform: translateX(-7px); filter: brightness(1.6); }
-  50%  { transform: translateX(4px);  filter: brightness(1.2); }
-  70%  { transform: translateX(-2px); filter: brightness(1); }
-  100% { transform: translateX(0);    filter: brightness(1); }
+@keyframes nx-combat-jump-anim {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-10px); }
+  65%  { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
+
+/* Objetivo — golpe recibido: shake + overlay rojo (pseudo-elemento,
+   sin nodo extra en el DOM). */
+.nx-combat-hit-shake {
+  animation: nx-combat-hit-shake-anim var(--nx-combat-hit-dur) var(--ease-out);
+  will-change: transform;
+}
+@keyframes nx-combat-hit-shake-anim {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-8px); }
+  30%  { transform: translateX(7px); }
+  45%  { transform: translateX(-5px); }
+  60%  { transform: translateX(4px); }
+  75%  { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+.nx-combat-hit-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: rgba(220, 38, 38, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  animation: nx-combat-hit-overlay-anim var(--nx-combat-hit-dur) var(--ease-out);
+  will-change: opacity;
+}
+@keyframes nx-combat-hit-overlay-anim {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Objetivo — bloqueo: crecimiento breve */
+.nx-combat-block-grow {
+  animation: nx-combat-block-anim var(--nx-combat-block-dur) var(--ease-out);
+  will-change: transform;
+}
+@keyframes nx-combat-block-anim {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* Objetivo — esquiva: salida y reentrada (opacidad media a mitad de camino) */
+.nx-combat-dodge {
+  animation: nx-combat-dodge-anim var(--nx-combat-dodge-dur) var(--ease-out);
+  will-change: transform, opacity;
+}
+@keyframes nx-combat-dodge-anim {
+  0%   { transform: translateX(0) scale(1);       opacity: 1; }
+  40%  { transform: translateX(28px) scale(0.92); opacity: 0.4; }
+  100% { transform: translateX(0) scale(1);        opacity: 1; }
 }
 
 /* ---------------------------------------------------------
@@ -232,7 +301,11 @@
   .nx-strike-flash,
   .nx-strike-ring,
   .nx-strike-particle,
-  .nx-strike-target-hit {
+  .nx-combat-atk-jump,
+  .nx-combat-hit-shake,
+  .nx-combat-hit-overlay::after,
+  .nx-combat-block-grow,
+  .nx-combat-dodge {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
   }

@@ -13,37 +13,52 @@ export function getRelativeCenter(el, container) {
   };
 }
 
+/** Clases a aplicar al objetivo según el desenlace, y cuánto duran (debe calzar con energy-strike.css). */
+const OUTCOME_TARGET_CLASSES = {
+  hit:   { classes: ['nx-combat-hit-shake', 'nx-combat-hit-overlay'], ms: 360 },
+  block: { classes: ['nx-combat-block-grow'],                          ms: 320 },
+  dodge: { classes: ['nx-combat-dodge'],                               ms: 400 },
+};
+const ATTACKER_JUMP_MS = 280;
+
 /**
  * Ciclo de vida compartido por los golpes de energía (melee/a distancia):
- * sacude el stage y aplica retroceso+flash al objetivo cuando el golpe
- * conecta (`hit`), en el instante `impactAt` (ms desde el montaje), y llama
- * a `onDone` cuando el efecto completo termina (`totalMs`). En una falla
- * (`hit=false`) no hay shake/retroceso — solo el viaje del golpe hasta el
- * objetivo.
+ * - Anima al atacante con un pequeño salto apenas se monta el efecto.
+ * - En el instante `impactAt` (ms desde el montaje), reacciona según el
+ *   desenlace (`outcome`): "hit" sacude el stage + overlay rojo y shake en
+ *   el objetivo; "block" un crecimiento breve; "dodge" una salida y
+ *   reentrada. Llama a `onDone` cuando el efecto completo termina (`totalMs`).
  */
-export function useStrikeLifecycle({ stageRef, targetRef, hit = true, impactAt = 0, totalMs, onDone }) {
+export function useStrikeLifecycle({ stageRef, attackerRef, targetRef, outcome = 'hit', impactAt = 0, totalMs, onDone }) {
   useEffect(() => {
     const stage = stageRef?.current;
+    const attacker = attackerRef?.current;
     const target = targetRef?.current;
     let clearShake;
     let clearTarget;
 
-    const addImpactClasses = hit ? setTimeout(() => {
-      stage?.classList.add('nx-strike-shake');
-      target?.classList.add('nx-strike-target-hit');
-      clearShake = setTimeout(() => stage?.classList.remove('nx-strike-shake'), 160);
-      clearTarget = setTimeout(() => target?.classList.remove('nx-strike-target-hit'), 400);
-    }, impactAt) : null;
+    attacker?.classList.add('nx-combat-atk-jump');
+    const clearAttacker = setTimeout(() => attacker?.classList.remove('nx-combat-atk-jump'), ATTACKER_JUMP_MS);
+
+    const { classes: targetClasses, ms: targetMs } = OUTCOME_TARGET_CLASSES[outcome] ?? OUTCOME_TARGET_CLASSES.hit;
+    const addImpactClasses = setTimeout(() => {
+      if (outcome === 'hit') stage?.classList.add('nx-strike-shake');
+      target?.classList.add(...targetClasses);
+      if (outcome === 'hit') clearShake = setTimeout(() => stage?.classList.remove('nx-strike-shake'), 160);
+      clearTarget = setTimeout(() => target?.classList.remove(...targetClasses), targetMs);
+    }, impactAt);
 
     const done = setTimeout(() => onDone?.(), totalMs);
 
     return () => {
+      clearTimeout(clearAttacker);
       clearTimeout(addImpactClasses);
       clearTimeout(clearShake);
       clearTimeout(clearTarget);
       clearTimeout(done);
+      attacker?.classList.remove('nx-combat-atk-jump');
       stage?.classList.remove('nx-strike-shake');
-      target?.classList.remove('nx-strike-target-hit');
+      target?.classList.remove(...targetClasses);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

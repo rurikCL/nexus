@@ -26,16 +26,19 @@ function buildArcPath(from, to) {
  * - `from` / `to`: {x, y} en px, relativos al mismo elemento posicionado
  *   (position: relative) donde se monta este componente. Usa
  *   `getRelativeCenter(el, stageEl)` para calcularlos desde refs reales.
- * - `hit`: si es `false` (ataque fallado), se dibuja el arco pero se omite
- *   el estallido de impacto y el shake/retroceso del objetivo.
+ * - `outcome`: "hit" dibuja el arco y dispara el estallido de impacto +
+ *   overlay rojo/shake en el objetivo; "block" un crecimiento breve;
+ *   "dodge" una salida y reentrada — en estos dos últimos el arco se dibuja
+ *   igual (el ataque ocurrió) pero sin estallido de impacto.
  * - `stageRef` (opcional): ref del contenedor a sacudir (screen shake).
- * - `targetRef` (opcional): ref del elemento del objetivo (retroceso + flash).
+ * - `attackerRef` (opcional): ref del atacante (salto al actuar).
+ * - `targetRef` (opcional): ref del objetivo (reacción según `outcome`).
  */
-export default function EnergyStrikeEffect({ from, to, color = '#38cdf0', hit = true, stageRef, targetRef, onDone }) {
+export default function EnergyStrikeEffect({ from, to, color = '#38cdf0', outcome = 'hit', stageRef, attackerRef, targetRef, onDone }) {
   const path = useMemo(() => buildArcPath(from, to), [from, to]);
   const filterId = useRef(`nx-strike-${Math.random().toString(36).slice(2)}`).current;
 
-  useStrikeLifecycle({ stageRef, targetRef, hit, impactAt: 140, totalMs: STRIKE_TOTAL_MS, onDone });
+  useStrikeLifecycle({ stageRef, attackerRef, targetRef, outcome, impactAt: 140, totalMs: STRIKE_TOTAL_MS, onDone });
 
   return (
     <div className="nx-strike" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'visible' }}>
@@ -66,7 +69,7 @@ export default function EnergyStrikeEffect({ from, to, color = '#38cdf0', hit = 
           className="nx-strike-arc nx-strike-arc-core" />
       </svg>
 
-      <ImpactBurst to={to} color={color} filterId={filterId} hit={hit} />
+      <ImpactBurst to={to} color={color} filterId={filterId} hit={outcome === 'hit'} />
     </div>
   );
 }

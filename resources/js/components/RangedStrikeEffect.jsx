@@ -12,14 +12,15 @@ const TRAVEL_MS = 260;
  * "lock-on" sobre el objetivo, seguida del mismo estallido de impacto
  * (flash/anillo/partículas) que el golpe melee — comparte `ImpactBurst` y
  * `useStrikeLifecycle` con `EnergyStrikeEffect`, solo cambia cómo se cierra
- * la distancia (mira en vez de arco de energía).
+ * la distancia (mira en vez de arco de energía). `outcome` ("hit"/"block"/
+ * "dodge") controla la reacción del objetivo, igual que en el golpe melee.
  */
-export default function RangedStrikeEffect({ from, to, color = '#38cdf0', hit = true, stageRef, targetRef, onDone }) {
+export default function RangedStrikeEffect({ from, to, color = '#38cdf0', outcome = 'hit', stageRef, attackerRef, targetRef, onDone }) {
   const filterId = useRef(`nx-ranged-${Math.random().toString(36).slice(2)}`).current;
   const dx = to.x - from.x;
   const dy = to.y - from.y;
 
-  useStrikeLifecycle({ stageRef, targetRef, hit, impactAt: TRAVEL_MS, totalMs: RANGED_TOTAL_MS, onDone });
+  useStrikeLifecycle({ stageRef, attackerRef, targetRef, outcome, impactAt: TRAVEL_MS, totalMs: RANGED_TOTAL_MS, onDone });
 
   return (
     <div className="nx-strike" style={{
@@ -31,7 +32,7 @@ export default function RangedStrikeEffect({ from, to, color = '#38cdf0', hit = 
         <span className="nx-reticle-line nx-reticle-line-v" style={{ background: color }} />
       </div>
 
-      <ImpactBurst to={to} color={color} filterId={filterId} hit={hit} />
+      <ImpactBurst to={to} color={color} filterId={filterId} hit={outcome === 'hit'} />
     </div>
   );
 }

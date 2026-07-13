@@ -186,8 +186,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       setStrike({
         key: `${Date.now()}-${Math.random()}`,
         type: lastAttack.ranged ? 'ranged' : 'melee',
-        hit: lastAttack.hit,
+        outcome: lastAttack.hit ? 'hit' : (lastAttack.ranged ? 'dodge' : 'block'),
         color,
+        attackerRef,
         targetRef,
         from: getRelativeCenter(attackerRef.current, stageRef.current),
         to: getRelativeCenter(targetRef.current, stageRef.current),
@@ -473,14 +474,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         {/* Golpe de energía (melee) o mira (a distancia) sobre el stage */}
         {strike && (strike.type === 'melee' ? (
           <EnergyStrikeEffect key={strike.key}
-            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
-            stageRef={stageRef} targetRef={strike.targetRef}
+            from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
+            stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => setStrike(null)}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
-            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
-            stageRef={stageRef} targetRef={strike.targetRef}
+            from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
+            stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => setStrike(null)}
           />
         ))}

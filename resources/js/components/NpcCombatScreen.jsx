@@ -121,7 +121,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     setStrike({
       key: `${Date.now()}-${Math.random()}`,
       type: ranged ? 'ranged' : 'melee',
-      hit, color, targetRef,
+      outcome: hit ? 'hit' : (ranged ? 'dodge' : 'block'),
+      color, attackerRef, targetRef,
       from: getRelativeCenter(attackerRef.current, stageRef.current),
       to: getRelativeCenter(targetRef.current, stageRef.current),
     });
@@ -664,14 +665,14 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         {/* Golpe de energía (melee) o mira (a distancia) */}
         {strike && (strike.type === 'melee' ? (
           <EnergyStrikeEffect key={strike.key}
-            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
-            stageRef={stageRef} targetRef={strike.targetRef}
+            from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
+            stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => setStrike(null)}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
-            from={strike.from} to={strike.to} color={strike.color} hit={strike.hit}
-            stageRef={stageRef} targetRef={strike.targetRef}
+            from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
+            stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => setStrike(null)}
           />
         ))}
