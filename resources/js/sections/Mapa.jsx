@@ -1188,55 +1188,27 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
         {/* cards de zonas */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Panel title="Zonas del planeta" kicker="TERRITORIOS" icon="shield">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {zonas.map((z) => {
-                const hs = hostilidadStyle(z.hostilidad);
-                const zonaImagen = mediaUrl(z.imagen);
-                return (
-                  <button key={z.id} onClick={() => onSelectZona(z)}
-                    style={{
-                      background: hs.bg, border: `1px solid ${hs.border}66`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '8px 10px', cursor: 'pointer', textAlign: 'left',
-                      transition: 'all 0.2s', color: 'var(--txt)',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = hs.border; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = hs.border + '66'; }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {zonaImagen ? (
-                        <div style={{
-                          width: 44, height: 44, borderRadius: 6, flexShrink: 0,
-                          backgroundImage: `url(${zonaImagen})`,
-                          backgroundSize: 'cover', backgroundPosition: 'center',
-                          border: `1px solid ${hs.border}55`,
-                        }} />
-                      ) : (
-                        <div style={{
-                          width: 44, height: 44, borderRadius: 6, flexShrink: 0,
-                          background: hs.bg, border: `1px solid ${hs.border}44`,
-                          display: 'grid', placeItems: 'center',
-                        }}>
-                          <Icon name="target" size={18} style={{ color: hs.text, opacity: 0.5 }} />
-                        </div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3 }}>{z.nombre}</div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                          <span style={{ fontSize: 10, color: hs.text, fontFamily: 'var(--font-data)' }}>{hs.label}</span>
-                          {z.faccion && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{z.faccion}</span>}
-                          {z.estrato_social && <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{z.estrato_social}</span>}
-                          {(z.presentes_personajes ?? []).length > 0 && (
-                            <PresentesAvatars presentes={z.presentes_personajes} max={3} />
-                          )}
-                        </div>
-                      </div>
-                      <Icon name="arrow" size={14} style={{ color: 'var(--holo)', opacity: 0.6, flexShrink: 0 }} />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            {zonas.length === 0 ? (
+              <div style={{ color: 'var(--txt-faint)', fontSize: 13, textAlign: 'center', padding: 16 }}>
+                Sin zonas registradas
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(130px, 1fr))' : '1fr',
+                gap: isMobile ? 8 : 10,
+              }}>
+                {zonas.map((z) => (
+                  <ZonaCard
+                    key={z.id}
+                    zona={z}
+                    presentes={z.presentes_personajes ?? []}
+                    onClick={() => onSelectZona(z)}
+                    compact={isMobile}
+                  />
+                ))}
+              </div>
+            )}
           </Panel>
 
           {planeta.historia && (
@@ -1257,6 +1229,86 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
         />
       </div>
     </div>
+  );
+}
+
+/* ─── CARD ZONA ─────────────────────────────────────────── */
+function ZonaCard({ zona, presentes = [], onClick, compact = false }) {
+  const hs = hostilidadStyle(zona.hostilidad);
+  const zonaImagen = mediaUrl(zona.imagen);
+  return (
+    <button onClick={onClick}
+      style={{
+        background: 'rgba(12,30,64,0.55)', border: `1px solid ${hs.border}55`,
+        borderRadius: 'var(--radius-lg)', cursor: 'pointer', textAlign: 'left',
+        padding: 0, overflow: 'hidden', transition: 'all 0.2s', width: '100%',
+        display: 'flex', flexDirection: 'column', color: 'var(--txt)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = hs.border;
+        e.currentTarget.style.boxShadow = `0 0 20px -6px ${hs.border}`;
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = hs.border + '55';
+        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.transform = 'none';
+      }}
+    >
+      {/* cabecera: imagen */}
+      <div style={{
+        height: compact ? 64 : 90, flexShrink: 0, position: 'relative',
+        background: zonaImagen
+          ? `url(${zonaImagen}) center/cover`
+          : 'linear-gradient(135deg, rgba(56,205,240,0.08), rgba(4,7,15,0.8))',
+      }}>
+        {!zonaImagen && (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.3 }}>
+            <Icon name="target" size={compact ? 22 : 32} style={{ color: 'var(--holo)' }} />
+          </div>
+        )}
+        <div style={{
+          position: 'absolute', top: 6, right: 6,
+          background: `${hs.bg}`, border: `1px solid ${hs.border}88`,
+          borderRadius: 4, padding: '2px 6px',
+          fontSize: 9, color: hs.text, fontFamily: 'var(--font-data)',
+          letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+        }}>
+          {hs.label}
+        </div>
+      </div>
+
+      {/* cuerpo: nombre */}
+      <div style={{ padding: compact ? '8px 10px' : '10px 12px', flex: 1 }}>
+        <div style={{
+          fontSize: compact ? 11 : 13, fontWeight: 700, color: 'var(--txt)',
+          lineHeight: 1.25, marginBottom: (compact || (!zona.faccion && !zona.estrato_social)) ? 0 : 6,
+        }}>
+          {zona.nombre}
+        </div>
+        {!compact && (zona.faccion || zona.estrato_social) && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {zona.faccion && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{zona.faccion}</span>}
+            {zona.estrato_social && <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{zona.estrato_social}</span>}
+          </div>
+        )}
+      </div>
+
+      {/* footer: usuarios presentes */}
+      <div style={{
+        padding: compact ? '6px 10px' : '8px 12px', borderTop: '1px solid var(--holo-line)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+      }}>
+        {presentes.length > 0
+          ? <PresentesAvatars presentes={presentes} max={compact ? 3 : 4} />
+          : <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>Sin presencia</span>}
+        {!compact && (
+          <span style={{ fontSize: 10, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', flexShrink: 0 }}>
+            ENTRAR →
+          </span>
+        )}
+      </div>
+    </button>
   );
 }
 

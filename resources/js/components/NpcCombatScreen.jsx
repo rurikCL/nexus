@@ -383,11 +383,42 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     const entries = [];
 
-    /* ─── Habilidad de auto-buff ────────────────────────────────── */
+    /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
     if (hab.objetivo === 'self') {
       const buffDesc = habBuff.map(s => `+1 ${s}`).join(', ');
       entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
+
+      const selfDmg = hab.damage ?? 0;
+      const selfDmgEscudo = hab.damage_escudo ?? 0;
+      let healedHp = { ...playerHp };
+      if (selfDmg < 0) {
+        const heal = -selfDmg;
+        healedHp.vida = Math.min(maxPlayer.vida, healedHp.vida + heal);
+        entries.push({ text: `¡Curación! +${heal} vida`, type: 'success' });
+      }
+      if (selfDmgEscudo < 0) {
+        const healEsc = -selfDmgEscudo;
+        healedHp.escudo = Math.min(maxPlayer.escudo, healedHp.escudo + healEsc);
+        entries.push({ text: `¡Curación! +${healEsc} escudo`, type: 'success' });
+      }
+      if (selfDmg < 0 || selfDmgEscudo < 0) setPlayerHp(healedHp);
+
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+      endTurnAfter('player');
+      return;
+    }
+
+    /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ─ */
+    const targetDmg = hab.damage ?? 0;
+    if (hab.objetivo === 'target' && targetDmg < 0) {
+      const heal = -targetDmg;
+      const newNpcHp = { ...npcHp, vida: Math.min(maxNpc.vida, npcHp.vida + heal) };
+      entries.push({
+        text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
+        type: 'info',
+      });
+      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+      setNpcHp(newNpcHp);
       endTurnAfter('player');
       return;
     }
