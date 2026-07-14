@@ -204,8 +204,9 @@ const ENTITY_CONFIG = {
       { key: 'movimiento',    label: 'Movimiento',       type: 'number', min: 0 },
       { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
       { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
+      { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del NPC, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0 },
   },
 
   naves: {
@@ -265,13 +266,15 @@ const ENTITY_CONFIG = {
       { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
       { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
       { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
-      { key: 'damage',       label: 'Daño base',             type: 'number',    min: 0 },
+      { key: 'damage',       label: 'Daño base',             type: 'number',    min: -999, hint: 'Negativo = cura esa cantidad de vida en vez de dañar (al usuario si Objetivo=self, al rival si Objetivo=target)' },
+      { key: 'damage_escudo', label: 'Daño a Escudo',         type: 'number',    min: -999, hint: 'Extra que se SUMA al Daño base pero solo golpea escudo (mientras el objetivo tenga escudo). Si el escudo ya está en 0, este extra no se aplica y solo pega el Daño base a la vida. Negativo = restaura esa cantidad de escudo.' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
       { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
-      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario durante el turno' },
+      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario' },
       { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
+      { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
     ],
-    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, cooldown: 0 },
+    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, cooldown: 0, duracion: 2 },
   },
 
   rol_objetos: {
@@ -1057,6 +1060,76 @@ function CellValue({ col, record }) {
   );
 }
 
+/* ─── ASIGNAR HABILIDAD A UN PERSONAJE ──────────────────────
+   Desbloquea la habilidad (rol_habilidades_aprendidas) para el usuario dueño
+   del personaje elegido — el mismo mecanismo que "aprender" una habilidad
+   normalmente en el juego. El jugador la equipa en el slot de forma que quiera. */
+function AssignHabilidadModal({ habilidad, onClose }) {
+  const [personajes, setPersonajes] = useState(null);
+  const [filter, setFilter]         = useState('');
+  const [selectedId, setSelectedId] = useState(null);
+  const [busy, setBusy]             = useState(false);
+
+  useEffect(() => {
+    api('GET', '/admin/personajes/options')
+      .then(d => setPersonajes(d.options ?? []))
+      .catch(() => toast('No se pudo cargar la lista de personajes', { tone: 'error', icon: 'x' }));
+  }, []);
+
+  const filtered = (personajes ?? []).filter(p => p.label.toLowerCase().includes(filter.toLowerCase()));
+
+  const asignar = async () => {
+    if (!selectedId) return;
+    setBusy(true);
+    try {
+      await api('POST', `/admin/rol_habilidades/${habilidad.id}/asignar`, { character_id: selectedId });
+      toast(`"${habilidad.nombre}" asignada`, { tone: 'success', icon: 'check' });
+      onClose();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Asignar "${habilidad.nombre}"`} kicker="HABILIDADES" width={380}>
+      <p style={{ fontSize: 12, color: 'var(--txt-dim)', lineHeight: 1.5, marginTop: 0, marginBottom: 12 }}>
+        Elegí un personaje. La habilidad quedará desbloqueada para que su jugador la equipe.
+      </p>
+      <input
+        type="text" placeholder="Buscar personaje..." value={filter}
+        onChange={e => setFilter(e.target.value)}
+        className="nx-input" style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+      />
+      <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
+        {personajes === null ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando personajes...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Sin resultados</div>
+        ) : (
+          filtered.map(p => (
+            <button key={p.id} type="button" onClick={() => setSelectedId(p.id)} style={{
+              textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+              background: selectedId === p.id ? 'rgba(56,205,240,0.15)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${selectedId === p.id ? 'var(--holo)' : 'var(--holo-line)'}`,
+              color: 'var(--txt)', fontSize: 12, transition: 'all 0.15s',
+            }}>
+              {p.label}
+            </button>
+          ))
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+        <Btn kind="primary" onClick={asignar} disabled={!selectedId || busy}>
+          {busy ? 'Asignando...' : 'Asignar'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─── ENTITY TABLE ───────────────────────────────────────── */
 function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [data, setData]         = useState(null);
@@ -1067,6 +1140,7 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [editRecord, setEditRecord]   = useState(null);  // null=closed, {}=new, {id,...}=edit
   const [deleteId, setDeleteId] = useState(null);
   const [activeFilters, setActiveFilters] = useState({});
+  const [assignHabilidad, setAssignHabilidad] = useState(null); // registro de rol_habilidades a asignar a un personaje
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1262,6 +1336,21 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
                         >
                           <Icon name="edit" size={12} />
                         </button>
+                        {entityKey === 'rol_habilidades' && (
+                          <button
+                            onClick={() => setAssignHabilidad(r)}
+                            title="Asignar a un personaje"
+                            style={{
+                              background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.3)',
+                              borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: 'var(--holocron-oro)',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.08)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.3)'; }}
+                          >
+                            <Icon name="user" size={12} />
+                          </button>
+                        )}
                         {!config.noDelete && (
                           <button
                             onClick={() => setDeleteId(r.id)}
@@ -1345,6 +1434,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
             onClose={() => setEditRecord(null)}
           />
         )
+      )}
+
+      {/* modal asignar habilidad a un personaje */}
+      {assignHabilidad && (
+        <AssignHabilidadModal
+          habilidad={assignHabilidad}
+          onClose={() => setAssignHabilidad(null)}
+        />
       )}
     </div>
   );

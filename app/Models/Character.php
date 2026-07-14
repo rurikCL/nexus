@@ -49,6 +49,13 @@ class Character extends Model
         'current_forma'         => 'integer',
     ];
 
+    /** Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje */
+    public function formaEspecializacion(): int
+    {
+        $n = (int) str_replace('forma', '', $this->cls ?? 'forma1');
+        return $n >= 1 && $n <= 7 ? $n : 1;
+    }
+
     public function getWinrateAttribute(): int
     {
         $total = ($this->wins ?? 0) + ($this->losses ?? 0);

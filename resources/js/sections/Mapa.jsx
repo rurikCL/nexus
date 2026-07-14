@@ -345,6 +345,11 @@ function GalaxiaView({ onSelectSistema }) {
   const [hovered, setHovered]       = useState(null);
   const isMobile = useIsMobile();
 
+  /* Confirmación de viaje: nave equipada (combustible) o transbordador de pasajeros (créditos) */
+  const [confirmSistema, setConfirmSistema] = useState(null);
+  const [confirmData, setConfirmData]       = useState(null); // { naveEquipada, credits }
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
   useEffect(() => {
     apiFetch('/map/sistemas')
       .then((d) => setSistemas(d.sistemas ?? []))
@@ -356,6 +361,25 @@ function GalaxiaView({ onSelectSistema }) {
   const handleTravel = (sistema) => {
     setTraveling(sistema.id);
     setTimeout(() => { setTraveling(null); onSelectSistema(sistema); }, 1800);
+  };
+
+  const openConfirm = (sistema) => {
+    setConfirmSistema(sistema);
+    setConfirmData(null);
+    setConfirmLoading(true);
+    apiFetch('/naves/mias')
+      .then((d) => {
+        const equipada = (d.naves ?? []).find((n) => n.id === d.nave_equipada_id) ?? null;
+        setConfirmData({ naveEquipada: equipada, credits: d.credits ?? 0 });
+      })
+      .catch(() => setConfirmData({ naveEquipada: null, credits: 0 }))
+      .finally(() => setConfirmLoading(false));
+  };
+  const closeConfirm = () => { setConfirmSistema(null); setConfirmData(null); };
+  const confirmarViaje = () => {
+    const sistema = confirmSistema;
+    closeConfirm();
+    handleTravel(sistema);
   };
 
   if (loading) return <LoadingHUD text="ESCANEANDO GALAXIA..." />;
@@ -407,7 +431,7 @@ function GalaxiaView({ onSelectSistema }) {
                 if (!traveling) {
                   if (isMobile && hovered !== s.id) { setHovered(s.id); return; }
                   setHovered(null);
-                  handleTravel(s);
+                  openConfirm(s);
                 }
               }}
               style={{
@@ -509,6 +533,75 @@ function GalaxiaView({ onSelectSistema }) {
           );
         })}
       </div>
+
+      {/* ── confirmación de viaje: nave equipada (combustible) o transbordador (créditos) ── */}
+      {confirmSistema && (
+        <Modal open onClose={closeConfirm} title={`Viajar a ${confirmSistema.nombre}`} kicker="CONFIRMAR SALTO" width={380}>
+          {confirmLoading ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>
+              Calculando ruta...
+            </div>
+          ) : (() => {
+            const nave = confirmData?.naveEquipada;
+            const credits = confirmData?.credits ?? 0;
+            const costo = confirmSistema.costo_viaje ?? 0;
+
+            if (nave) {
+              const fuelActual = nave.combustible_actual ?? 0;
+              const fuelMax    = nave.nave?.capacidad_salto ?? 0;
+              const sinCombustible = fuelActual <= 0;
+              return (
+                <>
+                  <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+                    Vas a saltar con tu nave equipada <strong>{nave.nave?.nombre}</strong>. Este salto consumirá <strong>1 unidad de combustible</strong>.
+                  </p>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    background: sinCombustible ? 'rgba(255,45,69,0.1)' : 'rgba(56,205,240,0.08)',
+                    border: `1px solid ${sinCombustible ? 'rgba(255,45,69,0.35)' : 'var(--holo-line)'}`,
+                  }}>
+                    <Icon name="fuel" size={16} style={{ color: sinCombustible ? '#ff6b6b' : 'var(--holo)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: sinCombustible ? '#ff6b6b' : 'var(--txt-dim)' }}>
+                      Combustible actual: {fuelActual}/{fuelMax}
+                      {sinCombustible && ' — insuficiente para saltar. Debes reabastecer tu nave.'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <Btn kind="ghost" onClick={closeConfirm}>Cancelar</Btn>
+                    <Btn kind="primary" onClick={confirmarViaje} disabled={sinCombustible}>Confirmar salto</Btn>
+                  </div>
+                </>
+              );
+            }
+
+            const sinCreditos = costo > 0 && credits < costo;
+            return (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+                  No tienes una nave equipada. Vas a viajar en un <strong>transbordador de pasajeros</strong> hacia {confirmSistema.nombre}.
+                </p>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  background: sinCreditos ? 'rgba(255,45,69,0.1)' : 'rgba(230,179,37,0.08)',
+                  border: `1px solid ${sinCreditos ? 'rgba(255,45,69,0.35)' : 'rgba(230,179,37,0.25)'}`,
+                }}>
+                  <Icon name="coin" size={16} style={{ color: sinCreditos ? '#ff6b6b' : 'var(--holocron-oro)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: sinCreditos ? '#ff6b6b' : 'var(--txt-dim)' }}>
+                    {costo > 0 ? `Costo del viaje: ${costo} cr (tienes ${credits} cr)` : 'Este viaje es gratuito.'}
+                    {sinCreditos && ' — créditos insuficientes para pagar el transporte.'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                  <Btn kind="ghost" onClick={closeConfirm}>Cancelar</Btn>
+                  <Btn kind="primary" onClick={confirmarViaje} disabled={sinCreditos}>Confirmar viaje</Btn>
+                </div>
+              </>
+            );
+          })()}
+        </Modal>
+      )}
 
       {/* ── overlay salto hiperespacio ── */}
       {traveling && (
@@ -1767,6 +1860,12 @@ function NpcCard({ npc, onClick }) {
   );
 }
 
+/* Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje */
+function formaEspecializacion(character) {
+  const n = parseInt(String(character?.cls ?? '').replace('forma', ''), 10);
+  return n >= 1 && n <= 7 ? n : 1;
+}
+
 /* ─── STATS DE COMBATE DEL JUGADOR ─────────────────────── */
 function getPlayerCombatStats(character) {
   const s = character?.stats ?? {};
@@ -1798,12 +1897,12 @@ function getPlayerCombatStats(character) {
           color_hoja: character.arma_efectiva.color_hoja ?? null,
         }
       : null,
-    current_forma:         character?.current_forma ?? 1,
+    current_forma:         formaEspecializacion(character),
     habilidades_por_forma: character?.habilidades_por_forma ?? {},
     all_habilidades_data:  character?.all_habilidades_data  ?? {},
     /* current form's habilidades for backward compat */
     habilidades: (() => {
-      const forma   = character?.current_forma ?? 1;
+      const forma   = formaEspecializacion(character);
       const por     = character?.habilidades_por_forma ?? {};
       const allHabs = character?.all_habilidades_data  ?? {};
       const ids     = Array.isArray(por[String(forma)]) ? por[String(forma)] : [];
@@ -1945,7 +2044,19 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
 /* ─── TIENDA DE NPC VENDEDOR (naves u objetos, con interés ya aplicado) ── */
+/* Atributos de nave mostrados como badges en la tienda: ícono + etiqueta corta */
+const NAVE_ATTRS = [
+  { key: 'vida',             label: 'VID',    icon: 'anvil' },
+  { key: 'escudo',           label: 'ESC',    icon: 'shield' },
+  { key: 'velocidad',        label: 'VEL',    icon: 'zap' },
+  { key: 'ataque',           label: 'ATQ',    icon: 'sword' },
+  { key: 'maniobrabilidad',  label: 'MAN',    icon: 'trending' },
+  { key: 'capacidad_salto',  label: 'SALTOS', icon: 'star' },
+  { key: 'capacidad_carga',  label: 'CARGA',  icon: 'download' },
+];
+
 function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
+  const isMobile = useIsMobile();
   const isNaves = tipo === 'vendedor_naves';
   const [items, setItems]         = useState([]);
   const [inventario, setInventario] = useState(null); // { ocupado, capacidad } — solo objetos
@@ -2063,35 +2174,65 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
               {items.map((item) => (
-                <div key={item.id} className="nx-panel solid" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
-                    display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
-                  }}>
-                    {item.imagen
-                      ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="nx-display" style={{ fontSize: 12 }}>{item.nombre}</div>
-                    {isNaves ? (
-                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                        <span>Vida {item.vida}</span><span>Escudo {item.escudo}</span><span>Ataque {item.ataque}</span><span>{item.capacidad_salto} saltos</span>
-                      </div>
-                    ) : (
-                      item.tipo && (
+                <div key={item.id} className="nx-panel solid" style={{
+                  padding: isMobile ? 10 : 12, display: 'flex', flexDirection: 'column', gap: 8,
+                  maxWidth: isNaves && isMobile ? 320 : undefined,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12 }}>
+                    <div style={{
+                      width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                      display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+                    }}>
+                      {item.imagen
+                        ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="nx-display" style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.nombre}</div>
+                      {!isNaves && item.tipo && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginTop: 3, textTransform: 'capitalize' }}>
                           {item.tipo.replace(/_/g, ' ')}
                         </div>
-                      )
-                    )}
+                      )}
+                    </div>
+                    <Btn kind="gold" sm icon="coin"
+                      onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
+                      disabled={busy === item.id}
+                    >
+                      {busy === item.id ? '...' : `${item.precio_final} cr`}
+                    </Btn>
                   </div>
-                  <Btn kind="gold" sm icon="coin"
-                    onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
-                    disabled={busy === item.id}
-                  >
-                    {busy === item.id ? '...' : `${item.precio_final} cr`}
-                  </Btn>
+
+                  {isNaves && (
+                    <>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {NAVE_ATTRS.map(a => (
+                          <span key={a.key} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 10, fontFamily: 'var(--font-data)', padding: '3px 7px', borderRadius: 5,
+                            background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.22)', color: 'var(--txt-dim)',
+                          }}>
+                            <Icon name={a.icon} size={11} style={{ color: 'var(--holo)' }} />
+                            {a.label} {item[a.key]}
+                          </span>
+                        ))}
+                      </div>
+                      {item.habilidades?.length > 0 && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {item.habilidades.map(h => (
+                            <span key={h.id} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              fontSize: 10, fontFamily: 'var(--font-data)', padding: '3px 7px', borderRadius: 5,
+                              background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)', color: 'var(--holocron-oro)',
+                            }}>
+                              <Icon name="zap" size={11} />
+                              {h.nombre}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -2123,8 +2264,8 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))}
                 style={{
-                  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
-                  color: 'var(--txt)', cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                  width: 36, height: 36, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--txt)', cursor: 'pointer', fontSize: 16, lineHeight: 1,
                 }}
               >−</button>
               <input type="number" className="nx-input" min={1} max={espacioDisponible ?? 99}
@@ -2139,8 +2280,8 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
                 onClick={() => setCantidad((c) => (espacioDisponible != null ? Math.min(espacioDisponible, c + 1) : c + 1))}
                 disabled={espacioDisponible != null && cantidad >= espacioDisponible}
                 style={{
-                  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
-                  color: 'var(--txt)', cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                  width: 36, height: 36, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--txt)', cursor: 'pointer', fontSize: 16, lineHeight: 1,
                   opacity: (espacioDisponible != null && cantidad >= espacioDisponible) ? 0.4 : 1,
                 }}
               >+</button>
@@ -2183,6 +2324,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
 }
 
 function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange, onCreditsChange }) {
+  const isMobile = useIsMobile();
   const isAI = Boolean(npc.prompt);
   const [showTienda, setShowTienda] = useState(false);
   const [messages, setMessages]   = useState([]);
@@ -2284,6 +2426,11 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       .slice(0, 4);
   }, [npc.interaccion]);
 
+  /* El panel de opciones (diálogo estático) debe aparecer si hay algo que mostrar en él:
+     opciones de diálogo, misión disponible, o los botones de Comprar/Atacar. */
+  const hasSidebarContent = npcOptions.length > 0 || Boolean(misionInfo)
+    || isVendedor || isVendedorNaves || (!isAliado && npc.ataque > 0);
+
   /* Referencias [Objeto] / @[NPC] presentes en los textos del NPC: se resuelven
      una vez por nombre nuevo y se cachean para pintar los tokens + tooltip. */
   const [refsMap, setRefsMap] = useState({ objeto: new Map(), npc: new Map() });
@@ -2334,9 +2481,9 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       setTimeout(() => {
         showNpcMsg(npc.saludo);
         setTyping(false);
-        if (npcOptions.length > 0 || misionInfo) setPhase('dialog');
+        if (hasSidebarContent) setPhase('dialog');
       }, 800);
-    } else if (npcOptions.length > 0 || misionInfo) {
+    } else if (hasSidebarContent) {
       setPhase('dialog');
     }
   }, []);
@@ -2479,12 +2626,46 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     { label: 'PNT', val: npc.punteria },
   ].filter(s => s.val > 0);
 
+  const statsCluster = STATS.length > 0 && (
+    <div style={{
+      display: 'flex', gap: 6, padding: '6px 10px', flexWrap: 'wrap',
+      background: 'rgba(4,7,15,0.5)', borderRadius: 8, border: '1px solid var(--holo-line)',
+    }}>
+      {STATS.map(s => (
+        <div key={s.label} style={{ textAlign: 'center' }}>
+          <div className="nx-num" style={{ fontSize: 14, color: s.label === 'ATQ' ? 'var(--holocron-naranja)' : s.label === 'VID' ? '#10b981' : 'var(--holo)' }}>
+            {s.val}
+          </div>
+          <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
+            {s.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const remainingBox = isAI && remaining !== null && (
+    <div style={{
+      flexShrink: 0, padding: '5px 10px',
+      background: remaining === 0 ? 'rgba(255,100,100,0.10)' : 'rgba(56,205,240,0.07)',
+      border: `1px solid ${remaining === 0 ? 'rgba(255,100,100,0.35)' : 'var(--holo-line)'}`,
+      borderRadius: 6, textAlign: 'center',
+    }}>
+      <div className="nx-num" style={{ fontSize: 18, lineHeight: 1, color: remaining === 0 ? '#ff6b6b' : 'var(--holo)' }}>
+        {remaining}
+      </div>
+      <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+        {remaining === 1 ? 'RESP.' : 'RESP.'}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1200,
       background: 'rgba(2,5,12,0.88)', backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16,
+      padding: isMobile ? 6 : 16,
       animation: 'nx-fade-up 0.3s ease both',
     }}>
     <div className="nx-panel solid nx-panel-glow" style={{
@@ -2496,97 +2677,80 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       {/* barra superior — retrato del NPC */}
       <div style={{
         background: 'rgba(7,16,31,0.95)', borderBottom: '1px solid var(--holo-line)',
-        padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0,
+        padding: isMobile ? '10px 12px' : '12px 20px', flexShrink: 0,
+        display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 0,
       }}>
-        {/* retrato */}
-        <div style={{
-          width: 56, height: 56, borderRadius: 8, overflow: 'hidden',
-          border: '2px solid var(--holo-line)', flexShrink: 0,
-          background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
-        }}>
-          {npc.imagen_mini || npc.imagen
-            ? <img src={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} alt={npc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />
-          }
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14 }}>
+          {/* retrato */}
+          <div style={{
+            width: isMobile ? 42 : 56, height: isMobile ? 42 : 56, borderRadius: 8, overflow: 'hidden',
+            border: '2px solid var(--holo-line)', flexShrink: 0,
+            background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
+          }}>
+            {npc.imagen_mini || npc.imagen
+              ? <img src={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} alt={npc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />
+            }
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="nx-display" style={{
+              fontSize: isMobile ? 14 : 16, color: 'var(--txt)', marginBottom: 2,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{npc.nombre}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {npc.profesion && <span className="nx-kicker" style={{ fontSize: 9 }}>{npc.profesion}</span>}
+              {npc.faccion   && <Chip tone="dim" icon="shield">{npc.faccion}</Chip>}
+              {npc.tipo && (
+                <span style={{
+                  fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+                  padding: '3px 8px', borderRadius: 4, fontWeight: 700,
+                  ...(isAliado
+                    ? { background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981' }
+                    : isHostil
+                    ? { background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.35)', color: '#ff6b6b' }
+                    : isEntrenador
+                    ? { background: 'rgba(56,205,240,0.14)', border: '1px solid rgba(56,205,240,0.35)', color: '#38cdf0' }
+                    : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
+                  ),
+                }}>
+                  {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR'
+                    : isVendedorNaves ? '⛁ VENDEDOR DE NAVES' : isVendedor ? '⛁ VENDEDOR' : '◈ NEUTRAL'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* stats combate + contador de respuestas — en la misma fila solo en desktop */}
+          {!isMobile && statsCluster}
+          {!isMobile && remainingBox}
+
+          <button onClick={onClose} style={{
+            background: 'transparent', border: '1px solid var(--holo-line)',
+            borderRadius: 6, padding: 8, cursor: 'pointer', color: 'var(--txt-dim)',
+            transition: 'all 0.15s', flexShrink: 0,
+          }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.color = 'var(--txt)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+          >
+            <Icon name="x" size={16} />
+          </button>
         </div>
-        <div style={{ flex: 1 }}>
-          <div className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', marginBottom: 2 }}>{npc.nombre}</div>
+
+        {/* en mobile, stats + contador bajan a una segunda fila para no apretar el header */}
+        {isMobile && (statsCluster || remainingBox) && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {npc.profesion && <span className="nx-kicker" style={{ fontSize: 9 }}>{npc.profesion}</span>}
-            {npc.faccion   && <Chip tone="dim" icon="shield">{npc.faccion}</Chip>}
-            {npc.tipo && (
-              <span style={{
-                fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-                padding: '3px 8px', borderRadius: 4, fontWeight: 700,
-                ...(isAliado
-                  ? { background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981' }
-                  : isHostil
-                  ? { background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.35)', color: '#ff6b6b' }
-                  : isEntrenador
-                  ? { background: 'rgba(56,205,240,0.14)', border: '1px solid rgba(56,205,240,0.35)', color: '#38cdf0' }
-                  : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
-                ),
-              }}>
-                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR'
-                  : isVendedorNaves ? '⛁ VENDEDOR DE NAVES' : isVendedor ? '⛁ VENDEDOR' : '◈ NEUTRAL'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* stats combate */}
-        {STATS.length > 0 && (
-          <div style={{
-            display: 'flex', gap: 6, padding: '6px 10px', flexWrap: 'wrap',
-            background: 'rgba(4,7,15,0.5)', borderRadius: 8, border: '1px solid var(--holo-line)',
-          }}>
-            {STATS.map(s => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
-                <div className="nx-num" style={{ fontSize: 14, color: s.label === 'ATQ' ? 'var(--holocron-naranja)' : s.label === 'VID' ? '#10b981' : 'var(--holo)' }}>
-                  {s.val}
-                </div>
-                <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
-                  {s.label}
-                </div>
-              </div>
-            ))}
+            {statsCluster}
+            {remainingBox}
           </div>
         )}
-
-        {isAI && remaining !== null && (
-          <div style={{
-            flexShrink: 0, padding: '5px 10px',
-            background: remaining === 0 ? 'rgba(255,100,100,0.10)' : 'rgba(56,205,240,0.07)',
-            border: `1px solid ${remaining === 0 ? 'rgba(255,100,100,0.35)' : 'var(--holo-line)'}`,
-            borderRadius: 6, textAlign: 'center',
-          }}>
-            <div className="nx-num" style={{ fontSize: 18, lineHeight: 1, color: remaining === 0 ? '#ff6b6b' : 'var(--holo)' }}>
-              {remaining}
-            </div>
-            <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
-              {remaining === 1 ? 'RESP.' : 'RESP.'}
-            </div>
-          </div>
-        )}
-
-        <button onClick={onClose} style={{
-          background: 'transparent', border: '1px solid var(--holo-line)',
-          borderRadius: 6, padding: 8, cursor: 'pointer', color: 'var(--txt-dim)',
-          transition: 'all 0.15s', flexShrink: 0,
-        }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.color = 'var(--txt)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
-        >
-          <Icon name="x" size={16} />
-        </button>
       </div>
 
-      {/* cuerpo: mensajes + barra lateral de opciones */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* cuerpo: mensajes + barra lateral de opciones (mobile: apilados en columna) */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden' }}>
 
         {/* área de mensajes */}
         <div style={{
-          flex: 1, overflowY: 'auto', padding: '20px 24px',
+          flex: 1, minHeight: 0, overflowY: 'auto', padding: isMobile ? '14px 14px' : '20px 24px',
           display: 'flex', flexDirection: 'column', gap: 14,
           backgroundImage: 'radial-gradient(ellipse at 60% 30%, rgba(0,71,186,0.08), transparent 60%)',
         }}>
@@ -2597,7 +2761,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
               animation: 'nx-fade-up 0.25s ease both',
             }}>
               <div style={{
-                maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
+                maxWidth: isMobile ? '86%' : '72%', padding: '11px 15px', borderRadius: 12,
                 fontSize: 13, lineHeight: 1.55,
                 ...(m.from === 'npc' ? {
                   background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
@@ -2620,7 +2784,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
           {typingInMsg && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'nx-fade-up 0.2s ease both' }}>
               <div style={{
-                maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
+                maxWidth: isMobile ? '86%' : '72%', padding: '11px 15px', borderRadius: 12,
                 fontSize: 13, lineHeight: 1.55,
                 background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
                 color: 'var(--txt)', borderBottomLeftRadius: 4,
@@ -2654,11 +2818,14 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
           <div ref={bottomRef} />
         </div>
 
-        {/* panel lateral: modo AI o diálogo estático */}
+        {/* panel lateral: modo AI o diálogo estático (mobile: full width, debajo del chat) */}
         {isAI ? (
           <div style={{
-            width: 230, flexShrink: 0,
-            borderLeft: '1px solid var(--holo-line)',
+            width: isMobile ? '100%' : 230, flexShrink: 0,
+            borderLeft: isMobile ? 'none' : '1px solid var(--holo-line)',
+            borderTop: isMobile ? '1px solid var(--holo-line)' : 'none',
+            maxHeight: isMobile ? '45%' : undefined,
+            overflowY: isMobile ? 'auto' : 'visible',
             background: 'rgba(5,12,26,0.97)',
             display: 'flex', flexDirection: 'column',
           }}>
@@ -2770,10 +2937,12 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
             </div>
           </div>
         ) : (
-          (npcOptions.length > 0 || misionInfo) && phase === 'dialog' && (
+          hasSidebarContent && phase === 'dialog' && (
             <div style={{
-              width: 210, flexShrink: 0,
-              borderLeft: '1px solid var(--holo-line)',
+              width: isMobile ? '100%' : 210, flexShrink: 0,
+              borderLeft: isMobile ? 'none' : '1px solid var(--holo-line)',
+              borderTop: isMobile ? '1px solid var(--holo-line)' : 'none',
+              maxHeight: isMobile ? '45%' : undefined,
               background: 'rgba(5,12,26,0.96)',
               overflowY: 'auto',
               display: 'flex', flexDirection: 'column',
@@ -2901,6 +3070,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
 /* ─── POPUP DE MISIÓN OFRECIDA POR NPC ─────────────────── */
 function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) {
+  const isMobile = useIsMobile();
   const ESTADO_LABEL = { pendiente: 'Pendiente', 'en-curso': 'En curso', completada: 'Completada' };
   const ESTADO_COLOR = { pendiente: '#E6B325', 'en-curso': '#38cdf0', completada: '#10b981' };
   const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : '📦';
@@ -2913,14 +3083,14 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
     <div onMouseDown={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 1300,
       background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(6px)',
-      display: 'grid', placeItems: 'center', padding: 20,
+      display: 'grid', placeItems: 'center', padding: isMobile ? 8 : 20,
       animation: 'nx-fade-up 0.25s ease both',
     }}>
       <div onMouseDown={e => e.stopPropagation()} className="nx-panel solid nx-panel-glow" style={{
-        width: 480, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto',
+        width: 480, maxWidth: '100%', maxHeight: isMobile ? '92vh' : '86vh', overflowY: 'auto',
       }}>
         {mision.foto_mision && (
-          <div style={{ height: 140, overflow: 'hidden' }}>
+          <div style={{ height: isMobile ? 90 : 140, overflow: 'hidden' }}>
             <img src={mediaUrl(mision.foto_mision)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         )}

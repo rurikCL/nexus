@@ -25,7 +25,8 @@ class NpcVendedorController extends Controller
     /** GET /npcs/{npc}/tienda-naves */
     public function tiendaNaves(int $npcId): JsonResponse
     {
-        $npc = MapNpc::with('naves')->findOrFail($npcId);
+        $npc = MapNpc::with('naves.habilidad1', 'naves.habilidad2', 'naves.habilidad3', 'naves.habilidad4')
+            ->findOrFail($npcId);
 
         $naves = $npc->naves->map(fn($n) => [
             'id'               => $n->id,
@@ -44,6 +45,10 @@ class NpcVendedorController extends Controller
             'costo_base'       => $n->costo,
             'interes'          => $n->pivot->interes,
             'precio_final'     => $this->precioFinal((int) $n->costo, (int) $n->pivot->interes),
+            'habilidades'      => collect([$n->habilidad1, $n->habilidad2, $n->habilidad3, $n->habilidad4])
+                ->filter()
+                ->map(fn($h) => ['id' => $h->id, 'nombre' => $h->nombre, 'tipo' => $h->tipo])
+                ->values(),
         ])->values();
 
         return response()->json(['naves' => $naves]);

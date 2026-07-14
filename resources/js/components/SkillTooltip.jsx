@@ -14,6 +14,8 @@ export function SkillTooltip({ hab }) {
   const habBuff   = Array.isArray(hab.buff)   ? hab.buff   : [];
   const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
   const isSelf    = hab.objetivo === 'self';
+  const rondas    = hab.duracion ?? 2;
+  const rondaTxt  = `${rondas} ronda${rondas === 1 ? '' : 's'}`;
 
   return (
     <div style={{
@@ -32,6 +34,11 @@ export function SkillTooltip({ hab }) {
         <Chip color="#38cdf0">⚡ {hab.costo_fuerza}</Chip>
         {hab.cooldown > 0 && <Chip color="#E6B325">CD {hab.cooldown}t</Chip>}
         {!isSelf && <Chip color="#ff7043">DMG {hab.damage}</Chip>}
+        {!!hab.damage_escudo && (
+          hab.damage_escudo > 0
+            ? <Chip color="#ff7043">DMG ESC +{hab.damage_escudo}</Chip>
+            : <Chip color="#38cdf0">CURA ESC +{-hab.damage_escudo}</Chip>
+        )}
       </div>
 
       {hab.efecto && (
@@ -43,12 +50,12 @@ export function SkillTooltip({ hab }) {
 
       {habBuff.length > 0 && (
         <div style={{ fontSize: 9, color: '#10b981', lineHeight: 1.5 }}>
-          ▲ Buff a ti (2 turnos): {habBuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
+          ▲ Buff a ti ({rondaTxt}): {habBuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
         </div>
       )}
       {habDebuff.length > 0 && (
         <div style={{ fontSize: 9, color: '#ff6b6b', lineHeight: 1.5 }}>
-          ▼ Debuff al objetivo si impacta (2 turnos): {habDebuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
+          ▼ Debuff al objetivo si impacta ({rondaTxt}): {habDebuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
         </div>
       )}
 

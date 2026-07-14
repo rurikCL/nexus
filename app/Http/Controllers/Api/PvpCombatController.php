@@ -97,8 +97,8 @@ class PvpCombatController extends Controller
             'defender_def_bonus'     => 0,
             'attacker_fuerza'        => $attackerFuerza,
             'defender_fuerza'        => $defenderFuerza,
-            'attacker_current_forma' => $attacker->character->current_forma ?? 1,
-            'defender_current_forma' => $defChar->current_forma ?? 1,
+            'attacker_current_forma' => $attacker->character->formaEspecializacion(),
+            'defender_current_forma' => $defChar->formaEspecializacion(),
             'current_turn'           => $firstTurn,
             'ronda'                  => 1,
             'ronda_turno'            => 0,
@@ -239,16 +239,7 @@ class PvpCombatController extends Controller
         $oppDebuffs   = ($isAttacker ? $combat->defender_debuffs   : $combat->attacker_debuffs)    ?? [];
         $oppLastForma = ($isAttacker ? $combat->defender_last_forma : $combat->attacker_last_forma) ?? 0;
 
-        /* Tick: decrementar buffs/debuffs y cooldowns al inicio del turno */
-        $tick = fn(array $arr) => array_values(array_filter(
-            array_map(fn($e) => array_merge($e, ['turns' => $e['turns'] - 1]), $arr),
-            fn($e) => $e['turns'] > 0
-        ));
-        $myBuffs   = $tick($myBuffs);
-        $myDebuffs = $tick($myDebuffs);
-        $oppBuffs  = $tick($oppBuffs);
-        $oppDebuffs = $tick($oppDebuffs);
-
+        /* Tick de cooldowns al inicio del turno (los buffs/debuffs se tickean por ronda, no por turno) */
         $myCooldowns = array_filter(
             array_map(fn($v) => $v - 1, $myCooldowns),
             fn($v) => $v > 0
@@ -264,10 +255,19 @@ class PvpCombatController extends Controller
         $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => []];
         $skill = $data['skill'];
 
-        /* ─── Huir ────────────────────────────────────────────────────── */
+        /* ─── Huir (requiere ganar tirada de iniciativa contra el rival) ── */
         if ($skill === 'flee') {
-            $combat->status      = $isAttacker ? 'fled_attacker' : 'fled_defender';
-            $entry['messages'][] = "{$actorChar->name} huyó del combate";
+            $roll = self::rollIniciativa($actorStats['iniciativa'], $opponentStats['iniciativa']);
+            $entry['messages'][] = "{$actorChar->name} intenta huir: "
+                . "1d20({$roll['atk_dado']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
+                . "vs 1d20({$roll['def_dado']})+{$opponentStats['iniciativa']}={$roll['def_total']}";
+
+            if ($roll['gana_atacante']) {
+                $combat->status      = $isAttacker ? 'fled_attacker' : 'fled_defender';
+                $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
+            } else {
+                $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
+            }
 
         /* ─── Cambio de estancia ─────────────────────────────────────── */
         } elseif ($skill === 'stance') {
@@ -315,9 +315,15 @@ class PvpCombatController extends Controller
                 ? ($combat->attacker_current_forma ?? 1)
                 : ($combat->defender_current_forma ?? 1);
 
-            /* Verificar que la habilidad está en los slots de la forma actual */
-            $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
-            $slotIds  = array_filter($porForma[(string)$myCurrentForma] ?? []);
+            /* Verificar que la habilidad está disponible: slots de la nave (combate naval)
+             * o slots de la forma actual del sable (combate de personaje) */
+            $naveSkillIds = self::getNaveSkillIds($actorChar);
+            if ($naveSkillIds) {
+                $slotIds = $naveSkillIds;
+            } else {
+                $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
+                $slotIds  = array_filter($porForma[(string)$myCurrentForma] ?? []);
+            }
 
             if (!in_array($skillId, $slotIds)) {
                 return response()->json(['error' => 'Habilidad no disponible en esta forma'], 422);
@@ -341,22 +347,70 @@ class PvpCombatController extends Controller
             }
 
             /* Aplicar buff al actor (siempre al usar la habilidad) */
-            $habBuff   = is_array($hab->buff)   ? $hab->buff   : [];
-            $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
+            $habBuff    = is_array($hab->buff)   ? $hab->buff   : [];
+            $habDebuff  = is_array($hab->debuff) ? $hab->debuff : [];
+            $habRondas  = $hab->duracion ?: 2;
             foreach ($habBuff as $stat) {
-                $myBuffs[] = ['stat' => $stat, 'turns' => 2];
+                $myBuffs[] = ['stat' => $stat, 'turns' => $habRondas];
             }
 
             /* Registrar la forma usada */
             if ($isAttacker) $combat->attacker_last_forma = $hab->forma;
             else             $combat->defender_last_forma = $hab->forma;
 
-            /* ─── Habilidad de auto-buff (objetivo: self) ─────────────── */
+            $dmg       = (int) ($hab->damage ?? 0);
+            $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
+
+            /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
             if ($hab->objetivo === 'self') {
                 $buffDesc = !empty($habBuff) ? ' (+' . implode(', +', $habBuff) . ')' : '';
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}{$buffDesc}";
 
-            /* ─── Habilidad de ataque (objetivo: target) ──────────────── */
+                if ($dmg < 0) {
+                    $heal  = -$dmg;
+                    $maxHp = self::getMaxVida($actorChar);
+                    if ($isAttacker) {
+                        $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
+                    } else {
+                        $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
+                    }
+                    $entry['messages'][] = "¡Curación! +{$heal} vida";
+                }
+
+                if ($dmgEscudo < 0) {
+                    $healEsc  = -$dmgEscudo;
+                    $maxEsc   = self::getMaxEscudo($actorChar);
+                    if ($isAttacker) {
+                        $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
+                    } else {
+                        $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
+                    }
+                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo";
+                }
+
+            /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ── */
+            } elseif ($dmg < 0) {
+                $heal  = -$dmg;
+                $maxHp = self::getMaxVida($opponentChar);
+                if ($isAttacker) {
+                    $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
+                } else {
+                    $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
+                }
+                $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$opponentChar->name}";
+
+                if ($dmgEscudo < 0) {
+                    $healEsc = -$dmgEscudo;
+                    $maxEsc  = self::getMaxEscudo($opponentChar);
+                    if ($isAttacker) {
+                        $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
+                    } else {
+                        $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
+                    }
+                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo a {$opponentChar->name}";
+                }
+
+            /* ─── Habilidad de ataque (objetivo: target, damage >= 0) ──────── */
             } else {
                 $useAtq  = $hab->tipo === 'melee';
                 $atkVal  = $useAtq ? $actorStats['ataque']   : $actorStats['punteria'];
@@ -369,31 +423,36 @@ class PvpCombatController extends Controller
                     . "1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
 
                 if ($atkRoll > $defRoll) {
-                    $dmg       = $hab->damage ?? 0;
                     $effective = self::isEffective((int)$hab->forma, (int)$oppLastForma);
 
                     if ($effective) {
-                        $dmg = (int) round($dmg * 1.5);
+                        $dmg       = (int) round($dmg * 1.5);
+                        $dmgEscudo = (int) round($dmgEscudo * 1.5);
                         $entry['messages'][] = "¡Forma efectiva! ×1.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
                     }
 
+                    $oppEscudoAntes = $isAttacker ? $combat->defender_escudo : $combat->attacker_escudo;
+                    $tieneEscudo    = $oppEscudoAntes > 0;
+                    $dmgAplicado    = $tieneEscudo ? $dmg + max(0, $dmgEscudo) : $dmg;
+
                     if ($isAttacker) {
                         [$combat->defender_hp, $combat->defender_escudo] =
-                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg);
+                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo);
                     } else {
                         [$combat->attacker_hp, $combat->attacker_escudo] =
-                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg);
+                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo);
                     }
 
                     /* Debuffs al oponente solo si impacta */
                     foreach ($habDebuff as $stat) {
-                        $oppDebuffs[] = ['stat' => $stat, 'turns' => 2];
+                        $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
                     }
 
                     $debuffDesc = !empty($habDebuff)
                         ? ' (penaliza: ' . implode(', ', $habDebuff) . ')'
                         : '';
-                    $entry['messages'][] = "¡Impacto! −{$dmg} daño{$debuffDesc}";
+                    $objetivoDano = $tieneEscudo ? 'al escudo' : 'a la vida';
+                    $entry['messages'][] = "¡Impacto! −{$dmgAplicado} daño {$objetivoDano}{$debuffDesc}";
 
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
@@ -437,7 +496,12 @@ class PvpCombatController extends Controller
                 if ($isAttacker) $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
                 else             $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
             } else {
-                /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
+                /* Ambos actuaron: termina la ronda — tick de buffs/debuffs (duran N rondas) y nueva iniciativa */
+                $myBuffs    = self::tickEffects($myBuffs);
+                $myDebuffs  = self::tickEffects($myDebuffs);
+                $oppBuffs   = self::tickEffects($oppBuffs);
+                $oppDebuffs = self::tickEffects($oppDebuffs);
+
                 $combat->ronda      += 1;
                 $combat->ronda_turno = 0;
 
@@ -553,9 +617,15 @@ class PvpCombatController extends Controller
 
     private function formatPlayer(User $user, int $currentForma = 1): array
     {
-        $ch       = $user->character;
-        $porForma = is_array($ch?->habilidades_por_forma) ? $ch->habilidades_por_forma : [];
-        $slotIds  = array_filter($porForma[(string)$currentForma] ?? []);
+        $ch = $user->character;
+
+        $naveSkillIds = self::getNaveSkillIds($ch);
+        if ($naveSkillIds) {
+            $slotIds = $naveSkillIds;
+        } else {
+            $porForma = is_array($ch?->habilidades_por_forma) ? $ch->habilidades_por_forma : [];
+            $slotIds  = array_filter($porForma[(string)$currentForma] ?? []);
+        }
 
         $habilidades = $slotIds
             ? RolHabilidad::whereIn('id', $slotIds)->get()->map(fn($h) => self::fmtHab($h))->values()->toArray()
@@ -582,10 +652,12 @@ class PvpCombatController extends Controller
             'forma'        => $h->forma,
             'costo_fuerza' => $h->costo_fuerza,
             'damage'       => $h->damage,
+            'damage_escudo' => $h->damage_escudo,
             'cooldown'     => $h->cooldown,
             'objetivo'     => $h->objetivo,
             'buff'         => $h->buff ?? [],
             'debuff'       => $h->debuff ?? [],
+            'duracion'     => $h->duracion,
             'efecto'       => $h->efecto,
         ];
     }
@@ -609,23 +681,18 @@ class PvpCombatController extends Controller
         /* Combate naval: si el personaje tiene una nave equipada, sus atributos
          * reemplazan por completo a los del personaje (vida/escudo persisten el
          * daño entre combates — requieren reparación). */
-        if (method_exists($char, 'naveEquipada')) {
-            $naveOwned = $char->relationLoaded('naveEquipada')
-                ? $char->naveEquipada
-                : $char->naveEquipada()->with('nave')->first();
-
-            if ($naveOwned && $naveOwned->nave) {
-                $nave = $naveOwned->nave;
-                return [
-                    'vida'       => $naveOwned->vida_actual,
-                    'escudo'     => $naveOwned->escudo_actual,
-                    'ataque'     => $nave->ataque,
-                    'defensa'    => $nave->maniobrabilidad,
-                    'movimiento' => $nave->maniobrabilidad,
-                    'iniciativa' => $nave->velocidad,
-                    'punteria'   => $nave->ataque,
-                ];
-            }
+        $naveOwned = self::getNaveOwned($char);
+        if ($naveOwned && $naveOwned->nave) {
+            $nave = $naveOwned->nave;
+            return [
+                'vida'       => $naveOwned->vida_actual,
+                'escudo'     => $naveOwned->escudo_actual,
+                'ataque'     => $nave->ataque,
+                'defensa'    => $nave->maniobrabilidad,
+                'movimiento' => $nave->maniobrabilidad,
+                'iniciativa' => $nave->velocidad,
+                'punteria'   => $nave->ataque,
+            ];
         }
 
         $s = is_array($char->stats) ? $char->stats : [];
@@ -687,6 +754,15 @@ class PvpCombatController extends Controller
         return $stats;
     }
 
+    /** Descuenta 1 ronda a cada efecto (buff/debuff) y elimina los que ya expiraron */
+    private static function tickEffects(array $effects): array
+    {
+        return array_values(array_filter(
+            array_map(fn($e) => array_merge($e, ['turns' => $e['turns'] - 1]), $effects),
+            fn($e) => $e['turns'] > 0
+        ));
+    }
+
     /** ¿La forma del atacante supera la forma del defensor? */
     private static function isEffective(int $atkForma, int $defForma): bool
     {
@@ -696,23 +772,72 @@ class PvpCombatController extends Controller
 
     private static function persistNaveDamage(?object $char, int $hp, int $escudo): void
     {
-        if (!$char || !method_exists($char, 'naveEquipada')) {
-            return;
-        }
-
-        $naveOwned = $char->naveEquipada()->first();
+        $naveOwned = self::getNaveOwned($char);
         if ($naveOwned) {
             $naveOwned->update(['vida_actual' => max(0, $hp), 'escudo_actual' => max(0, $escudo)]);
         }
     }
 
-    private static function applyDamage(int $hp, int $escudo, int $dmg): array
+    /** Nave equipada del personaje (con relación 'nave' cargada), o null si no aplica */
+    private static function getNaveOwned(?object $char): ?object
+    {
+        if (!$char || !method_exists($char, 'naveEquipada')) {
+            return null;
+        }
+
+        return $char->relationLoaded('naveEquipada')
+            ? $char->naveEquipada
+            : $char->naveEquipada()->with('nave')->first();
+    }
+
+    /** IDs de las habilidades (tipo 'nave') asignadas a la nave equipada, o [] si no hay nave */
+    private static function getNaveSkillIds(?object $char): array
+    {
+        $naveOwned = self::getNaveOwned($char);
+        if (!$naveOwned || !$naveOwned->nave) {
+            return [];
+        }
+
+        $nave = $naveOwned->nave;
+        return array_values(array_filter([
+            $nave->habilidad_1, $nave->habilidad_2, $nave->habilidad_3, $nave->habilidad_4,
+        ]));
+    }
+
+    /** Vida máxima para topar curaciones: vida base de la nave si aplica, o vida de combate del personaje */
+    private static function getMaxVida(?object $char): int
+    {
+        $naveOwned = self::getNaveOwned($char);
+        if ($naveOwned && $naveOwned->nave) {
+            return (int) $naveOwned->nave->vida;
+        }
+
+        return (int) self::getCombatStats($char)['vida'];
+    }
+
+    /** Escudo máximo para topar curaciones de escudo: escudo base de la nave si aplica, o de combate del personaje */
+    private static function getMaxEscudo(?object $char): int
+    {
+        $naveOwned = self::getNaveOwned($char);
+        if ($naveOwned && $naveOwned->nave) {
+            return (int) $naveOwned->nave->escudo;
+        }
+
+        return (int) self::getCombatStats($char)['escudo'];
+    }
+
+    /**
+     * Aplica daño. Mientras el objetivo tenga escudo (>0), el escudo absorbe TODO
+     * el golpe (dmg + dmgEscudo si corresponde) sin dejar pasar nada a la vida,
+     * aunque el golpe sea mayor que el escudo restante. Recién cuando el escudo
+     * ya está en 0 el daño (solo dmg, sin dmgEscudo) pasa directo a la vida.
+     */
+    private static function applyDamage(int $hp, int $escudo, int $dmg, int $dmgEscudo = 0): array
     {
         if ($escudo > 0) {
-            $absorbed = min($escudo, $dmg);
-            $escudo  -= $absorbed;
-            $dmg     -= $absorbed;
+            $total = $dmg + max(0, $dmgEscudo);
+            return [$hp, max(0, $escudo - $total)];
         }
-        return [max(0, $hp - $dmg), max(0, $escudo)];
+        return [max(0, $hp - $dmg), 0];
     }
 }
