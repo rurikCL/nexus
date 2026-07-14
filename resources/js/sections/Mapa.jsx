@@ -1060,16 +1060,8 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
   const zonas = planeta.zonas ?? [];
   const planetaImagen = mediaUrl(planeta.imagen);
 
-  /* colores de zona para mapa */
-  const getZonaStyle = (z) => hostilidadStyle(z.hostilidad);
-
-  /* distribución visual tipo mapa (grid orgánico) */
-  const GRID_POS = [
-    { col: 2, row: 1 }, { col: 4, row: 1 }, { col: 3, row: 2 },
-    { col: 1, row: 2 }, { col: 5, row: 2 }, { col: 2, row: 3 },
-    { col: 4, row: 3 }, { col: 1, row: 4 }, { col: 3, row: 4 },
-    { col: 5, row: 4 }, { col: 2, row: 5 }, { col: 4, row: 5 },
-  ];
+  /* posiciones dispersas deterministas (mismo algoritmo que los sistemas de la galaxia) */
+  const positions = buildPositions(zonas);
 
   return (
     <div className="nx-fade">
@@ -1085,7 +1077,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
             {hostilidadStyle(planeta.hostilidad).label}
           </Chip>}
         >
-          <div style={{ position: 'relative', minHeight: 420 }}>
+          <div style={{ position: 'relative', minHeight: isMobile ? 300 : 420, overflow: 'hidden' }}>
             {/* fondo imagen del planeta */}
             {planetaImagen && (
               <div style={{
@@ -1107,84 +1099,74 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
               backgroundSize: 'auto, 48px 48px, 48px 48px',
             }} />
 
-            {/* grid de zonas */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(96px, 1fr))' : 'repeat(6, 1fr)',
-              gridTemplateRows: isMobile ? undefined : `repeat(${Math.ceil(zonas.length / 2) + 2}, minmax(92px, 1fr))`,
-              gridAutoRows: isMobile ? 'auto' : undefined,
-              gap: 8, padding: 16, minHeight: isMobile ? 'auto' : 400, position: 'relative', zIndex: 1,
-            }}>
-              {zonas.length === 0 && (
-                <div style={{
-                  gridColumn: '1 / -1', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', color: 'var(--txt-faint)', fontSize: 13,
-                }}>
-                  Sin zonas registradas
-                </div>
-              )}
-              {zonas.map((z, i) => {
-                const hs = getZonaStyle(z);
-                const pos = GRID_POS[i % GRID_POS.length];
-                const zonaImagen = mediaUrl(z.imagen);
-                const presentes = z.presentes_personajes ?? [];
-                return (
-                  <button
-                    key={z.id}
-                    onClick={() => onSelectZona(z)}
-                    style={{
-                      ...(isMobile ? {} : { gridColumn: pos.col, gridRow: pos.row }),
-                      background: 'rgba(12,30,64,0.6)', border: `1.5px solid ${hs.border}`,
-                      borderRadius: 8, padding: 0, cursor: 'pointer', overflow: 'hidden',
-                      display: 'flex', flexDirection: 'column', color: 'var(--txt)',
-                      transition: 'all 0.2s', position: 'relative',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = `0 0 16px 4px ${hs.border}55`;
-                      e.currentTarget.style.transform = 'scale(1.04)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.transform = 'none';
-                    }}
-                  >
-                    {/* cabecera: imagen */}
-                    <div style={{
-                      height: 32, flexShrink: 0, position: 'relative',
-                      borderBottom: `1px solid ${hs.border}55`,
-                      background: zonaImagen ? `url(${zonaImagen}) center/cover` : hs.bg,
-                    }}>
-                      {!zonaImagen && (
-                        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.45 }}>
-                          <Icon name="target" size={14} style={{ color: hs.text }} />
-                        </div>
-                      )}
-                    </div>
+            {zonas.length === 0 && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: 'var(--txt-faint)', fontSize: 13, zIndex: 1,
+              }}>
+                Sin zonas registradas
+              </div>
+            )}
 
-                    {/* cuerpo: nombre */}
+            {/* íconos de zona — dispersos, con leve deriva simulando la rotación del planeta */}
+            {zonas.map((z, i) => {
+              const hs = hostilidadStyle(z.hostilidad);
+              const pos = positions[i];
+              const presentes = z.presentes_personajes ?? [];
+              const ax = 8 + hashf(z.id * 17 + 4) * 14;
+              const ay = 5 + hashf(z.id * 23 + 8) * 9;
+              const dur = 16 + hashf(z.id * 5 + 2) * 12;
+              const delay = -hashf(z.id * 13 + 6) * dur;
+              return (
+                <button
+                  key={z.id}
+                  onClick={() => onSelectZona(z)}
+                  style={{
+                    position: 'absolute', left: pos.left, top: pos.top, zIndex: 1,
+                    background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    animation: `nx-node-drift ${dur}s ease-in-out infinite`,
+                    animationDelay: `${delay}s`,
+                    '--ax': `${ax}px`, '--ay': `${ay}px`,
+                  }}
+                  onMouseEnter={(e) => {
+                    const orb = e.currentTarget.querySelector('.nx-zona-orb');
+                    if (orb) { orb.style.boxShadow = `0 0 22px 6px ${hs.border}88`; orb.style.transform = 'scale(1.15)'; }
+                  }}
+                  onMouseLeave={(e) => {
+                    const orb = e.currentTarget.querySelector('.nx-zona-orb');
+                    if (orb) { orb.style.boxShadow = `0 0 14px 3px ${hs.border}44`; orb.style.transform = 'scale(1)'; }
+                  }}
+                >
+                  <div className="nx-zona-orb" style={{
+                    width: 38, height: 38, borderRadius: '50%',
+                    background: `radial-gradient(circle at 35% 30%, ${hs.border}cc, ${hs.border}33 60%, transparent)`,
+                    border: `1.5px solid ${hs.border}`,
+                    boxShadow: `0 0 14px 3px ${hs.border}44`,
+                    display: 'grid', placeItems: 'center',
+                    transition: 'box-shadow 0.2s, transform 0.2s',
+                  }}>
+                    <Icon name="target" size={16} style={{ color: hs.text }} />
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
                     <div style={{
-                      padding: '5px 6px 3px', flex: 1, minHeight: 0,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      justifyContent: 'center', gap: 2,
+                      fontSize: 10, fontWeight: 700, color: 'var(--txt)',
+                      fontFamily: 'var(--font-data)', whiteSpace: 'nowrap',
+                      textShadow: '0 1px 4px rgba(0,0,0,0.9)',
                     }}>
-                      <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', lineHeight: 1.15, textAlign: 'center' }}>
-                        {z.nombre}
-                      </span>
-                      <span style={{ fontSize: 8, color: hs.text, fontFamily: 'var(--font-data)', letterSpacing: '0.06em' }}>
-                        {hs.label}
-                      </span>
+                      {z.nombre}
                     </div>
-
-                    {/* footer: usuarios */}
-                    {presentes.length > 0 && (
-                      <div style={{ padding: '3px 6px', borderTop: `1px solid ${hs.border}33`, display: 'flex', justifyContent: 'center' }}>
-                        <PresentesAvatars presentes={presentes} max={2} />
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                    <div style={{
+                      fontSize: 8, color: hs.text, fontFamily: 'var(--font-data)',
+                      letterSpacing: '0.08em', textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+                    }}>
+                      {hs.label}
+                    </div>
+                  </div>
+                  {presentes.length > 0 && <PresentesAvatars presentes={presentes} max={2} />}
+                </button>
+              );
+            })}
           </div>
 
           {/* leyenda */}

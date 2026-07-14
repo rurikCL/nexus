@@ -201,6 +201,15 @@ select.nx-select option { background: var(--space-panel-solid); }
 
 @keyframes nx-signal-bar { from { opacity: .25; } to { opacity: 1; } }
 
+/* Deriva lenta de íconos de zona — simula la rotación del planeta */
+@keyframes nx-node-drift {
+  0%   { transform: translate(-50%, -50%); }
+  25%  { transform: translate(calc(-50% + var(--ax)), calc(-50% - var(--ay))); }
+  50%  { transform: translate(calc(-50% - var(--ax) * 0.4), calc(-50% - var(--ay) * 1.3)); }
+  75%  { transform: translate(calc(-50% - var(--ax)), calc(-50% + var(--ay) * 0.6)); }
+  100% { transform: translate(-50%, -50%); }
+}
+
 /* avatar monograma */
 .nx-avatar {
   position: relative; display: grid; place-items: center;
