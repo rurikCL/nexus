@@ -1110,9 +1110,10 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
             {/* grid de zonas */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(6, 1fr)',
-              gridTemplateRows: `repeat(${Math.ceil(zonas.length / 2) + 2}, 1fr)`,
-              gap: 8, padding: 16, minHeight: 400, position: 'relative', zIndex: 1,
+              gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(96px, 1fr))' : 'repeat(6, 1fr)',
+              gridTemplateRows: isMobile ? undefined : `repeat(${Math.ceil(zonas.length / 2) + 2}, minmax(92px, 1fr))`,
+              gridAutoRows: isMobile ? 'auto' : undefined,
+              gap: 8, padding: 16, minHeight: isMobile ? 'auto' : 400, position: 'relative', zIndex: 1,
             }}>
               {zonas.length === 0 && (
                 <div style={{
@@ -1126,17 +1127,17 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
                 const hs = getZonaStyle(z);
                 const pos = GRID_POS[i % GRID_POS.length];
                 const zonaImagen = mediaUrl(z.imagen);
+                const presentes = z.presentes_personajes ?? [];
                 return (
                   <button
                     key={z.id}
                     onClick={() => onSelectZona(z)}
                     style={{
-                      gridColumn: pos.col, gridRow: pos.row,
-                      background: hs.bg, border: `1.5px solid ${hs.border}`,
-                      borderRadius: 8, padding: '10px 8px', cursor: 'pointer',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      gap: 4, textAlign: 'center', transition: 'all 0.2s',
-                      color: 'var(--txt)', position: 'relative', overflow: 'hidden',
+                      ...(isMobile ? {} : { gridColumn: pos.col, gridRow: pos.row }),
+                      background: 'rgba(12,30,64,0.6)', border: `1.5px solid ${hs.border}`,
+                      borderRadius: 8, padding: 0, cursor: 'pointer', overflow: 'hidden',
+                      display: 'flex', flexDirection: 'column', color: 'var(--txt)',
+                      transition: 'all 0.2s', position: 'relative',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.boxShadow = `0 0 16px 4px ${hs.border}55`;
@@ -1147,24 +1148,37 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
                       e.currentTarget.style.transform = 'none';
                     }}
                   >
-                    {zonaImagen && (
-                      <div style={{
-                        position: 'absolute', inset: 0,
-                        backgroundImage: `url(${zonaImagen})`,
-                        backgroundSize: 'cover', backgroundPosition: 'center',
-                        opacity: 0.30, borderRadius: 7,
-                      }} />
-                    )}
-                    <Icon name="target" size={16} style={{ color: hs.text, position: 'relative', zIndex: 1 }} />
-                    <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', lineHeight: 1.2, position: 'relative', zIndex: 1 }}>
-                      {z.nombre}
-                    </span>
-                    <span style={{ fontSize: 9, color: hs.text, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', position: 'relative', zIndex: 1 }}>
-                      {hs.label}
-                    </span>
-                    {(z.presentes_personajes ?? []).length > 0 && (
-                      <div style={{ position: 'relative', zIndex: 1 }}>
-                        <PresentesAvatars presentes={z.presentes_personajes} max={2} />
+                    {/* cabecera: imagen */}
+                    <div style={{
+                      height: 32, flexShrink: 0, position: 'relative',
+                      borderBottom: `1px solid ${hs.border}55`,
+                      background: zonaImagen ? `url(${zonaImagen}) center/cover` : hs.bg,
+                    }}>
+                      {!zonaImagen && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.45 }}>
+                          <Icon name="target" size={14} style={{ color: hs.text }} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* cuerpo: nombre */}
+                    <div style={{
+                      padding: '5px 6px 3px', flex: 1, minHeight: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      justifyContent: 'center', gap: 2,
+                    }}>
+                      <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', lineHeight: 1.15, textAlign: 'center' }}>
+                        {z.nombre}
+                      </span>
+                      <span style={{ fontSize: 8, color: hs.text, fontFamily: 'var(--font-data)', letterSpacing: '0.06em' }}>
+                        {hs.label}
+                      </span>
+                    </div>
+
+                    {/* footer: usuarios */}
+                    {presentes.length > 0 && (
+                      <div style={{ padding: '3px 6px', borderTop: `1px solid ${hs.border}33`, display: 'flex', justifyContent: 'center' }}>
+                        <PresentesAvatars presentes={presentes} max={2} />
                       </div>
                     )}
                   </button>
