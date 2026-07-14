@@ -34,6 +34,11 @@ export function SkillTooltip({ hab }) {
         <Chip color="#38cdf0">⚡ {hab.costo_fuerza}</Chip>
         {hab.cooldown > 0 && <Chip color="#E6B325">CD {hab.cooldown}t</Chip>}
         {!isSelf && <Chip color="#ff7043">DMG {hab.damage}</Chip>}
+        {!!hab.damage_escudo && (
+          hab.damage_escudo > 0
+            ? <Chip color="#ff7043">DMG ESC +{hab.damage_escudo}</Chip>
+            : <Chip color="#38cdf0">CURA ESC +{-hab.damage_escudo}</Chip>
+        )}
       </div>
 
       {hab.efecto && (

@@ -218,10 +218,14 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       .catch(() => {});
   }, []);
 
-  const applyDmg = (dmg, hp) => {
-    const newEsc = Math.max(0, hp.escudo - dmg);
-    const rem    = dmg - hp.escudo;
-    return { escudo: newEsc, vida: rem > 0 ? Math.max(0, hp.vida - rem) : hp.vida };
+  /* Mientras haya escudo (>0), absorbe TODO el golpe (dmg + dmgEscudo si corresponde)
+     sin dejar pasar nada a la vida. Con el escudo ya en 0, solo dmg pasa directo a la vida. */
+  const applyDmg = (dmg, hp, dmgEscudo = 0) => {
+    if (hp.escudo > 0) {
+      const total = dmg + Math.max(0, dmgEscudo);
+      return { escudo: Math.max(0, hp.escudo - total), vida: hp.vida };
+    }
+    return { escudo: 0, vida: Math.max(0, hp.vida - dmg) };
   };
 
   /* Iniciativa — solo si es combate nuevo (no restaurado) */
@@ -412,13 +416,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     let newNpcHp = { ...npcHp };
     if (hit) {
       let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
+      let dmgEscudo = hab.damage_escudo ?? 0;
       const effective = formaEsEfectiva(hab.forma, npc.forma ?? 0);
       if (effective) {
         dmg = Math.round(dmg * 1.5);
+        dmgEscudo = Math.round(dmgEscudo * 1.5);
         entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
       }
-      newNpcHp = applyDmg(dmg, npcHp);
-      entries.push({ text: `¡Impacto! −${dmg} daño`, type: 'success' });
+      const tieneEscudo = npcHp.escudo > 0;
+      const dmgAplicado = tieneEscudo ? dmg + Math.max(0, dmgEscudo) : dmg;
+      newNpcHp = applyDmg(dmg, npcHp, dmgEscudo);
+      entries.push({ text: `¡Impacto! −${dmgAplicado} daño ${tieneEscudo ? 'al escudo' : 'a la vida'}`, type: 'success' });
 
       if (habDebuff.length > 0) {
         setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);

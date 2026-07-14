@@ -358,7 +358,8 @@ class PvpCombatController extends Controller
             if ($isAttacker) $combat->attacker_last_forma = $hab->forma;
             else             $combat->defender_last_forma = $hab->forma;
 
-            $dmg = (int) ($hab->damage ?? 0);
+            $dmg       = (int) ($hab->damage ?? 0);
+            $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
 
             /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
             if ($hab->objetivo === 'self') {
@@ -376,6 +377,17 @@ class PvpCombatController extends Controller
                     $entry['messages'][] = "¡Curación! +{$heal} vida";
                 }
 
+                if ($dmgEscudo < 0) {
+                    $healEsc  = -$dmgEscudo;
+                    $maxEsc   = self::getMaxEscudo($actorChar);
+                    if ($isAttacker) {
+                        $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
+                    } else {
+                        $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
+                    }
+                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo";
+                }
+
             /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ── */
             } elseif ($dmg < 0) {
                 $heal  = -$dmg;
@@ -386,6 +398,17 @@ class PvpCombatController extends Controller
                     $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
                 }
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$opponentChar->name}";
+
+                if ($dmgEscudo < 0) {
+                    $healEsc = -$dmgEscudo;
+                    $maxEsc  = self::getMaxEscudo($opponentChar);
+                    if ($isAttacker) {
+                        $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
+                    } else {
+                        $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
+                    }
+                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo a {$opponentChar->name}";
+                }
 
             /* ─── Habilidad de ataque (objetivo: target, damage >= 0) ──────── */
             } else {
@@ -403,16 +426,21 @@ class PvpCombatController extends Controller
                     $effective = self::isEffective((int)$hab->forma, (int)$oppLastForma);
 
                     if ($effective) {
-                        $dmg = (int) round($dmg * 1.5);
+                        $dmg       = (int) round($dmg * 1.5);
+                        $dmgEscudo = (int) round($dmgEscudo * 1.5);
                         $entry['messages'][] = "¡Forma efectiva! ×1.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
                     }
 
+                    $oppEscudoAntes = $isAttacker ? $combat->defender_escudo : $combat->attacker_escudo;
+                    $tieneEscudo    = $oppEscudoAntes > 0;
+                    $dmgAplicado    = $tieneEscudo ? $dmg + max(0, $dmgEscudo) : $dmg;
+
                     if ($isAttacker) {
                         [$combat->defender_hp, $combat->defender_escudo] =
-                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg);
+                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo);
                     } else {
                         [$combat->attacker_hp, $combat->attacker_escudo] =
-                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg);
+                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo);
                     }
 
                     /* Debuffs al oponente solo si impacta */
@@ -423,7 +451,8 @@ class PvpCombatController extends Controller
                     $debuffDesc = !empty($habDebuff)
                         ? ' (penaliza: ' . implode(', ', $habDebuff) . ')'
                         : '';
-                    $entry['messages'][] = "¡Impacto! −{$dmg} daño{$debuffDesc}";
+                    $objetivoDano = $tieneEscudo ? 'al escudo' : 'a la vida';
+                    $entry['messages'][] = "¡Impacto! −{$dmgAplicado} daño {$objetivoDano}{$debuffDesc}";
 
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
@@ -623,6 +652,7 @@ class PvpCombatController extends Controller
             'forma'        => $h->forma,
             'costo_fuerza' => $h->costo_fuerza,
             'damage'       => $h->damage,
+            'damage_escudo' => $h->damage_escudo,
             'cooldown'     => $h->cooldown,
             'objetivo'     => $h->objetivo,
             'buff'         => $h->buff ?? [],
@@ -785,13 +815,29 @@ class PvpCombatController extends Controller
         return (int) self::getCombatStats($char)['vida'];
     }
 
-    private static function applyDamage(int $hp, int $escudo, int $dmg): array
+    /** Escudo máximo para topar curaciones de escudo: escudo base de la nave si aplica, o de combate del personaje */
+    private static function getMaxEscudo(?object $char): int
+    {
+        $naveOwned = self::getNaveOwned($char);
+        if ($naveOwned && $naveOwned->nave) {
+            return (int) $naveOwned->nave->escudo;
+        }
+
+        return (int) self::getCombatStats($char)['escudo'];
+    }
+
+    /**
+     * Aplica daño. Mientras el objetivo tenga escudo (>0), el escudo absorbe TODO
+     * el golpe (dmg + dmgEscudo si corresponde) sin dejar pasar nada a la vida,
+     * aunque el golpe sea mayor que el escudo restante. Recién cuando el escudo
+     * ya está en 0 el daño (solo dmg, sin dmgEscudo) pasa directo a la vida.
+     */
+    private static function applyDamage(int $hp, int $escudo, int $dmg, int $dmgEscudo = 0): array
     {
         if ($escudo > 0) {
-            $absorbed = min($escudo, $dmg);
-            $escudo  -= $absorbed;
-            $dmg     -= $absorbed;
+            $total = $dmg + max(0, $dmgEscudo);
+            return [$hp, max(0, $escudo - $total)];
         }
-        return [max(0, $hp - $dmg), max(0, $escudo)];
+        return [max(0, $hp - $dmg), 0];
     }
 }

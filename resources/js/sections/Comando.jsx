@@ -744,7 +744,7 @@ const RANGOS_JEDI = [
 
 
 /* ===================== HABILIDADES ===================== */
-const FORMA_LABELS = ['Shi-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
+const FORMA_LABELS = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
 const FORMA_IMGS   = ['/assets/Forma1.png', '/assets/Forma2.png', '/assets/Forma3.png', '/assets/Forma4.png', '/assets/Forma5.png', '/assets/Forma6.png', '/assets/Forma7.png'];
 
 function WeaponCard({ objeto, selected, onClick }) {
@@ -1672,7 +1672,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
                   transition: 'all .14s',
                 }}>
-                  F{f}
+                  {label}
                 </button>
               );
             })}
