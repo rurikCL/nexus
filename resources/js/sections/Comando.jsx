@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, cloneElement } from 'react';
+import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
@@ -942,6 +943,14 @@ function HabilidadSlot({ slot, habilidad, onClick }) {
 function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex }) {
   const [loading, setLoading] = useState(false);
 
+  /* Bloquea el scroll de la página mientras el modal está abierto */
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
+
   if (!open) return null;
 
   const grouped = {};
@@ -952,7 +961,7 @@ function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex 
   }
   const formaKeys = Object.keys(grouped).map(Number).sort((a, b) => a - b);
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
       background: 'rgba(4,7,15,0.85)', backdropFilter: 'blur(6px)',
@@ -1010,7 +1019,8 @@ function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex 
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1331,6 +1341,14 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipTab, setEquipTab]   = useState('inventario');
   const itemsDeTab = inventario.filter(o => o.tipo === invTab);
+
+  /* Bloquea el scroll de la página mientras el cajón de equipo está abierto */
+  useEffect(() => {
+    if (!equipOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [equipOpen]);
 
   // Sable de luz armado (arma equipable prioritaria en combate)
   const sableActivo   = user?.character?.sable_activo ?? null;
@@ -1727,6 +1745,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
     </div>
 
     {/* ── Cajón lateral de Equipo (Inventario / Sable de luz / Nave) ── */}
+    {createPortal(<>
     <button
       onClick={() => setEquipOpen(o => !o)}
       style={{
@@ -1893,6 +1912,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
         )}
       </div>
     </div>
+    </>, document.body)}
     </>
   );
 }

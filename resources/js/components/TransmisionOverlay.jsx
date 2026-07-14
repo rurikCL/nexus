@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 
 const TONES = {
@@ -50,6 +51,14 @@ export function TransmisionOverlay({ notification, onDismiss }) {
     return () => { clearTimeout(t); clearInterval(timerRef.current); };
   }, [notification]);
 
+  /* Bloquea el scroll de la página mientras la transmisión está en pantalla */
+  useEffect(() => {
+    if (!notification) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [notification]);
+
   const handleDismiss = () => {
     clearInterval(timerRef.current);
     setPhase('exit');
@@ -60,7 +69,7 @@ export function TransmisionOverlay({ notification, onDismiss }) {
 
   const isShown = phase === 'shown';
 
-  return (
+  return createPortal(
     <div
       onClick={handleDismiss}
       style={{
@@ -205,6 +214,7 @@ export function TransmisionOverlay({ notification, onDismiss }) {
           CIERRA AUTOMÁTICAMENTE · CLICK PARA DESCARTAR
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

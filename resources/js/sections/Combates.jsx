@@ -944,7 +944,7 @@ export function CombatesView({ S, user, initialViewCombat, onClearViewCombat }) 
       <div className="nx-panel" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <span style={{ color: 'var(--holocron-naranja)' }}><Icon name="swords" size={22} /></span>
         <div style={{ flex: 1, minWidth: 200 }}>
-          <div className="nx-display" style={{ fontSize: 15 }}>Arena Orbital</div>
+          <div className="nx-display" style={{ fontSize: 15 }}>Arena de Combate</div>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)' }}>Apuesta con tus créditos o reta a un combatiente a un duelo oficial.</div>
         </div>
         <div className="nx-panel solid" style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>

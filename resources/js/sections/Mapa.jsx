@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
@@ -2347,6 +2348,13 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
   }, [npc]);
   const [misionBusy, setMisionBusy]   = useState(false);
 
+  /* Bloquea el scroll de la página mientras el diálogo está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   /* Carga el retraso_texto_npc desde configuraciones */
   useEffect(() => {
     apiFetch('/admin/configuraciones?q=retraso_texto_npc')
@@ -2653,7 +2661,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     </div>
   );
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1200,
       background: 'rgba(2,5,12,0.88)', backdropFilter: 'blur(8px)',
@@ -3057,7 +3065,8 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
         />
       )}
 
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3356,6 +3365,13 @@ function ChatModal({ target, myUserId, onClose }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  /* Bloquea el scroll de la página mientras el chat está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   const send = useCallback(() => {
     const body = input.trim();
     if (!body || sending || !target?.user_id) return;
@@ -3377,7 +3393,7 @@ function ChatModal({ target, myUserId, onClose }) {
   const photoUrl = mediaUrl(other?.photo ?? target?.photo);
   const displayName = other?.handle ?? target?.handle ?? '?';
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', right: 0, top: 0, bottom: 0,
       width: 360, zIndex: 1100,
@@ -3491,7 +3507,8 @@ function ChatModal({ target, myUserId, onClose }) {
         />
         <Btn kind="accent" icon="arrow" onClick={send} disabled={sending || !input.trim()} />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3501,6 +3518,13 @@ function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
   const attacker  = combat.attacker;
   const color     = SABER_COLORS[attacker?.saber_color] ?? '#38cdf0';
   const photoUrl  = mediaUrl(attacker?.photo_url);
+
+  /* Bloquea el scroll de la página mientras el popup está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
 
   const AUTH = () => {
     const t = localStorage.getItem('nx-token');
@@ -3535,7 +3559,7 @@ function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
     }
   };
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3629,7 +3653,8 @@ function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3637,7 +3662,15 @@ function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
 function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
   const color    = SABER_COLORS[target?.saber_color] ?? '#38cdf0';
   const photoUrl = mediaUrl(target?.photo);
-  return (
+
+  /* Bloquea el scroll de la página mientras el popup está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3716,7 +3749,8 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
