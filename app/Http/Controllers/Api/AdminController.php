@@ -259,4 +259,24 @@ class AdminController extends Controller
 
         return response()->json(['options' => $options]);
     }
+
+    /** POST /admin/rol_habilidades/{habilidadId}/asignar — desbloquea la habilidad para el personaje indicado
+     *  (misma tabla rol_habilidades_aprendidas que usa el jugador al aprenderla normalmente). */
+    public function asignarHabilidad(Request $request, int $habilidadId): JsonResponse
+    {
+        $data = $request->validate([
+            'character_id' => 'required|exists:characters,id',
+        ]);
+
+        $habilidad = RolHabilidad::findOrFail($habilidadId);
+        $character = Character::with('user')->findOrFail($data['character_id']);
+
+        if (!$character->user) {
+            return response()->json(['error' => 'Ese personaje no tiene un usuario asociado'], 422);
+        }
+
+        $character->user->habilidadesAprendidas()->syncWithoutDetaching([$habilidad->id]);
+
+        return response()->json(['ok' => true]);
+    }
 }

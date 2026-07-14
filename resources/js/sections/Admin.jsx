@@ -1059,6 +1059,76 @@ function CellValue({ col, record }) {
   );
 }
 
+/* ─── ASIGNAR HABILIDAD A UN PERSONAJE ──────────────────────
+   Desbloquea la habilidad (rol_habilidades_aprendidas) para el usuario dueño
+   del personaje elegido — el mismo mecanismo que "aprender" una habilidad
+   normalmente en el juego. El jugador la equipa en el slot de forma que quiera. */
+function AssignHabilidadModal({ habilidad, onClose }) {
+  const [personajes, setPersonajes] = useState(null);
+  const [filter, setFilter]         = useState('');
+  const [selectedId, setSelectedId] = useState(null);
+  const [busy, setBusy]             = useState(false);
+
+  useEffect(() => {
+    api('GET', '/admin/personajes/options')
+      .then(d => setPersonajes(d.options ?? []))
+      .catch(() => toast('No se pudo cargar la lista de personajes', { tone: 'error', icon: 'x' }));
+  }, []);
+
+  const filtered = (personajes ?? []).filter(p => p.label.toLowerCase().includes(filter.toLowerCase()));
+
+  const asignar = async () => {
+    if (!selectedId) return;
+    setBusy(true);
+    try {
+      await api('POST', `/admin/rol_habilidades/${habilidad.id}/asignar`, { character_id: selectedId });
+      toast(`"${habilidad.nombre}" asignada`, { tone: 'success', icon: 'check' });
+      onClose();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Asignar "${habilidad.nombre}"`} kicker="HABILIDADES" width={380}>
+      <p style={{ fontSize: 12, color: 'var(--txt-dim)', lineHeight: 1.5, marginTop: 0, marginBottom: 12 }}>
+        Elegí un personaje. La habilidad quedará desbloqueada para que su jugador la equipe.
+      </p>
+      <input
+        type="text" placeholder="Buscar personaje..." value={filter}
+        onChange={e => setFilter(e.target.value)}
+        className="nx-input" style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+      />
+      <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
+        {personajes === null ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando personajes...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Sin resultados</div>
+        ) : (
+          filtered.map(p => (
+            <button key={p.id} type="button" onClick={() => setSelectedId(p.id)} style={{
+              textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+              background: selectedId === p.id ? 'rgba(56,205,240,0.15)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${selectedId === p.id ? 'var(--holo)' : 'var(--holo-line)'}`,
+              color: 'var(--txt)', fontSize: 12, transition: 'all 0.15s',
+            }}>
+              {p.label}
+            </button>
+          ))
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+        <Btn kind="primary" onClick={asignar} disabled={!selectedId || busy}>
+          {busy ? 'Asignando...' : 'Asignar'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─── ENTITY TABLE ───────────────────────────────────────── */
 function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [data, setData]         = useState(null);
@@ -1069,6 +1139,7 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [editRecord, setEditRecord]   = useState(null);  // null=closed, {}=new, {id,...}=edit
   const [deleteId, setDeleteId] = useState(null);
   const [activeFilters, setActiveFilters] = useState({});
+  const [assignHabilidad, setAssignHabilidad] = useState(null); // registro de rol_habilidades a asignar a un personaje
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1264,6 +1335,21 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
                         >
                           <Icon name="edit" size={12} />
                         </button>
+                        {entityKey === 'rol_habilidades' && (
+                          <button
+                            onClick={() => setAssignHabilidad(r)}
+                            title="Asignar a un personaje"
+                            style={{
+                              background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.3)',
+                              borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: 'var(--holocron-oro)',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.08)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.3)'; }}
+                          >
+                            <Icon name="user" size={12} />
+                          </button>
+                        )}
                         {!config.noDelete && (
                           <button
                             onClick={() => setDeleteId(r.id)}
@@ -1347,6 +1433,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
             onClose={() => setEditRecord(null)}
           />
         )
+      )}
+
+      {/* modal asignar habilidad a un personaje */}
+      {assignHabilidad && (
+        <AssignHabilidadModal
+          habilidad={assignHabilidad}
+          onClose={() => setAssignHabilidad(null)}
+        />
       )}
     </div>
   );
