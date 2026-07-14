@@ -24,6 +24,16 @@ const PODIO_CFG = [
 const fmtDate = (d) =>
   d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+function useIsMobile() {
+  const [m, setM] = useState(() => window.innerWidth < 700);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 700);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+}
+
 const EMPTY_RECOMPENSA = { nombre: '', descripcion: '', creditos: 0, experiencia: 0, medalla_id: '' };
 const EMPTY_PODIO = (rango) => ({ rango, primer_lugar_id: '', segundo_lugar_id: '', tercer_lugar_id: '' });
 
@@ -118,6 +128,7 @@ function EmblemSlot({ preview, onUpload }) {
 
 /* ── RecompensaRow ──────────────────────────────────────── */
 function RecompensaRow({ r, idx, onChange, onRemove }) {
+  const isMobile = useIsMobile();
   const up = (field, val) => onChange(idx, field, val);
   return (
     <div style={{
@@ -135,7 +146,10 @@ function RecompensaRow({ r, idx, onChange, onRemove }) {
       >
         <Icon name="x" size={13} />
       </button>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px', gap: 10, paddingRight: 28 }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 90px 90px', gap: 10,
+        paddingRight: 28,
+      }}>
         <div>
           <label className="nx-label">Nombre recompensa</label>
           <input className="nx-input" value={r.nombre} placeholder="Nombre"
@@ -152,7 +166,7 @@ function RecompensaRow({ r, idx, onChange, onRemove }) {
             onChange={e => up('experiencia', +e.target.value)} />
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 210px', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 210px', gap: 10 }}>
         <div>
           <label className="nx-label">Descripción (opcional)</label>
           <input className="nx-input" value={r.descripcion ?? ''} placeholder="Descripción de la recompensa"
@@ -247,6 +261,7 @@ function ToggleRow({ active, onToggle, label, descOn, descOff }) {
 
 /* ── TemporadaModal ─────────────────────────────────────── */
 function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
+  const isMobile = useIsMobile();
   const [form, setForm] = useState(makeFormFrom(editing));
   const [saving, setSaving] = useState(false);
 
@@ -346,7 +361,7 @@ function TemporadaModal({ open, onClose, editing, combatants, onSaved }) {
         </div>
 
         {/* Período */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <div>
             <label className="nx-label">Inicio del período *</label>
             <input className="nx-input" type="date" value={form.periodo_inicio}
@@ -580,7 +595,7 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
                     {(m.objetivos ?? []).length > 0 && (
                       <div style={{ display: 'grid', gap: 3, marginBottom: 6 }}>
                         {m.objetivos.map(obj => (
-                          <div key={obj.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--txt-faint)' }}>
+                          <div key={obj.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--txt-faint)' }}>
                             <div style={{ width: 4, height: 4, borderRadius: '50%', background: done ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
                             {obj.nombre}
                             <span style={{ marginLeft: 'auto' }}>Meta: {obj.meta} {obj.unidad ?? ''}</span>
@@ -633,10 +648,13 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
           <img src={t.foto_emblema} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} />
         )}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(11,26,54,.98) 0%, rgba(11,26,54,.3) 100%)' }} />
-        <div style={{ position: 'absolute', bottom: 14, left: 18, right: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div>
+        <div style={{ position: 'absolute', bottom: 14, left: 18, right: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 8 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div className="nx-kicker" style={{ marginBottom: 2, fontSize: 9 }}>Temporada</div>
-            <h3 className="nx-display" style={{ fontSize: 17, color: 'var(--txt)', margin: 0, lineHeight: 1.2 }}>{t.nombre}</h3>
+            <h3 className="nx-display" style={{
+              fontSize: 17, color: 'var(--txt)', margin: 0, lineHeight: 1.2,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{t.nombre}</h3>
           </div>
           <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
             {t.divide_por_rango && <Chip tone="dim" icon="user" style={{ fontSize: 9 }}>Por rango</Chip>}
@@ -683,9 +701,12 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
                     }}
                   >
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0 }} />
-                    <span className="nx-label" style={{ flex: 1, color }}>{tierInfo?.label ?? p.rango}</span>
+                    <span className="nx-label" style={{ flex: 1, color, minWidth: 0 }}>{tierInfo?.label ?? p.rango}</span>
                     {p.primer_lugar && (
-                      <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontWeight: 600 }}>
+                      <span style={{
+                        fontSize: 11, color: 'var(--txt-dim)', fontWeight: 600, flexShrink: 1, minWidth: 0,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110,
+                      }}>
                         {p.primer_lugar.name}
                       </span>
                     )}
@@ -770,6 +791,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
 
 /* ── Vista principal ────────────────────────────────────── */
 export function TemporadasView({ S, user }) {
+  const isMobile = useIsMobile();
   const [temporadas, setTemporadas] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [modalOpen,  setModalOpen]  = useState(false);
@@ -804,11 +826,16 @@ export function TemporadasView({ S, user }) {
         title="Temporadas de la Academia"
         kicker="HISTORIAL · TEMPORADAS"
         icon="crown"
-        right={canEdit && <Btn kind="accent" icon="plus" onClick={openCreate}>Nueva Temporada</Btn>}
+        right={!isMobile && canEdit && <Btn kind="accent" icon="plus" onClick={openCreate}>Nueva Temporada</Btn>}
       >
         <div style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6 }}>
           Registro oficial de las temporadas de combate. Cada temporada define un período de competencia, su podio de campeones y las recompensas otorgadas.
         </div>
+        {isMobile && canEdit && (
+          <Btn kind="accent" icon="plus" onClick={openCreate} style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}>
+            Nueva Temporada
+          </Btn>
+        )}
       </Panel>
 
       {loading ? (
@@ -828,7 +855,11 @@ export function TemporadasView({ S, user }) {
           {canEdit && <Btn kind="accent" icon="plus" onClick={openCreate}>Crear primera temporada</Btn>}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18, alignItems: 'start' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: 18, alignItems: 'start',
+        }}>
           {temporadas.map(t => (
             <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} />
           ))}
