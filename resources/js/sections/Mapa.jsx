@@ -2129,8 +2129,8 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))}
                 style={{
-                  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
-                  color: 'var(--txt)', cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                  width: 36, height: 36, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--txt)', cursor: 'pointer', fontSize: 16, lineHeight: 1,
                 }}
               >−</button>
               <input type="number" className="nx-input" min={1} max={espacioDisponible ?? 99}
@@ -2145,8 +2145,8 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
                 onClick={() => setCantidad((c) => (espacioDisponible != null ? Math.min(espacioDisponible, c + 1) : c + 1))}
                 disabled={espacioDisponible != null && cantidad >= espacioDisponible}
                 style={{
-                  width: 26, height: 26, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
-                  color: 'var(--txt)', cursor: 'pointer', fontSize: 14, lineHeight: 1,
+                  width: 36, height: 36, borderRadius: 6, border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.04)',
+                  color: 'var(--txt)', cursor: 'pointer', fontSize: 16, lineHeight: 1,
                   opacity: (espacioDisponible != null && cantidad >= espacioDisponible) ? 0.4 : 1,
                 }}
               >+</button>
@@ -2189,6 +2189,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
 }
 
 function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange, onCreditsChange }) {
+  const isMobile = useIsMobile();
   const isAI = Boolean(npc.prompt);
   const [showTienda, setShowTienda] = useState(false);
   const [messages, setMessages]   = useState([]);
@@ -2478,12 +2479,46 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     { label: 'PNT', val: npc.punteria },
   ].filter(s => s.val > 0);
 
+  const statsCluster = STATS.length > 0 && (
+    <div style={{
+      display: 'flex', gap: 6, padding: '6px 10px', flexWrap: 'wrap',
+      background: 'rgba(4,7,15,0.5)', borderRadius: 8, border: '1px solid var(--holo-line)',
+    }}>
+      {STATS.map(s => (
+        <div key={s.label} style={{ textAlign: 'center' }}>
+          <div className="nx-num" style={{ fontSize: 14, color: s.label === 'ATQ' ? 'var(--holocron-naranja)' : s.label === 'VID' ? '#10b981' : 'var(--holo)' }}>
+            {s.val}
+          </div>
+          <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
+            {s.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const remainingBox = isAI && remaining !== null && (
+    <div style={{
+      flexShrink: 0, padding: '5px 10px',
+      background: remaining === 0 ? 'rgba(255,100,100,0.10)' : 'rgba(56,205,240,0.07)',
+      border: `1px solid ${remaining === 0 ? 'rgba(255,100,100,0.35)' : 'var(--holo-line)'}`,
+      borderRadius: 6, textAlign: 'center',
+    }}>
+      <div className="nx-num" style={{ fontSize: 18, lineHeight: 1, color: remaining === 0 ? '#ff6b6b' : 'var(--holo)' }}>
+        {remaining}
+      </div>
+      <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+        {remaining === 1 ? 'RESP.' : 'RESP.'}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1200,
       background: 'rgba(2,5,12,0.88)', backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16,
+      padding: isMobile ? 6 : 16,
       animation: 'nx-fade-up 0.3s ease both',
     }}>
     <div className="nx-panel solid nx-panel-glow" style={{
@@ -2495,97 +2530,80 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       {/* barra superior — retrato del NPC */}
       <div style={{
         background: 'rgba(7,16,31,0.95)', borderBottom: '1px solid var(--holo-line)',
-        padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0,
+        padding: isMobile ? '10px 12px' : '12px 20px', flexShrink: 0,
+        display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 0,
       }}>
-        {/* retrato */}
-        <div style={{
-          width: 56, height: 56, borderRadius: 8, overflow: 'hidden',
-          border: '2px solid var(--holo-line)', flexShrink: 0,
-          background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
-        }}>
-          {npc.imagen_mini || npc.imagen
-            ? <img src={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} alt={npc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />
-          }
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14 }}>
+          {/* retrato */}
+          <div style={{
+            width: isMobile ? 42 : 56, height: isMobile ? 42 : 56, borderRadius: 8, overflow: 'hidden',
+            border: '2px solid var(--holo-line)', flexShrink: 0,
+            background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
+          }}>
+            {npc.imagen_mini || npc.imagen
+              ? <img src={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} alt={npc.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />
+            }
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="nx-display" style={{
+              fontSize: isMobile ? 14 : 16, color: 'var(--txt)', marginBottom: 2,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{npc.nombre}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {npc.profesion && <span className="nx-kicker" style={{ fontSize: 9 }}>{npc.profesion}</span>}
+              {npc.faccion   && <Chip tone="dim" icon="shield">{npc.faccion}</Chip>}
+              {npc.tipo && (
+                <span style={{
+                  fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+                  padding: '3px 8px', borderRadius: 4, fontWeight: 700,
+                  ...(isAliado
+                    ? { background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981' }
+                    : isHostil
+                    ? { background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.35)', color: '#ff6b6b' }
+                    : isEntrenador
+                    ? { background: 'rgba(56,205,240,0.14)', border: '1px solid rgba(56,205,240,0.35)', color: '#38cdf0' }
+                    : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
+                  ),
+                }}>
+                  {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR'
+                    : isVendedorNaves ? '⛁ VENDEDOR DE NAVES' : isVendedor ? '⛁ VENDEDOR' : '◈ NEUTRAL'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* stats combate + contador de respuestas — en la misma fila solo en desktop */}
+          {!isMobile && statsCluster}
+          {!isMobile && remainingBox}
+
+          <button onClick={onClose} style={{
+            background: 'transparent', border: '1px solid var(--holo-line)',
+            borderRadius: 6, padding: 8, cursor: 'pointer', color: 'var(--txt-dim)',
+            transition: 'all 0.15s', flexShrink: 0,
+          }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.color = 'var(--txt)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+          >
+            <Icon name="x" size={16} />
+          </button>
         </div>
-        <div style={{ flex: 1 }}>
-          <div className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', marginBottom: 2 }}>{npc.nombre}</div>
+
+        {/* en mobile, stats + contador bajan a una segunda fila para no apretar el header */}
+        {isMobile && (statsCluster || remainingBox) && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {npc.profesion && <span className="nx-kicker" style={{ fontSize: 9 }}>{npc.profesion}</span>}
-            {npc.faccion   && <Chip tone="dim" icon="shield">{npc.faccion}</Chip>}
-            {npc.tipo && (
-              <span style={{
-                fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
-                padding: '3px 8px', borderRadius: 4, fontWeight: 700,
-                ...(isAliado
-                  ? { background: 'rgba(16,185,129,0.14)', border: '1px solid rgba(16,185,129,0.35)', color: '#10b981' }
-                  : isHostil
-                  ? { background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.35)', color: '#ff6b6b' }
-                  : isEntrenador
-                  ? { background: 'rgba(56,205,240,0.14)', border: '1px solid rgba(56,205,240,0.35)', color: '#38cdf0' }
-                  : { background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.35)', color: '#E6B325' }
-                ),
-              }}>
-                {isAliado ? '▲ ALIADO' : isHostil ? '⚠ HOSTIL' : isEntrenador ? '◆ ENTRENADOR'
-                  : isVendedorNaves ? '⛁ VENDEDOR DE NAVES' : isVendedor ? '⛁ VENDEDOR' : '◈ NEUTRAL'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* stats combate */}
-        {STATS.length > 0 && (
-          <div style={{
-            display: 'flex', gap: 6, padding: '6px 10px', flexWrap: 'wrap',
-            background: 'rgba(4,7,15,0.5)', borderRadius: 8, border: '1px solid var(--holo-line)',
-          }}>
-            {STATS.map(s => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
-                <div className="nx-num" style={{ fontSize: 14, color: s.label === 'ATQ' ? 'var(--holocron-naranja)' : s.label === 'VID' ? '#10b981' : 'var(--holo)' }}>
-                  {s.val}
-                </div>
-                <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
-                  {s.label}
-                </div>
-              </div>
-            ))}
+            {statsCluster}
+            {remainingBox}
           </div>
         )}
-
-        {isAI && remaining !== null && (
-          <div style={{
-            flexShrink: 0, padding: '5px 10px',
-            background: remaining === 0 ? 'rgba(255,100,100,0.10)' : 'rgba(56,205,240,0.07)',
-            border: `1px solid ${remaining === 0 ? 'rgba(255,100,100,0.35)' : 'var(--holo-line)'}`,
-            borderRadius: 6, textAlign: 'center',
-          }}>
-            <div className="nx-num" style={{ fontSize: 18, lineHeight: 1, color: remaining === 0 ? '#ff6b6b' : 'var(--holo)' }}>
-              {remaining}
-            </div>
-            <div style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
-              {remaining === 1 ? 'RESP.' : 'RESP.'}
-            </div>
-          </div>
-        )}
-
-        <button onClick={onClose} style={{
-          background: 'transparent', border: '1px solid var(--holo-line)',
-          borderRadius: 6, padding: 8, cursor: 'pointer', color: 'var(--txt-dim)',
-          transition: 'all 0.15s', flexShrink: 0,
-        }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.color = 'var(--txt)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
-        >
-          <Icon name="x" size={16} />
-        </button>
       </div>
 
-      {/* cuerpo: mensajes + barra lateral de opciones */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* cuerpo: mensajes + barra lateral de opciones (mobile: apilados en columna) */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden' }}>
 
         {/* área de mensajes */}
         <div style={{
-          flex: 1, overflowY: 'auto', padding: '20px 24px',
+          flex: 1, minHeight: 0, overflowY: 'auto', padding: isMobile ? '14px 14px' : '20px 24px',
           display: 'flex', flexDirection: 'column', gap: 14,
           backgroundImage: 'radial-gradient(ellipse at 60% 30%, rgba(0,71,186,0.08), transparent 60%)',
         }}>
@@ -2596,7 +2614,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
               animation: 'nx-fade-up 0.25s ease both',
             }}>
               <div style={{
-                maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
+                maxWidth: isMobile ? '86%' : '72%', padding: '11px 15px', borderRadius: 12,
                 fontSize: 13, lineHeight: 1.55,
                 ...(m.from === 'npc' ? {
                   background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
@@ -2619,7 +2637,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
           {typingInMsg && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', animation: 'nx-fade-up 0.2s ease both' }}>
               <div style={{
-                maxWidth: '72%', padding: '11px 15px', borderRadius: 12,
+                maxWidth: isMobile ? '86%' : '72%', padding: '11px 15px', borderRadius: 12,
                 fontSize: 13, lineHeight: 1.55,
                 background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
                 color: 'var(--txt)', borderBottomLeftRadius: 4,
@@ -2653,11 +2671,14 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
           <div ref={bottomRef} />
         </div>
 
-        {/* panel lateral: modo AI o diálogo estático */}
+        {/* panel lateral: modo AI o diálogo estático (mobile: full width, debajo del chat) */}
         {isAI ? (
           <div style={{
-            width: 230, flexShrink: 0,
-            borderLeft: '1px solid var(--holo-line)',
+            width: isMobile ? '100%' : 230, flexShrink: 0,
+            borderLeft: isMobile ? 'none' : '1px solid var(--holo-line)',
+            borderTop: isMobile ? '1px solid var(--holo-line)' : 'none',
+            maxHeight: isMobile ? '45%' : undefined,
+            overflowY: isMobile ? 'auto' : 'visible',
             background: 'rgba(5,12,26,0.97)',
             display: 'flex', flexDirection: 'column',
           }}>
@@ -2771,8 +2792,10 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
         ) : (
           (npcOptions.length > 0 || misionInfo) && phase === 'dialog' && (
             <div style={{
-              width: 210, flexShrink: 0,
-              borderLeft: '1px solid var(--holo-line)',
+              width: isMobile ? '100%' : 210, flexShrink: 0,
+              borderLeft: isMobile ? 'none' : '1px solid var(--holo-line)',
+              borderTop: isMobile ? '1px solid var(--holo-line)' : 'none',
+              maxHeight: isMobile ? '45%' : undefined,
               background: 'rgba(5,12,26,0.96)',
               overflowY: 'auto',
               display: 'flex', flexDirection: 'column',
@@ -2900,6 +2923,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
 /* ─── POPUP DE MISIÓN OFRECIDA POR NPC ─────────────────── */
 function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) {
+  const isMobile = useIsMobile();
   const ESTADO_LABEL = { pendiente: 'Pendiente', 'en-curso': 'En curso', completada: 'Completada' };
   const ESTADO_COLOR = { pendiente: '#E6B325', 'en-curso': '#38cdf0', completada: '#10b981' };
   const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : '📦';
@@ -2912,14 +2936,14 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
     <div onMouseDown={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 1300,
       background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(6px)',
-      display: 'grid', placeItems: 'center', padding: 20,
+      display: 'grid', placeItems: 'center', padding: isMobile ? 8 : 20,
       animation: 'nx-fade-up 0.25s ease both',
     }}>
       <div onMouseDown={e => e.stopPropagation()} className="nx-panel solid nx-panel-glow" style={{
-        width: 480, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto',
+        width: 480, maxWidth: '100%', maxHeight: isMobile ? '92vh' : '86vh', overflowY: 'auto',
       }}>
         {mision.foto_mision && (
-          <div style={{ height: 140, overflow: 'hidden' }}>
+          <div style={{ height: isMobile ? 90 : 140, overflow: 'hidden' }}>
             <img src={mediaUrl(mision.foto_mision)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         )}
