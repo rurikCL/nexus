@@ -268,10 +268,11 @@ const ENTITY_CONFIG = {
       { key: 'damage',       label: 'Daño base',             type: 'number',    min: -999, hint: 'Negativo = cura esa cantidad de vida en vez de dañar (al usuario si Objetivo=self, al rival si Objetivo=target)' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
       { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
-      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario durante el turno' },
+      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario' },
       { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
+      { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
     ],
-    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, cooldown: 0 },
+    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, cooldown: 0, duracion: 2 },
   },
 
   rol_objetos: {

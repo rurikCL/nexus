@@ -14,6 +14,8 @@ export function SkillTooltip({ hab }) {
   const habBuff   = Array.isArray(hab.buff)   ? hab.buff   : [];
   const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
   const isSelf    = hab.objetivo === 'self';
+  const rondas    = hab.duracion ?? 2;
+  const rondaTxt  = `${rondas} ronda${rondas === 1 ? '' : 's'}`;
 
   return (
     <div style={{
@@ -43,12 +45,12 @@ export function SkillTooltip({ hab }) {
 
       {habBuff.length > 0 && (
         <div style={{ fontSize: 9, color: '#10b981', lineHeight: 1.5 }}>
-          ▲ Buff a ti (2 turnos): {habBuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
+          ▲ Buff a ti ({rondaTxt}): {habBuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
         </div>
       )}
       {habDebuff.length > 0 && (
         <div style={{ fontSize: 9, color: '#ff6b6b', lineHeight: 1.5 }}>
-          ▼ Debuff al objetivo si impacta (2 turnos): {habDebuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
+          ▼ Debuff al objetivo si impacta ({rondaTxt}): {habDebuff.map(s => STAT_LABEL[s] ?? s).join(', ')}
         </div>
       )}
 

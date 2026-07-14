@@ -239,16 +239,7 @@ class PvpCombatController extends Controller
         $oppDebuffs   = ($isAttacker ? $combat->defender_debuffs   : $combat->attacker_debuffs)    ?? [];
         $oppLastForma = ($isAttacker ? $combat->defender_last_forma : $combat->attacker_last_forma) ?? 0;
 
-        /* Tick: decrementar buffs/debuffs y cooldowns al inicio del turno */
-        $tick = fn(array $arr) => array_values(array_filter(
-            array_map(fn($e) => array_merge($e, ['turns' => $e['turns'] - 1]), $arr),
-            fn($e) => $e['turns'] > 0
-        ));
-        $myBuffs   = $tick($myBuffs);
-        $myDebuffs = $tick($myDebuffs);
-        $oppBuffs  = $tick($oppBuffs);
-        $oppDebuffs = $tick($oppDebuffs);
-
+        /* Tick de cooldowns al inicio del turno (los buffs/debuffs se tickean por ronda, no por turno) */
         $myCooldowns = array_filter(
             array_map(fn($v) => $v - 1, $myCooldowns),
             fn($v) => $v > 0
@@ -356,10 +347,11 @@ class PvpCombatController extends Controller
             }
 
             /* Aplicar buff al actor (siempre al usar la habilidad) */
-            $habBuff   = is_array($hab->buff)   ? $hab->buff   : [];
-            $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
+            $habBuff    = is_array($hab->buff)   ? $hab->buff   : [];
+            $habDebuff  = is_array($hab->debuff) ? $hab->debuff : [];
+            $habRondas  = $hab->duracion ?: 2;
             foreach ($habBuff as $stat) {
-                $myBuffs[] = ['stat' => $stat, 'turns' => 2];
+                $myBuffs[] = ['stat' => $stat, 'turns' => $habRondas];
             }
 
             /* Registrar la forma usada */
@@ -425,7 +417,7 @@ class PvpCombatController extends Controller
 
                     /* Debuffs al oponente solo si impacta */
                     foreach ($habDebuff as $stat) {
-                        $oppDebuffs[] = ['stat' => $stat, 'turns' => 2];
+                        $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
                     }
 
                     $debuffDesc = !empty($habDebuff)
@@ -475,7 +467,12 @@ class PvpCombatController extends Controller
                 if ($isAttacker) $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
                 else             $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
             } else {
-                /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
+                /* Ambos actuaron: termina la ronda — tick de buffs/debuffs (duran N rondas) y nueva iniciativa */
+                $myBuffs    = self::tickEffects($myBuffs);
+                $myDebuffs  = self::tickEffects($myDebuffs);
+                $oppBuffs   = self::tickEffects($oppBuffs);
+                $oppDebuffs = self::tickEffects($oppDebuffs);
+
                 $combat->ronda      += 1;
                 $combat->ronda_turno = 0;
 
@@ -630,6 +627,7 @@ class PvpCombatController extends Controller
             'objetivo'     => $h->objetivo,
             'buff'         => $h->buff ?? [],
             'debuff'       => $h->debuff ?? [],
+            'duracion'     => $h->duracion,
             'efecto'       => $h->efecto,
         ];
     }
@@ -724,6 +722,15 @@ class PvpCombatController extends Controller
         foreach ($buffs   as $b) { if (isset($stats[$b['stat']])) $stats[$b['stat']] += 1; }
         foreach ($debuffs as $d) { if (isset($stats[$d['stat']])) $stats[$d['stat']] = max(0, $stats[$d['stat']] - 1); }
         return $stats;
+    }
+
+    /** Descuenta 1 ronda a cada efecto (buff/debuff) y elimina los que ya expiraron */
+    private static function tickEffects(array $effects): array
+    {
+        return array_values(array_filter(
+            array_map(fn($e) => array_merge($e, ['turns' => $e['turns'] - 1]), $effects),
+            fn($e) => $e['turns'] > 0
+        ));
     }
 
     /** ¿La forma del atacante supera la forma del defensor? */

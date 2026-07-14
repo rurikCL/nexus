@@ -241,7 +241,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       setCurrTurn(next);
       if (next === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
     } else {
-      /* Ambos actuaron: termina la ronda, se tira nueva iniciativa */
+      /* Ambos actuaron: termina la ronda — tick de buffs/debuffs (duran N rondas) y nueva iniciativa */
+      setPlayerBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
+      setNpcDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
+
       const pR = d20(); const nR = d20();
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
@@ -316,12 +319,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
       setPlayerHp(newHp);
 
-      /* Al fin del turno NPC: decrementar cooldowns/buffs y pre-recuperar fuerza del jugador */
+      /* Al fin del turno NPC: decrementar cooldowns (los buffs/debuffs se tickean por ronda en endTurnAfter) */
       setCooldowns(prev => Object.fromEntries(
         Object.entries(prev).filter(([, v]) => v > 1).map(([k, v]) => [k, v - 1])
       ));
-      setPlayerBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
-      setNpcDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
 
       setNpcBusy(false);
       if (newHp.vida <= 0) {
@@ -345,6 +346,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     const habBuff   = Array.isArray(hab.buff)   ? hab.buff   : [];
     const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
+    const habRondas = hab.duracion ?? 2;
 
     /* Gastar fuerza */
     setPlayerFuerza(prev => prev - hab.costo_fuerza);
@@ -356,7 +358,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     /* Aplicar buff al jugador */
     if (habBuff.length > 0) {
-      setPlayerBuffs(prev => [...prev, ...habBuff.map(stat => ({ stat, turns: 2 }))]);
+      setPlayerBuffs(prev => [...prev, ...habBuff.map(stat => ({ stat, turns: habRondas }))]);
     }
 
     const entries = [];
@@ -399,8 +401,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       entries.push({ text: `¡Impacto! −${dmg} daño`, type: 'success' });
 
       if (habDebuff.length > 0) {
-        setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: 2 }))]);
-        entries.push({ text: `${npc.nombre}: ${habDebuff.map(s => `−1 ${s}`).join(', ')} (2 turnos)`, type: 'info' });
+        setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);
+        entries.push({ text: `${npc.nombre}: ${habDebuff.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
       }
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
@@ -550,14 +552,14 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
           const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
           return (
-            <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} turno${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
+            <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
               display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
               fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
               background: `${c}18`, border: `1px solid ${c}55`, color: c, fontWeight: 700,
             }}>
               {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
               {e.kind === 'buff' ? '+' : '−'}{e.amount} {abbr}
-              <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}t</span>
+              <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}r</span>
             </span>
           );
         })}

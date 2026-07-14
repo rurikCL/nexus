@@ -318,14 +318,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
           const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
           return (
-            <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} turno${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
+            <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
               display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
               fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
               background: `${c}18`, border: `1px solid ${c}55`, color: c, fontWeight: 700,
             }}>
               {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
               {e.kind === 'buff' ? '+' : '−'}{e.amount} {abbr}
-              <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}t</span>
+              <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}r</span>
             </span>
           );
         })}
