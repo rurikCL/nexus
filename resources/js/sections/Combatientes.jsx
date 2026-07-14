@@ -21,7 +21,7 @@ export function CombatientesView({ S }) {
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
-      <Panel kicker="Directorio de la academia" title="Directorio de usuarios de la fuerza" icon="roster"
+      <Panel kicker="Registros de usuarios" title="Directorio de usuarios de la fuerza" icon="roster"
         right={<Chip tone="dim" icon="roster">{S.combatants.length} registrados</Chip>}>
         {/* Filtros */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -108,6 +108,13 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
     const h = (e) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, [onClose]);
+
+  /* Bloquea el scroll de la página mientras el popup está abierto */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
 
   return createPortal(
     <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'start center', padding: '40px 24px 24px', overflowY: 'auto' }}>

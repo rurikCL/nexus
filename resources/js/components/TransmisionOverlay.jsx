@@ -50,6 +50,14 @@ export function TransmisionOverlay({ notification, onDismiss }) {
     return () => { clearTimeout(t); clearInterval(timerRef.current); };
   }, [notification]);
 
+  /* Bloquea el scroll de la página mientras la transmisión está en pantalla */
+  useEffect(() => {
+    if (!notification) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [notification]);
+
   const handleDismiss = () => {
     clearInterval(timerRef.current);
     setPhase('exit');

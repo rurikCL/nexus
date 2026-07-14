@@ -170,6 +170,13 @@ export function Modal({ open, onClose, title, kicker, children, width = 540 }) {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [open, onClose]);
+  /* Bloquea el scroll de la página mientras el modal está abierto */
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
   if (!open) return null;
   return createPortal(
     <div onMouseDown={onClose} style={{

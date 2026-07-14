@@ -942,6 +942,14 @@ function HabilidadSlot({ slot, habilidad, onClick }) {
 function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex }) {
   const [loading, setLoading] = useState(false);
 
+  /* Bloquea el scroll de la página mientras el modal está abierto */
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
+
   if (!open) return null;
 
   const grouped = {};
@@ -1331,6 +1339,14 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipTab, setEquipTab]   = useState('inventario');
   const itemsDeTab = inventario.filter(o => o.tipo === invTab);
+
+  /* Bloquea el scroll de la página mientras el cajón de equipo está abierto */
+  useEffect(() => {
+    if (!equipOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [equipOpen]);
 
   // Sable de luz armado (arma equipable prioritaria en combate)
   const sableActivo   = user?.character?.sable_activo ?? null;
