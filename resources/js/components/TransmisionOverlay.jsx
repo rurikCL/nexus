@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 
 const TONES = {
@@ -68,7 +69,7 @@ export function TransmisionOverlay({ notification, onDismiss }) {
 
   const isShown = phase === 'shown';
 
-  return (
+  return createPortal(
     <div
       onClick={handleDismiss}
       style={{
@@ -213,6 +214,7 @@ export function TransmisionOverlay({ notification, onDismiss }) {
           CIERRA AUTOMÁTICAMENTE · CLICK PARA DESCARTAR
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
@@ -2660,7 +2661,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     </div>
   );
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1200,
       background: 'rgba(2,5,12,0.88)', backdropFilter: 'blur(8px)',
@@ -3064,7 +3065,8 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
         />
       )}
 
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3391,7 +3393,7 @@ function ChatModal({ target, myUserId, onClose }) {
   const photoUrl = mediaUrl(other?.photo ?? target?.photo);
   const displayName = other?.handle ?? target?.handle ?? '?';
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', right: 0, top: 0, bottom: 0,
       width: 360, zIndex: 1100,
@@ -3505,7 +3507,8 @@ function ChatModal({ target, myUserId, onClose }) {
         />
         <Btn kind="accent" icon="arrow" onClick={send} disabled={sending || !input.trim()} />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3556,7 +3559,7 @@ function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
     }
   };
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3650,7 +3653,8 @@ function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3666,7 +3670,7 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
     return () => { document.body.style.overflow = prevOverflow; };
   }, []);
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3745,7 +3749,8 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
