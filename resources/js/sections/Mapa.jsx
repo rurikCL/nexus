@@ -2121,7 +2121,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
   const inventarioLleno = !isNaves && inventario && espacioDisponible === 0;
 
   return (
-    <Modal open onClose={onClose} title={npc.nombre} kicker={isNaves ? 'VENDEDOR DE NAVES' : 'VENDEDOR'} width={560}>
+    <Modal open onClose={onClose} title={npc.nombre} kicker={isNaves ? 'VENDEDOR DE NAVES' : 'VENDEDOR'} width={560} zIndex={1300}>
       {/* Retrato del vendedor */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
         <div style={{
@@ -2242,7 +2242,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
       </div>
 
       {confirmItem && (
-        <Modal open onClose={cerrarConfirmacion} title="Confirmar compra" kicker={npc.nombre} width={420}>
+        <Modal open onClose={cerrarConfirmacion} title="Confirmar compra" kicker={npc.nombre} width={420} zIndex={1310}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
             <div style={{
               width: 48, height: 48, borderRadius: 8, background: 'rgba(56,205,240,0.08)',

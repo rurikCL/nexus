@@ -163,7 +163,7 @@ export function MedalIcon({ id, size = 34 }) {
 }
 
 /* ---- Modal ---- */
-export function Modal({ open, onClose, title, kicker, children, width = 540 }) {
+export function Modal({ open, onClose, title, kicker, children, width = 540, zIndex = 1000 }) {
   useEffect(() => {
     if (!open) return;
     const h = (e) => e.key === 'Escape' && onClose();
@@ -180,7 +180,7 @@ export function Modal({ open, onClose, title, kicker, children, width = 540 }) {
   if (!open) return null;
   return createPortal(
     <div onMouseDown={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.72)',
+      position: 'fixed', inset: 0, zIndex, background: 'rgba(2,5,12,0.72)',
       backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'start center',
       padding: '40px 20px 20px', overflowY: 'auto' }}>
       <div className="nx-panel solid nx-panel-glow nx-fade" onMouseDown={(e) => e.stopPropagation()}
