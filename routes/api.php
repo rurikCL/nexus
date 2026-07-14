@@ -216,6 +216,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin CRUD
     Route::prefix('admin')->group(function () {
         Route::post('/rol_habilidades/{habilidadId}/asignar', [AdminController::class, 'asignarHabilidad']);
+        Route::post('/rol_objetos/{objetoId}/asignar', [AdminController::class, 'asignarObjeto']);
         Route::get('/{entity}/options',  [AdminController::class, 'options']);
         Route::get('/{entity}',          [AdminController::class, 'index']);
         Route::post('/{entity}',         [AdminController::class, 'store']);

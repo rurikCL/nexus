@@ -480,6 +480,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     }
   };
 
+  /* Evadir (solo naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa por 3 rondas —
+     sirve para naves sin habilidades o para no quedar sin nada que hacer en el turno. */
+  const doPlayerEvadir = () => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || !naveMode) return;
+
+    setPlayerBuffs(prev => [...prev, ...['defensa', 'movimiento', 'iniciativa'].map(stat => ({ stat, turns: 3 }))]);
+    setLog(prev => [...prev, {
+      text: `${player.nombre} evade: +1 Maniobra y +1 Iniciativa (3 rondas)`,
+      type: 'info', id: prev.length, ronda, actor: 'player',
+    }]);
+    endTurnAfter('player');
+  };
+
   /* Ataque básico: arma equipada o desarmado */
   const doPlayerBasicAttack = async () => {
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
@@ -922,6 +935,21 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
                   <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
                   <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1] ?? `F${currentForma}`}</span>
                   <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+                </ActionBtn>
+              </>
+            )}
+
+            {naveMode && (
+              <>
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+
+                <ActionBtn onClick={() => isPlayerTurn && doPlayerEvadir()}
+                  disabled={!isPlayerTurn}
+                  bg="rgba(16,185,129,0.07)" border="rgba(16,185,129,0.22)"
+                  hoverBg="rgba(16,185,129,0.18)" hoverBorder="rgba(16,185,129,0.5)" minW={54}
+                >
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>🌀</span>
+                  <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>EVADIR</span>
                 </ActionBtn>
               </>
             )}

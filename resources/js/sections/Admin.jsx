@@ -1130,6 +1130,101 @@ function AssignHabilidadModal({ habilidad, onClose }) {
   );
 }
 
+/* ─── ASIGNAR OBJETO A UNO O MÁS PERSONAJES ─────────────────
+   Agrega el objeto al inventario de cada personaje elegido (suma cantidad si
+   ya lo tenía). Selección múltiple: se puede enviar a varios a la vez. */
+function AssignObjetoModal({ objeto, onClose }) {
+  const [personajes, setPersonajes] = useState(null);
+  const [filter, setFilter]         = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [cantidad, setCantidad]     = useState(1);
+  const [busy, setBusy]             = useState(false);
+
+  useEffect(() => {
+    api('GET', '/admin/personajes/options')
+      .then(d => setPersonajes(d.options ?? []))
+      .catch(() => toast('No se pudo cargar la lista de personajes', { tone: 'error', icon: 'x' }));
+  }, []);
+
+  const filtered = (personajes ?? []).filter(p => p.label.toLowerCase().includes(filter.toLowerCase()));
+
+  const toggle = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const asignar = async () => {
+    if (selectedIds.length === 0) return;
+    setBusy(true);
+    try {
+      await api('POST', `/admin/rol_objetos/${objeto.id}/asignar`, { character_ids: selectedIds, cantidad });
+      toast(`"${objeto.nombre}" asignado a ${selectedIds.length} personaje${selectedIds.length === 1 ? '' : 's'}`, { tone: 'success', icon: 'check' });
+      onClose();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Asignar "${objeto.nombre}"`} kicker="OBJETOS" width={400}>
+      <p style={{ fontSize: 12, color: 'var(--txt-dim)', lineHeight: 1.5, marginTop: 0, marginBottom: 12 }}>
+        Elegí uno o más personajes. El objeto se agregará a su inventario (si ya lo tienen, se suma la cantidad).
+      </p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <label className="nx-label" style={{ margin: 0, whiteSpace: 'nowrap' }}>Cantidad c/u</label>
+        <input type="number" min={1} className="nx-input" value={cantidad}
+          onChange={e => setCantidad(Math.max(1, Number(e.target.value) || 1))}
+          style={{ width: 70, textAlign: 'center' }}
+        />
+      </div>
+      <input
+        type="text" placeholder="Buscar personaje..." value={filter}
+        onChange={e => setFilter(e.target.value)}
+        className="nx-input" style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+      />
+      <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+        {personajes === null ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando personajes...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Sin resultados</div>
+        ) : (
+          filtered.map(p => {
+            const checked = selectedIds.includes(p.id);
+            return (
+              <button key={p.id} type="button" onClick={() => toggle(p.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                background: checked ? 'rgba(56,205,240,0.15)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${checked ? 'var(--holo)' : 'var(--holo-line)'}`,
+                color: 'var(--txt)', fontSize: 12, transition: 'all 0.15s',
+              }}>
+                <span style={{
+                  width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                  border: `1px solid ${checked ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  background: checked ? 'var(--holo)' : 'transparent',
+                  display: 'grid', placeItems: 'center',
+                }}>
+                  {checked && <Icon name="check" size={10} style={{ color: '#04070f' }} />}
+                </span>
+                {p.label}
+              </button>
+            );
+          })
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 14 }}>
+        {selectedIds.length} personaje{selectedIds.length === 1 ? '' : 's'} seleccionado{selectedIds.length === 1 ? '' : 's'}
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+        <Btn kind="primary" onClick={asignar} disabled={selectedIds.length === 0 || busy}>
+          {busy ? 'Asignando...' : 'Asignar'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─── ENTITY TABLE ───────────────────────────────────────── */
 function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [data, setData]         = useState(null);
@@ -1141,6 +1236,7 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const [deleteId, setDeleteId] = useState(null);
   const [activeFilters, setActiveFilters] = useState({});
   const [assignHabilidad, setAssignHabilidad] = useState(null); // registro de rol_habilidades a asignar a un personaje
+  const [assignObjeto, setAssignObjeto] = useState(null); // registro de rol_objetos a asignar a uno o más personajes
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1351,6 +1447,21 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
                             <Icon name="user" size={12} />
                           </button>
                         )}
+                        {entityKey === 'rol_objetos' && (
+                          <button
+                            onClick={() => setAssignObjeto(r)}
+                            title="Asignar a uno o más personajes"
+                            style={{
+                              background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.3)',
+                              borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: 'var(--holocron-oro)',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.08)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.3)'; }}
+                          >
+                            <Icon name="user" size={12} />
+                          </button>
+                        )}
                         {!config.noDelete && (
                           <button
                             onClick={() => setDeleteId(r.id)}
@@ -1441,6 +1552,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
         <AssignHabilidadModal
           habilidad={assignHabilidad}
           onClose={() => setAssignHabilidad(null)}
+        />
+      )}
+
+      {/* modal asignar objeto a uno o más personajes */}
+      {assignObjeto && (
+        <AssignObjetoModal
+          objeto={assignObjeto}
+          onClose={() => setAssignObjeto(null)}
         />
       )}
     </div>

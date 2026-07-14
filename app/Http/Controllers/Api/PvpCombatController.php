@@ -308,6 +308,16 @@ class PvpCombatController extends Controller
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
             }
 
+        /* ─── Evadir (solo combate naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa, 3 rondas ── */
+        } elseif ($skill === 'evadir') {
+            if (!self::getNaveOwned($actorChar)) {
+                return response()->json(['error' => 'Evadir solo está disponible en combate naval'], 422);
+            }
+            foreach (['defensa', 'movimiento', 'iniciativa'] as $stat) {
+                $myBuffs[] = ['stat' => $stat, 'turns' => 3];
+            }
+            $entry['messages'][] = "{$actorChar->name} evade: +1 Maniobra y +1 Iniciativa (3 rondas)";
+
         /* ─── Habilidad ───────────────────────────────────────────────── */
         } else {
             $skillId      = (int) $skill;
@@ -640,6 +650,7 @@ class PvpCombatController extends Controller
             'habilidades'  => $habilidades,
             'current_forma' => $currentForma,
             'arma_equipada' => $ch?->armaEfectiva(),
+            'es_nave'      => self::getNaveOwned($ch) !== null,
         ];
     }
 

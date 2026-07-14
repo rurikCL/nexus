@@ -279,4 +279,36 @@ class AdminController extends Controller
 
         return response()->json(['ok' => true]);
     }
+
+    /** POST /admin/rol_objetos/{objetoId}/asignar — agrega el objeto al inventario de uno o más personajes.
+     *  Si el personaje ya lo tiene, suma la cantidad al stock existente en vez de duplicar la fila. */
+    public function asignarObjeto(Request $request, int $objetoId): JsonResponse
+    {
+        $data = $request->validate([
+            'character_ids'   => 'required|array|min:1',
+            'character_ids.*' => 'exists:characters,id',
+            'cantidad'        => 'nullable|integer|min:1',
+        ]);
+
+        $objeto   = RolObjeto::findOrFail($objetoId);
+        $cantidad = $data['cantidad'] ?? 1;
+
+        foreach ($data['character_ids'] as $characterId) {
+            $character = Character::find($characterId);
+            if (!$character) {
+                continue;
+            }
+
+            $owned = $character->rolObjetos()->where('rol_objetos.id', $objeto->id)->first();
+            if ($owned) {
+                $character->rolObjetos()->updateExistingPivot($objeto->id, [
+                    'cantidad' => $owned->pivot->cantidad + $cantidad,
+                ]);
+            } else {
+                $character->rolObjetos()->attach($objeto->id, ['cantidad' => $cantidad]);
+            }
+        }
+
+        return response()->json(['ok' => true, 'count' => count($data['character_ids'])]);
+    }
 }

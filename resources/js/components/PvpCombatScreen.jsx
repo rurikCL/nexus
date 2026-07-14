@@ -714,6 +714,22 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
           </button>
 
+          {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
+          {me.es_nave && (
+            <button onClick={() => doAction('evadir')} disabled={busy} style={{
+              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+            }}
+              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(16,185,129,0.18)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.22)'; }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>🌀</span>
+              <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>EVADIR</span>
+            </button>
+          )}
+
           {/* Huir */}
           <button onClick={() => doAction('flee')} disabled={busy} style={{
             minWidth: 50, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
