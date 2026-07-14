@@ -53,6 +53,16 @@ function hashColor(str) {
   return HASH_COLORS[Math.abs(h) % HASH_COLORS.length];
 }
 
+function useIsMobile() {
+  const [m, setM] = useState(() => window.innerWidth < 700);
+  useEffect(() => {
+    const fn = () => setM(window.innerWidth < 700);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return m;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────
@@ -111,6 +121,7 @@ function ComunidadSection({ misiones, onReload, user }) {
 
 function ComunidadCard({ mision, userId }) {
   const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
   const totalPuntos = mision.total_progreso ?? 0;
   const requeridos  = mision.puntos_requeridos ?? 100;
   const progresoPct = pct(totalPuntos, requeridos);
@@ -128,7 +139,7 @@ function ComunidadCard({ mision, userId }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10 }}>
           {mision.foto_mision && (
             <img src={mediaUrl(mision.foto_mision)} alt={mision.nombre} style={{
-              width: 110, height: 110, objectFit: 'cover', borderRadius: 10,
+              width: isMobile ? 64 : 110, height: isMobile ? 64 : 110, objectFit: 'cover', borderRadius: 10,
               border: '1px solid rgba(230,179,37,0.35)', flexShrink: 0,
             }} />
           )}
@@ -238,7 +249,7 @@ function ComunidadCard({ mision, userId }) {
                 return (
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <Avatar c={av} size={26} />
-                    <span style={{ fontSize: 12, color: 'var(--txt-dim)', width: 130, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: 12, color: 'var(--txt-dim)', width: isMobile ? 78 : 130, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {p.name}
                     </span>
                     <div className="nx-bar" style={{ flex: 1 }}>
@@ -265,9 +276,11 @@ function ComunidadCard({ mision, userId }) {
 // MISIONES INDIVIDUALES (dadas por NPC)
 // ─────────────────────────────────────────────────────────────
 function IndividualSection({ misiones, onReload }) {
+  const isMobile = useIsMobile();
   const misionesNpc = misiones.filter(m => m.npc);
   const activas      = misionesNpc.filter(m => m.status !== 'completada');
   const completadas  = misionesNpc.filter(m => m.status === 'completada');
+  const gridCols = isMobile ? '1fr' : 'repeat(3, 1fr)';
 
   return (
     <Panel kicker="NPC" title="Misiones Individuales" icon="target">
@@ -276,7 +289,7 @@ function IndividualSection({ misiones, onReload }) {
       )}
       {activas.length > 0 && (
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14,
+          display: 'grid', gridTemplateColumns: gridCols, gap: 14,
           marginBottom: completadas.length ? 18 : 0,
         }}>
           {activas.map(m => (
@@ -289,7 +302,7 @@ function IndividualSection({ misiones, onReload }) {
           <div className="nx-kicker" style={{ marginBottom: 10, marginTop: activas.length ? 8 : 0 }}>
             COMPLETADAS
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             {completadas.map(m => (
               <IndividualCard key={m.id} mision={m} completed onReload={onReload} />
             ))}
@@ -301,6 +314,7 @@ function IndividualSection({ misiones, onReload }) {
 }
 
 function IndividualCard({ mision, completed, onReload }) {
+  const isMobile = useIsMobile();
   const npc = mision.npc;
 
   return (
@@ -317,7 +331,7 @@ function IndividualCard({ mision, completed, onReload }) {
           <img
             src={mision.foto_mision ? mediaUrl(mision.foto_mision) : mediaUrl(npc.imagen_mini)}
             alt={mision.nombre}
-            style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--holo-line)', flexShrink: 0 }}
+            style={{ width: isMobile ? 64 : 96, height: isMobile ? 64 : 96, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--holo-line)', flexShrink: 0 }}
           />
         )}
         <div style={{ flex: 1 }}>

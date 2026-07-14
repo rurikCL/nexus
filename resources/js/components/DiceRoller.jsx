@@ -106,9 +106,16 @@ export function renderDiceText(text, colors = DEFAULT_PALETTE) {
   let lastIndex = 0, m, i = 0;
   while ((m = rx.exec(text))) {
     if (m.index > lastIndex) parts.push(text.slice(lastIndex, m.index));
-    const dado = m[1] !== undefined ? Number(m[1]) : Number(m[3]) - Number(m[2]);
-    parts.push(<InlineDie key={`d-${i}`} value={dado} color={colors[i % colors.length]} />);
-    parts.push(`+${m[2]}=${m[3]}`);
+    const dado  = m[1] !== undefined ? Number(m[1]) : Number(m[3]) - Number(m[2]);
+    const color = colors[i % colors.length];
+    parts.push(<InlineDie key={`d-${i}`} value={dado} color={color} />);
+    parts.push(`+${m[2]}=`);
+    parts.push(
+      <strong key={`t-${i}`} style={{
+        color, fontWeight: 800, fontSize: '1.08em',
+        textShadow: `0 0 7px ${color}99`,
+      }}>{m[3]}</strong>
+    );
     lastIndex = m.index + m[0].length;
     i++;
   }
