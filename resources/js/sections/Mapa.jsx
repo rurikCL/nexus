@@ -1767,6 +1767,12 @@ function NpcCard({ npc, onClick }) {
   );
 }
 
+/* Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje */
+function formaEspecializacion(character) {
+  const n = parseInt(String(character?.cls ?? '').replace('forma', ''), 10);
+  return n >= 1 && n <= 7 ? n : 1;
+}
+
 /* ─── STATS DE COMBATE DEL JUGADOR ─────────────────────── */
 function getPlayerCombatStats(character) {
   const s = character?.stats ?? {};
@@ -1798,12 +1804,12 @@ function getPlayerCombatStats(character) {
           color_hoja: character.arma_efectiva.color_hoja ?? null,
         }
       : null,
-    current_forma:         character?.current_forma ?? 1,
+    current_forma:         formaEspecializacion(character),
     habilidades_por_forma: character?.habilidades_por_forma ?? {},
     all_habilidades_data:  character?.all_habilidades_data  ?? {},
     /* current form's habilidades for backward compat */
     habilidades: (() => {
-      const forma   = character?.current_forma ?? 1;
+      const forma   = formaEspecializacion(character);
       const por     = character?.habilidades_por_forma ?? {};
       const allHabs = character?.all_habilidades_data  ?? {};
       const ids     = Array.isArray(por[String(forma)]) ? por[String(forma)] : [];
