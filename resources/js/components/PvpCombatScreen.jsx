@@ -471,7 +471,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         {diceOverlay}
 
         {/* Oponente HUD — arriba derecha */}
-        <div ref={oppHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
+        <div ref={oppHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(380px, 48%, 480px)' }}>
           <HUD
             hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
             nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
@@ -482,7 +482,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         </div>
 
         {/* Mi HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div ref={myHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(310px, 46%, 420px)' }}>
+        <div ref={myHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 100, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(380px, 48%, 480px)' }}>
           <HUD
             hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
             nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}

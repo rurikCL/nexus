@@ -714,7 +714,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         {diceOverlay}
 
         {/* NPC HUD — arriba derecha */}
-        <div ref={npcHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
+        <div ref={npcHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(360px, 55%, 520px)' }}>
           <HUD
             hp={npcHp.vida} maxHp={maxNpc.vida} escudo={npcHp.escudo} maxEscudo={maxNpc.escudo}
             nombre={npc.nombre} photoUrl={mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen)} ini={npcIni}
@@ -726,7 +726,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         </div>
 
         {/* Jugador HUD — abajo izquierda (móvil: arriba izquierda) */}
-        <div ref={playerHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(300px, 46%, 390px)' }}>
+        <div ref={playerHudRef} style={{ position: 'absolute', ...(isMobile ? { top: 10, left: 10 } : { bottom: 90, left: 14 }), zIndex: 10, width: isMobile ? 'calc(50% - 14px)' : 'clamp(360px, 55%, 520px)' }}>
           <HUD
             hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
             nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
