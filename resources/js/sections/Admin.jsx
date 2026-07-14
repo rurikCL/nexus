@@ -265,7 +265,7 @@ const ENTITY_CONFIG = {
       { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
       { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
       { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
-      { key: 'damage',       label: 'Daño base',             type: 'number',    min: 0 },
+      { key: 'damage',       label: 'Daño base',             type: 'number',    min: -999, hint: 'Negativo = cura esa cantidad de vida en vez de dañar (al usuario si Objetivo=self, al rival si Objetivo=target)' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
       { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
       { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario durante el turno' },
