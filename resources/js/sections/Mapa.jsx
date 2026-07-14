@@ -345,6 +345,11 @@ function GalaxiaView({ onSelectSistema }) {
   const [hovered, setHovered]       = useState(null);
   const isMobile = useIsMobile();
 
+  /* Confirmación de viaje: nave equipada (combustible) o transbordador de pasajeros (créditos) */
+  const [confirmSistema, setConfirmSistema] = useState(null);
+  const [confirmData, setConfirmData]       = useState(null); // { naveEquipada, credits }
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
   useEffect(() => {
     apiFetch('/map/sistemas')
       .then((d) => setSistemas(d.sistemas ?? []))
@@ -356,6 +361,25 @@ function GalaxiaView({ onSelectSistema }) {
   const handleTravel = (sistema) => {
     setTraveling(sistema.id);
     setTimeout(() => { setTraveling(null); onSelectSistema(sistema); }, 1800);
+  };
+
+  const openConfirm = (sistema) => {
+    setConfirmSistema(sistema);
+    setConfirmData(null);
+    setConfirmLoading(true);
+    apiFetch('/naves/mias')
+      .then((d) => {
+        const equipada = (d.naves ?? []).find((n) => n.id === d.nave_equipada_id) ?? null;
+        setConfirmData({ naveEquipada: equipada, credits: d.credits ?? 0 });
+      })
+      .catch(() => setConfirmData({ naveEquipada: null, credits: 0 }))
+      .finally(() => setConfirmLoading(false));
+  };
+  const closeConfirm = () => { setConfirmSistema(null); setConfirmData(null); };
+  const confirmarViaje = () => {
+    const sistema = confirmSistema;
+    closeConfirm();
+    handleTravel(sistema);
   };
 
   if (loading) return <LoadingHUD text="ESCANEANDO GALAXIA..." />;
@@ -407,7 +431,7 @@ function GalaxiaView({ onSelectSistema }) {
                 if (!traveling) {
                   if (isMobile && hovered !== s.id) { setHovered(s.id); return; }
                   setHovered(null);
-                  handleTravel(s);
+                  openConfirm(s);
                 }
               }}
               style={{
@@ -509,6 +533,75 @@ function GalaxiaView({ onSelectSistema }) {
           );
         })}
       </div>
+
+      {/* ── confirmación de viaje: nave equipada (combustible) o transbordador (créditos) ── */}
+      {confirmSistema && (
+        <Modal open onClose={closeConfirm} title={`Viajar a ${confirmSistema.nombre}`} kicker="CONFIRMAR SALTO" width={380}>
+          {confirmLoading ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>
+              Calculando ruta...
+            </div>
+          ) : (() => {
+            const nave = confirmData?.naveEquipada;
+            const credits = confirmData?.credits ?? 0;
+            const costo = confirmSistema.costo_viaje ?? 0;
+
+            if (nave) {
+              const fuelActual = nave.combustible_actual ?? 0;
+              const fuelMax    = nave.nave?.capacidad_salto ?? 0;
+              const sinCombustible = fuelActual <= 0;
+              return (
+                <>
+                  <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+                    Vas a saltar con tu nave equipada <strong>{nave.nave?.nombre}</strong>. Este salto consumirá <strong>1 unidad de combustible</strong>.
+                  </p>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    background: sinCombustible ? 'rgba(255,45,69,0.1)' : 'rgba(56,205,240,0.08)',
+                    border: `1px solid ${sinCombustible ? 'rgba(255,45,69,0.35)' : 'var(--holo-line)'}`,
+                  }}>
+                    <Icon name="fuel" size={16} style={{ color: sinCombustible ? '#ff6b6b' : 'var(--holo)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: sinCombustible ? '#ff6b6b' : 'var(--txt-dim)' }}>
+                      Combustible actual: {fuelActual}/{fuelMax}
+                      {sinCombustible && ' — insuficiente para saltar. Debes reabastecer tu nave.'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <Btn kind="ghost" onClick={closeConfirm}>Cancelar</Btn>
+                    <Btn kind="primary" onClick={confirmarViaje} disabled={sinCombustible}>Confirmar salto</Btn>
+                  </div>
+                </>
+              );
+            }
+
+            const sinCreditos = costo > 0 && credits < costo;
+            return (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+                  No tienes una nave equipada. Vas a viajar en un <strong>transbordador de pasajeros</strong> hacia {confirmSistema.nombre}.
+                </p>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  background: sinCreditos ? 'rgba(255,45,69,0.1)' : 'rgba(230,179,37,0.08)',
+                  border: `1px solid ${sinCreditos ? 'rgba(255,45,69,0.35)' : 'rgba(230,179,37,0.25)'}`,
+                }}>
+                  <Icon name="coin" size={16} style={{ color: sinCreditos ? '#ff6b6b' : 'var(--holocron-oro)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: sinCreditos ? '#ff6b6b' : 'var(--txt-dim)' }}>
+                    {costo > 0 ? `Costo del viaje: ${costo} cr (tienes ${credits} cr)` : 'Este viaje es gratuito.'}
+                    {sinCreditos && ' — créditos insuficientes para pagar el transporte.'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                  <Btn kind="ghost" onClick={closeConfirm}>Cancelar</Btn>
+                  <Btn kind="primary" onClick={confirmarViaje} disabled={sinCreditos}>Confirmar viaje</Btn>
+                </div>
+              </>
+            );
+          })()}
+        </Modal>
+      )}
 
       {/* ── overlay salto hiperespacio ── */}
       {traveling && (
