@@ -1951,7 +1951,19 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
 
 /* ─── SISTEMA DE DIÁLOGO RPG ────────────────────────────── */
 /* ─── TIENDA DE NPC VENDEDOR (naves u objetos, con interés ya aplicado) ── */
+/* Atributos de nave mostrados como badges en la tienda: ícono + etiqueta corta */
+const NAVE_ATTRS = [
+  { key: 'vida',             label: 'VID',    icon: 'anvil' },
+  { key: 'escudo',           label: 'ESC',    icon: 'shield' },
+  { key: 'velocidad',        label: 'VEL',    icon: 'zap' },
+  { key: 'ataque',           label: 'ATQ',    icon: 'sword' },
+  { key: 'maniobrabilidad',  label: 'MAN',    icon: 'trending' },
+  { key: 'capacidad_salto',  label: 'SALTOS', icon: 'star' },
+  { key: 'capacidad_carga',  label: 'CARGA',  icon: 'download' },
+];
+
 function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
+  const isMobile = useIsMobile();
   const isNaves = tipo === 'vendedor_naves';
   const [items, setItems]         = useState([]);
   const [inventario, setInventario] = useState(null); // { ocupado, capacidad } — solo objetos
@@ -2069,35 +2081,65 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 420, overflowY: 'auto' }}>
               {items.map((item) => (
-                <div key={item.id} className="nx-panel solid" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
-                    display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
-                  }}>
-                    {item.imagen
-                      ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="nx-display" style={{ fontSize: 12 }}>{item.nombre}</div>
-                    {isNaves ? (
-                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                        <span>Vida {item.vida}</span><span>Escudo {item.escudo}</span><span>Ataque {item.ataque}</span><span>{item.capacidad_salto} saltos</span>
-                      </div>
-                    ) : (
-                      item.tipo && (
+                <div key={item.id} className="nx-panel solid" style={{
+                  padding: isMobile ? 10 : 12, display: 'flex', flexDirection: 'column', gap: 8,
+                  maxWidth: isNaves && isMobile ? 320 : undefined,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12 }}>
+                    <div style={{
+                      width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                      display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+                    }}>
+                      {item.imagen
+                        ? <img src={mediaUrl(item.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <Icon name={isNaves ? 'ship' : 'star'} size={20} style={{ color: 'var(--holo)' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="nx-display" style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.nombre}</div>
+                      {!isNaves && item.tipo && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginTop: 3, textTransform: 'capitalize' }}>
                           {item.tipo.replace(/_/g, ' ')}
                         </div>
-                      )
-                    )}
+                      )}
+                    </div>
+                    <Btn kind="gold" sm icon="coin"
+                      onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
+                      disabled={busy === item.id}
+                    >
+                      {busy === item.id ? '...' : `${item.precio_final} cr`}
+                    </Btn>
                   </div>
-                  <Btn kind="gold" sm icon="coin"
-                    onClick={() => (isNaves ? comprarNave(item) : abrirConfirmacion(item))}
-                    disabled={busy === item.id}
-                  >
-                    {busy === item.id ? '...' : `${item.precio_final} cr`}
-                  </Btn>
+
+                  {isNaves && (
+                    <>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {NAVE_ATTRS.map(a => (
+                          <span key={a.key} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 10, fontFamily: 'var(--font-data)', padding: '3px 7px', borderRadius: 5,
+                            background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.22)', color: 'var(--txt-dim)',
+                          }}>
+                            <Icon name={a.icon} size={11} style={{ color: 'var(--holo)' }} />
+                            {a.label} {item[a.key]}
+                          </span>
+                        ))}
+                      </div>
+                      {item.habilidades?.length > 0 && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {item.habilidades.map(h => (
+                            <span key={h.id} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              fontSize: 10, fontFamily: 'var(--font-data)', padding: '3px 7px', borderRadius: 5,
+                              background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)', color: 'var(--holocron-oro)',
+                            }}>
+                              <Icon name="zap" size={11} />
+                              {h.nombre}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
