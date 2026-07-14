@@ -553,102 +553,107 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       {/* Main */}
       <div id="nx-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <header className="nx-header" style={{ position: 'sticky', top: 0, zIndex: 4, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 57, flexShrink: 0, borderBottom: '1px solid var(--holo-line)', background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(8px)' }}>
-          <button className="nx-hamburger" onClick={() => setSidebarOpen(o => !o)} aria-label="Abrir menú">
-            <Icon name="menu" size={18} />
-          </button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', margin: 0 }}>{title}</h1>
-            <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.04em' }}>{sub}</div>
-          </div>
-          {mapLocation?.nombre && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px',
-              background: 'rgba(56,205,240,0.06)',
-              border: '1px solid rgba(56,205,240,0.18)',
-              borderRadius: 8, flexShrink: 0, maxWidth: 180, overflow: 'hidden',
-            }}>
-              <Icon name="target" size={11} style={{ color: 'var(--holo)', opacity: 0.7, flexShrink: 0 }} />
-              <span style={{
-                fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
-                letterSpacing: '0.05em', whiteSpace: 'nowrap',
-                overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {mapLocation.nombre.toUpperCase()}
-              </span>
+          <div className="nx-header-main" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+            <button className="nx-hamburger" onClick={() => setSidebarOpen(o => !o)} aria-label="Abrir menú">
+              <Icon name="menu" size={18} />
+            </button>
+            <div className="nx-header-titles" style={{ flex: 1, minWidth: 0 }}>
+              <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', margin: 0 }}>{title}</h1>
+              <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.04em' }}>{sub}</div>
             </div>
-          )}
-          <div className="nx-panel" style={{ padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: 'var(--holocron-oro)' }}><Icon name="coin" size={14} /></span>
-            <span className="nx-num" style={{ fontSize: 14, color: 'var(--holocron-oro)' }}>{NX.fmtCLP(S.credits)}</span>
           </div>
-          {unreadMsgs.length > 0 && (
-            <button
-              className="nx-btn nx-btn-ghost"
-              title="Mensajes no leídos"
-              style={{ padding: 7, position: 'relative', color: 'var(--holo)' }}
-              onClick={() => { setExternalChatTarget(unreadMsgs[0]); go('mapa'); }}
-            >
-              <Icon name="message" size={15} />
-              <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holo)', boxShadow: '0 0 6px var(--holo)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
-                {unreadMsgs.length > 9 ? '9+' : unreadMsgs.length}
-              </span>
-            </button>
-          )}
-          <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={() => setNotifOpen(o => !o)}>
-            <Icon name="bell" size={15} />
-            {unread > 0 && (
-              <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holocron-naranja)', boxShadow: '0 0 6px var(--holocron-naranja)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
-          </button>
 
-          {/* Widget de prueba de transmisiones */}
-          <div style={{ position: 'relative' }}>
-            <button
-              className="nx-btn nx-btn-ghost"
-              title="Probar Transmisión"
-              style={{ padding: 7, color: testOpen ? 'var(--holo)' : 'var(--txt-faint)' }}
-              onClick={() => setTestOpen(o => !o)}
-            >
-              <Icon name="video" size={15} />
-            </button>
-            {testOpen && (
+          <div className="nx-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {mapLocation?.nombre && (
               <div style={{
-                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                background: 'rgba(6,10,20,.97)', border: '1px solid var(--holo-line)',
-                boxShadow: '0 8px 32px rgba(0,0,0,.6)',
-                padding: 12, minWidth: 200, zIndex: 50,
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px',
+                background: 'rgba(56,205,240,0.06)',
+                border: '1px solid rgba(56,205,240,0.18)',
+                borderRadius: 8, flexShrink: 0, maxWidth: 180, overflow: 'hidden',
               }}>
-                <div style={{ fontFamily: 'var(--font-hud)', fontSize: 9, letterSpacing: '.2em', color: 'var(--holo)', marginBottom: 10 }}>
-                  TEST TRANSMISIÓN
-                </div>
-                {[
-                  { type: 'desafio', label: 'Reto de combate',  color: '#FF6B00' },
-                  { type: 'victoria', label: 'Combate ganado',  color: '#10b981' },
-                  { type: 'derrota',  label: 'Combate perdido', color: '#ff2d45' },
-                  { type: 'tarea',    label: 'Tarea asignada',  color: '#E6B325' },
-                  { type: 'sistema',  label: 'Mensaje sistema', color: '#3aa0ff' },
-                ].map(({ type, label, color }) => (
-                  <button
-                    key={type}
-                    onClick={() => fireTestTransmision(type)}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'left',
-                      padding: '7px 10px', marginBottom: 2,
-                      background: 'transparent', border: 'none', cursor: 'pointer',
-                      fontFamily: 'var(--font-hud)', fontSize: 11, color: 'var(--txt-dim)',
-                      letterSpacing: '.05em',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = `${color}18`; e.currentTarget.style.color = color; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <Icon name="target" size={11} style={{ color: 'var(--holo)', opacity: 0.7, flexShrink: 0 }} />
+                <span style={{
+                  fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
+                  letterSpacing: '0.05em', whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {mapLocation.nombre.toUpperCase()}
+                </span>
               </div>
             )}
+            <div className="nx-panel" style={{ padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: 'var(--holocron-oro)' }}><Icon name="coin" size={14} /></span>
+              <span className="nx-num" style={{ fontSize: 14, color: 'var(--holocron-oro)' }}>{NX.fmtCLP(S.credits)}</span>
+            </div>
+            {unreadMsgs.length > 0 && (
+              <button
+                className="nx-btn nx-btn-ghost"
+                title="Mensajes no leídos"
+                style={{ padding: 7, position: 'relative', color: 'var(--holo)' }}
+                onClick={() => { setExternalChatTarget(unreadMsgs[0]); go('mapa'); }}
+              >
+                <Icon name="message" size={15} />
+                <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holo)', boxShadow: '0 0 6px var(--holo)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
+                  {unreadMsgs.length > 9 ? '9+' : unreadMsgs.length}
+                </span>
+              </button>
+            )}
+            <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={() => setNotifOpen(o => !o)}>
+              <Icon name="bell" size={15} />
+              {unread > 0 && (
+                <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holocron-naranja)', boxShadow: '0 0 6px var(--holocron-naranja)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+
+            {/* Widget de prueba de transmisiones */}
+            <div style={{ position: 'relative' }}>
+              <button
+                className="nx-btn nx-btn-ghost"
+                title="Probar Transmisión"
+                style={{ padding: 7, color: testOpen ? 'var(--holo)' : 'var(--txt-faint)' }}
+                onClick={() => setTestOpen(o => !o)}
+              >
+                <Icon name="video" size={15} />
+              </button>
+              {testOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                  background: 'rgba(6,10,20,.97)', border: '1px solid var(--holo-line)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,.6)',
+                  padding: 12, minWidth: 200, zIndex: 50,
+                }}>
+                  <div style={{ fontFamily: 'var(--font-hud)', fontSize: 9, letterSpacing: '.2em', color: 'var(--holo)', marginBottom: 10 }}>
+                    TEST TRANSMISIÓN
+                  </div>
+                  {[
+                    { type: 'desafio', label: 'Reto de combate',  color: '#FF6B00' },
+                    { type: 'victoria', label: 'Combate ganado',  color: '#10b981' },
+                    { type: 'derrota',  label: 'Combate perdido', color: '#ff2d45' },
+                    { type: 'tarea',    label: 'Tarea asignada',  color: '#E6B325' },
+                    { type: 'sistema',  label: 'Mensaje sistema', color: '#3aa0ff' },
+                  ].map(({ type, label, color }) => (
+                    <button
+                      key={type}
+                      onClick={() => fireTestTransmision(type)}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        padding: '7px 10px', marginBottom: 2,
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        fontFamily: 'var(--font-hud)', fontSize: 11, color: 'var(--txt-dim)',
+                        letterSpacing: '.05em',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${color}18`; e.currentTarget.style.color = color; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

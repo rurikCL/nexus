@@ -832,8 +832,32 @@ a { color: var(--holo); }
     box-shadow: 4px 0 40px rgba(0,0,0,0.6);
   }
 
-  /* Header padding reducido */
-  .nx-header { padding: 12px 16px !important; gap: 10px !important; }
+  /* Header: 2 filas — arriba título+subtítulo, abajo el resto de botones */
+  .nx-header {
+    height: auto !important;
+    padding: 10px 16px !important;
+    gap: 8px !important;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .nx-header-main { flex: 1 1 100% !important; min-width: 0; }
+  .nx-header-titles {
+    display: flex !important;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+  .nx-header-titles h1 { flex-shrink: 0; white-space: nowrap; }
+  .nx-header-titles > div {
+    min-width: 0; flex: 1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .nx-header-actions {
+    flex: 1 1 100% !important;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
 
   /* Texto largo del header — ocultar en mobile */
   .nx-header-btn-text { display: none; }
