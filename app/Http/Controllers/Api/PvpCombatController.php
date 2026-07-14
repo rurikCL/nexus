@@ -264,10 +264,19 @@ class PvpCombatController extends Controller
         $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => []];
         $skill = $data['skill'];
 
-        /* ─── Huir ────────────────────────────────────────────────────── */
+        /* ─── Huir (requiere ganar tirada de iniciativa contra el rival) ── */
         if ($skill === 'flee') {
-            $combat->status      = $isAttacker ? 'fled_attacker' : 'fled_defender';
-            $entry['messages'][] = "{$actorChar->name} huyó del combate";
+            $roll = self::rollIniciativa($actorStats['iniciativa'], $opponentStats['iniciativa']);
+            $entry['messages'][] = "{$actorChar->name} intenta huir: "
+                . "1d20({$roll['atk_dado']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
+                . "vs 1d20({$roll['def_dado']})+{$opponentStats['iniciativa']}={$roll['def_total']}";
+
+            if ($roll['gana_atacante']) {
+                $combat->status      = $isAttacker ? 'fled_attacker' : 'fled_defender';
+                $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
+            } else {
+                $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
+            }
 
         /* ─── Cambio de estancia ─────────────────────────────────────── */
         } elseif ($skill === 'stance') {

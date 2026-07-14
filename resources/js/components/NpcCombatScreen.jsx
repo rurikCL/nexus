@@ -417,6 +417,39 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     }
   };
 
+  /* Intento de huida: requiere ganar tirada de iniciativa contra el rival */
+  const doPlayerFlee = async () => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
+
+    const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
+    const [pR, nR] = [d20(), d20()];
+    const [pT, nT] = [pR + effPlayerIni, nR + effNpcIni];
+    const success = pT >= nT;
+
+    await rollDice([
+      { key: 'p-flee', color: '#38cdf0', label: 'TÚ', value: pR },
+      { key: 'n-flee', color: '#ff6b6b', label: npcLabel, value: nR },
+    ]);
+
+    const entries = [{
+      text: `${player.nombre} intenta huir: 1d20(${pR})+${effPlayerIni}=${pT} vs 1d20(${nR})+${effNpcIni}=${nT}`,
+      type: 'info',
+    }];
+    entries.push(success
+      ? { text: '¡Logras escapar del combate!', type: 'success' }
+      : { text: 'No logras huir y pierdes el turno', type: 'danger' });
+
+    setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+
+    if (success) {
+      localStorage.removeItem(NPC_COMBAT_LS);
+      setPhase('fled');
+      onFlee?.();
+    } else {
+      endTurnAfter('player');
+    }
+  };
+
   /* Ataque básico: arma equipada o desarmado */
   const doPlayerBasicAttack = async () => {
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
@@ -914,7 +947,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
                 <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-                <ActionBtn onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); setPhase('fled'); onFlee?.(); }}
+                <ActionBtn onClick={() => isPlayerTurn && doPlayerFlee()}
+                  disabled={!isPlayerTurn}
                   bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
                   hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
                 >
