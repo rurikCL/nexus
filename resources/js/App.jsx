@@ -216,7 +216,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   useEffect(() => {
     const loc = user?.character?.map_location;
     if (loc?.nombre) setMapLocation(loc);
-  }, [user?.id]);
+  }, [user?.character?.map_location]);
 
   // Sincroniza el personaje del usuario autenticado al store cuando cambia la sesión
   useEffect(() => {
