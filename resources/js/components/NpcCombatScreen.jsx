@@ -671,7 +671,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
               <div style={{ height: '100%', width: `${vPct}%`, background: vc, borderRadius: 5, transition: 'width 0.4s ease' }} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: 4, justifyContent: rev ? 'end' : 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, auto)', gap: 4, justifyContent: rev ? 'end' : 'start' }}>
             {badges.map(b => (
               <span key={b.l} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
