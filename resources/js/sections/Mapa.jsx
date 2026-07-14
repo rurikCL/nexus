@@ -2284,6 +2284,11 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       .slice(0, 4);
   }, [npc.interaccion]);
 
+  /* El panel de opciones (diálogo estático) debe aparecer si hay algo que mostrar en él:
+     opciones de diálogo, misión disponible, o los botones de Comprar/Atacar. */
+  const hasSidebarContent = npcOptions.length > 0 || Boolean(misionInfo)
+    || isVendedor || isVendedorNaves || (!isAliado && npc.ataque > 0);
+
   /* Referencias [Objeto] / @[NPC] presentes en los textos del NPC: se resuelven
      una vez por nombre nuevo y se cachean para pintar los tokens + tooltip. */
   const [refsMap, setRefsMap] = useState({ objeto: new Map(), npc: new Map() });
@@ -2334,9 +2339,9 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       setTimeout(() => {
         showNpcMsg(npc.saludo);
         setTyping(false);
-        if (npcOptions.length > 0 || misionInfo) setPhase('dialog');
+        if (hasSidebarContent) setPhase('dialog');
       }, 800);
-    } else if (npcOptions.length > 0 || misionInfo) {
+    } else if (hasSidebarContent) {
       setPhase('dialog');
     }
   }, []);
@@ -2790,7 +2795,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
             </div>
           </div>
         ) : (
-          (npcOptions.length > 0 || misionInfo) && phase === 'dialog' && (
+          hasSidebarContent && phase === 'dialog' && (
             <div style={{
               width: isMobile ? '100%' : 210, flexShrink: 0,
               borderLeft: isMobile ? 'none' : '1px solid var(--holo-line)',
