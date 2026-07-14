@@ -149,6 +149,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myLastForma    = combat.my_last_forma    ?? 0;
   const oppLastForma   = combat.opp_last_forma   ?? 0;
   const myCurrentForma = combat.my_current_forma ?? 1;
+  const oppCurrentForma = combat.opp_current_forma ?? 1;
 
   const [stancePicker, setStancePicker] = useState(false);
   const isMobile = useIsMobile();
@@ -297,11 +298,20 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, buffs = [], debuffs = [] }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, buffs = [], debuffs = [], forma = 0, formaSide }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
     const rev  = align === 'right';
+    const formaImgSrc = forma > 0 ? NX.CLASSES[forma - 1]?.img : null;
+    const formaBox = formaImgSrc && (
+      <div title={`Forma ${formaLabel(forma)}`} style={{
+        width: isMobile ? 40 : 56, height: isMobile ? 90 : 120, borderRadius: 10, flexShrink: 0, alignSelf: 'center',
+        overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
+      }}>
+        <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+    );
     const effects = Object.values(
       [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
         .reduce((acc, e) => {
@@ -401,7 +411,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
     return (
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+        {formaSide === 'left' && formaBox}
         {rev ? <>{card}{effectsColumn}</> : <>{effectsColumn}{card}</>}
+        {formaSide === 'right' && formaBox}
       </div>
     );
   };
@@ -465,6 +477,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
             borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
             buffs={oppBuffs} debuffs={oppDebuffs}
+            forma={oppCurrentForma} formaSide="right"
           />
         </div>
 
@@ -475,6 +488,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
             borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
             buffs={myBuffs} debuffs={myDebuffs}
+            forma={myCurrentForma} formaSide="left"
           />
         </div>
 

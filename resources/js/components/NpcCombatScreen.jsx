@@ -10,6 +10,22 @@ import { SkillTooltip } from './SkillTooltip.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+/* Tabla de efectividad entre formas: forma atacante → formas que supera (igual que en PvP) */
+const FORMA_BEATS = {
+  1: [6],     // Shii-Cho    → Niman
+  6: [3],     // Niman       → Soresu
+  3: [4],     // Soresu      → Ataru
+  4: [1],     // Ataru       → Shii-Cho
+  2: [1, 5],  // Makashi     → Shii-Cho, Shien
+  5: [4],     // Shien/DjSo  → Ataru
+  7: [5, 6],  // Juyo/Vaapad → Shien, Niman
+};
+/* Forma 0 = universal: nunca aplica bono ni penalización */
+const formaEsEfectiva = (atkForma, defForma) => {
+  if (!atkForma || !defForma) return false;
+  return (FORMA_BEATS[atkForma] ?? []).includes(defForma);
+};
+
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
   useEffect(() => {
@@ -395,8 +411,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     let newNpcHp = { ...npcHp };
     if (hit) {
-      const dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
-      /* vs NPC: forma siempre neutral (sin bonus de efectividad) */
+      let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
+      const effective = formaEsEfectiva(hab.forma, npc.forma ?? 0);
+      if (effective) {
+        dmg = Math.round(dmg * 1.5);
+        entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
+      }
       newNpcHp = applyDmg(dmg, npcHp);
       entries.push({ text: `¡Impacto! −${dmg} daño`, type: 'success' });
 
@@ -531,11 +551,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const npcBadges    = naveMode ? npcBadgesFull.filter(naveBadgeFilter)    : npcBadgesFull;
   const playerBadges = naveMode ? playerBadgesFull.filter(naveBadgeFilter) : playerBadgesFull;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [] }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [], forma = 0, formaSide }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
     const rev  = align === 'right';
+    const formaImgSrc = forma > 0 ? NX.CLASSES[forma - 1]?.img : null;
+    const formaBox = formaImgSrc && (
+      <div title={`Forma ${formaLabel(forma)}`} style={{
+        width: isMobile ? 40 : 56, height: isMobile ? 90 : 120, borderRadius: 10, flexShrink: 0, alignSelf: 'center',
+        overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
+      }}>
+        <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+    );
     const effects = Object.values(
       [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
         .reduce((acc, e) => {
@@ -635,7 +664,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
 
     return (
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+        {formaSide === 'left' && formaBox}
         {rev ? <>{card}{effectsColumn}</> : <>{effectsColumn}{card}</>}
+        {formaSide === 'right' && formaBox}
       </div>
     );
   };
@@ -690,6 +721,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             borderColor="rgba(255,45,69,0.40)" badges={npcBadges} align="left"
             fallbackIcon={naveMode ? 'ship' : 'user'}
             debuffs={npcDebuffs}
+            forma={naveMode ? 0 : (npc.forma ?? 0)} formaSide="right"
           />
         </div>
 
@@ -701,6 +733,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
             borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
             fallbackIcon={naveMode ? 'ship' : 'user'}
             buffs={playerBuffs}
+            forma={naveMode ? 0 : currentForma} formaSide="left"
           />
         </div>
 

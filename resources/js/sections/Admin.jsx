@@ -204,8 +204,9 @@ const ENTITY_CONFIG = {
       { key: 'movimiento',    label: 'Movimiento',       type: 'number', min: 0 },
       { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
       { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
+      { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del NPC, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0 },
   },
 
   naves: {

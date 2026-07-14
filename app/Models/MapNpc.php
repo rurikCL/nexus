@@ -36,6 +36,7 @@ class MapNpc extends Model
         'movimiento',
         'iniciativa',
         'punteria',
+        'forma',
         'hito_requerimiento',
         'fecha_inicio',
         'fecha_fin',
@@ -50,6 +51,7 @@ class MapNpc extends Model
         'movimiento' => 'integer',
         'iniciativa' => 'integer',
         'punteria' => 'integer',
+        'forma' => 'integer',
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
     ];
