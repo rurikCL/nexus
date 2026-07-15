@@ -17,7 +17,7 @@ class PvpCombat extends Model
         'attacker_debuffs', 'defender_debuffs',
         'attacker_last_forma', 'defender_last_forma',
         'attacker_current_forma', 'defender_current_forma',
-        'current_turn', 'status', 'log',
+        'current_turn', 'status', 'modo', 'log',
         'ronda', 'ronda_turno',
     ];
 

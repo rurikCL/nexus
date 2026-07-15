@@ -45,6 +45,7 @@ class PvpCombatController extends Controller
     {
         $data = $request->validate([
             'defender_id' => 'required|integer|exists:users,id',
+            'origen' => 'nullable|string|in:nave,normal',
         ]);
 
         $attacker = $request->user();
@@ -71,8 +72,21 @@ class PvpCombatController extends Controller
             return response()->json(['error' => 'Ese jugador ya tiene un combate activo o pendiente'], 422);
         }
 
-        $attackerStats = self::getCombatStats($attacker->character);
-        $defenderStats = self::getCombatStats($defender->character);
+        /* Combate naval: solo si el reto se originó desde el icono de nave del mapa
+         * planetario (origen=nave) Y ambos jugadores tienen una nave equipada. En
+         * cualquier otro caso (vista de lugar, zona, sistema, o falta de nave de
+         * alguno de los dos) el combate es PvP normal de personaje. */
+        $modo = 'normal';
+        if (($data['origen'] ?? 'normal') === 'nave') {
+            $attackerNave = self::getNaveOwned($attacker->character);
+            $defenderNave = self::getNaveOwned($defender->character);
+            if ($attackerNave && $attackerNave->nave && $defenderNave && $defenderNave->nave) {
+                $modo = 'naval';
+            }
+        }
+
+        $attackerStats = self::getCombatStats($attacker->character, $modo);
+        $defenderStats = self::getCombatStats($defender->character, $modo);
 
         $roll = self::rollIniciativa($attackerStats['iniciativa'], $defenderStats['iniciativa']);
         $firstTurn = $roll['gana_atacante'] ? $attacker->id : $defender->id;
@@ -106,6 +120,7 @@ class PvpCombatController extends Controller
             'ronda' => 1,
             'ronda_turno' => 0,
             'status' => 'pending',
+            'modo' => $modo,
             'log' => [[
                 'turn' => 1,
                 'actor_id' => null,
@@ -249,8 +264,8 @@ class PvpCombatController extends Controller
         );
 
         /* Stats efectivos con buffs/debuffs */
-        $actorBaseStats = self::getCombatStats($actorChar);
-        $opponentBaseStats = self::getCombatStats($opponentChar);
+        $actorBaseStats = self::getCombatStats($actorChar, $combat->modo);
+        $opponentBaseStats = self::getCombatStats($opponentChar, $combat->modo);
         $actorStats = self::getEffectiveStats($actorBaseStats, $myBuffs, $myDebuffs);
         $opponentStats = self::getEffectiveStats($opponentBaseStats, $oppBuffs, $oppDebuffs);
 
@@ -316,7 +331,7 @@ class PvpCombatController extends Controller
 
             /* ─── Evadir (solo combate naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa, 3 rondas ── */
         } elseif ($skill === 'evadir') {
-            if (! self::getNaveOwned($actorChar)) {
+            if ($combat->modo !== 'naval') {
                 return response()->json(['error' => 'Evadir solo está disponible en combate naval'], 422);
             }
             foreach (['defensa', 'movimiento', 'iniciativa'] as $stat) {
@@ -333,7 +348,7 @@ class PvpCombatController extends Controller
 
             /* Verificar que la habilidad está disponible: slots de la nave (combate naval)
              * o slots de la forma actual del sable (combate de personaje) */
-            $naveSkillIds = self::getNaveSkillIds($actorChar);
+            $naveSkillIds = self::getNaveSkillIds($actorChar, $combat->modo);
             if ($naveSkillIds) {
                 $slotIds = $naveSkillIds;
             } else {
@@ -387,7 +402,7 @@ class PvpCombatController extends Controller
 
                 if ($dmg < 0) {
                     $heal = -$dmg;
-                    $maxHp = self::getMaxVida($actorChar);
+                    $maxHp = self::getMaxVida($actorChar, $combat->modo);
                     if ($isAttacker) {
                         $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
                     } else {
@@ -398,7 +413,7 @@ class PvpCombatController extends Controller
 
                 if ($dmgEscudo < 0) {
                     $healEsc = -$dmgEscudo;
-                    $maxEsc = self::getMaxEscudo($actorChar);
+                    $maxEsc = self::getMaxEscudo($actorChar, $combat->modo);
                     if ($isAttacker) {
                         $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
                     } else {
@@ -410,7 +425,7 @@ class PvpCombatController extends Controller
                 /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ── */
             } elseif ($dmg < 0) {
                 $heal = -$dmg;
-                $maxHp = self::getMaxVida($opponentChar);
+                $maxHp = self::getMaxVida($opponentChar, $combat->modo);
                 if ($isAttacker) {
                     $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
                 } else {
@@ -420,7 +435,7 @@ class PvpCombatController extends Controller
 
                 if ($dmgEscudo < 0) {
                     $healEsc = -$dmgEscudo;
-                    $maxEsc = self::getMaxEscudo($opponentChar);
+                    $maxEsc = self::getMaxEscudo($opponentChar, $combat->modo);
                     if ($isAttacker) {
                         $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
                     } else {
@@ -499,8 +514,9 @@ class PvpCombatController extends Controller
             }
         }
 
-        /* ─── Persistir daño de la nave equipada (si el combate fue naval) ── */
-        if (in_array($combat->status, ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'], true)) {
+        /* ─── Persistir daño de la nave equipada (solo si el combate fue naval) ── */
+        if ($combat->modo === 'naval'
+            && in_array($combat->status, ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'], true)) {
             self::persistNaveDamage($combat->attacker->character, $combat->attacker_hp, $combat->attacker_escudo);
             self::persistNaveDamage($combat->defender->character, $combat->defender_hp, $combat->defender_escudo);
         }
@@ -535,8 +551,8 @@ class PvpCombatController extends Controller
                 $defBuffs = $isAttacker ? $oppBuffs : $myBuffs;
                 $defDebuffs = $isAttacker ? $oppDebuffs : $myDebuffs;
 
-                $attEff = self::getEffectiveStats(self::getCombatStats($combat->attacker->character), $attBuffs, $attDebuffs);
-                $defEff = self::getEffectiveStats(self::getCombatStats($combat->defender->character), $defBuffs, $defDebuffs);
+                $attEff = self::getEffectiveStats(self::getCombatStats($combat->attacker->character, $combat->modo), $attBuffs, $attDebuffs);
+                $defEff = self::getEffectiveStats(self::getCombatStats($combat->defender->character, $combat->modo), $defBuffs, $defDebuffs);
 
                 $roll = self::rollIniciativa($attEff['iniciativa'], $defEff['iniciativa']);
                 $combat->current_turn = $roll['gana_atacante'] ? $combat->attacker_id : $combat->defender_id;
@@ -620,6 +636,7 @@ class PvpCombatController extends Controller
         return [
             'id' => $c->id,
             'status' => $c->status,
+            'modo' => $c->modo ?? 'normal',
             'ronda' => $c->ronda ?? 1,
             'current_turn' => $c->current_turn,
             'is_my_turn' => $c->current_turn === $myId && $c->status === 'active',
@@ -650,16 +667,16 @@ class PvpCombatController extends Controller
             'opp_last_forma' => $isAtt ? $c->defender_last_forma : $c->attacker_last_forma,
             'my_current_forma' => $isAtt ? ($c->attacker_current_forma ?? 1) : ($c->defender_current_forma ?? 1),
             'opp_current_forma' => $isAtt ? ($c->defender_current_forma ?? 1) : ($c->attacker_current_forma ?? 1),
-            'attacker' => $this->formatPlayer($att, $c->attacker_current_forma ?? 1),
-            'defender' => $this->formatPlayer($def, $c->defender_current_forma ?? 1),
+            'attacker' => $this->formatPlayer($att, $c->attacker_current_forma ?? 1, $c->modo ?? 'normal'),
+            'defender' => $this->formatPlayer($def, $c->defender_current_forma ?? 1, $c->modo ?? 'normal'),
         ];
     }
 
-    private function formatPlayer(User $user, int $currentForma = 1): array
+    private function formatPlayer(User $user, int $currentForma = 1, string $modo = 'normal'): array
     {
         $ch = $user->character;
 
-        $naveSkillIds = self::getNaveSkillIds($ch);
+        $naveSkillIds = self::getNaveSkillIds($ch, $modo);
         if ($naveSkillIds) {
             $slotIds = $naveSkillIds;
         } else {
@@ -676,11 +693,11 @@ class PvpCombatController extends Controller
             'name' => $ch?->name ?? $user->name,
             'handle' => $ch?->handle ?? $user->name,
             'photo_url' => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
-            'stats' => self::getCombatStats($ch),
+            'stats' => self::getCombatStats($ch, $modo),
             'habilidades' => $habilidades,
             'current_forma' => $currentForma,
             'arma_equipada' => $ch?->armaEfectiva(),
-            'es_nave' => self::getNaveOwned($ch) !== null,
+            'es_nave' => $modo === 'naval',
         ];
     }
 
@@ -713,17 +730,19 @@ class PvpCombatController extends Controller
         return $won ? '¡Ganaste el combate PvP! (el rival huyó)' : 'Fuiste derrotado en el combate PvP';
     }
 
-    private static function getCombatStats(?object $char): array
+    private static function getCombatStats(?object $char, string $modo = 'normal'): array
     {
         if (! $char) {
             return ['vida' => 30, 'escudo' => 10, 'ataque' => 20, 'defensa' => 15,
                 'iniciativa' => 10, 'punteria' => 10, 'movimiento' => 20];
         }
 
-        /* Combate naval: si el personaje tiene una nave equipada, sus atributos
-         * reemplazan por completo a los del personaje (vida/escudo persisten el
-         * daño entre combates — requieren reparación). */
-        $naveOwned = self::getNaveOwned($char);
+        /* Combate naval: si el combate se determinó como naval (ver challenge()),
+         * los atributos de la nave equipada reemplazan por completo a los del
+         * personaje (vida/escudo persisten el daño entre combates — requieren
+         * reparación). En combate normal siempre se usan los stats del personaje,
+         * tenga o no una nave equipada. */
+        $naveOwned = $modo === 'naval' ? self::getNaveOwned($char) : null;
         if ($naveOwned && $naveOwned->nave) {
             $nave = $naveOwned->nave;
 
@@ -846,9 +865,13 @@ class PvpCombatController extends Controller
             : $char->naveEquipada()->with('nave')->first();
     }
 
-    /** IDs de las habilidades (tipo 'nave') asignadas a la nave equipada, o [] si no hay nave */
-    private static function getNaveSkillIds(?object $char): array
+    /** IDs de las habilidades (tipo 'nave') asignadas a la nave equipada, o [] si el combate no es naval */
+    private static function getNaveSkillIds(?object $char, string $modo = 'normal'): array
     {
+        if ($modo !== 'naval') {
+            return [];
+        }
+
         $naveOwned = self::getNaveOwned($char);
         if (! $naveOwned || ! $naveOwned->nave) {
             return [];
@@ -861,26 +884,26 @@ class PvpCombatController extends Controller
         ]));
     }
 
-    /** Vida máxima para topar curaciones: vida base de la nave si aplica, o vida de combate del personaje */
-    private static function getMaxVida(?object $char): int
+    /** Vida máxima para topar curaciones: vida base de la nave si el combate es naval, o vida de combate del personaje */
+    private static function getMaxVida(?object $char, string $modo = 'normal'): int
     {
-        $naveOwned = self::getNaveOwned($char);
+        $naveOwned = $modo === 'naval' ? self::getNaveOwned($char) : null;
         if ($naveOwned && $naveOwned->nave) {
             return (int) $naveOwned->nave->vida;
         }
 
-        return (int) self::getCombatStats($char)['vida'];
+        return (int) self::getCombatStats($char, $modo)['vida'];
     }
 
-    /** Escudo máximo para topar curaciones de escudo: escudo base de la nave si aplica, o de combate del personaje */
-    private static function getMaxEscudo(?object $char): int
+    /** Escudo máximo para topar curaciones de escudo: escudo base de la nave si el combate es naval, o de combate del personaje */
+    private static function getMaxEscudo(?object $char, string $modo = 'normal'): int
     {
-        $naveOwned = self::getNaveOwned($char);
+        $naveOwned = $modo === 'naval' ? self::getNaveOwned($char) : null;
         if ($naveOwned && $naveOwned->nave) {
             return (int) $naveOwned->nave->escudo;
         }
 
-        return (int) self::getCombatStats($char)['escudo'];
+        return (int) self::getCombatStats($char, $modo)['escudo'];
     }
 
     /**

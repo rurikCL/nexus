@@ -761,20 +761,22 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
           </button>
 
-          {/* Estancia */}
-          <button onClick={() => !busy && combat.is_my_turn && setStancePicker(true)} disabled={busy} style={{
-            minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-            background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-          }}
-            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
-          >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
-            <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[myCurrentForma - 1] ?? `F${myCurrentForma}`}</span>
-            <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
-          </button>
+          {/* Estancia (las naves no tienen estancias — solo combate normal) */}
+          {!me.es_nave && (
+            <button onClick={() => !busy && combat.is_my_turn && setStancePicker(true)} disabled={busy} style={{
+              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+            }}
+              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+              <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[myCurrentForma - 1] ?? `F${myCurrentForma}`}</span>
+              <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+            </button>
+          )}
 
           {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
           {me.es_nave && (

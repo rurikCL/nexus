@@ -1257,7 +1257,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
             <Btn kind="ghost" icon="coin" onClick={() => { onTrade?.(shipPopup); setShipPopup(null); }}>
               Comerciar
             </Btn>
-            <Btn kind="ghost" icon="swords" onClick={() => { onAttack?.(shipPopup); setShipPopup(null); }}>
+            <Btn kind="ghost" icon="swords" onClick={() => { onAttack?.(shipPopup, 'nave'); setShipPopup(null); }}>
               Atacar
             </Btn>
           </div>
@@ -4214,7 +4214,11 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     return () => clearInterval(pvpPollRef.current);
   }, [activePvpCombat, pendingChallenge]);
 
-  const handleAttackUser = (character) => setPvpAttackTarget(character);
+  /* origin: 'nave' solo cuando se ataca desde el icono de nave del mapa planetario
+     (el backend decide si el combate es naval según si ambos tienen nave equipada;
+     cualquier otro origen — lugar, zona, sistema — siempre es PvP normal). */
+  const handleAttackUser = (character, origin = 'normal') =>
+    setPvpAttackTarget({ ...character, __origin: origin });
 
   const handleNaveEncounter = useCallback(async (npcEspacio) => {
     try {
@@ -4258,7 +4262,10 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     if (!pvpAttackTarget || pvpChallenging) return;
     setPvpChallenging(true);
     try {
-      const d = await apiPost('/pvp/challenge', { defender_id: pvpAttackTarget.user_id });
+      const d = await apiPost('/pvp/challenge', {
+        defender_id: pvpAttackTarget.user_id,
+        origen: pvpAttackTarget.__origin === 'nave' ? 'nave' : 'normal',
+      });
       if (d?.combat) {
         setActivePvpCombat(d.combat);
         setPvpAttackTarget(null);
