@@ -1,0 +1,47 @@
+/* ============================================================
+   NÉXUS — Texto flotante de resultado de combate
+   Aparece sobre el personaje afectado justo después del golpe de
+   energía (impacto/crítico/bloqueo/esquiva) o de una curación, y
+   se desvanece con un simple fade in/out. Dura FLOAT_TEXT_MS
+   (FloatingCombatText.jsx) — debe calzar con --nx-float-fade-dur.
+   ============================================================ */
+
+.nx-float-text {
+  --nx-float-fade-dur: 1000ms;
+  --nx-float-outline:
+    -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000,
+    -1.5px  1.5px 0 #000, 1.5px  1.5px 0 #000,
+    0 3px 8px rgba(0, 0, 0, 0.6);
+
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 550;
+  pointer-events: none;
+  font-family: var(--font-mono, monospace);
+  font-weight: 800;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: var(--nx-float-outline);
+  opacity: 0;
+  will-change: opacity;
+  animation: nx-float-fade-io var(--nx-float-fade-dur) ease forwards;
+}
+
+.nx-float-text-hit   { color: #fff; }
+.nx-float-text-crit  {
+  color: #ff4d4d;
+  font-size: 1.6rem;
+  text-shadow: var(--nx-float-outline), 0 0 16px rgba(255, 45, 69, 0.7);
+}
+.nx-float-text-block { color: #cbd5e1; }
+.nx-float-text-dodge { color: #7dd3fc; }
+.nx-float-text-heal  { color: #4ade80; }
+
+@keyframes nx-float-fade-io {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { opacity: 0; }
+}

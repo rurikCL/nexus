@@ -7,6 +7,7 @@ import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
+import FloatingCombatText from './FloatingCombatText.jsx';
 
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
@@ -32,7 +33,10 @@ function classifyPvpAttack(entry, combat, myId) {
   }
 
   const hit = msgs.some((m) => /¡Impacto!|¡CRÍTICO!/.test(m));
-  return { actorIsMe, ranged, hit };
+  const crit = msgs.some((m) => /¡CRÍTICO!/.test(m));
+  const dmgMatch = msgs.join(' ').match(/−(\d+) daño/);
+  const dmg = dmgMatch ? Number(dmgMatch[1]) : 0;
+  return { actorIsMe, ranged, hit, crit, dmg };
 }
 
 /* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
@@ -63,6 +67,27 @@ function extractRollGroups(entry, { myId, attackerId }) {
     ]);
   }
   return groups;
+}
+
+/* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
+function resultTextFor(hit, ranged, crit, dmg) {
+  if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
+  if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
+  return { variant: 'hit', text: `HIT: ${dmg}` };
+}
+
+/* Detecta una curación (auto-curación u a distancia) en una entrada del log del backend */
+function classifyPvpHeal(entry, myId) {
+  const msgs = entry.messages ?? [];
+  const actorIsMe = entry.actor_id === myId;
+
+  const selfMatch = msgs.map((m) => m.match(/^¡Curación! \+(\d+) (?:vida|escudo)/)).find(Boolean);
+  if (selfMatch) return { healedIsMe: actorIsMe, heal: Number(selfMatch[1]) };
+
+  const targetMatch = msgs.map((m) => m.match(/cura \+(\d+) vida a/)).find(Boolean);
+  if (targetMatch) return { healedIsMe: !actorIsMe, heal: Number(targetMatch[1]) };
+
+  return null;
 }
 
 function useIsMobile() {
@@ -129,6 +154,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myHudRef                        = useRef(null);
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
+  const [floatTexts, setFloatTexts]     = useState([]);
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -175,11 +201,25 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const newEntries = (newCombat.log ?? []).slice(prevLen);
     const attackerId = newCombat.attacker?.id;
     let lastAttack = null;
+    let lastHeal = null;
     for (const entry of newEntries) {
       const groups = extractRollGroups(entry, { myId: userId, attackerId });
       for (const g of groups) await rollDice(g);
       const classified = classifyPvpAttack(entry, newCombat, userId);
       if (classified) lastAttack = classified;
+      const healed = classifyPvpHeal(entry, userId);
+      if (healed) lastHeal = healed;
+    }
+
+    if (lastHeal && stageRef.current) {
+      const healRef = lastHeal.healedIsMe ? myHudRef : oppHudRef;
+      if (healRef.current) {
+        const pos = getRelativeCenter(healRef.current, stageRef.current);
+        setFloatTexts((prev) => [...prev, {
+          id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y,
+          variant: 'heal', text: `Curación: ${lastHeal.heal}`,
+        }]);
+      }
     }
 
     if (lastAttack && stageRef.current) {
@@ -200,6 +240,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         targetRef,
         from: getRelativeCenter(attackerRef.current, stageRef.current),
         to: getRelativeCenter(targetRef.current, stageRef.current),
+        result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg),
       });
     }
 
@@ -854,13 +895,27 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <EnergyStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
+          />
+        ))}
+
+        {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
+        {floatTexts.map((ft) => (
+          <FloatingCombatText key={ft.id}
+            x={ft.x} y={ft.y} text={ft.text} variant={ft.variant}
+            onDone={() => setFloatTexts((prev) => prev.filter((f) => f.id !== ft.id))}
           />
         ))}
 

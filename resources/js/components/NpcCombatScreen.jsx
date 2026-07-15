@@ -5,6 +5,7 @@ import { NX } from '../data/seed.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
+import FloatingCombatText from './FloatingCombatText.jsx';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 
@@ -123,10 +124,25 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const stageRef = useRef(null);
   const playerHudRef = useRef(null);
   const npcHudRef = useRef(null);
-  const [strike, setStrike] = useState(null);
+  const [strike, setStrike]         = useState(null);
+  const [floatTexts, setFloatTexts] = useState([]);
+
+  /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
+  const resultTextFor = (hit, ranged, crit, dmg) => {
+    if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
+    if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
+    return { variant: 'hit', text: `HIT: ${dmg}` };
+  };
+
+  /* Texto flotante independiente de un golpe (curaciones): aparece sobre `ref` sin VFX de golpe */
+  const showFloatText = (ref, result) => {
+    if (!stageRef.current || !ref.current) return;
+    const pos = getRelativeCenter(ref.current, stageRef.current);
+    setFloatTexts((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y, ...result }]);
+  };
 
   /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
-  const triggerStrike = ({ playerIsAttacker, ranged, hit }) => {
+  const triggerStrike = ({ playerIsAttacker, ranged, hit, crit = false, dmg = 0 }) => {
     if (!stageRef.current) return;
     const attackerRef = playerIsAttacker ? playerHudRef : npcHudRef;
     const targetRef    = playerIsAttacker ? npcHudRef : playerHudRef;
@@ -141,6 +157,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       color, attackerRef, targetRef,
       from: getRelativeCenter(attackerRef.current, stageRef.current),
       to: getRelativeCenter(targetRef.current, stageRef.current),
+      result: resultTextFor(hit, ranged, crit, dmg),
     });
   };
 
@@ -315,7 +332,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       ]);
       if (cancelled) return;
 
-      triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit: aT > dT });
+      triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit: aT > dT, dmg: useRanged ? effNpcPnt : effNpcAtk });
 
       let entries;
       let newHp;
@@ -395,11 +412,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         const heal = -selfDmg;
         healedHp.vida = Math.min(maxPlayer.vida, healedHp.vida + heal);
         entries.push({ text: `¡Curación! +${heal} vida`, type: 'success' });
+        showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       }
       if (selfDmgEscudo < 0) {
         const healEsc = -selfDmgEscudo;
         healedHp.escudo = Math.min(maxPlayer.escudo, healedHp.escudo + healEsc);
         entries.push({ text: `¡Curación! +${healEsc} escudo`, type: 'success' });
+        showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${healEsc}` });
       }
       if (selfDmg < 0 || selfDmgEscudo < 0) setPlayerHp(healedHp);
 
@@ -417,6 +436,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
         type: 'info',
       });
+      showFloatText(npcHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       setNpcHp(newNpcHp);
       endTurnAfter('player');
@@ -442,9 +462,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       type: 'info',
     });
 
-    triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit });
-
     let newNpcHp = { ...npcHp };
+    let dmgAplicado = 0;
     if (hit) {
       let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
       let dmgEscudo = hab.damage_escudo ?? 0;
@@ -455,7 +474,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
       }
       const tieneEscudo = npcHp.escudo > 0;
-      const dmgAplicado = tieneEscudo ? dmg + Math.max(0, dmgEscudo) : dmg;
+      dmgAplicado = tieneEscudo ? dmg + Math.max(0, dmgEscudo) : dmg;
       newNpcHp = applyDmg(dmg, npcHp, dmgEscudo);
       entries.push({ text: `¡Impacto! −${dmgAplicado} daño ${tieneEscudo ? 'al escudo' : 'a la vida'}`, type: 'success' });
 
@@ -466,6 +485,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
+
+    triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit, dmg: dmgAplicado });
 
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
@@ -550,16 +571,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       type: 'info',
     }];
 
-    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit });
-
     let newNpcHp = { ...npcHp };
+    let dmg = 0;
     if (hit) {
-      const dmg = (arma?.dano ?? 3) + (esCritico ? 1 : 0);
+      dmg = (arma?.dano ?? 3) + (esCritico ? 1 : 0);
       newNpcHp = applyDmg(dmg, npcHp);
       entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) −${dmg} daño` : `¡Impacto! −${dmg} daño`, type: 'success' });
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
+
+    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit, crit: esCritico, dmg });
 
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
@@ -1113,13 +1135,27 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           <EnergyStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
+          />
+        ))}
+
+        {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
+        {floatTexts.map((ft) => (
+          <FloatingCombatText key={ft.id}
+            x={ft.x} y={ft.y} text={ft.text} variant={ft.variant}
+            onDone={() => setFloatTexts((prev) => prev.filter((f) => f.id !== ft.id))}
           />
         ))}
 

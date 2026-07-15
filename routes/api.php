@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\SesionEntrenamientoController;
 use App\Http\Controllers\Api\RolHabilidadController;
 use App\Http\Controllers\Api\SableController;
 use App\Http\Controllers\Api\TorneoController;
+use App\Http\Controllers\Api\TradeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -201,6 +202,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pvp/{id}/action',    [PvpCombatController::class, 'action']);
     Route::post('/pvp/{id}/accept',    [PvpCombatController::class, 'accept']);
     Route::post('/pvp/{id}/decline',   [PvpCombatController::class, 'decline']);
+
+    Route::post('/trades/propose',      [TradeController::class, 'propose']);
+    Route::get('/trades/active',        [TradeController::class, 'active']);
+    Route::get('/trades/{id}',          [TradeController::class, 'show']);
+    Route::post('/trades/{id}/accept',  [TradeController::class, 'accept']);
+    Route::post('/trades/{id}/decline', [TradeController::class, 'decline']);
+    Route::post('/trades/{id}/cancel',  [TradeController::class, 'cancel']);
 
     // NPC AI chat
     Route::get('/npcs/refs',             [NpcChatController::class, 'refs']);
