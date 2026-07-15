@@ -256,7 +256,7 @@ class PvpCombatController extends Controller
             ."de un duelo con sable de luz entre {$attackerName} y {$defenderName}. Escribe una crónica dramática "
             .'del duelo, en español, en prosa corrida (sin listas, sin markdown, sin títulos), yendo directo a los '
             .'momentos clave sin descripciones ambientales largas. '
-            .'LÍMITE ESTRICTO: no más de 90 palabras en total, ni una más. No inventes datos que contradigan la bitácora.'
+            .'LÍMITE ESTRICTO: no más de 55 palabras en total, ni una más. No inventes datos que contradigan la bitácora.'
             ."\n\nBitácora:\n{$transcript}";
 
         $response = Http::withToken(config('services.mistral.api_key'))
@@ -264,7 +264,7 @@ class PvpCombatController extends Controller
             ->post('https://api.mistral.ai/v1/chat/completions', [
                 'model' => 'open-mistral-nemo',
                 'messages' => [['role' => 'user', 'content' => $prompt]],
-                'max_tokens' => 260,
+                'max_tokens' => 160,
                 'temperature' => 0.8,
             ]);
 
@@ -279,7 +279,7 @@ class PvpCombatController extends Controller
             return response()->json(['error' => 'No se pudo generar el resumen.'], 502);
         }
 
-        $resumen = self::limitarPalabras($resumen, 100);
+        $resumen = self::limitarPalabras($resumen, 60);
 
         $combat->update(['resumen_ia' => $resumen]);
 
