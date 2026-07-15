@@ -87,8 +87,28 @@ const WIDGET_DEFAULT_ORDER = [
   { id: 'tareas',     cols: 1 },
   { id: 'eventos',    cols: 1 },
   { id: 'ranking',    cols: 1 },
+  { id: 'hitos',      cols: 1 },
   { id: 'qr',         cols: 1 },
 ];
+
+const fmtHitoDate = (d) => d
+  ? new Date(d).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+  : '';
+
+function HitoRow({ hito }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+      background: 'rgba(255,255,255,.03)', border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-md)',
+    }}>
+      <span style={{ color: 'var(--holocron-oro)', flexShrink: 0 }}><Icon name="star" size={16} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)' }}>{hito.hito}</div>
+        <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{fmtHitoDate(hito.created_at)}</div>
+      </div>
+    </div>
+  );
+}
 
 /* ---- Widget: QR de perfil público ---- */
 function QrWidget({ url, handle, right, style }) {
@@ -171,6 +191,8 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
   const [draggingId,  setDraggingId]          = useState(null);
   const [overIdx,     setOverIdx]             = useState(null);
   const [activaTemporada, setActivaTemporada] = useState(null);
+  const [showAllHitos, setShowAllHitos]       = useState(false);
+  const hitos = user?.character?.hitos ?? [];
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -510,6 +532,15 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
                 </div>
               </Panel>
             ),
+            hitos: (
+              <Panel title="Hitos" kicker="Logros y reconocimientos" icon="star"
+                right={panelRight(<Btn sm onClick={() => setShowAllHitos(true)}>Ver todos</Btn>)}>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {hitos.length === 0 && <Empty label="Sin hitos obtenidos aún" />}
+                  {hitos.slice(0, 4).map((h) => <HitoRow key={h.id} hito={h} />)}
+                </div>
+              </Panel>
+            ),
             qr: <QrWidget url={publicProfileUrl} handle={ch.handle} right={panelRight(null)} />,
           })[id];
 
@@ -541,6 +572,13 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
           );
         })}
       </div>
+
+      <Modal open={showAllHitos} onClose={() => setShowAllHitos(false)} title="Todos los Hitos" kicker="Logros y reconocimientos">
+        <div style={{ display: 'grid', gap: 10, maxHeight: '60vh', overflowY: 'auto', paddingRight: 4 }}>
+          {hitos.length === 0 && <Empty label="Sin hitos obtenidos aún" />}
+          {hitos.map((h) => <HitoRow key={h.id} hito={h} />)}
+        </div>
+      </Modal>
     </div>
   );
 }

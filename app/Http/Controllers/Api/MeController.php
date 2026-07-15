@@ -70,6 +70,7 @@ class MeController extends Controller
                 'mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada',
                 'sableActivo' => fn ($q) => $q->with(array_keys(CharacterSable::SLOTS)),
                 'titulos', 'tituloActivo',
+                'hitos' => fn ($q) => $q->latest(),
             ]);
         }
 
@@ -121,6 +122,7 @@ class MeController extends Controller
                 'arma_efectiva' => $character->armaEfectiva(),
                 'titulos' => $character->titulos,
                 'titulo_activo' => $character->tituloActivo,
+                'hitos' => $character->hitos,
                 'gold' => $character->gold,
                 'photo_url' => $character->photo
                     ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
