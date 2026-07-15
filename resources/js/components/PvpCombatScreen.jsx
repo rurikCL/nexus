@@ -372,20 +372,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myEffects  = withDurationPct('my', mergeEffects(myBuffs, myDebuffs));
   const oppEffects = withDurationPct('opp', mergeEffects(oppBuffs, oppDebuffs));
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, formaSide, effectsPosition = 'side' }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, effectsPosition = 'side' }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
     const rev  = align === 'right';
     const formaImgSrc = forma > 0 ? NX.CLASSES[forma - 1]?.img : null;
-    const formaBox = formaImgSrc && (
-      <div title={`Forma ${formaLabel(forma)}`} style={{
-        width: isMobile ? 40 : 56, height: isMobile ? 90 : 120, borderRadius: 10, flexShrink: 0, alignSelf: 'center',
-        overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
-      }}>
-        <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      </div>
-    );
     const renderBadge = (e, i) => {
       const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
       const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
@@ -424,14 +416,29 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         gap: isMobile ? 8 : 14, alignItems: 'flex-start', flex: 1, minWidth: 0,
       }}>
         <div style={{
-          width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-          border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
-          display: 'grid', placeItems: 'center',
+          position: 'relative',
+          width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'visible',
         }}>
-          {photoUrl
-            ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
-          }
+          <div style={{
+            width: '100%', height: '100%', borderRadius: 10, overflow: 'hidden',
+            border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
+            display: 'grid', placeItems: 'center',
+          }}>
+            {photoUrl
+              ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
+            }
+          </div>
+          {formaImgSrc && (
+            <div title={`Forma ${formaLabel(forma)}`} style={{
+              position: 'absolute', bottom: -6, right: -6, zIndex: 1,
+              width: isMobile ? 22 : 30, height: isMobile ? 22 : 30, borderRadius: 8,
+              overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(6,12,26,0.95)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+            }}>
+              <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: rev ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
@@ -485,9 +492,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
     const cardRow = (
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
-        {formaSide === 'left' && formaBox}
         {effectsPosition === 'side' ? (rev ? <>{card}{effectsColumn}</> : <>{effectsColumn}{card}</>) : card}
-        {formaSide === 'right' && formaBox}
       </div>
     );
 
@@ -866,7 +871,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
-                forma={oppCurrentForma} formaSide="right"
+                forma={oppCurrentForma}
                 effectsPosition="below"
               />
             </div>
@@ -886,7 +891,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
-                forma={myCurrentForma} formaSide="left"
+                forma={myCurrentForma}
                 effectsPosition="above"
               />
             </div>
@@ -902,7 +907,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
-                forma={oppCurrentForma} formaSide="right"
+                forma={oppCurrentForma}
               />
             </div>
 
@@ -913,7 +918,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
-                forma={myCurrentForma} formaSide="left"
+                forma={myCurrentForma}
               />
             </div>
           </>
