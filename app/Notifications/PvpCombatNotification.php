@@ -17,11 +17,14 @@ class PvpCombatNotification extends Notification implements ShouldQueue
         public readonly string $title,
         public readonly string $body,
         public readonly int $combatId,
+        public readonly bool $push = true,
     ) {}
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', WebPushChannel::class];
+        return $this->push
+            ? ['database', 'broadcast', WebPushChannel::class]
+            : ['database', 'broadcast'];
     }
 
     public function toArray(object $notifiable): array
