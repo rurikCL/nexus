@@ -161,7 +161,7 @@ function wrapText(ctx, text, cx, y, maxWidth, lineHeight) {
 }
 
 /** Dibuja la tarjeta de resolución de combate y devuelve el canvas listo para exportar. */
-async function renderResultCard({ winner, loser, rounds, subtitle, rows }) {
+async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumenIA }) {
   await ensureFonts();
 
   const W = 1080;
@@ -310,7 +310,7 @@ const STAT_ROWS = (leftVal, rightVal) => [
 ];
 
 /** Dibuja la tarjeta de resolución de un combate PvP y devuelve el canvas listo para exportar. */
-export async function drawCombatCard(combat) {
+export async function drawCombatCard(combat, resumenIA) {
   const summary = summarizeCombat(combat);
   const isFled = combat.status === 'fled_attacker' || combat.status === 'fled_defender';
   const winnerSide = combat.status === 'attacker_won' || combat.status === 'fled_defender' ? 'attacker' : 'defender';
@@ -333,6 +333,7 @@ export async function drawCombatCard(combat) {
   return renderResultCard({
     winner, loser, rounds: summary.rounds, subtitle,
     rows: STAT_ROWS(summary[winnerSide], summary[loserSide]),
+    resumenIA,
   });
 }
 
@@ -373,16 +374,7 @@ function ResultCardModal({ generate, fileName, onClose }) {
 
   useEffect(() => {
     cancelledRef.current = false;
-    const token = localStorage.getItem('nx-token');
-
-    fetch(`/api/pvp/${combat.id}/resumen-ia`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.resumen ?? null)
-      .catch(() => null)
-      .then((resumen) => drawCombatCard(combat, resumen))
+    generate()
       .then((canvas) => { if (!cancelledRef.current) setDataUrl(canvas.toDataURL('image/png')); })
       .catch(() => { if (!cancelledRef.current) setError(true); });
     return () => { cancelledRef.current = true; };
@@ -453,11 +445,23 @@ function ResultCardModal({ generate, fileName, onClose }) {
   );
 }
 
+/** Pide la crónica del duelo generada por IA (cacheada en el backend tras la primera llamada). */
+function fetchResumenIA(combatId) {
+  const token = localStorage.getItem('nx-token');
+  return fetch(`/api/pvp/${combatId}/resumen-ia`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => d?.resumen ?? null)
+    .catch(() => null);
+}
+
 /** Tarjeta de resolución para un combate PvP (ver PvpCombatScreen.jsx). */
 export default function CombatCardModal({ combat, onClose }) {
   return (
     <ResultCardModal
-      generate={() => drawCombatCard(combat)}
+      generate={() => fetchResumenIA(combat.id).then((resumen) => drawCombatCard(combat, resumen))}
       fileName={`nexus-combate-${combat.id}.png`}
       onClose={onClose}
     />
