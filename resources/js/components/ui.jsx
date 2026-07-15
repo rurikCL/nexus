@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { NX } from '../data/seed.js';
 
 /* ---- Icon set (línea fina, estilo HUD) ---- */
-const ICON_PATHS = {
+export const ICON_PATHS = {
   command:  'M3 4h7v7H3zM14 4h7v4h-7zM14 11h7v9h-7zM3 14h7v6H3z',
   user:     'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
   calendar: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',

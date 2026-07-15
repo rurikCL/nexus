@@ -9,6 +9,7 @@ import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
 import FleeEffect from './FleeEffect.jsx';
+import CombatCardModal from './CombatCard.jsx';
 
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
@@ -153,6 +154,11 @@ const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow', INI: 'zap' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+const combatCardBtnStyle = {
+  padding: '8px 20px', borderRadius: 7, cursor: 'pointer',
+  background: 'rgba(56,205,240,0.10)', border: '1px solid rgba(56,205,240,0.4)',
+  color: '#38cdf0', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em',
+};
 
 /* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */
 const mergeEffects = (buffs = [], debuffs = []) => Object.values(
@@ -178,6 +184,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
   const [fleeFx, setFleeFx]             = useState(null);
+  const [showCombatCard, setShowCombatCard] = useState(false);
   const [floatTexts, setFloatTexts]     = useState([]);
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
@@ -664,16 +671,19 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>
               {(combat.status === 'fled_attacker' || combat.status === 'fled_defender') ? '🏃 RIVAL HUYÓ — VICTORIA' : '⚡ VICTORIA'}
             </span>
+            <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
             <button onClick={() => onClose({ won: true })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
           </>
         ) : iFled ? (
           <>
             <span style={{ fontSize: 16, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>🏃 HUISTE</span>
+            <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
             <button onClick={() => onClose({ fled: true })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
           </>
         ) : (
           <>
             <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
+            <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
             <button onClick={() => onClose({ won: false })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
           </>
         )}
@@ -1058,6 +1068,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         )}
         </div>
       </div>
+      {showCombatCard && (
+        <CombatCardModal combat={combat} onClose={() => setShowCombatCard(false)} />
+      )}
     </div>
   );
 
