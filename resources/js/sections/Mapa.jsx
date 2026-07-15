@@ -1061,7 +1061,11 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
   const planetaImagen = mediaUrl(planeta.imagen);
 
   /* posiciones dispersas deterministas (mismo algoritmo que los sistemas de la galaxia) */
-  const positions = buildPositions(zonas);
+  /* zonas y naves comparten una única cuadrícula de celdas para no sobreponerse entre sí */
+  const presentesPlaneta = planeta.presentes_personajes ?? [];
+  const allPositions = buildPositions([...zonas, ...presentesPlaneta]);
+  const positions = allPositions.slice(0, zonas.length);
+  const shipPositions = allPositions.slice(zonas.length);
 
   return (
     <div className="nx-fade">
@@ -1108,26 +1112,20 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
               </div>
             )}
 
-            {/* íconos de zona — dispersos, con leve deriva simulando la rotación del planeta */}
+            {/* íconos de zona — dispersos, posición fija */}
             {zonas.map((z, i) => {
               const hs = hostilidadStyle(z.hostilidad);
               const pos = positions[i];
               const presentes = z.presentes_personajes ?? [];
-              const ax = 8 + hashf(z.id * 17 + 4) * 14;
-              const ay = 5 + hashf(z.id * 23 + 8) * 9;
-              const dur = 16 + hashf(z.id * 5 + 2) * 12;
-              const delay = -hashf(z.id * 13 + 6) * dur;
               return (
                 <button
                   key={z.id}
                   onClick={() => onSelectZona(z)}
                   style={{
-                    position: 'absolute', left: pos.left, top: pos.top, zIndex: 1,
+                    position: 'absolute', left: pos.left, top: pos.top,
+                    transform: 'translate(-50%, -50%)', zIndex: 1,
                     background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                    animation: `nx-node-drift ${dur}s ease-in-out infinite`,
-                    animationDelay: `${delay}s`,
-                    '--ax': `${ax}px`, '--ay': `${ay}px`,
                   }}
                   onMouseEnter={(e) => {
                     const orb = e.currentTarget.querySelector('.nx-zona-orb');
@@ -1165,6 +1163,34 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
                   </div>
                   {presentes.length > 0 && <PresentesAvatars presentes={presentes} max={2} />}
                 </button>
+              );
+            })}
+
+            {/* naves de jugadores presentes en el planeta — deriva lenta simulando vuelo orbital */}
+            {presentesPlaneta.map((p, i) => {
+              const pos = shipPositions[i];
+              const color = p.saber_color || 'var(--holo)';
+              const ax = 8 + hashf(p.id * 17 + 4) * 14;
+              const ay = 5 + hashf(p.id * 23 + 8) * 9;
+              const dur = 16 + hashf(p.id * 5 + 2) * 12;
+              const delay = -hashf(p.id * 13 + 6) * dur;
+              return (
+                <div key={p.id} style={{
+                  position: 'absolute', left: pos.left, top: pos.top, zIndex: 2,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  animation: `nx-node-drift ${dur}s ease-in-out infinite`,
+                  animationDelay: `${delay}s`,
+                  '--ax': `${ax}px`, '--ay': `${ay}px`,
+                  pointerEvents: 'none',
+                }}>
+                  <Icon name="ship" size={18} style={{ color, filter: `drop-shadow(0 0 6px ${color})` }} />
+                  <span style={{
+                    fontSize: 8, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
+                    whiteSpace: 'nowrap', textShadow: '0 1px 4px rgba(0,0,0,0.9)',
+                  }}>
+                    {p.handle}
+                  </span>
+                </div>
               );
             })}
           </div>
@@ -1278,15 +1304,31 @@ function ZonaCard({ zona, presentes = [], onClick, compact = false }) {
       <div style={{ padding: compact ? '8px 10px' : '10px 12px', flex: 1 }}>
         <div style={{
           fontSize: compact ? 11 : 13, fontWeight: 700, color: 'var(--txt)',
-          lineHeight: 1.25, marginBottom: (compact || (!zona.faccion && !zona.estrato_social)) ? 0 : 6,
+          lineHeight: 1.25, marginBottom: (compact || (!zona.faccion && !zona.estrato_social && !zona.impuestos)) ? 0 : 6,
         }}>
           {zona.nombre}
         </div>
-        {!compact && (zona.faccion || zona.estrato_social) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {!compact && (zona.faccion || zona.estrato_social || Number(zona.impuestos) > 0) && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: zona.historia ? 6 : 0 }}>
             {zona.faccion && <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>{zona.faccion}</span>}
             {zona.estrato_social && <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{zona.estrato_social}</span>}
+            {Number(zona.impuestos) > 0 && (
+              <span style={{
+                fontSize: 10, color: 'var(--holocron-oro)', fontFamily: 'var(--font-data)',
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}>
+                <Icon name="coin" size={10} /> {Number(zona.impuestos)}% impuestos
+              </span>
+            )}
           </div>
+        )}
+        {!compact && zona.historia && (
+          <p style={{
+            fontSize: 11, color: 'var(--txt-dim)', lineHeight: 1.5, margin: 0,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {zona.historia}
+          </p>
         )}
       </div>
 
