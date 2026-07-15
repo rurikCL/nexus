@@ -162,6 +162,47 @@ function drawAvatar(ctx, img, cx, cy, r, ringColor, isNave) {
   }
 }
 
+/** Dibuja una imagen centrada en (cx, cy) ajustada dentro de w×h sin recortar ni rellenar fondo — para planetas (fondo transparente, sin borde). */
+function drawImagePlain(ctx, img, cx, cy, w, h) {
+  if (!img) return;
+  const scale = Math.min(w / img.width, h / img.height);
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+}
+
+/** Dibuja una imagen recortada dentro de un rectángulo de esquinas semiredondeadas, con borde — para el lugar. */
+function drawImageRounded(ctx, img, cx, cy, w, h, radius, borderColor) {
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = '#0a1428';
+  ctx.fill();
+  if (img) {
+    const scale = Math.max(w / img.width, h / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = borderColor;
+  ctx.stroke();
+  ctx.restore();
+
+  if (!img) {
+    drawIcon(ctx, 'target', cx, cy, Math.min(w, h) * 0.4, 'rgba(150,200,255,0.5)', 2.2);
+  }
+}
+
 function fitText(ctx, text, maxWidth, baseFont, minFont = 18) {
   let size = parseInt(baseFont, 10);
   const rest = baseFont.replace(/^\d+px\s*/, '');
@@ -198,7 +239,7 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
   await ensureFonts();
 
   const W = 1080;
-  const H = 1350 + (winnerHighlights ? 220 : 0) + (resumenIA ? 270 : 0) + (location ? 150 : 0);
+  const H = 1350 + (winnerHighlights ? 220 : 0) + (resumenIA ? 270 : 0) + (location ? 260 : 0);
   const DPR = 2;
   const canvas = document.createElement('canvas');
   canvas.width = W * DPR;
@@ -206,9 +247,11 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
   const ctx = canvas.getContext('2d');
   ctx.scale(DPR, DPR);
 
-  const [winnerImg, loserImg] = await Promise.all([
+  const [winnerImg, loserImg, planetaImg, lugarImg] = await Promise.all([
     loadImage(winner.imageSrc),
     loadImage(loser.imageSrc),
+    loadImage(location?.planetaImg),
+    loadImage(location?.lugarImg),
   ]);
 
   /* ── fondo ── */
@@ -372,26 +415,33 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
     ctx.font = '600 22px "JetBrains Mono"';
     ctx.fillText('UBICACIÓN DEL ENCUENTRO', W / 2, rowY + 30);
 
-    const colY = rowY + 85;
     const locCols = [
-      { label: 'PLANETA', value: location.planeta },
-      { label: 'LUGAR', value: location.lugar },
+      { label: 'PLANETA', value: location.planeta, img: planetaImg, rounded: false },
+      { label: 'LUGAR', value: location.lugar, img: lugarImg, rounded: true },
     ].filter(c => c.value);
-    const locXs = locCols.length === 1 ? [W / 2] : [W * 0.32, W * 0.68];
+    const locXs = locCols.length === 1 ? [W / 2] : [W * 0.3, W * 0.7];
+    const imgY = rowY + 100;
+    const imgSize = 100;
 
     locCols.forEach((col, i) => {
       const x = locXs[i];
-      drawIcon(ctx, 'target', x, colY - 34, 24, '#38cdf0', 2.2);
+      if (col.rounded) {
+        drawImageRounded(ctx, col.img, x, imgY, imgSize, imgSize, 16, 'rgba(56,205,240,0.5)');
+      } else {
+        drawImagePlain(ctx, col.img, x, imgY, imgSize, imgSize);
+      }
+
+      ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(160,190,230,0.6)';
-      ctx.font = '600 15px "JetBrains Mono"';
-      ctx.fillText(col.label, x, colY - 4);
+      ctx.font = '600 14px "JetBrains Mono"';
+      ctx.fillText(col.label, x, imgY + imgSize / 2 + 28);
       ctx.fillStyle = 'rgba(220,230,255,0.85)';
-      const size = fitText(ctx, col.value, 380, '30px Orbitron', 16);
+      const size = fitText(ctx, col.value, 320, '26px Orbitron', 14);
       ctx.font = `800 ${size}px Orbitron`;
-      ctx.fillText(col.value, x, colY + 30);
+      ctx.fillText(col.value, x, imgY + imgSize / 2 + 58);
     });
 
-    rowY = colY + 60;
+    rowY = imgY + imgSize / 2 + 80;
   }
 
   /* ── crónica del duelo (IA) — aislada por ahora, no se invoca desde CombatCardModal ── */
@@ -458,7 +508,7 @@ export async function drawCombatCard(combat, resumenIA) {
 }
 
 /** Dibuja la tarjeta de resolución de un combate contra NPC (o encuentro naval) y devuelve el canvas. */
-export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre }) {
+export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, planetaImagen, lugarImagen }) {
   const summary = summarizeNpcLog(log);
   const playerWon = phase === 'victory';
 
@@ -474,7 +524,10 @@ export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMo
   const loser = playerWon ? npcCombatant : playerCombatant;
   const subtitle = `vence a ${loser.name} en ${naveMode ? 'combate espacial' : 'combate'}`;
   const location = (planetaNombre || lugarNombre)
-    ? { planeta: planetaNombre, lugar: lugarNombre }
+    ? {
+        planeta: planetaNombre, lugar: lugarNombre,
+        planetaImg: mediaUrl(planetaImagen), lugarImg: mediaUrl(lugarImagen),
+      }
     : null;
 
   return renderResultCard({
@@ -601,10 +654,10 @@ export default function CombatCardModal({ combat, onClose }) {
 }
 
 /** Tarjeta de resolución para un combate contra NPC / encuentro naval (ver NpcCombatScreen.jsx). */
-export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, onClose }) {
+export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, planetaImagen, lugarImagen, onClose }) {
   return (
     <ResultCardModal
-      generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre })}
+      generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, planetaImagen, lugarImagen })}
       fileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.png`}
       onClose={onClose}
     />
