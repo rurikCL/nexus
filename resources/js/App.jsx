@@ -147,7 +147,7 @@ const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
   { id: 'comando', label: 'Comando', icon: 'command' },
   { id: 'personaje', label: 'Mi Personaje', icon: 'user' },
-  { id: 'sesiones', label: 'Sesiones', icon: 'calendar' },
+  { id: 'sesiones', label: 'Entrenamiento', icon: 'calendar' },
   { id: 'entrenamiento', label: 'Bitácora', icon: 'calendar' },
   { id: 'modulos-entrenamiento', label: 'Módulos', icon: 'target' },
   { id: 'tareas',   label: 'Tareas',   icon: 'tasks' },
@@ -743,16 +743,30 @@ function PushToggle() {
 
   return (
     <button onClick={toggle} disabled={busy} style={{
-      width: '100%', padding: '8px', borderRadius: 'var(--radius-md)', marginTop: 8,
-      border: '1px solid var(--holo-line)',
-      background: enabled ? 'color-mix(in srgb, var(--green-500) 12%, transparent)' : 'transparent',
-      color: enabled ? 'var(--green-500)' : 'var(--txt-dim)', cursor: busy ? 'not-allowed' : 'pointer',
-      fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
-      fontWeight: 700, transition: 'all .15s', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', gap: 7, opacity: busy ? 0.5 : 1,
+      width: '100%', background: 'none', border: 'none', padding: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+      cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1,
     }}>
-      <Icon name={enabled ? 'check' : 'bell'} size={13} />
-      {enabled ? 'Notificaciones push activadas' : 'Activar notificaciones push'}
+      <span style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontFamily: 'var(--font-data)', fontSize: 10.5, letterSpacing: '0.08em',
+        textTransform: 'uppercase', color: enabled ? 'var(--txt)' : 'var(--txt-dim)',
+      }}>
+        <Icon name="bell" size={13} style={{ color: enabled ? 'var(--green-500)' : 'var(--txt-faint)' }} />
+        Notificaciones push
+      </span>
+      <span style={{
+        position: 'relative', width: 38, height: 20, borderRadius: 10, flexShrink: 0,
+        background: enabled ? 'var(--green-500)' : 'rgba(255,255,255,0.12)',
+        border: `1px solid ${enabled ? 'var(--green-500)' : 'var(--holo-line)'}`,
+        transition: 'background .18s ease, border-color .18s ease',
+      }}>
+        <span style={{
+          position: 'absolute', top: 1, left: enabled ? 18 : 1,
+          width: 16, height: 16, borderRadius: '50%', background: '#fff',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.4)', transition: 'left .18s var(--ease-standard)',
+        }} />
+      </span>
     </button>
   );
 }
@@ -801,7 +815,6 @@ function NotifDrawer({ open, notifications, unread, onMarkRead, onMarkAllRead, o
             Marcar todo como leído
           </button>
         )}
-        <PushToggle />
       </div>
 
       {/* Lista scrollable */}
@@ -824,7 +837,8 @@ function NotifDrawer({ open, notifications, unread, onMarkRead, onMarkAllRead, o
       </div>
 
       {/* Pie */}
-      <div style={{ padding: '12px 20px', borderTop: '1px solid var(--holo-line)', flexShrink: 0 }}>
+      <div style={{ padding: '14px 20px', borderTop: '1px solid var(--holo-line)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <PushToggle />
         <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textAlign: 'center', letterSpacing: '0.08em' }}>
           {notifications.length} notificación{notifications.length !== 1 ? 'es' : ''} · últimas 24 h
         </div>
