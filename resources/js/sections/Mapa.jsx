@@ -3887,14 +3887,14 @@ function TradeOfferModal({ target, userCharacter, onClose, onSent }) {
     if (ofertaVacia || sending) return;
     setSending(true);
     try {
-      await apiPost('/trades/propose', {
+      const d = await apiPost('/trades/propose', {
         target_id: target.user_id,
         offer_credits: offerCredits,
         request_credits: requestCredits,
         items,
       });
       toast('Propuesta de comercio enviada', { tone: 'success', icon: 'coin' });
-      onSent?.();
+      onSent?.(d?.trade);
     } catch (err) {
       toast(err.message || 'No se pudo enviar la propuesta', { tone: 'error', icon: 'x' });
     } finally {
@@ -4112,6 +4112,46 @@ function TradeRequestReceived({ trade, onAccept, onDecline, onCreditsChange, lug
   );
 }
 
+/* ─── COMERCIO PROPUESTO — pendiente de respuesta ───────── */
+function OutgoingTradePanel({ trade, onCancelled }) {
+  const [busy, setBusy] = useState(false);
+  const cancel = async () => {
+    setBusy(true);
+    try {
+      await apiPost(`/trades/${trade.id}/cancel`, {});
+      toast('Propuesta de comercio cancelada', { tone: 'default', icon: 'x' });
+      onCancelled();
+    } catch (err) {
+      toast(err.message || 'No se pudo cancelar la propuesta', { tone: 'error', icon: 'x' });
+      setBusy(false);
+    }
+  };
+
+  return createPortal(
+    <div className="nx-panel solid nx-fade" style={{
+      position: 'fixed', right: 20, bottom: 20, zIndex: 700,
+      width: 280, padding: 14, display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="coin" size={14} style={{ color: 'var(--holo)' }} />
+        <div className="nx-kicker" style={{ flex: 1 }}>COMERCIO PENDIENTE</div>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--txt)' }}>
+        Esperando respuesta de <strong>@{trade.target?.handle ?? '?'}</strong>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--txt-dim)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {trade.offer_credits > 0 && <span>Ofreces: {trade.offer_credits} créditos</span>}
+        {trade.offer_items.map((it) => <span key={it.rol_objeto_id}>Ofreces: {it.nombre} ×{it.cantidad}</span>)}
+        {trade.request_credits > 0 && <span>Pides: {trade.request_credits} créditos</span>}
+      </div>
+      <Btn kind="ghost" sm onClick={cancel} disabled={busy}>
+        {busy ? 'Cancelando...' : 'Cancelar propuesta'}
+      </Btn>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
 export default function MapaView({ S, setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
@@ -4139,22 +4179,24 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const pvpPollRef = useRef(null);
   const [tradeTarget, setTradeTarget] = useState(null);
   const [pendingTrade, setPendingTrade] = useState(null);
+  const [outgoingTrade, setOutgoingTrade] = useState(null);
   const tradePollRef = useRef(null);
 
-  // Polling para detectar propuestas de comercio entrantes mientras no haya una visible
+  // Polling: detecta propuestas de comercio entrantes y refleja el estado de las que yo envié
   useEffect(() => {
-    if (pendingTrade) return;
     const checkTrade = () => {
       apiFetch('/trades/active')
         .then(d => {
-          if (d?.trade && !d.trade.i_am_initiator) setPendingTrade(d.trade);
+          if (!d?.trade) { setPendingTrade(null); setOutgoingTrade(null); return; }
+          if (d.trade.i_am_initiator) { setOutgoingTrade(d.trade); setPendingTrade(null); }
+          else { setPendingTrade(d.trade); setOutgoingTrade(null); }
         })
         .catch(() => {});
     };
     checkTrade();
     tradePollRef.current = setInterval(checkTrade, 5000);
     return () => clearInterval(tradePollRef.current);
-  }, [pendingTrade]);
+  }, []);
 
   // Comprueba si hay un combate PvP activo o pendiente al entrar al mapa
   useEffect(() => {
@@ -4475,7 +4517,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           target={tradeTarget}
           userCharacter={userCharacter}
           onClose={() => setTradeTarget(null)}
-          onSent={() => setTradeTarget(null)}
+          onSent={(trade) => { setTradeTarget(null); if (trade) setOutgoingTrade(trade); }}
         />
       )}
 
@@ -4487,6 +4529,14 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           onAccept={() => setPendingTrade(null)}
           onDecline={() => setPendingTrade(null)}
           onCreditsChange={syncCredits}
+        />
+      )}
+
+      {/* Comercio que propuse y sigue pendiente de respuesta — panel no bloqueante */}
+      {outgoingTrade && (
+        <OutgoingTradePanel
+          trade={outgoingTrade}
+          onCancelled={() => setOutgoingTrade(null)}
         />
       )}
 
