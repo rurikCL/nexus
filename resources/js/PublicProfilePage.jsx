@@ -34,6 +34,7 @@ function mapPublicCombatant(p) {
     sponsor:   p.sponsor ?? '',
     joined:    p.joined_year ? String(p.joined_year) : '',
     photo_url: p.photo_url ?? null,
+    titulo_activo: p.titulo_activo ?? null,
     tutor:     p.tutor ?? null,
     medals:    [],
     initials,

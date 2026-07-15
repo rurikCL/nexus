@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Character;
+use App\Models\CharacterSable;
+use App\Models\RolHabilidad;
 use App\Models\StatsTemporada;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -11,9 +14,12 @@ use Illuminate\Support\Facades\Storage;
 
 class MeController extends Controller
 {
-    private function habilidadResource(?\App\Models\RolHabilidad $h): ?array
+    private function habilidadResource(?RolHabilidad $h): ?array
     {
-        if (!$h) return null;
+        if (! $h) {
+            return null;
+        }
+
         return array_merge($h->toArray(), [
             'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
         ]);
@@ -24,27 +30,31 @@ class MeController extends Controller
         $tutors = User::whereIn('tier', ['caballero', 'maestro', 'granmaestro'])
             ->with('character')
             ->get()
-            ->filter(fn($u) => $u->character !== null)
-            ->map(fn($u) => [
-                'id'     => $u->id,
-                'name'   => $u->name,
+            ->filter(fn ($u) => $u->character !== null)
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
                 'handle' => $u->character->handle,
-                'tier'   => $u->tier,
+                'tier' => $u->tier,
             ])
             ->values();
 
         return response()->json(['tutors' => $tutors]);
     }
 
-    private function resolveAllHabilidades(?\App\Models\Character $character): array
+    private function resolveAllHabilidades(?Character $character): array
     {
-        if (!$character) return [];
+        if (! $character) {
+            return [];
+        }
         $porForma = is_array($character->habilidades_por_forma) ? $character->habilidades_por_forma : [];
-        $allIds   = collect($porForma)->flatten()->filter()->unique()->values()->toArray();
-        if (empty($allIds)) return [];
+        $allIds = collect($porForma)->flatten()->filter()->unique()->values()->toArray();
+        if (empty($allIds)) {
+            return [];
+        }
 
-        return \App\Models\RolHabilidad::whereIn('id', $allIds)->get()
-            ->mapWithKeys(fn($h) => [(string)$h->id => array_merge($h->toArray(), [
+        return RolHabilidad::whereIn('id', $allIds)->get()
+            ->mapWithKeys(fn ($h) => [(string) $h->id => array_merge($h->toArray(), [
                 'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
             ])])
             ->toArray();
@@ -58,75 +68,78 @@ class MeController extends Controller
         if ($character) {
             $character->load([
                 'mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada',
-                'sableActivo' => fn ($q) => $q->with(array_keys(\App\Models\CharacterSable::SLOTS)),
+                'sableActivo' => fn ($q) => $q->with(array_keys(CharacterSable::SLOTS)),
+                'titulos', 'tituloActivo',
             ]);
         }
 
         $stats = $character ? StatsTemporada::totalsForUser($user->id) : [];
 
         return response()->json([
-            'id'        => $user->id,
-            'name'      => $user->name,
-            'email'     => $user->email,
-            'tier'      => $user->tier,
-            'grado'     => $user->grado,
-            'clase'     => $user->clase,
-            'is_tutor'  => $user->isTutor(),
-            'roles'     => $user->roles->pluck('name'),
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'tier' => $user->tier,
+            'grado' => $user->grado,
+            'clase' => $user->clase,
+            'is_tutor' => $user->isTutor(),
+            'roles' => $user->roles->pluck('name'),
             'character' => $character ? [
-                'id'          => $character->id,
-                'handle'      => $character->handle,
-                'name'        => $character->name,
-                'bio'         => $character->bio,
-                'lore'        => $character->lore,
-                'cls'         => $character->cls,
+                'id' => $character->id,
+                'handle' => $character->handle,
+                'name' => $character->name,
+                'bio' => $character->bio,
+                'lore' => $character->lore,
+                'cls' => $character->cls,
                 'saber_color' => $character->saber_color,
-                'side'        => $character->side,
-                'sector'      => $character->sector,
-                'sponsor'     => $character->sponsor,
+                'side' => $character->side,
+                'sector' => $character->sector,
+                'sponsor' => $character->sponsor,
                 'joined_year' => $character->joined_year,
-                'credits'     => $character->credits,
-                'reputation'  => $character->reputation ?? 0,
-                'wins'        => $stats['wins'],
-                'losses'      => $stats['losses'],
-                'streak'      => $stats['streak'],
-                'winrate'     => $stats['winrate'],
-                'stats'       => $character->stats,
-                'vida'        => $character->vida,
-                'escudo'      => $character->escudo,
-                'defensa'     => $character->defensa,
-                'ataque'      => $character->ataque,
-                'movimiento'  => $character->movimiento,
-                'iniciativa'  => $character->iniciativa,
-                'punteria'      => $character->punteria,
-                'sable_bonos'   => $character->sableBonos(),
-                'puntos_libres'         => $character->puntos_libres ?? 5,
-                'habilidades_por_forma' => $character->habilidades_por_forma ?? (object)[],
-                'current_forma'         => $character->current_forma ?? 1,
-                'all_habilidades_data'  => $this->resolveAllHabilidades($character),
-                'rol_objetos'   => $character->rolObjetos->values(),
+                'credits' => $character->credits,
+                'reputation' => $character->reputation ?? 0,
+                'wins' => $stats['wins'],
+                'losses' => $stats['losses'],
+                'streak' => $stats['streak'],
+                'winrate' => $stats['winrate'],
+                'stats' => $character->stats,
+                'vida' => $character->vida,
+                'escudo' => $character->escudo,
+                'defensa' => $character->defensa,
+                'ataque' => $character->ataque,
+                'movimiento' => $character->movimiento,
+                'iniciativa' => $character->iniciativa,
+                'punteria' => $character->punteria,
+                'sable_bonos' => $character->sableBonos(),
+                'puntos_libres' => $character->puntos_libres ?? 5,
+                'habilidades_por_forma' => $character->habilidades_por_forma ?? (object) [],
+                'current_forma' => $character->current_forma ?? 1,
+                'all_habilidades_data' => $this->resolveAllHabilidades($character),
+                'rol_objetos' => $character->rolObjetos->values(),
                 'arma_equipada' => $character->armaEquipada,
-                'sable_activo'  => $character->sableActivo,
+                'sable_activo' => $character->sableActivo,
                 'arma_efectiva' => $character->armaEfectiva(),
-                'gold'                  => $character->gold,
-                'photo_url'    => $character->photo
-                    ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
+                'titulos' => $character->titulos,
+                'titulo_activo' => $character->tituloActivo,
+                'gold' => $character->gold,
+                'photo_url' => $character->photo
+                    ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                     : null,
                 'map_location' => [
-                    'sistema_id'     => $character->map_sistema_id,
+                    'sistema_id' => $character->map_sistema_id,
                     'sistema_nombre' => $character->mapSistema?->nombre,
-                    'planeta_id'     => $character->map_planeta_id,
+                    'planeta_id' => $character->map_planeta_id,
                     'planeta_nombre' => $character->mapPlaneta?->nombre,
-                    'zona_id'        => $character->map_zona_id,
-                    'zona_nombre'    => $character->mapZona?->nombre,
-                    'lugar_id'       => $character->map_lugar_id,
-                    'lugar_nombre'   => $character->mapLugar?->nombre,
-                    'nombre'         => $character->mapLugar?->nombre
+                    'zona_id' => $character->map_zona_id,
+                    'zona_nombre' => $character->mapZona?->nombre,
+                    'lugar_id' => $character->map_lugar_id,
+                    'lugar_nombre' => $character->mapLugar?->nombre,
+                    'nombre' => $character->mapLugar?->nombre
                                      ?? $character->mapZona?->nombre
                                      ?? $character->mapPlaneta?->nombre
                                      ?? $character->mapSistema?->nombre,
-                    'nivel'          => $character->map_lugar_id  ? 'lugar'
-                                      : ($character->map_zona_id  ? 'zona'
+                    'nivel' => $character->map_lugar_id ? 'lugar'
+                                      : ($character->map_zona_id ? 'zona'
                                       : ($character->map_planeta_id ? 'planeta'
                                       : ($character->map_sistema_id ? 'sistema' : null))),
                 ],

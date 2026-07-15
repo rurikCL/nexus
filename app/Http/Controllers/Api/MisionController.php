@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CharacterHito;
 use App\Models\Mision;
 use App\Models\Objetivo;
 use App\Models\Recompensa;
@@ -93,15 +94,15 @@ class MisionController extends Controller
                 $base = $this->formatMision($m);
 
                 $participantes = $m->users->map(fn ($u) => [
-                    'id'           => $u->id,
-                    'name'         => $u->name,
-                    'handle'       => $u->character?->handle ?? '',
-                    'photo_url'    => $u->character?->photo_url ?? null,
-                    'progreso'     => $u->pivot->progreso,
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'handle' => $u->character?->handle ?? '',
+                    'photo_url' => $u->character?->photo_url ?? null,
+                    'progreso' => $u->pivot->progreso,
                     'progreso_json' => $u->pivot->progreso_json
                         ? json_decode($u->pivot->progreso_json, true)
                         : null,
-                    'status'       => $u->pivot->status,
+                    'status' => $u->pivot->status,
                 ])->values();
 
                 $totalProgreso = $m->users->sum(fn ($u) => $u->pivot->progreso);
@@ -109,8 +110,8 @@ class MisionController extends Controller
                 $miPivot = $m->users->firstWhere('id', $user->id);
 
                 return array_merge($base, [
-                    'participantes'    => $participantes,
-                    'total_progreso'   => $totalProgreso,
+                    'participantes' => $participantes,
+                    'total_progreso' => $totalProgreso,
                     'completada_por_mi' => $miPivot?->pivot->status === 'completada',
                 ]);
             });
@@ -139,16 +140,16 @@ class MisionController extends Controller
                 $pivot = $m->users()->where('user_id', $user->id)->first()?->pivot;
 
                 return array_merge($base, [
-                    'status'       => $pivot?->status ?? 'pendiente',
-                    'progreso'     => $pivot?->progreso ?? 0,
+                    'status' => $pivot?->status ?? 'pendiente',
+                    'progreso' => $pivot?->progreso ?? 0,
                     'progreso_json' => $pivot?->progreso_json
                         ? json_decode($pivot->progreso_json, true)
                         : null,
-                    'npc'          => $m->npc ? [
-                        'id'         => $m->npc->id,
-                        'nombre'     => $m->npc->nombre,
+                    'npc' => $m->npc ? [
+                        'id' => $m->npc->id,
+                        'nombre' => $m->npc->nombre,
                         'imagen_mini' => $m->npc->imagen_mini,
-                        'lugar'      => $m->npc->lugar?->nombre,
+                        'lugar' => $m->npc->lugar?->nombre,
                     ] : null,
                 ]);
             });
@@ -174,8 +175,8 @@ class MisionController extends Controller
 
                 return array_merge($base, [
                     'completada_por_mi' => $pivot?->status === 'completada',
-                    'status'            => $pivot?->status ?? null,
-                    'progreso'          => $pivot?->progreso ?? 0,
+                    'status' => $pivot?->status ?? null,
+                    'progreso' => $pivot?->progreso ?? 0,
                 ]);
             });
 
@@ -192,35 +193,35 @@ class MisionController extends Controller
         $this->decodeJsonArrayFields($request);
 
         $data = $request->validate([
-            'nombre'            => 'required|string|max:255',
-            'mision'            => 'required|string',
-            'descripcion'       => 'nullable|string',
-            'foto_mision'       => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
-            'tipo_mision'       => 'sometimes|in:temporada,comunidad,individual',
-            'temporada_id'      => 'nullable|integer|exists:temporadas,id',
-            'npc_id'            => 'nullable|integer|exists:map_npcs,id',
+            'nombre' => 'required|string|max:255',
+            'mision' => 'required|string',
+            'descripcion' => 'nullable|string',
+            'foto_mision' => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
+            'tipo_mision' => 'sometimes|in:temporada,comunidad,individual',
+            'temporada_id' => 'nullable|integer|exists:temporadas,id',
+            'npc_id' => 'nullable|integer|exists:map_npcs,id',
             'puntos_requeridos' => 'sometimes|integer|min:0',
-            'activa'            => 'sometimes|boolean',
-            'orden'             => 'sometimes|integer|min:0',
-            'fecha_inicio'      => 'nullable|date_format:Y-m-d',
-            'fecha_termino'     => 'nullable|date_format:Y-m-d',
-            'objetivos'         => 'sometimes|array',
-            'objetivos.*.nombre'      => 'required|string|max:255',
+            'activa' => 'sometimes|boolean',
+            'orden' => 'sometimes|integer|min:0',
+            'fecha_inicio' => 'nullable|date_format:Y-m-d',
+            'fecha_termino' => 'nullable|date_format:Y-m-d',
+            'objetivos' => 'sometimes|array',
+            'objetivos.*.nombre' => 'required|string|max:255',
             'objetivos.*.descripcion' => 'nullable|string',
-            'objetivos.*.tipo'        => 'sometimes|string|max:100',
-            'objetivos.*.meta'        => 'sometimes|numeric',
-            'objetivos.*.unidad'      => 'nullable|string|max:100',
+            'objetivos.*.tipo' => 'sometimes|string|max:100',
+            'objetivos.*.meta' => 'sometimes|numeric',
+            'objetivos.*.unidad' => 'nullable|string|max:100',
             'objetivos.*.progreso_tipo' => 'sometimes|in:conteo,porcentaje',
-            'recompensas'       => 'sometimes|array',
-            'recompensas.*.nombre'       => 'required|string|max:255',
-            'recompensas.*.descripcion'  => 'nullable|string',
-            'recompensas.*.tipo'         => 'sometimes|string|max:100',
-            'recompensas.*.valor'        => 'sometimes|numeric',
-            'recompensas.*.imagen'       => 'nullable|string|max:500',
+            'recompensas' => 'sometimes|array',
+            'recompensas.*.nombre' => 'required|string|max:255',
+            'recompensas.*.descripcion' => 'nullable|string',
+            'recompensas.*.tipo' => 'sometimes|string|max:100',
+            'recompensas.*.valor' => 'sometimes|numeric',
+            'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
-            'recompensas.*.objeto_id'    => 'nullable|integer|exists:rol_objetos,id',
+            'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
             'hito_requerimiento' => 'nullable|string',
-            'entregar_hito'      => 'nullable|string',
+            'entregar_hito' => 'nullable|string',
         ]);
 
         if ($request->hasFile('foto_mision')) {
@@ -252,43 +253,43 @@ class MisionController extends Controller
         $this->decodeJsonArrayFields($request);
 
         $data = $request->validate([
-            'nombre'            => 'sometimes|string|max:255',
-            'mision'            => 'sometimes|string',
-            'descripcion'       => 'nullable|string',
-            'foto_mision'       => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
-            'tipo_mision'       => 'sometimes|in:temporada,comunidad,individual',
-            'temporada_id'      => 'nullable|integer|exists:temporadas,id',
-            'npc_id'            => 'nullable|integer|exists:map_npcs,id',
+            'nombre' => 'sometimes|string|max:255',
+            'mision' => 'sometimes|string',
+            'descripcion' => 'nullable|string',
+            'foto_mision' => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
+            'tipo_mision' => 'sometimes|in:temporada,comunidad,individual',
+            'temporada_id' => 'nullable|integer|exists:temporadas,id',
+            'npc_id' => 'nullable|integer|exists:map_npcs,id',
             'puntos_requeridos' => 'sometimes|integer|min:0',
-            'activa'            => 'sometimes|boolean',
-            'orden'             => 'sometimes|integer|min:0',
-            'fecha_inicio'      => 'nullable|date_format:Y-m-d',
-            'fecha_termino'     => 'nullable|date_format:Y-m-d',
-            'objetivos'         => 'sometimes|array',
-            'objetivos.*.id'          => 'sometimes|integer',
-            'objetivos.*.nombre'      => 'required|string|max:255',
+            'activa' => 'sometimes|boolean',
+            'orden' => 'sometimes|integer|min:0',
+            'fecha_inicio' => 'nullable|date_format:Y-m-d',
+            'fecha_termino' => 'nullable|date_format:Y-m-d',
+            'objetivos' => 'sometimes|array',
+            'objetivos.*.id' => 'sometimes|integer',
+            'objetivos.*.nombre' => 'required|string|max:255',
             'objetivos.*.descripcion' => 'nullable|string',
-            'objetivos.*.tipo'        => 'sometimes|string|max:100',
-            'objetivos.*.meta'        => 'sometimes|numeric',
-            'objetivos.*.unidad'      => 'nullable|string|max:100',
+            'objetivos.*.tipo' => 'sometimes|string|max:100',
+            'objetivos.*.meta' => 'sometimes|numeric',
+            'objetivos.*.unidad' => 'nullable|string|max:100',
             'objetivos.*.progreso_tipo' => 'sometimes|in:conteo,porcentaje',
-            'recompensas'       => 'sometimes|array',
-            'recompensas.*.id'           => 'sometimes|integer',
-            'recompensas.*.nombre'       => 'required|string|max:255',
-            'recompensas.*.descripcion'  => 'nullable|string',
-            'recompensas.*.tipo'         => 'sometimes|string|max:100',
-            'recompensas.*.valor'        => 'sometimes|numeric',
-            'recompensas.*.imagen'       => 'nullable|string|max:500',
+            'recompensas' => 'sometimes|array',
+            'recompensas.*.id' => 'sometimes|integer',
+            'recompensas.*.nombre' => 'required|string|max:255',
+            'recompensas.*.descripcion' => 'nullable|string',
+            'recompensas.*.tipo' => 'sometimes|string|max:100',
+            'recompensas.*.valor' => 'sometimes|numeric',
+            'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
-            'recompensas.*.objeto_id'    => 'nullable|integer|exists:rol_objetos,id',
+            'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
             'hito_requerimiento' => 'nullable|string',
-            'entregar_hito'      => 'nullable|string',
+            'entregar_hito' => 'nullable|string',
         ]);
 
         $reemplazandoFoto = $request->hasFile('foto_mision');
-        $borrandoFoto     = array_key_exists('foto_mision', $data) && $data['foto_mision'] === null;
+        $borrandoFoto = array_key_exists('foto_mision', $data) && $data['foto_mision'] === null;
 
-        if (($reemplazandoFoto || $borrandoFoto) && $mision->foto_mision && !str_starts_with($mision->foto_mision, 'http')) {
+        if (($reemplazandoFoto || $borrandoFoto) && $mision->foto_mision && ! str_starts_with($mision->foto_mision, 'http')) {
             Storage::disk('public')->delete($mision->foto_mision);
         }
         if ($reemplazandoFoto) {
@@ -410,8 +411,8 @@ class MisionController extends Controller
         }
 
         $data = $request->validate([
-            'progreso'      => 'required|integer|min:0|max:100',
-            'status'        => 'nullable|in:pendiente,en-curso,completada',
+            'progreso' => 'required|integer|min:0|max:100',
+            'status' => 'nullable|in:pendiente,en-curso,completada',
             'progreso_json' => 'nullable|array',
         ]);
 
@@ -420,7 +421,7 @@ class MisionController extends Controller
 
         $pivotData = [
             'progreso' => $data['progreso'],
-            'status'   => $status,
+            'status' => $status,
         ];
 
         if (isset($data['progreso_json'])) {
@@ -435,20 +436,20 @@ class MisionController extends Controller
     // ── POST /api/misiones/{mision}/completar ─────────────────────────────────
     public function completar(Request $request, Mision $mision): JsonResponse
     {
-        $user      = $request->user();
+        $user = $request->user();
         $character = $user->character;
 
         // Verificar hitos requeridos
         if ($mision->hito_requerimiento) {
-            $requeridos  = array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)));
-            $tieneHitos  = $character
+            $requeridos = array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)));
+            $tieneHitos = $character
                 ? $character->hitos()->whereIn('hito', $requeridos)->pluck('hito')->toArray()
                 : [];
-            $faltantes   = array_values(array_diff($requeridos, $tieneHitos));
+            $faltantes = array_values(array_diff($requeridos, $tieneHitos));
 
             if (! empty($faltantes)) {
                 return response()->json([
-                    'message'  => 'No cumples los hitos requeridos para esta misión.',
+                    'message' => 'No cumples los hitos requeridos para esta misión.',
                     'faltantes' => $faltantes,
                 ], 403);
             }
@@ -462,9 +463,10 @@ class MisionController extends Controller
 
         // Otorgar recompensas según su tipo
         $habilidadesAprendidas = [];
-        $objetosOtorgados      = [];
-        $objetosSinEspacio     = [];
-        $creditosOtorgados     = 0;
+        $objetosOtorgados = [];
+        $objetosSinEspacio = [];
+        $creditosOtorgados = 0;
+        $titulosOtorgados = [];
         foreach ($mision->recompensas as $recompensa) {
             if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
                 $user->habilidadesAprendidas()->syncWithoutDetaching([$recompensa->habilidad_id]);
@@ -479,6 +481,12 @@ class MisionController extends Controller
             } elseif ($recompensa->tipo === 'creditos' && $recompensa->valor && $character) {
                 $character->increment('credits', $recompensa->valor);
                 $creditosOtorgados += $recompensa->valor;
+            } elseif (in_array($recompensa->tipo, ['titulo', 'insignia'], true) && $character) {
+                $titulo = $character->titulos()->firstOrCreate(
+                    ['nombre' => $recompensa->nombre],
+                    ['tipo' => $recompensa->tipo, 'mision_id' => $mision->id]
+                );
+                $titulosOtorgados[] = $titulo->only(['id', 'nombre', 'tipo']);
             }
         }
 
@@ -487,7 +495,7 @@ class MisionController extends Controller
         if ($mision->entregar_hito && $character) {
             $hitos = array_filter(array_map('trim', explode(',', $mision->entregar_hito)));
             foreach ($hitos as $hito) {
-                \App\Models\CharacterHito::firstOrCreate(
+                CharacterHito::firstOrCreate(
                     ['character_id' => $character->id, 'hito' => $hito]
                 );
                 $hitosOtorgados[] = $hito;
@@ -497,14 +505,15 @@ class MisionController extends Controller
         $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
 
         return response()->json([
-            'message'                => 'Misión completada.',
+            'message' => 'Misión completada.',
             'habilidades_aprendidas' => $habilidadesAprendidas,
-            'objetos_otorgados'      => $objetosOtorgados,
-            'objetos_sin_espacio'    => $objetosSinEspacio,
-            'creditos_otorgados'     => $creditosOtorgados,
-            'hitos_otorgados'        => $hitosOtorgados,
-            'mision'                 => array_merge($this->formatMision($mision), [
-                'status'   => $pivot?->status ?? 'completada',
+            'objetos_otorgados' => $objetosOtorgados,
+            'objetos_sin_espacio' => $objetosSinEspacio,
+            'creditos_otorgados' => $creditosOtorgados,
+            'titulos_otorgados' => $titulosOtorgados,
+            'hitos_otorgados' => $hitosOtorgados,
+            'mision' => array_merge($this->formatMision($mision), [
+                'status' => $pivot?->status ?? 'completada',
                 'progreso' => $pivot?->progreso ?? 100,
             ]),
         ]);
@@ -515,49 +524,49 @@ class MisionController extends Controller
     private function formatMision(Mision $mision, bool $withUsers = false): array
     {
         $base = [
-            'id'                => $mision->id,
-            'nombre'            => $mision->nombre,
-            'mision'            => $mision->mision,
-            'descripcion'       => $mision->descripcion,
-            'foto_mision'       => $mision->foto_mision,
-            'tipo_mision'       => $mision->tipo_mision ?? 'individual',
-            'temporada_id'      => $mision->temporada_id,
-            'npc_id'            => $mision->npc_id,
+            'id' => $mision->id,
+            'nombre' => $mision->nombre,
+            'mision' => $mision->mision,
+            'descripcion' => $mision->descripcion,
+            'foto_mision' => $mision->foto_mision,
+            'tipo_mision' => $mision->tipo_mision ?? 'individual',
+            'temporada_id' => $mision->temporada_id,
+            'npc_id' => $mision->npc_id,
             'puntos_requeridos' => $mision->puntos_requeridos,
-            'activa'            => (bool) $mision->activa,
-            'orden'             => $mision->orden,
-            'fecha_inicio'         => $mision->fecha_inicio?->format('Y-m-d'),
-            'fecha_termino'        => $mision->fecha_termino?->format('Y-m-d'),
-            'hito_requerimiento'   => $mision->hito_requerimiento,
-            'entregar_hito'        => $mision->entregar_hito,
-            'npc'               => $mision->relationLoaded('npc') && $mision->npc
+            'activa' => (bool) $mision->activa,
+            'orden' => $mision->orden,
+            'fecha_inicio' => $mision->fecha_inicio?->format('Y-m-d'),
+            'fecha_termino' => $mision->fecha_termino?->format('Y-m-d'),
+            'hito_requerimiento' => $mision->hito_requerimiento,
+            'entregar_hito' => $mision->entregar_hito,
+            'npc' => $mision->relationLoaded('npc') && $mision->npc
                 ? ['id' => $mision->npc->id, 'nombre' => $mision->npc->nombre, 'imagen_mini' => $mision->npc->imagen_mini]
                 : null,
-            'objetivos'         => $mision->relationLoaded('objetivos')
+            'objetivos' => $mision->relationLoaded('objetivos')
                 ? $mision->objetivos->map(fn ($o) => [
-                    'id'           => $o->id,
-                    'nombre'       => $o->nombre,
-                    'descripcion'  => $o->descripcion,
-                    'tipo'         => $o->tipo,
-                    'meta'         => $o->meta,
-                    'unidad'       => $o->unidad,
+                    'id' => $o->id,
+                    'nombre' => $o->nombre,
+                    'descripcion' => $o->descripcion,
+                    'tipo' => $o->tipo,
+                    'meta' => $o->meta,
+                    'unidad' => $o->unidad,
                     'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
                 ])->values()
                 : [],
-            'recompensas'       => $mision->relationLoaded('recompensas')
+            'recompensas' => $mision->relationLoaded('recompensas')
                 ? $mision->recompensas->map(fn ($r) => [
-                    'id'           => $r->id,
-                    'nombre'       => $r->nombre,
-                    'descripcion'  => $r->descripcion,
-                    'tipo'         => $r->tipo,
-                    'valor'        => $r->valor,
-                    'imagen'       => $r->imagen,
+                    'id' => $r->id,
+                    'nombre' => $r->nombre,
+                    'descripcion' => $r->descripcion,
+                    'tipo' => $r->tipo,
+                    'valor' => $r->valor,
+                    'imagen' => $r->imagen,
                     'habilidad_id' => $r->habilidad_id,
-                    'habilidad'    => $r->relationLoaded('habilidad') && $r->habilidad
+                    'habilidad' => $r->relationLoaded('habilidad') && $r->habilidad
                         ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre]
                         : null,
-                    'objeto_id'    => $r->objeto_id,
-                    'objeto'       => $r->relationLoaded('objeto') && $r->objeto
+                    'objeto_id' => $r->objeto_id,
+                    'objeto' => $r->relationLoaded('objeto') && $r->objeto
                         ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen]
                         : null,
                 ])->values()
@@ -566,11 +575,11 @@ class MisionController extends Controller
 
         if ($withUsers && $mision->relationLoaded('users')) {
             $base['users'] = $mision->users->map(fn ($u) => [
-                'id'       => $u->id,
-                'name'     => $u->name,
-                'handle'   => $u->character?->handle ?? '',
-                'tier'     => $u->tier ?? 'iniciado',
-                'status'   => $u->pivot->status,
+                'id' => $u->id,
+                'name' => $u->name,
+                'handle' => $u->character?->handle ?? '',
+                'tier' => $u->tier ?? 'iniciado',
+                'status' => $u->pivot->status,
                 'progreso' => $u->pivot->progreso,
             ])->values();
         }
