@@ -4313,8 +4313,16 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     if (loc.sistema_id) setSistema({ id: loc.sistema_id, nombre: loc.sistema_nombre });
     if (loc.planeta_id) setPlaneta({ id: loc.planeta_id, nombre: loc.planeta_nombre });
     if (loc.zona_id)    setZona   ({ id: loc.zona_id,    nombre: loc.zona_nombre    });
-    if (loc.lugar_id)   setLugar  ({ id: loc.lugar_id });
+    if (loc.lugar_id)   setLugar  ({ id: loc.lugar_id,   nombre: loc.lugar_nombre   });
     setNivel(loc.nivel);
+
+    // Al restaurar directamente en un nivel profundo, PlanetaView nunca llega a montarse,
+    // así que su imagen (usada en la tarjeta de combate) no se carga por su propio efecto — se pide aquí.
+    if (loc.planeta_id) {
+      apiFetch(`/map/planetas/${loc.planeta_id}`)
+        .then((d) => setPlanetaImagen(d.planeta?.imagen ? mediaUrl(d.planeta.imagen) : null))
+        .catch(() => {});
+    }
   }, [initialLocation]);
 
   const goGalaxy  = () => {
