@@ -302,6 +302,9 @@ class PvpCombatController extends Controller
 
             /* ─── Ataque básico (sable armado > arma equipada > desarmado) ──── */
         } elseif ($skill === 'unarmed') {
+            if ($combat->modo === 'naval') {
+                return response()->json(['error' => 'El ataque cuerpo a cuerpo no está disponible en combate naval'], 422);
+            }
             $arma = $actorChar->armaEfectiva();
             $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
             $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
@@ -682,11 +685,14 @@ class PvpCombatController extends Controller
             ? RolHabilidad::whereIn('id', $slotIds)->get()->map(fn ($h) => self::fmtHab($h))->values()->toArray()
             : [];
 
+        $naveOwned = $modo === 'naval' ? self::getNaveOwned($ch) : null;
+
         return [
             'id' => $user->id,
             'name' => $ch?->name ?? $user->name,
             'handle' => $ch?->handle ?? $user->name,
             'photo_url' => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
+            'nave_imagen' => $naveOwned?->nave?->imagen,
             'stats' => self::getCombatStats($ch, $modo),
             'habilidades' => $habilidades,
             'current_forma' => $currentForma,

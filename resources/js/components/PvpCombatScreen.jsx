@@ -380,6 +380,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 
+  /* En combate naval se muestra la imagen de la nave equipada en vez de la
+     foto del personaje, y no hay forma/estancia que mostrar (las naves no
+     tienen forma de sable). */
+  const myPhotoUrl  = mediaUrl(me.es_nave  ? me.nave_imagen  : me.photo_url);
+  const oppPhotoUrl = mediaUrl(opp.es_nave ? opp.nave_imagen : opp.photo_url);
+  const myFormaProp  = me.es_nave  ? 0 : myCurrentForma;
+  const oppFormaProp = opp.es_nave ? 0 : oppCurrentForma;
+
   /* Adjunta a cada efecto el % de rondas restantes respecto de la mayor duración
      observada desde que apareció, para la barrita que se va reduciendo. */
   const withDurationPct = (side, effects) => {
@@ -777,26 +785,28 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
           <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-          {/* Ataque básico (arma equipada o desarmado) */}
-          <button onClick={() => doAction('unarmed')} disabled={busy} style={{
-            minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-            background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-          }}
-            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
-            <span style={{
-              fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
-              maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis',
-              color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
-            }}>
-              {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
-            </span>
-            <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
-          </button>
+          {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
+          {!me.es_nave && (
+            <button onClick={() => doAction('unarmed')} disabled={busy} style={{
+              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+            }}
+              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
+              <span style={{
+                fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis',
+                color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
+              }}>
+                {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
+              </span>
+              <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
+            </button>
+          )}
 
           {/* Estancia (las naves no tienen estancias — solo combate normal) */}
           {!me.es_nave && (
@@ -894,10 +904,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={oppHudRef}>
               <HUD
                 hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
-                nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
+                nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
-                forma={oppCurrentForma}
+                forma={oppFormaProp}
                 effectsPosition="below"
               />
             </div>
@@ -914,10 +924,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={myHudRef}>
               <HUD
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
-                nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
+                nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
-                forma={myCurrentForma}
+                forma={myFormaProp}
                 effectsPosition="above"
               />
             </div>
@@ -930,10 +940,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={oppHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
                 hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
-                nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
+                nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
-                forma={oppCurrentForma}
+                forma={oppFormaProp}
               />
             </div>
 
@@ -941,10 +951,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={myHudRef} style={{ position: 'absolute', bottom: 100, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
-                nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
+                nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
-                forma={myCurrentForma}
+                forma={myFormaProp}
               />
             </div>
           </>
