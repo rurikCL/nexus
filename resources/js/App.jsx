@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
+import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
 
 const HUD_COLORS = ['#FF6B00', '#38cdf0', '#8b5cf6', '#10b981', '#ec4899', '#f97316', '#E6B325', '#3aa0ff'];
 function hashColor(str) {
@@ -704,6 +705,52 @@ function groupByDate(notifications) {
   return groups;
 }
 
+function PushToggle() {
+  const [supported, setSupported] = useState(true);
+  const [enabled, setEnabled]     = useState(false);
+  const [busy, setBusy]           = useState(false);
+
+  useEffect(() => {
+    if (!isPushSupported()) { setSupported(false); return; }
+    getExistingSubscription().then((sub) => setEnabled(!!sub));
+  }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (enabled) {
+        await unsubscribeFromPush();
+        setEnabled(false);
+      } else {
+        await subscribeToPush();
+        setEnabled(true);
+        toast('Notificaciones push activadas', { tone: 'success', icon: 'bell' });
+      }
+    } catch (err) {
+      toast(err?.message || 'No se pudo activar las notificaciones push', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!supported) return null;
+
+  return (
+    <button onClick={toggle} disabled={busy} style={{
+      width: '100%', padding: '8px', borderRadius: 'var(--radius-md)', marginTop: 8,
+      border: '1px solid var(--holo-line)',
+      background: enabled ? 'color-mix(in srgb, var(--green-500) 12%, transparent)' : 'transparent',
+      color: enabled ? 'var(--green-500)' : 'var(--txt-dim)', cursor: busy ? 'not-allowed' : 'pointer',
+      fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
+      fontWeight: 700, transition: 'all .15s', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', gap: 7, opacity: busy ? 0.5 : 1,
+    }}>
+      <Icon name={enabled ? 'check' : 'bell'} size={13} />
+      {enabled ? 'Notificaciones push activadas' : 'Activar notificaciones push'}
+    </button>
+  );
+}
+
 function NotifDrawer({ open, notifications, unread, onMarkRead, onMarkAllRead, onClose }) {
   const hasUnread = unread > 0;
   const groups = groupByDate(notifications);
@@ -748,6 +795,7 @@ function NotifDrawer({ open, notifications, unread, onMarkRead, onMarkAllRead, o
             Marcar todo como leído
           </button>
         )}
+        <PushToggle />
       </div>
 
       {/* Lista scrollable */}

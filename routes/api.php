@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\NpcVendedorController;
 use App\Http\Controllers\Api\PirataEncuentroController;
 use App\Http\Controllers\Api\TaskController;
@@ -149,6 +150,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // Web Push
+    Route::get('/push/vapid-public-key', [PushSubscriptionController::class, 'vapidPublicKey']);
+    Route::post('/push/subscribe',       [PushSubscriptionController::class, 'store']);
+    Route::post('/push/unsubscribe',     [PushSubscriptionController::class, 'destroy']);
 
     // Mensajes directos
     Route::get('/messages/unread',       [MessageController::class, 'unread']);

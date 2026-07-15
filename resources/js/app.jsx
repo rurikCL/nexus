@@ -11,10 +11,23 @@ import Login from './Login.jsx';
 import TutorialWizard from './components/TutorialWizard.jsx';
 import { TransmisionOverlay } from './components/TransmisionOverlay.jsx';
 import PublicProfilePage from './PublicProfilePage.jsx';
+import { registerServiceWorker } from './push.js';
 
 const PUBLIC_PROFILE_MATCH = location.pathname.match(/^\/c\/([^/]+)\/?$/);
 
 function Root() {
+  // Registra el service worker (PWA + push) y navega cuando se hace click en una notificación push
+  useEffect(() => {
+    registerServiceWorker();
+    const onMessage = (e) => {
+      if (e.data?.type === 'nx-push-navigate' && e.data.url) {
+        window.location.assign(e.data.url);
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+  }, []);
+
   // Vista pública de perfil (/c/:handle) — no requiere sesión, se resuelve antes de cualquier chequeo de auth
   if (PUBLIC_PROFILE_MATCH) {
     return <PublicProfilePage handle={decodeURIComponent(PUBLIC_PROFILE_MATCH[1])} />;

@@ -2,37 +2,39 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\BuildsWebPushMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\WebPush\WebPushChannel;
 
 class PvpCombatNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use BuildsWebPushMessage, Queueable;
 
     public function __construct(
         public readonly string $title,
         public readonly string $body,
-        public readonly int    $combatId,
+        public readonly int $combatId,
     ) {}
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', WebPushChannel::class];
     }
 
     public function toArray(object $notifiable): array
     {
         return [
-            'type'         => 'pvp_combat',
-            'icon'         => 'swords',
-            'tone'         => 'red',
-            'title'        => $this->title,
-            'body'         => $this->body,
-            'action_url'   => '#mapa',
+            'type' => 'pvp_combat',
+            'icon' => 'swords',
+            'tone' => 'red',
+            'title' => $this->title,
+            'body' => $this->body,
+            'action_url' => '#mapa',
             'action_label' => 'Ir al combate',
-            'combat_id'    => $this->combatId,
+            'combat_id' => $this->combatId,
         ];
     }
 

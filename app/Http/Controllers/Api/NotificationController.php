@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Notifications\TestTransmision;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Pusher\Pusher;
@@ -18,15 +19,15 @@ class NotificationController extends Controller
             ->limit(50)
             ->get()
             ->map(fn ($n) => [
-                'id'         => $n->id,
-                'type'       => $n->type,
-                'data'       => $n->data,
-                'read'       => !is_null($n->read_at),
+                'id' => $n->id,
+                'type' => $n->type,
+                'data' => $n->data,
+                'read' => ! is_null($n->read_at),
                 'created_at' => $n->created_at->toISOString(),
             ]);
 
         return response()->json([
-            'data'         => $notifications,
+            'data' => $notifications,
             'unread_count' => $request->user()->unreadNotifications()->count(),
         ]);
     }
@@ -71,49 +72,49 @@ class NotificationController extends Controller
 
         $templates = [
             'desafio' => [
-                'icon'         => 'swords',
-                'tone'         => 'orange',
-                'title'        => 'Diego Fuentes te retó a combate',
-                'body'         => 'Apuesta: 750 créditos · Duelo Oficial',
+                'icon' => 'swords',
+                'tone' => 'orange',
+                'title' => 'Diego Fuentes te retó a combate',
+                'body' => 'Apuesta: 750 créditos · Duelo Oficial',
                 'action_label' => 'VER DESAFÍO',
-                'action_url'   => '/combates',
+                'action_url' => '/combates',
             ],
             'victoria' => [
-                'icon'         => 'trophy',
-                'tone'         => 'green',
-                'title'        => '¡Ganaste el combate!',
-                'body'         => 'Carlos Méndez fue derrotado — Ronda clasificatoria',
+                'icon' => 'trophy',
+                'tone' => 'green',
+                'title' => '¡Ganaste el combate!',
+                'body' => 'Carlos Méndez fue derrotado — Ronda clasificatoria',
                 'action_label' => 'VER RESULTADO',
-                'action_url'   => '/combates',
+                'action_url' => '/combates',
             ],
             'derrota' => [
-                'icon'         => 'x',
-                'tone'         => 'red',
-                'title'        => 'Combate perdido',
-                'body'         => 'Carlos Méndez ganó el duelo · Sigue entrenando',
+                'icon' => 'x',
+                'tone' => 'red',
+                'title' => 'Combate perdido',
+                'body' => 'Carlos Méndez ganó el duelo · Sigue entrenando',
                 'action_label' => 'VER RESULTADO',
-                'action_url'   => '/combates',
+                'action_url' => '/combates',
             ],
             'tarea' => [
-                'icon'         => 'tasks',
-                'tone'         => 'holo',
-                'title'        => 'Nueva tarea asignada',
-                'body'         => '3 sesiones de footwork · Recompensa: 120 créditos',
+                'icon' => 'tasks',
+                'tone' => 'holo',
+                'title' => 'Nueva tarea asignada',
+                'body' => '3 sesiones de footwork · Recompensa: 120 créditos',
                 'action_label' => 'VER TAREA',
-                'action_url'   => '/tareas',
+                'action_url' => '/tareas',
             ],
             'sistema' => [
-                'icon'         => 'bell',
-                'tone'         => 'blue',
-                'title'        => 'Mensaje del Sistema NÉXUS',
-                'body'         => 'Mantenimiento programado en 10 minutos.',
+                'icon' => 'bell',
+                'tone' => 'blue',
+                'title' => 'Mensaje del Sistema NÉXUS',
+                'body' => 'Mantenimiento programado en 10 minutos.',
                 'action_label' => null,
-                'action_url'   => null,
+                'action_url' => null,
             ],
         ];
 
-        $payload = $templates[$data['type']];
-        $user    = $request->user();
+        $payload = ['type' => 'test_'.$data['type'], ...$templates[$data['type']]];
+        $user = $request->user();
 
         $pusher = new Pusher(
             config('broadcasting.connections.pusher.key'),
@@ -121,15 +122,17 @@ class NotificationController extends Controller
             config('broadcasting.connections.pusher.app_id'),
             [
                 'cluster' => config('broadcasting.connections.pusher.options.cluster'),
-                'useTLS'  => true,
+                'useTLS' => true,
             ]
         );
 
         $pusher->trigger(
-            'private-App.Models.User.' . $user->id,
+            'private-App.Models.User.'.$user->id,
             'Illuminate\\Notifications\\Events\\BroadcastNotificationCreated',
             $payload
         );
+
+        $user->notify(new TestTransmision($payload));
 
         return response()->json(['ok' => true]);
     }

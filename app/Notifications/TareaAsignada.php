@@ -4,14 +4,16 @@ namespace App\Notifications;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Notifications\Concerns\BuildsWebPushMessage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
+use NotificationChannels\WebPush\WebPushChannel;
 
 class TareaAsignada extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use BuildsWebPushMessage, Queueable;
 
     public function __construct(
         public readonly Task $task,
@@ -20,20 +22,20 @@ class TareaAsignada extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', WebPushChannel::class];
     }
 
     public function toArray(object $notifiable): array
     {
         return [
-            'type'         => 'tarea_asignada',
-            'icon'         => 'tasks',
-            'tone'         => 'holo',
-            'title'        => "Nueva tarea: {$this->task->title}",
-            'body'         => "Asignada por {$this->tutor->name} · Recompensa: {$this->task->reward} créditos",
-            'action_url'   => '/tareas',
+            'type' => 'tarea_asignada',
+            'icon' => 'tasks',
+            'tone' => 'holo',
+            'title' => "Nueva tarea: {$this->task->title}",
+            'body' => "Asignada por {$this->tutor->name} · Recompensa: {$this->task->reward} créditos",
+            'action_url' => '/tareas',
             'action_label' => 'Ver tarea',
-            'task_id'      => $this->task->id,
+            'task_id' => $this->task->id,
         ];
     }
 
