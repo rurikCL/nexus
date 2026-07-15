@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
 
+function mediaUrl(path) {
+  if (!path) return null;
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/storage/')) return cleanPath;
+  if (cleanPath.startsWith('/admin/'))   return `/storage${cleanPath}`;
+  if (cleanPath.startsWith('/public/'))  return cleanPath.replace('/public/', '/storage/');
+  return `/storage${cleanPath}`;
+}
+
 /* ── Constantes ─────────────────────────────────────────── */
 const TIER_COLORS = {
   iniciado: '#8aa0c0', padawan: '#38cdf0', caballero: '#10b981',
@@ -525,7 +535,7 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
       <div style={{ display: 'grid', gap: 16 }}>
         {mision.foto_mision && (
           <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-            <img src={mision.foto_mision} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={mediaUrl(mision.foto_mision)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         )}
 
