@@ -23,3 +23,21 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Cache de imágenes subidas (fotos de personaje, planetas, npcs, emblemas, etc.)
+# Cada subida genera un nombre de archivo único (UUID), por lo que el contenido
+# de una misma URL nunca cambia — es seguro cachearlo de forma agresiva.
+# Al subir una foto nueva se genera una URL distinta, así que el navegador
+# nunca sirve la imagen vieja desde caché.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico)$">
+        ExpiresDefault "access plus 1 year"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>

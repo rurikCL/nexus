@@ -3,17 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Traits\ConvertsToWebp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class EmblemUploadController extends Controller
 {
+    use ConvertsToWebp;
+
     public function store(Request $request): JsonResponse
     {
         $request->validate(['emblema' => 'required|image|max:3072']);
 
-        $path = $request->file('emblema')->store('emblemas', 'public');
+        $path = $this->saveAsWebp($request->file('emblema'), 'emblemas');
 
         return response()->json([
             'path' => $path,
