@@ -584,6 +584,7 @@ class PvpCombatController extends Controller
                 "vs {$actorChar->name} — Responde en el mapa",
                 $combat->id,
                 push: false,
+                broadcast: false,
             ));
 
             // Push diferido: solo llega si el oponente sigue sin responder pasado el plazo configurado
