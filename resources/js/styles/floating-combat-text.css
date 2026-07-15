@@ -8,10 +8,12 @@
 
 .nx-float-text {
   --nx-float-jump-dur: 420ms;
-  --nx-float-fade-dur: 400ms;
-  --nx-float-fade-delay: 600ms;
+  --nx-float-fade-dur: 600ms;
+  --nx-float-fade-delay: 1400ms;
 
-  position: absolute;
+  position: fixed;
+  left: 50%;
+  top: 45%;
   z-index: 550;
   pointer-events: none;
   font-family: var(--font-mono, monospace);
@@ -49,6 +51,6 @@
 @media (prefers-reduced-motion: reduce) {
   .nx-float-text {
     animation-duration: 1ms !important;
-    animation-delay: 0ms, 700ms !important;
+    animation-delay: 0ms, 1500ms !important;
   }
 }

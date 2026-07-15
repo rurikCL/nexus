@@ -1125,20 +1125,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           <EnergyStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => { setFloatText({ key: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }); setStrike(null); }}
+            onDone={() => { setFloatText({ key: strike.key, ...strike.result }); setStrike(null); }}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => { setFloatText({ key: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }); setStrike(null); }}
+            onDone={() => { setFloatText({ key: strike.key, ...strike.result }); setStrike(null); }}
           />
         ))}
 
         {/* Resultado del ataque — texto flotante sobre el objetivo */}
         {floatText && (
           <FloatingCombatText key={floatText.key}
-            x={floatText.x} y={floatText.y} text={floatText.text} variant={floatText.variant}
+            text={floatText.text} variant={floatText.variant}
             onDone={() => setFloatText(null)}
           />
         )}
