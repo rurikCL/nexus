@@ -8,6 +8,7 @@ import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
+import FleeEffect from './FleeEffect.jsx';
 
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
@@ -15,6 +16,7 @@ import FloatingCombatText from './FloatingCombatText.jsx';
    mensaje + el arma/habilidades del lado que actuó. */
 function classifyPvpAttack(entry, combat, myId) {
   const msgs = entry.messages ?? [];
+  if (msgs.some((m) => /intenta huir/.test(m))) return null; // la huida tiene su propia animación
   const attackMsg = msgs.find((m) => / vs 1d20/.test(m));
   if (!attackMsg) return null;
 
@@ -90,6 +92,15 @@ function classifyPvpHeal(entry, myId) {
   return null;
 }
 
+/* Detecta un intento de huida en una entrada del log y si tuvo éxito */
+function classifyPvpFlee(entry, myId) {
+  const msgs = entry.messages ?? [];
+  if (!msgs.some((m) => /intenta huir/.test(m))) return null;
+  const actorIsMe = entry.actor_id === myId;
+  const success = msgs.some((m) => /logra huir del combate/.test(m));
+  return { actorIsMe, success };
+}
+
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
   useEffect(() => {
@@ -140,8 +151,20 @@ const isEffective = (atkForma, defForma) => {
 
 const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
-const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
+const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow', INI: 'zap' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+
+/* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */
+const mergeEffects = (buffs = [], debuffs = []) => Object.values(
+  [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
+    .reduce((acc, e) => {
+      const key = `${e.kind}-${e.stat}`;
+      acc[key] = acc[key]
+        ? { ...acc[key], amount: acc[key].amount + 1, turns: Math.max(acc[key].turns, e.turns) }
+        : { kind: e.kind, stat: e.stat, amount: 1, turns: e.turns };
+      return acc;
+    }, {})
+);
 
 export default function PvpCombatScreen({ combat: initialCombat, userId, onClose, lugarImagen }) {
   const [combat, setCombat]             = useState(initialCombat);
@@ -154,20 +177,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myHudRef                        = useRef(null);
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
+  const [fleeFx, setFleeFx]             = useState(null);
   const [floatTexts, setFloatTexts]     = useState([]);
-  const [notifCountdown, setNotifCountdown] = useState(null);
-
-  /* Cuenta regresiva antes de que se le notifique al que no responda (ver PvpTurnoPushRecordatorio) */
-  useEffect(() => {
-    const turnoDesde = combat.turno_desde ? new Date(combat.turno_desde).getTime() : null;
-    const delaySeg = combat.notif_delay_seg ?? 30;
-    if (!turnoDesde || combat.status !== 'active') { setNotifCountdown(null); return; }
-
-    const tick = () => setNotifCountdown(Math.max(0, Math.round(delaySeg - (Date.now() - turnoDesde) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [combat.turno_desde, combat.notif_delay_seg, combat.status]);
+  /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
+     de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
+  const effectMaxTurnsRef = useRef({});
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -215,6 +229,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const attackerId = newCombat.attacker?.id;
     let lastAttack = null;
     let lastHeal = null;
+    let lastFlee = null;
     for (const entry of newEntries) {
       const groups = extractRollGroups(entry, { myId: userId, attackerId });
       for (const g of groups) await rollDice(g);
@@ -222,6 +237,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       if (classified) lastAttack = classified;
       const healed = classifyPvpHeal(entry, userId);
       if (healed) lastHeal = healed;
+      const fled = classifyPvpFlee(entry, userId);
+      if (fled) lastFlee = fled;
     }
 
     if (lastHeal && stageRef.current) {
@@ -255,6 +272,18 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         to: getRelativeCenter(targetRef.current, stageRef.current),
         result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg),
       });
+    }
+
+    if (lastFlee && stageRef.current) {
+      const actorRef = lastFlee.actorIsMe ? myHudRef : oppHudRef;
+      if (actorRef.current) {
+        setFleeFx({
+          key: `${Date.now()}-${Math.random()}`,
+          outcome: lastFlee.success ? 'success' : 'fail',
+          dir: lastFlee.actorIsMe ? -1 : 1,
+          actorRef,
+        });
+      }
     }
 
     setCombat(newCombat);
@@ -348,46 +377,57 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     { l: 'DEF', v: effOppStat('defensa') + (oppDefBonus || 0), c: '#38cdf0', dim: countBuff(oppDebuffs, 'defensa') > 0 },
     { l: 'PNT', v: effOppStat('punteria'), c: '#10b981', dim: countBuff(oppDebuffs, 'punteria') > 0 },
     { l: 'MOV', v: effOppStat('movimiento'), c: '#a78bfa', dim: countBuff(oppDebuffs, 'movimiento') > 0 },
-    ...(oppLastForma > 0 ? [{ l: `F${formaLabel(oppLastForma)}`, v: null, c: 'rgba(200,200,255,0.5)' }] : []),
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side', secondsLeft = null }) => {
+  /* En combate naval se muestra la imagen de la nave equipada en vez de la
+     foto del personaje, y no hay forma/estancia que mostrar (las naves no
+     tienen forma de sable). */
+  const myPhotoUrl  = mediaUrl(me.es_nave  ? me.nave_imagen  : me.photo_url);
+  const oppPhotoUrl = mediaUrl(opp.es_nave ? opp.nave_imagen : opp.photo_url);
+  const myFormaProp  = me.es_nave  ? 0 : myCurrentForma;
+  const oppFormaProp = opp.es_nave ? 0 : oppCurrentForma;
+
+  /* Adjunta a cada efecto el % de rondas restantes respecto de la mayor duración
+     observada desde que apareció, para la barrita que se va reduciendo. */
+  const withDurationPct = (side, effects) => {
+    const store = effectMaxTurnsRef.current;
+    const activeKeys = new Set();
+    const withPct = effects.map(e => {
+      const key = `${side}-${e.kind}-${e.stat}`;
+      activeKeys.add(key);
+      const max = Math.max(store[key] ?? 0, e.turns);
+      store[key] = max;
+      return { ...e, pct: pct(e.turns, max) };
+    });
+    Object.keys(store).forEach(k => { if (k.startsWith(`${side}-`) && !activeKeys.has(k)) delete store[k]; });
+    return withPct;
+  };
+  const myEffects  = withDurationPct('my', mergeEffects(myBuffs, myDebuffs));
+  const oppEffects = withDurationPct('opp', mergeEffects(oppBuffs, oppDebuffs));
+
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, effectsPosition = 'side' }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
     const rev  = align === 'right';
     const formaImgSrc = forma > 0 ? NX.CLASSES[forma - 1]?.img : null;
-    const formaBox = formaImgSrc && (
-      <div title={`Forma ${formaLabel(forma)}`} style={{
-        width: isMobile ? 40 : 56, height: isMobile ? 90 : 120, borderRadius: 10, flexShrink: 0, alignSelf: 'center',
-        overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
-      }}>
-        <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      </div>
-    );
-    const effects = Object.values(
-      [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
-        .reduce((acc, e) => {
-          const key = `${e.kind}-${e.stat}`;
-          acc[key] = acc[key]
-            ? { ...acc[key], amount: acc[key].amount + 1, turns: Math.max(acc[key].turns, e.turns) }
-            : { kind: e.kind, stat: e.stat, amount: 1, turns: e.turns };
-          return acc;
-        }, {})
-    );
     const renderBadge = (e, i) => {
       const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
       const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
       return (
         <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
+          display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0,
           fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
           background: `${c}18`, border: `1px solid ${c}55`, color: c, fontWeight: 700,
         }}>
-          {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
-          {e.kind === 'buff' ? '+' : '−'}{e.amount} {abbr}
-          <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}r</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+            {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
+            {e.kind === 'buff' ? '+' : '−'}{e.amount}
+          </span>
+          <div style={{ width: 18, height: 2, background: `${c}30`, borderRadius: 1 }}>
+            <div style={{ height: '100%', width: `${e.pct}%`, background: c, borderRadius: 1, transition: 'width 0.4s ease' }} />
+          </div>
         </span>
       );
     };
@@ -410,14 +450,29 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         gap: isMobile ? 8 : 14, alignItems: 'flex-start', flex: 1, minWidth: 0,
       }}>
         <div style={{
-          width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-          border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
-          display: 'grid', placeItems: 'center',
+          position: 'relative',
+          width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'visible',
         }}>
-          {photoUrl
-            ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
-          }
+          <div style={{
+            width: '100%', height: '100%', borderRadius: 10, overflow: 'hidden',
+            border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
+            display: 'grid', placeItems: 'center',
+          }}>
+            {photoUrl
+              ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
+            }
+          </div>
+          {formaImgSrc && (
+            <div title={`Forma ${formaLabel(forma)}`} style={{
+              position: 'absolute', bottom: -6, right: -6, zIndex: 1,
+              width: isMobile ? 22 : 30, height: isMobile ? 34 : 46, borderRadius: 8,
+              overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(6,12,26,0.95)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+            }}>
+              <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: rev ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
@@ -465,23 +520,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               </span>
             ))}
           </div>
-          {secondsLeft !== null && (
-            <div style={{
-              marginTop: 6, fontSize: 8, color: 'rgba(150,180,220,0.55)', fontFamily: 'var(--font-data)',
-              letterSpacing: '0.06em', textAlign: rev ? 'right' : 'left',
-            }}>
-              ⏱ {secondsLeft}s antes de notificar
-            </div>
-          )}
         </div>
       </div>
     );
 
     const cardRow = (
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
-        {formaSide === 'left' && formaBox}
         {effectsPosition === 'side' ? (rev ? <>{card}{effectsColumn}</> : <>{effectsColumn}{card}</>) : card}
-        {formaSide === 'right' && formaBox}
       </div>
     );
 
@@ -740,26 +785,28 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
           <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
 
-          {/* Ataque básico (arma equipada o desarmado) */}
-          <button onClick={() => doAction('unarmed')} disabled={busy} style={{
-            minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-            background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-          }}
-            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
-            <span style={{
-              fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
-              maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis',
-              color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
-            }}>
-              {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
-            </span>
-            <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
-          </button>
+          {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
+          {!me.es_nave && (
+            <button onClick={() => doAction('unarmed')} disabled={busy} style={{
+              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+            }}
+              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
+              <span style={{
+                fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis',
+                color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
+              }}>
+                {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
+              </span>
+              <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
+            </button>
+          )}
 
           {/* Estancia (las naves no tienen estancias — solo combate normal) */}
           {!me.es_nave && (
@@ -857,11 +904,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={oppHudRef}>
               <HUD
                 hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
-                nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
+                nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
-                buffs={oppBuffs} debuffs={oppDebuffs}
-                forma={oppCurrentForma} formaSide="right"
-                effectsPosition="below" secondsLeft={notifCountdown}
+                effects={oppEffects}
+                forma={oppFormaProp}
+                effectsPosition="below"
               />
             </div>
 
@@ -877,11 +924,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={myHudRef}>
               <HUD
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
-                nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
+                nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
-                buffs={myBuffs} debuffs={myDebuffs}
-                forma={myCurrentForma} formaSide="left"
-                effectsPosition="above" secondsLeft={notifCountdown}
+                effects={myEffects}
+                forma={myFormaProp}
+                effectsPosition="above"
               />
             </div>
 
@@ -893,10 +940,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={oppHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
                 hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
-                nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
+                nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
-                buffs={oppBuffs} debuffs={oppDebuffs}
-                forma={oppCurrentForma} formaSide="right" secondsLeft={notifCountdown}
+                effects={oppEffects}
+                forma={oppFormaProp}
               />
             </div>
 
@@ -904,10 +951,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <div ref={myHudRef} style={{ position: 'absolute', bottom: 100, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
-                nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
+                nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
-                buffs={myBuffs} debuffs={myDebuffs}
-                forma={myCurrentForma} formaSide="left" secondsLeft={notifCountdown}
+                effects={myEffects}
+                forma={myFormaProp}
               />
             </div>
           </>
@@ -933,6 +980,15 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             }}
           />
         ))}
+
+        {/* Animación de huida — separada de la de ataque: dash+desvanecimiento si escapa, rebote+sacudida si falla */}
+        {fleeFx && (
+          <FleeEffect key={fleeFx.key}
+            outcome={fleeFx.outcome} dir={fleeFx.dir}
+            stageRef={stageRef} actorRef={fleeFx.actorRef}
+            onDone={() => setFleeFx(null)}
+          />
+        )}
 
         {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
         {floatTexts.map((ft) => (
