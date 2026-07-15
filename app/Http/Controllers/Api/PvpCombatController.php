@@ -581,7 +581,8 @@ class PvpCombatController extends Controller
 
         /* ─── Hito de victoria ──────────────────────────────────────────── */
         if (in_array($combat->status, ['attacker_won', 'defender_won'], true)) {
-            $winnerChar = $combat->status === 'attacker_won' ? $combat->attacker->character : $combat->defender->character;
+            $winnerUser = $combat->status === 'attacker_won' ? $combat->attacker : $combat->defender;
+            $winnerChar = $winnerUser->character;
             $loserChar = $combat->status === 'attacker_won' ? $combat->defender->character : $combat->attacker->character;
 
             if ($winnerChar && $loserChar) {
@@ -589,6 +590,7 @@ class PvpCombatController extends Controller
                     'character_id' => $winnerChar->id,
                     'hito' => "{$loserChar->name} derrotado",
                 ]);
+                \App\Services\MisionProgresoService::registrar($winnerUser, 'combate', 1);
             }
         }
 

@@ -203,6 +203,7 @@ class CharacterController extends Controller
             'character_id' => $character->id,
             'hito'         => $hito,
         ]);
+        \App\Services\MisionProgresoService::registrar($request->user(), 'combate', 1);
 
         return response()->json(['hito' => $hito]);
     }
@@ -225,6 +226,7 @@ class CharacterController extends Controller
             'character_id' => $character->id,
             'hito'         => $hito,
         ]);
+        \App\Services\MisionProgresoService::registrar($request->user(), 'combate', 1);
 
         return response()->json(['hito' => $hito]);
     }

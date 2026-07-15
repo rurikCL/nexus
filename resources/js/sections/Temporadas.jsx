@@ -513,10 +513,116 @@ function PodioNum({ color, num, size = 22 }) {
   );
 }
 
+/* ── MisionDetallePopup — detalle completo de una misión + completar ── */
+function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
+  const done = mision.completada_por_mi;
+  const hitosReq = mision.hito_requerimiento
+    ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)
+    : [];
+
+  return (
+    <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Detalle de misión'} title={mision.nombre} zIndex={1100}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        {mision.foto_mision && (
+          <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <img src={mision.foto_mision} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+        )}
+
+        {mision.mision && (
+          <p style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, margin: 0 }}>{mision.mision}</p>
+        )}
+        {mision.descripcion && (
+          <p style={{ fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{mision.descripcion}</p>
+        )}
+
+        {/* Objetivos con progreso */}
+        {(mision.objetivos ?? []).length > 0 && (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>OBJETIVOS</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {mision.objetivos.map(o => {
+                const actual = o.progreso_actual ?? 0;
+                const pct = o.meta > 0 ? Math.min(100, Math.round((actual / o.meta) * 100)) : 100;
+                return (
+                  <div key={o.id} style={{
+                    padding: '8px 10px', borderRadius: 7,
+                    background: o.completado ? 'rgba(16,185,129,0.06)' : 'rgba(56,205,240,0.05)',
+                    border: `1px solid ${o.completado ? 'rgba(16,185,129,0.25)' : 'var(--holo-line)'}`,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Icon name={o.completado ? 'check' : 'target'} size={13} style={{ color: o.completado ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--txt)', fontWeight: 600 }}>{o.nombre}</div>
+                      <span className="nx-data" style={{ fontSize: 10, color: o.completado ? '#10b981' : 'var(--txt-faint)' }}>
+                        {actual}/{o.meta}{o.unidad ? ` ${o.unidad}` : ''}
+                      </span>
+                    </div>
+                    {o.descripcion && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 3, marginLeft: 21 }}>{o.descripcion}</div>}
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, marginTop: 6 }}>
+                      <div style={{
+                        height: '100%', width: `${pct}%`, borderRadius: 2, transition: 'width 0.4s ease',
+                        background: o.completado ? '#10b981' : 'var(--holo)',
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Hitos requeridos */}
+        {hitosReq.length > 0 && (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>HITOS REQUERIDOS</div>
+            <div style={{ fontSize: 11, color: mision.cumple_hitos ? '#10b981' : 'var(--txt-faint)' }}>
+              {hitosReq.join(', ')}
+            </div>
+          </div>
+        )}
+
+        {/* Recompensas */}
+        {(mision.recompensas ?? []).length > 0 && (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>RECOMPENSAS</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {mision.recompensas.map((r, i) => (
+                <span key={r.id ?? i} style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 4,
+                  background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.25)', color: '#E6B325',
+                }}>
+                  {r.tipo === 'creditos' ? '💰' : '📦'} {r.nombre}{r.valor > 0 ? ` ×${r.valor}` : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {done ? (
+          <div style={{ fontSize: 12, color: '#10b981', textAlign: 'right' }}>Ya completaste esta misión.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, paddingTop: 4 }}>
+            {!mision.puede_completar && (
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
+                {!mision.cumple_hitos ? 'Aún no cumples los hitos requeridos.' : 'Aún no completas todos los objetivos.'}
+              </div>
+            )}
+            <Btn kind="accent" icon="check" onClick={onCompletar} disabled={busy || !mision.puede_completar}>
+              {busy ? 'Completando...' : 'Completar misión'}
+            </Btn>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 /* ── MisionesTemporadaModal — Battle pass popup ─────────── */
 function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
-  const [misiones, setMisiones] = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [misiones, setMisiones]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     if (!temporadaId) return;
@@ -530,6 +636,34 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
   }, [temporadaId]);
 
   const completadas = misiones.filter(m => m.completada_por_mi).length;
+  const selectedMision = misiones.find(m => m.id === selectedId) ?? null;
+
+  const handleCompletar = async () => {
+    if (!selectedMision) return;
+    setCompleting(true);
+    try {
+      const token = localStorage.getItem('nx-token');
+      const res = await fetch(`/api/misiones/${selectedMision.id}/completar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || 'No se pudo completar la misión');
+
+      toast('¡Misión completada!', { tone: 'success', icon: 'check' });
+      (data?.hitos_otorgados ?? []).forEach((hito) => {
+        toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
+      });
+      setMisiones(prev => prev.map(m => m.id === selectedMision.id
+        ? { ...m, completada_por_mi: true, status: 'completada', puede_completar: false }
+        : m));
+      setSelectedId(null);
+    } catch (e) {
+      toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   return (
     <Modal open onClose={onClose} kicker="Pase de Batalla" title={temporadaNombre ?? 'Misiones de Temporada'}>
@@ -566,12 +700,16 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
             {misiones.map((m, idx) => {
               const done = m.completada_por_mi;
               return (
-                <div key={m.id} style={{
+                <button key={m.id} onClick={() => setSelectedId(m.id)} style={{
                   display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 8,
                   background: done ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
                   border: `1px solid ${done ? 'rgba(16,185,129,0.25)' : 'var(--holo-line)'}`,
-                  opacity: done ? 0.85 : 1,
-                }}>
+                  opacity: done ? 0.85 : 1, cursor: 'pointer', textAlign: 'left', width: '100%',
+                  color: 'inherit', font: 'inherit', transition: 'border-color 0.15s, background 0.15s',
+                }}
+                  onMouseEnter={e => { if (!done) e.currentTarget.style.borderColor = 'var(--holo)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = done ? 'rgba(16,185,129,0.25)' : 'var(--holo-line)'; }}
+                >
                   {/* Número / check */}
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -586,8 +724,13 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: done ? '#10b981' : 'var(--txt)', marginBottom: 2 }}>
-                      {m.nombre}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: done ? '#10b981' : 'var(--txt)' }}>
+                        {m.nombre}
+                      </div>
+                      {!done && m.puede_completar && (
+                        <Chip tone="green" style={{ fontSize: 9 }}>Lista para completar</Chip>
+                      )}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 6 }}>{m.mision}</div>
 
@@ -596,9 +739,11 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
                       <div style={{ display: 'grid', gap: 3, marginBottom: 6 }}>
                         {m.objetivos.map(obj => (
                           <div key={obj.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--txt-faint)' }}>
-                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: done ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: (done || obj.completado) ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
                             {obj.nombre}
-                            <span style={{ marginLeft: 'auto' }}>Meta: {obj.meta} {obj.unidad ?? ''}</span>
+                            <span style={{ marginLeft: 'auto' }}>
+                              {obj.progreso_actual ?? 0}/{obj.meta} {obj.unidad ?? ''}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -618,11 +763,20 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
                       </div>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </>
+      )}
+
+      {selectedMision && (
+        <MisionDetallePopup
+          mision={selectedMision}
+          busy={completing}
+          onClose={() => setSelectedId(null)}
+          onCompletar={handleCompletar}
+        />
       )}
     </Modal>
   );

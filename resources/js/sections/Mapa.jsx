@@ -2704,10 +2704,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       setShowMisionPopup(false);
       onMisionChange?.();
     } catch (e) {
-      const msg = String(e.message) === '403'
-        ? 'No cumples los hitos requeridos para completar esta misión.'
-        : 'Error al completar la misión';
-      toast(msg, { tone: 'error', icon: 'x' });
+      toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
       setMisionBusy(false);
     }

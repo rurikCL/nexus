@@ -113,6 +113,9 @@ class TaskController extends Controller
 
         // Award reward to pupil's character credits
         $pupil = $task->pupil()->with('character')->first();
+        if ($pupil) {
+            \App\Services\MisionProgresoService::registrar($pupil, 'tarea', 1);
+        }
         if ($pupil && $pupil->character && $task->reward > 0) {
             $pupil->character->increment('credits', $task->reward);
         }
