@@ -595,15 +595,9 @@ class PvpCombatController extends Controller
 
         /* ─── Notificar al oponente ───────────────────────────────────── */
         if ($combat->status === 'active') {
-            $opponentUser->notify(new PvpCombatNotification(
-                'Es tu turno en el combate',
-                "vs {$actorChar->name} — Responde en el mapa",
-                $combat->id,
-                push: false,
-                broadcast: false,
-            ));
-
+            // Sin notificación inmediata: la UI del combate (polling) ya refleja el cambio de turno.
             // Push diferido: solo llega si el oponente sigue sin responder pasado el plazo configurado
+
             $delaySeg = (int) Configuracion::valor('pvp_notif_push_delay_seg', 30);
             $opponentUser->notify(
                 (new PvpTurnoPushRecordatorio($combat->id, $actorChar->name, count($log)))
