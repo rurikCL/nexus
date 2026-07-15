@@ -1117,7 +1117,6 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
             {zonas.map((z, i) => {
               const hs = hostilidadStyle(z.hostilidad);
               const pos = positions[i];
-              const presentes = z.presentes_personajes ?? [];
               return (
                 <button
                   key={z.id}
@@ -1162,7 +1161,6 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
                       {hs.label}
                     </div>
                   </div>
-                  {presentes.length > 0 && <PresentesAvatars presentes={presentes} max={2} />}
                 </button>
               );
             })}
