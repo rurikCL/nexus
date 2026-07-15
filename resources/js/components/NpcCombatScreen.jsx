@@ -101,7 +101,7 @@ function SpaceBackground() {
   );
 }
 
-export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false }) {
+export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, onVictory, onDefeat, onFlee, initialState, naveMode = false }) {
   const d20 = () => Math.floor(Math.random() * 20) + 1;
 
   const maxPlayer = { vida: player.vida, escudo: player.escudo };
@@ -1241,6 +1241,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
       {showCombatCard && (
         <NpcCombatCardModal
           phase={phase} player={player} npc={npc} log={log} ronda={ronda} naveMode={naveMode}
+          planetaNombre={planetaNombre} lugarNombre={lugarNombre}
           onClose={() => setShowCombatCard(false)}
         />
       )}

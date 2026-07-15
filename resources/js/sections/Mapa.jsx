@@ -4476,7 +4476,10 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           lugarImagen={lugarImagen}
           onClose={() => setDialogNpc(null)}
           onCombatStart={(npcTipo) => {
-            const session = { npc: dialogNpc, player: getPlayerCombatStats(userCharacter), lugarImagen, npcTipo };
+            const session = {
+              npc: dialogNpc, player: getPlayerCombatStats(userCharacter), lugarImagen, npcTipo,
+              planetaNombre: planeta?.nombre, lugarNombre: lugar?.nombre,
+            };
             localStorage.setItem('nx-npc-combat', JSON.stringify(session));
             setActiveNpcCombat(session);
           }}
@@ -4529,6 +4532,8 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           npc={activeNpcCombat.npc}
           player={activeNpcCombat.player ?? getPlayerCombatStats(userCharacter)}
           lugarImagen={activeNpcCombat.lugarImagen || lugarImagen}
+          planetaNombre={activeNpcCombat.planetaNombre}
+          lugarNombre={activeNpcCombat.lugarNombre}
           initialState={activeNpcCombat.state}
           onVictory={async () => {
             localStorage.removeItem('nx-npc-combat');

@@ -15,26 +15,59 @@ function mediaUrl(path) {
   return `/storage${cleanPath}`;
 }
 
-/** Suma daño infligido, curación y críticos por bando a partir del log del combate. */
+/** Suma daño infligido, curación, críticos, bloqueos y daño por habilidad/ataque, por bando, a partir del log del combate. */
 export function summarizeCombat(combat) {
   const log = combat.log ?? [];
-  const mk = () => ({ dmgDealt: 0, healDone: 0, crits: 0 });
+  const mk = () => ({ dmgDealt: 0, healDone: 0, crits: 0, blocks: 0, actionDmg: {} });
   const totals = { [combat.attacker.id]: mk(), [combat.defender.id]: mk() };
+
   for (const entry of log) {
     const side = totals[entry.actor_id];
     if (!side) continue; // entrada inicial de iniciativa (ronda 1), sin actor
-    for (const m of entry.messages ?? []) {
+
+    const msgs = entry.messages ?? [];
+    const actionMsg = msgs.find(m => / ataca (con|desarmado)| usa /.test(m));
+    const actionName = actionMsg
+      ? (actionMsg.match(/ usa (.+?):/)?.[1]
+        ?? actionMsg.match(/ ataca con (.+?):/)?.[1]
+        ?? (/ ataca desarmado/.test(actionMsg) ? 'Ataque desarmado' : null))
+      : null;
+
+    let entryDmg = 0;
+    let blocked = false;
+    for (const m of msgs) {
       const dmgMatch = m.match(/−(\d+) daño/);
-      if (dmgMatch) side.dmgDealt += Number(dmgMatch[1]);
+      if (dmgMatch) { entryDmg += Number(dmgMatch[1]); side.dmgDealt += Number(dmgMatch[1]); }
       if (/¡CRÍTICO!/.test(m)) side.crits += 1;
       const healMatch = m.match(/\+(\d+) (?:vida|escudo)/);
       if (healMatch) side.healDone += Number(healMatch[1]);
+      if (/falla el (golpe|ataque)/.test(m)) blocked = true;
+    }
+
+    if (actionName && entryDmg > 0) {
+      side.actionDmg[actionName] = (side.actionDmg[actionName] ?? 0) + entryDmg;
+    }
+    if (blocked) {
+      // el ataque del actor falló: el oponente bloqueó/esquivó
+      const opponentId = Object.keys(totals).find(uid => Number(uid) !== entry.actor_id);
+      if (opponentId) totals[opponentId].blocks += 1;
     }
   }
+
+  const topAction = (side) => {
+    const entries = Object.entries(side.actionDmg);
+    if (!entries.length) return null;
+    entries.sort((a, b) => b[1] - a[1]);
+    return { name: entries[0][0], dmg: entries[0][1] };
+  };
+
+  const attacker = totals[combat.attacker.id];
+  const defender = totals[combat.defender.id];
+
   return {
     rounds: combat.ronda ?? 1,
-    attacker: totals[combat.attacker.id],
-    defender: totals[combat.defender.id],
+    attacker: { ...attacker, topAction: topAction(attacker) },
+    defender: { ...defender, topAction: topAction(defender) },
   };
 }
 
@@ -161,11 +194,11 @@ function wrapText(ctx, text, cx, y, maxWidth, lineHeight) {
 }
 
 /** Dibuja la tarjeta de resolución de combate y devuelve el canvas listo para exportar. */
-async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumenIA }) {
+async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumenIA, winnerHighlights, location }) {
   await ensureFonts();
 
   const W = 1080;
-  const H = resumenIA ? 1620 : 1350;
+  const H = 1350 + (winnerHighlights ? 220 : 0) + (resumenIA ? 270 : 0) + (location ? 150 : 0);
   const DPR = 2;
   const canvas = document.createElement('canvas');
   canvas.width = W * DPR;
@@ -282,7 +315,86 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
     rowY += rowH;
   }
 
-  /* ── crónica del duelo (IA) ── */
+  /* ── destacados del ganador (horizontal) ── */
+  if (winnerHighlights) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(150,200,255,0.55)';
+    ctx.font = '600 22px "JetBrains Mono"';
+    ctx.fillText('DESTACADOS DEL GANADOR', W / 2, rowY + 30);
+
+    const colY = rowY + 100;
+    const colXs = [W * 0.2, W / 2, W * 0.8];
+    const cols = [
+      {
+        icon: 'sword', color: '#ff7043',
+        value: winnerHighlights.topAction ? String(winnerHighlights.topAction.dmg) : '0',
+        label: 'MAYOR DAÑO',
+        detail: winnerHighlights.topAction?.name ?? 'Sin golpes efectivos',
+      },
+      {
+        icon: 'shield', color: '#38cdf0',
+        value: String(winnerHighlights.blocks),
+        label: 'GOLPES BLOQUEADOS',
+        detail: null,
+      },
+      {
+        icon: 'plus', color: '#10b981',
+        value: `${winnerHighlights.hp}/${winnerHighlights.maxHp}`,
+        label: 'VIDA FINAL',
+        detail: null,
+      },
+    ];
+
+    cols.forEach((col, i) => {
+      const x = colXs[i];
+      drawIcon(ctx, col.icon, x, colY - 55, 26, col.color, 2.2);
+      ctx.fillStyle = col.color;
+      ctx.font = '800 42px Orbitron';
+      ctx.fillText(col.value, x, colY);
+      ctx.fillStyle = 'rgba(160,190,230,0.6)';
+      ctx.font = '600 16px "JetBrains Mono"';
+      ctx.fillText(col.label, x, colY + 28);
+      if (col.detail) {
+        ctx.fillStyle = 'rgba(160,190,230,0.4)';
+        const size = fitText(ctx, col.detail, 240, '13px "JetBrains Mono"', 10);
+        ctx.font = `400 ${size}px "JetBrains Mono"`;
+        ctx.fillText(col.detail, x, colY + 48);
+      }
+    });
+
+    rowY = colY + 90;
+  }
+
+  /* ── ubicación del encuentro (planeta / lugar) ── */
+  if (location) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(150,200,255,0.55)';
+    ctx.font = '600 22px "JetBrains Mono"';
+    ctx.fillText('UBICACIÓN DEL ENCUENTRO', W / 2, rowY + 30);
+
+    const colY = rowY + 85;
+    const locCols = [
+      { label: 'PLANETA', value: location.planeta },
+      { label: 'LUGAR', value: location.lugar },
+    ].filter(c => c.value);
+    const locXs = locCols.length === 1 ? [W / 2] : [W * 0.32, W * 0.68];
+
+    locCols.forEach((col, i) => {
+      const x = locXs[i];
+      drawIcon(ctx, 'target', x, colY - 34, 24, '#38cdf0', 2.2);
+      ctx.fillStyle = 'rgba(160,190,230,0.6)';
+      ctx.font = '600 15px "JetBrains Mono"';
+      ctx.fillText(col.label, x, colY - 4);
+      ctx.fillStyle = 'rgba(220,230,255,0.85)';
+      const size = fitText(ctx, col.value, 380, '30px Orbitron', 16);
+      ctx.font = `800 ${size}px Orbitron`;
+      ctx.fillText(col.value, x, colY + 30);
+    });
+
+    rowY = colY + 60;
+  }
+
+  /* ── crónica del duelo (IA) — aislada por ahora, no se invoca desde CombatCardModal ── */
   if (resumenIA) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(150,200,255,0.55)';
@@ -330,15 +442,23 @@ export async function drawCombatCard(combat, resumenIA) {
     ? `${loser.name} huyó del combate`
     : `vence a ${loser.name} en un duelo por turnos`;
 
+  const winnerSummary = summary[winnerSide];
+  const winnerHighlights = {
+    topAction: winnerSummary.topAction,
+    blocks: winnerSummary.blocks,
+    hp: combat[`${winnerSide}_hp`],
+    maxHp: winnerData.stats?.vida ?? combat[`${winnerSide}_hp`],
+  };
+
   return renderResultCard({
     winner, loser, rounds: summary.rounds, subtitle,
     rows: STAT_ROWS(summary[winnerSide], summary[loserSide]),
-    resumenIA,
+    resumenIA, winnerHighlights,
   });
 }
 
 /** Dibuja la tarjeta de resolución de un combate contra NPC (o encuentro naval) y devuelve el canvas. */
-export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode }) {
+export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre }) {
   const summary = summarizeNpcLog(log);
   const playerWon = phase === 'victory';
 
@@ -353,10 +473,14 @@ export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMo
   const winner = playerWon ? playerCombatant : npcCombatant;
   const loser = playerWon ? npcCombatant : playerCombatant;
   const subtitle = `vence a ${loser.name} en ${naveMode ? 'combate espacial' : 'combate'}`;
+  const location = (planetaNombre || lugarNombre)
+    ? { planeta: planetaNombre, lugar: lugarNombre }
+    : null;
 
   return renderResultCard({
     winner, loser, rounds: summary.rounds ?? ronda, subtitle,
     rows: STAT_ROWS(playerWon ? summary.player : summary.npc, playerWon ? summary.npc : summary.player),
+    location,
   });
 }
 
@@ -445,7 +569,13 @@ function ResultCardModal({ generate, fileName, onClose }) {
   );
 }
 
-/** Pide la crónica del duelo generada por IA (cacheada en el backend tras la primera llamada). */
+/**
+ * Pide la crónica del duelo generada por IA (cacheada en el backend tras la
+ * primera llamada). Aislada por ahora — no la invoca `CombatCardModal`; el
+ * texto generado no convenció y se reemplazó por los destacados del ganador
+ * (ver `winnerHighlights` en `drawCombatCard`). Se deja lista por si se
+ * retoma a futuro: `drawCombatCard(combat, resumen)` ya soporta pintarla.
+ */
 function fetchResumenIA(combatId) {
   const token = localStorage.getItem('nx-token');
   return fetch(`/api/pvp/${combatId}/resumen-ia`, {
@@ -456,12 +586,14 @@ function fetchResumenIA(combatId) {
     .then((d) => d?.resumen ?? null)
     .catch(() => null);
 }
+// eslint-disable-next-line no-unused-vars -- ver comentario arriba, uso diferido
+void fetchResumenIA;
 
 /** Tarjeta de resolución para un combate PvP (ver PvpCombatScreen.jsx). */
 export default function CombatCardModal({ combat, onClose }) {
   return (
     <ResultCardModal
-      generate={() => fetchResumenIA(combat.id).then((resumen) => drawCombatCard(combat, resumen))}
+      generate={() => drawCombatCard(combat)}
       fileName={`nexus-combate-${combat.id}.png`}
       onClose={onClose}
     />
@@ -469,10 +601,10 @@ export default function CombatCardModal({ combat, onClose }) {
 }
 
 /** Tarjeta de resolución para un combate contra NPC / encuentro naval (ver NpcCombatScreen.jsx). */
-export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, onClose }) {
+export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, onClose }) {
   return (
     <ResultCardModal
-      generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode })}
+      generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre })}
       fileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.png`}
       onClose={onClose}
     />
