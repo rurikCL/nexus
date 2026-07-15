@@ -8,6 +8,7 @@ import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
+import FleeEffect from './FleeEffect.jsx';
 
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
@@ -15,6 +16,7 @@ import FloatingCombatText from './FloatingCombatText.jsx';
    mensaje + el arma/habilidades del lado que actuó. */
 function classifyPvpAttack(entry, combat, myId) {
   const msgs = entry.messages ?? [];
+  if (msgs.some((m) => /intenta huir/.test(m))) return null; // la huida tiene su propia animación
   const attackMsg = msgs.find((m) => / vs 1d20/.test(m));
   if (!attackMsg) return null;
 
@@ -88,6 +90,15 @@ function classifyPvpHeal(entry, myId) {
   if (targetMatch) return { healedIsMe: !actorIsMe, heal: Number(targetMatch[1]) };
 
   return null;
+}
+
+/* Detecta un intento de huida en una entrada del log y si tuvo éxito */
+function classifyPvpFlee(entry, myId) {
+  const msgs = entry.messages ?? [];
+  if (!msgs.some((m) => /intenta huir/.test(m))) return null;
+  const actorIsMe = entry.actor_id === myId;
+  const success = msgs.some((m) => /logra huir del combate/.test(m));
+  return { actorIsMe, success };
 }
 
 function useIsMobile() {
@@ -166,6 +177,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myHudRef                        = useRef(null);
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
+  const [fleeFx, setFleeFx]             = useState(null);
   const [floatTexts, setFloatTexts]     = useState([]);
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
@@ -217,6 +229,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const attackerId = newCombat.attacker?.id;
     let lastAttack = null;
     let lastHeal = null;
+    let lastFlee = null;
     for (const entry of newEntries) {
       const groups = extractRollGroups(entry, { myId: userId, attackerId });
       for (const g of groups) await rollDice(g);
@@ -224,6 +237,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       if (classified) lastAttack = classified;
       const healed = classifyPvpHeal(entry, userId);
       if (healed) lastHeal = healed;
+      const fled = classifyPvpFlee(entry, userId);
+      if (fled) lastFlee = fled;
     }
 
     if (lastHeal && stageRef.current) {
@@ -257,6 +272,18 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         to: getRelativeCenter(targetRef.current, stageRef.current),
         result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg),
       });
+    }
+
+    if (lastFlee && stageRef.current) {
+      const actorRef = lastFlee.actorIsMe ? myHudRef : oppHudRef;
+      if (actorRef.current) {
+        setFleeFx({
+          key: `${Date.now()}-${Math.random()}`,
+          outcome: lastFlee.success ? 'success' : 'fail',
+          dir: lastFlee.actorIsMe ? -1 : 1,
+          actorRef,
+        });
+      }
     }
 
     setCombat(newCombat);
@@ -350,7 +377,6 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     { l: 'DEF', v: effOppStat('defensa') + (oppDefBonus || 0), c: '#38cdf0', dim: countBuff(oppDebuffs, 'defensa') > 0 },
     { l: 'PNT', v: effOppStat('punteria'), c: '#10b981', dim: countBuff(oppDebuffs, 'punteria') > 0 },
     { l: 'MOV', v: effOppStat('movimiento'), c: '#a78bfa', dim: countBuff(oppDebuffs, 'movimiento') > 0 },
-    ...(oppLastForma > 0 ? [{ l: `F${formaLabel(oppLastForma)}`, v: null, c: 'rgba(200,200,255,0.5)' }] : []),
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 
@@ -432,7 +458,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           {formaImgSrc && (
             <div title={`Forma ${formaLabel(forma)}`} style={{
               position: 'absolute', bottom: -6, right: -6, zIndex: 1,
-              width: isMobile ? 22 : 30, height: isMobile ? 22 : 30, borderRadius: 8,
+              width: isMobile ? 22 : 30, height: isMobile ? 34 : 46, borderRadius: 8,
               overflow: 'hidden', border: `2px solid ${borderColor}`, background: 'rgba(6,12,26,0.95)',
               boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
             }}>
@@ -944,6 +970,15 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             }}
           />
         ))}
+
+        {/* Animación de huida — separada de la de ataque: dash+desvanecimiento si escapa, rebote+sacudida si falla */}
+        {fleeFx && (
+          <FleeEffect key={fleeFx.key}
+            outcome={fleeFx.outcome} dir={fleeFx.dir}
+            stageRef={stageRef} actorRef={fleeFx.actorRef}
+            onDone={() => setFleeFx(null)}
+          />
+        )}
 
         {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
         {floatTexts.map((ft) => (

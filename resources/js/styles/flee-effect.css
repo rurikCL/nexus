@@ -1,0 +1,88 @@
+/* ============================================================
+   NÉXUS — Animación de huida en combate PvP (distinta de la de
+   ataque): fuga exitosa (dash hacia el borde + destello "warp" y
+   desvanecimiento) y fuga fallida (arranque frustrado, rebote
+   contra algo invisible y sacudida con destello ámbar).
+
+   Mismas reglas que energy-strike.css: solo se anima transform y
+   opacity (más el filter de blur, compositable); la temporización
+   vive en custom properties; entradas con var(--ease-out), salidas
+   con var(--ease-in); prefers-reduced-motion colapsa a casi-
+   instantáneo en vez de "teletransportar" sin animación.
+   ============================================================ */
+
+:root {
+  --nx-flee-success-dur: 650ms;
+  --nx-flee-fail-dur:    520ms;
+  --nx-flee-burst-dur:   420ms;
+}
+
+/* Éxito: dash hacia el lado de salida (--nx-flee-dir: 1 o -1) + desvanecimiento */
+.nx-flee-success {
+  animation: nx-flee-success-anim var(--nx-flee-success-dur) var(--ease-in) forwards;
+  will-change: transform, opacity;
+}
+@keyframes nx-flee-success-anim {
+  0%   { transform: translateX(0) scale(1);                                opacity: 1; }
+  20%  { transform: translateX(calc(var(--nx-flee-dir, 1) * 16px)) scale(1.04); opacity: 1; }
+  100% { transform: translateX(calc(var(--nx-flee-dir, 1) * 260px)) scale(0.7); opacity: 0; }
+}
+
+/* Fallo: arranca, rebota contra algo invisible y vuelve a su sitio con sacudida */
+.nx-flee-fail {
+  animation: nx-flee-fail-anim var(--nx-flee-fail-dur) var(--ease-out);
+  will-change: transform;
+}
+@keyframes nx-flee-fail-anim {
+  0%   { transform: translateX(0); }
+  30%  { transform: translateX(calc(var(--nx-flee-dir, 1) * 30px)); }
+  50%  { transform: translateX(calc(var(--nx-flee-dir, 1) * -12px)); }
+  68%  { transform: translateX(calc(var(--nx-flee-dir, 1) * 6px)); }
+  84%  { transform: translateX(calc(var(--nx-flee-dir, 1) * -3px)); }
+  100% { transform: translateX(0); }
+}
+.nx-flee-fail-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: rgba(230, 179, 37, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  animation: nx-flee-fail-overlay-anim var(--nx-flee-fail-dur) var(--ease-out);
+  will-change: opacity;
+}
+@keyframes nx-flee-fail-overlay-anim {
+  0%   { opacity: 0; }
+  30%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Destello en el punto de partida: cian "warp" en éxito, ámbar "barrera" en fallo */
+.nx-flee-burst {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  border: 2px solid;
+  opacity: 0;
+  transform: scale(0.3);
+  will-change: transform, opacity;
+  animation: nx-flee-burst-anim var(--nx-flee-burst-dur) var(--ease-out) forwards;
+}
+@keyframes nx-flee-burst-anim {
+  0%   { transform: scale(0.3); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-flee-success,
+  .nx-flee-fail,
+  .nx-flee-fail-overlay::after,
+  .nx-flee-burst {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}
