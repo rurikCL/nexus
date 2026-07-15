@@ -239,7 +239,7 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
   await ensureFonts();
 
   const W = 1080;
-  const H = 1350 + (winnerHighlights ? 220 : 0) + (resumenIA ? 270 : 0) + (location ? 260 : 0);
+  const H = 1350 + (winnerHighlights ? 300 : 0) + (resumenIA ? 270 : 0) + (location ? 260 : 0);
   const DPR = 2;
   const canvas = document.createElement('canvas');
   canvas.width = W * DPR;
@@ -365,7 +365,7 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
     ctx.font = '600 22px "JetBrains Mono"';
     ctx.fillText('DESTACADOS DEL GANADOR', W / 2, rowY + 30);
 
-    const colY = rowY + 100;
+    const colY = rowY + 160;
     const colXs = [W * 0.2, W / 2, W * 0.8];
     const cols = [
       {
@@ -390,22 +390,22 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
 
     cols.forEach((col, i) => {
       const x = colXs[i];
-      drawIcon(ctx, col.icon, x, colY - 55, 26, col.color, 2.2);
+      drawIcon(ctx, col.icon, x, colY - 68, 30, col.color, 2.2);
       ctx.fillStyle = col.color;
-      ctx.font = '800 42px Orbitron';
+      ctx.font = '800 54px Orbitron';
       ctx.fillText(col.value, x, colY);
-      ctx.fillStyle = 'rgba(160,190,230,0.6)';
-      ctx.font = '600 16px "JetBrains Mono"';
-      ctx.fillText(col.label, x, colY + 28);
+      ctx.fillStyle = 'rgba(160,190,230,0.7)';
+      ctx.font = '600 21px "JetBrains Mono"';
+      ctx.fillText(col.label, x, colY + 36);
       if (col.detail) {
-        ctx.fillStyle = 'rgba(160,190,230,0.4)';
-        const size = fitText(ctx, col.detail, 240, '13px "JetBrains Mono"', 10);
+        ctx.fillStyle = 'rgba(160,190,230,0.45)';
+        const size = fitText(ctx, col.detail, 260, '17px "JetBrains Mono"', 13);
         ctx.font = `400 ${size}px "JetBrains Mono"`;
-        ctx.fillText(col.detail, x, colY + 48);
+        ctx.fillText(col.detail, x, colY + 62);
       }
     });
 
-    rowY = colY + 90;
+    rowY = colY + 100;
   }
 
   /* ── ubicación del encuentro (planeta / lugar) ── */
