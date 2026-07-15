@@ -38,6 +38,24 @@ export function summarizeCombat(combat) {
   };
 }
 
+/** Igual que summarizeCombat pero para el log plano (un mensaje por entrada) de NpcCombatScreen. */
+export function summarizeNpcLog(log = []) {
+  const mk = () => ({ dmgDealt: 0, healDone: 0, crits: 0 });
+  const totals = { player: mk(), npc: mk() };
+  let rounds = 1;
+  for (const entry of log) {
+    rounds = Math.max(rounds, entry.ronda ?? 1);
+    const side = totals[entry.actor];
+    if (!side) continue; // entradas 'system' (iniciativa, cambio de estancia, etc.)
+    const dmgMatch = entry.text.match(/−(\d+) daño/);
+    if (dmgMatch) side.dmgDealt += Number(dmgMatch[1]);
+    if (/¡CRÍTICO!/.test(entry.text)) side.crits += 1;
+    const healMatch = entry.text.match(/\+(\d+) (?:vida|escudo)/);
+    if (healMatch) side.healDone += Number(healMatch[1]);
+  }
+  return { rounds, player: totals.player, npc: totals.npc };
+}
+
 function loadImage(src) {
   return new Promise((resolve) => {
     if (!src) { resolve(null); return; }
@@ -143,7 +161,7 @@ function wrapText(ctx, text, cx, y, maxWidth, lineHeight) {
 }
 
 /** Dibuja la tarjeta de resolución de combate y devuelve el canvas listo para exportar. */
-export async function drawCombatCard(combat, resumenIA) {
+async function renderResultCard({ winner, loser, rounds, subtitle, rows }) {
   await ensureFonts();
 
   const W = 1080;
@@ -155,16 +173,9 @@ export async function drawCombatCard(combat, resumenIA) {
   const ctx = canvas.getContext('2d');
   ctx.scale(DPR, DPR);
 
-  const summary = summarizeCombat(combat);
-  const isFled = combat.status === 'fled_attacker' || combat.status === 'fled_defender';
-  const winnerSide = combat.status === 'attacker_won' || combat.status === 'fled_defender' ? 'attacker' : 'defender';
-  const loserSide = winnerSide === 'attacker' ? 'defender' : 'attacker';
-  const winner = combat[winnerSide];
-  const loser = combat[loserSide];
-
   const [winnerImg, loserImg] = await Promise.all([
-    loadImage(mediaUrl(winner.es_nave ? winner.nave_imagen : winner.photo_url)),
-    loadImage(mediaUrl(loser.es_nave ? loser.nave_imagen : loser.photo_url)),
+    loadImage(winner.imageSrc),
+    loadImage(loser.imageSrc),
   ]);
 
   /* ── fondo ── */
@@ -199,8 +210,6 @@ export async function drawCombatCard(combat, resumenIA) {
   ctx.fillText('N É X U S   ·   R E G I S T R O   D E   C O M B A T E', W / 2, 100);
 
   const headlineColor = '#E6B325';
-  ctx.fillStyle = headlineColor;
-  ctx.font = '800 62px Orbitron';
   const headline = `🏆 ${winner.name.toUpperCase()}`;
   fitText(ctx, headline, W - 160, '62px Orbitron');
   ctx.fillStyle = headlineColor;
@@ -208,36 +217,35 @@ export async function drawCombatCard(combat, resumenIA) {
 
   ctx.fillStyle = 'rgba(220,230,255,0.75)';
   ctx.font = '400 28px "JetBrains Mono"';
-  const subtitle = isFled
-    ? `${loser.name} huyó del combate`
-    : `vence a ${loser.name} en un duelo por turnos`;
   ctx.fillText(subtitle, W / 2, 245);
 
-  /* ── avatares ── */
+  /* ── avatares — el ganador siempre a la izquierda ── */
   const cy = 480;
   const r = 150;
-  const winnerX = winnerSide === 'attacker' ? 300 : 780;
-  const loserX = winnerSide === 'attacker' ? 780 : 300;
+  const winnerX = 300;
+  const loserX = 780;
 
   drawIcon(ctx, 'crown', winnerX, cy - r - 45, 56, headlineColor, 2.4);
-  drawAvatar(ctx, winnerImg, winnerX, cy, r, headlineColor, winner.es_nave);
-  drawAvatar(ctx, loserImg, loserX, cy, r, 'rgba(150,170,210,0.45)', loser.es_nave);
+  drawAvatar(ctx, winnerImg, winnerX, cy, r, headlineColor, winner.isNave);
+  drawAvatar(ctx, loserImg, loserX, cy, r, 'rgba(150,170,210,0.45)', loser.isNave);
 
   ctx.fillStyle = 'rgba(230,240,255,0.9)';
   ctx.font = '800 40px Orbitron';
   ctx.fillText('VS', W / 2, cy + 15);
 
-  const drawNameplate = (name, handle, x, color) => {
+  const drawNameplate = (combatant, x, color) => {
     ctx.fillStyle = color;
-    const nameSize = fitText(ctx, name, 260, '32px Orbitron');
+    const nameSize = fitText(ctx, combatant.name, 260, '32px Orbitron');
     ctx.font = `800 ${nameSize}px Orbitron`;
-    ctx.fillText(name, x, cy + r + 55);
-    ctx.fillStyle = 'rgba(160,190,230,0.55)';
-    ctx.font = '400 22px "JetBrains Mono"';
-    ctx.fillText(`@${handle}`, x, cy + r + 85);
+    ctx.fillText(combatant.name, x, cy + r + 55);
+    if (combatant.handle) {
+      ctx.fillStyle = 'rgba(160,190,230,0.55)';
+      ctx.font = '400 22px "JetBrains Mono"';
+      ctx.fillText(`@${combatant.handle}`, x, cy + r + 85);
+    }
   };
-  drawNameplate(winner.name, winner.handle, winnerX, headlineColor);
-  drawNameplate(loser.name, loser.handle, loserX, 'rgba(220,230,255,0.85)');
+  drawNameplate(winner, winnerX, headlineColor);
+  drawNameplate(loser, loserX, 'rgba(220,230,255,0.85)');
 
   /* ── rondas ── */
   const roundsY = 720;
@@ -246,17 +254,9 @@ export async function drawCombatCard(combat, resumenIA) {
   ctx.fillText('RONDAS DISPUTADAS', W / 2, roundsY);
   ctx.fillStyle = '#38cdf0';
   ctx.font = '800 54px Orbitron';
-  ctx.fillText(String(summary.rounds), W / 2, roundsY + 55);
+  ctx.fillText(String(rounds), W / 2, roundsY + 55);
 
   /* ── tabla comparativa ── */
-  const leftVal = winnerSide === 'attacker' ? summary.attacker : summary.defender;
-  const rightVal = winnerSide === 'attacker' ? summary.defender : summary.attacker;
-  const rows = [
-    { icon: 'sword', label: 'DAÑO INFLIGIDO', color: '#ff7043', left: leftVal.dmgDealt, right: rightVal.dmgDealt },
-    { icon: 'plus', label: 'CURACIÓN TOTAL', color: '#10b981', left: leftVal.healDone, right: rightVal.healDone },
-    { icon: 'zap', label: 'GOLPES CRÍTICOS', color: '#E6B325', left: leftVal.crits, right: rightVal.crits },
-  ];
-
   let rowY = 850;
   const rowH = 100;
   ctx.strokeStyle = 'rgba(56,205,240,0.14)';
@@ -303,12 +303,70 @@ export async function drawCombatCard(combat, resumenIA) {
   return canvas;
 }
 
+const STAT_ROWS = (leftVal, rightVal) => [
+  { icon: 'sword', label: 'DAÑO INFLIGIDO', color: '#ff7043', left: leftVal.dmgDealt, right: rightVal.dmgDealt },
+  { icon: 'plus', label: 'CURACIÓN TOTAL', color: '#10b981', left: leftVal.healDone, right: rightVal.healDone },
+  { icon: 'zap', label: 'GOLPES CRÍTICOS', color: '#E6B325', left: leftVal.crits, right: rightVal.crits },
+];
+
+/** Dibuja la tarjeta de resolución de un combate PvP y devuelve el canvas listo para exportar. */
+export async function drawCombatCard(combat) {
+  const summary = summarizeCombat(combat);
+  const isFled = combat.status === 'fled_attacker' || combat.status === 'fled_defender';
+  const winnerSide = combat.status === 'attacker_won' || combat.status === 'fled_defender' ? 'attacker' : 'defender';
+  const loserSide = winnerSide === 'attacker' ? 'defender' : 'attacker';
+  const winnerData = combat[winnerSide];
+  const loserData = combat[loserSide];
+
+  const winner = {
+    name: winnerData.name, handle: winnerData.handle, isNave: winnerData.es_nave,
+    imageSrc: mediaUrl(winnerData.es_nave ? winnerData.nave_imagen : winnerData.photo_url),
+  };
+  const loser = {
+    name: loserData.name, handle: loserData.handle, isNave: loserData.es_nave,
+    imageSrc: mediaUrl(loserData.es_nave ? loserData.nave_imagen : loserData.photo_url),
+  };
+  const subtitle = isFled
+    ? `${loser.name} huyó del combate`
+    : `vence a ${loser.name} en un duelo por turnos`;
+
+  return renderResultCard({
+    winner, loser, rounds: summary.rounds, subtitle,
+    rows: STAT_ROWS(summary[winnerSide], summary[loserSide]),
+  });
+}
+
+/** Dibuja la tarjeta de resolución de un combate contra NPC (o encuentro naval) y devuelve el canvas. */
+export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode }) {
+  const summary = summarizeNpcLog(log);
+  const playerWon = phase === 'victory';
+
+  const playerCombatant = {
+    name: player.nombre, handle: null, isNave: naveMode,
+    imageSrc: mediaUrl(player.photo),
+  };
+  const npcCombatant = {
+    name: npc.nombre, handle: null, isNave: naveMode,
+    imageSrc: mediaUrl(npc.imagen_mini) || mediaUrl(npc.imagen),
+  };
+  const winner = playerWon ? playerCombatant : npcCombatant;
+  const loser = playerWon ? npcCombatant : playerCombatant;
+  const subtitle = `vence a ${loser.name} en ${naveMode ? 'combate espacial' : 'combate'}`;
+
+  return renderResultCard({
+    winner, loser, rounds: summary.rounds ?? ronda, subtitle,
+    rows: STAT_ROWS(playerWon ? summary.player : summary.npc, playerWon ? summary.npc : summary.player),
+  });
+}
+
 /**
- * Modal que genera y muestra la tarjeta de resolución de combate al montarse,
- * con opciones para descargarla o compartirla directamente (Web Share API,
- * disponible en navegadores móviles — cae al link de descarga si no aplica).
+ * Panel compartido: genera y muestra la imagen resultante de `generate()` al
+ * montarse, con opciones para descargarla o compartirla directamente (Web
+ * Share API, disponible en navegadores móviles — cae al link de descarga si
+ * no aplica). `generate` es una función sin argumentos que devuelve el canvas
+ * (así el mismo panel sirve tanto para combates PvP como contra NPC).
  */
-export default function CombatCardModal({ combat, onClose }) {
+function ResultCardModal({ generate, fileName, onClose }) {
   const [dataUrl, setDataUrl] = useState(null);
   const [error, setError] = useState(false);
   const cancelledRef = useRef(false);
@@ -330,8 +388,6 @@ export default function CombatCardModal({ combat, onClose }) {
     return () => { cancelledRef.current = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const fileName = `nexus-combate-${combat.id}.png`;
 
   const download = () => {
     if (!dataUrl) return;
@@ -394,5 +450,27 @@ export default function CombatCardModal({ combat, onClose }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+/** Tarjeta de resolución para un combate PvP (ver PvpCombatScreen.jsx). */
+export default function CombatCardModal({ combat, onClose }) {
+  return (
+    <ResultCardModal
+      generate={() => drawCombatCard(combat)}
+      fileName={`nexus-combate-${combat.id}.png`}
+      onClose={onClose}
+    />
+  );
+}
+
+/** Tarjeta de resolución para un combate contra NPC / encuentro naval (ver NpcCombatScreen.jsx). */
+export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, onClose }) {
+  return (
+    <ResultCardModal
+      generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode })}
+      fileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.png`}
+      onClose={onClose}
+    />
   );
 }
