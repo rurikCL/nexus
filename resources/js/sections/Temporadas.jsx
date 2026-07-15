@@ -628,7 +628,7 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
 }
 
 /* ── MisionesTemporadaModal — Battle pass popup ─────────── */
-function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
+function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserUpdate }) {
   const [misiones, setMisiones]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [selectedId, setSelectedId] = useState(null);
@@ -668,6 +668,16 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
         ? { ...m, completada_por_mi: true, status: 'completada', puede_completar: false }
         : m));
       setSelectedId(null);
+
+      // Las recompensas (créditos, hitos, títulos) ya se otorgaron en el servidor —
+      // refresca el usuario global para que se reflejen sin recargar la página
+      // (p. ej. el widget de Hitos en Comando).
+      if (onUserUpdate) {
+        fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d) onUserUpdate(d); })
+          .catch(() => {});
+      }
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
@@ -793,7 +803,7 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose }) {
 }
 
 /* ── TemporadaCard ──────────────────────────────────────── */
-function TemporadaCard({ temporada: t, canEdit, onEdit }) {
+function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate }) {
   const [showRec, setShowRec]       = useState(false);
   const [openTier, setOpenTier]     = useState(null);
   const [showMisiones, setShowMisiones] = useState(false);
@@ -947,6 +957,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
           temporadaId={t.id}
           temporadaNombre={t.nombre}
           onClose={() => setShowMisiones(false)}
+          onUserUpdate={onUserUpdate}
         />
       )}
     </div>
@@ -954,7 +965,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit }) {
 }
 
 /* ── Vista principal ────────────────────────────────────── */
-export function TemporadasView({ S, user }) {
+export function TemporadasView({ S, user, onUserUpdate }) {
   const isMobile = useIsMobile();
   const [temporadas, setTemporadas] = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -1025,7 +1036,7 @@ export function TemporadasView({ S, user }) {
           gap: 18, alignItems: 'start',
         }}>
           {temporadas.map(t => (
-            <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} />
+            <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} onUserUpdate={onUserUpdate} />
           ))}
         </div>
       )}
