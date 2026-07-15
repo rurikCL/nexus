@@ -281,6 +281,11 @@ class MapController extends Controller
                 : [];
             $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
+            $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $objetivosCompletos = $mision->objetivos->every(
+                fn ($o) => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta
+            );
+
             $npc->setAttribute('mision_disponible', [
                 'id'                 => $mision->id,
                 'nombre'             => $mision->nombre,
@@ -290,12 +295,14 @@ class MapController extends Controller
                 'hito_requerimiento' => $mision->hito_requerimiento,
                 'entregar_hito'      => $mision->entregar_hito,
                 'objetivos'          => $mision->objetivos->map(fn ($o) => [
-                    'id'          => $o->id,
-                    'nombre'      => $o->nombre,
-                    'descripcion' => $o->descripcion,
-                    'tipo'        => $o->tipo,
-                    'meta'        => $o->meta,
-                    'unidad'      => $o->unidad,
+                    'id'              => $o->id,
+                    'nombre'          => $o->nombre,
+                    'descripcion'     => $o->descripcion,
+                    'tipo'            => $o->tipo,
+                    'meta'            => $o->meta,
+                    'unidad'          => $o->unidad,
+                    'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
+                    'completado'      => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
                 ])->values(),
                 'recompensas'        => $mision->recompensas->map(fn ($r) => [
                     'id'          => $r->id,
@@ -308,7 +315,7 @@ class MapController extends Controller
                     'objeto'      => $r->objeto ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen] : null,
                 ])->values(),
                 'estado'             => $pivot->status ?? null,
-                'puede_completar'    => (bool) ($pivot && $pivot->status !== 'completada' && $cumpleHitos),
+                'puede_completar'    => (bool) ($pivot && $pivot->status !== 'completada' && $cumpleHitos && $objetivosCompletos),
             ]);
 
             return $npc;

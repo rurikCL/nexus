@@ -161,6 +161,8 @@ class MisionController extends Controller
     public function porTemporada(Request $request, int $temporadaId): JsonResponse
     {
         $user = $request->user();
+        $character = $user->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
         $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
             ->where('tipo_mision', 'temporada')
@@ -168,15 +170,40 @@ class MisionController extends Controller
             ->where('activa', true)
             ->orderBy('orden')
             ->get()
-            ->map(function ($m) use ($user) {
+            ->map(function ($m) use ($user, $characterHitos) {
                 $base = $this->formatMision($m);
 
                 $pivot = $m->users()->where('user_id', $user->id)->first()?->pivot;
+                $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+
+                $requeridos = $m->hito_requerimiento
+                    ? array_filter(array_map('trim', explode(',', $m->hito_requerimiento)))
+                    : [];
+                $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+
+                $objetivosConProgreso = $m->objetivos->map(fn ($o) => [
+                    'id' => $o->id,
+                    'nombre' => $o->nombre,
+                    'descripcion' => $o->descripcion,
+                    'tipo' => $o->tipo,
+                    'meta' => $o->meta,
+                    'unidad' => $o->unidad,
+                    'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+                    'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
+                    'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
+                ])->values();
+
+                $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
+                $completada = $pivot?->status === 'completada';
 
                 return array_merge($base, [
-                    'completada_por_mi' => $pivot?->status === 'completada',
+                    'objetivos' => $objetivosConProgreso,
+                    'completada_por_mi' => $completada,
                     'status' => $pivot?->status ?? null,
                     'progreso' => $pivot?->progreso ?? 0,
+                    'cumple_hitos' => $cumpleHitos,
+                    'objetivos_completos' => $objetivosCompletos,
+                    'puede_completar' => ! $completada && $cumpleHitos && $objetivosCompletos,
                 ]);
             });
 
@@ -451,6 +478,25 @@ class MisionController extends Controller
                 return response()->json([
                     'message' => 'No cumples los hitos requeridos para esta misión.',
                     'faltantes' => $faltantes,
+                ], 403);
+            }
+        }
+
+        // Verificar que todos los objetivos estén completos
+        $mision->loadMissing('objetivos');
+        if ($mision->objetivos->isNotEmpty()) {
+            $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+            $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+
+            $objetivosFaltantes = $mision->objetivos
+                ->filter(fn ($o) => ($progresoJson[(string) $o->id] ?? 0) < $o->meta)
+                ->pluck('nombre')
+                ->values();
+
+            if ($objetivosFaltantes->isNotEmpty()) {
+                return response()->json([
+                    'message' => 'Aún no completas todos los objetivos de esta misión.',
+                    'objetivos_faltantes' => $objetivosFaltantes,
                 ], 403);
             }
         }

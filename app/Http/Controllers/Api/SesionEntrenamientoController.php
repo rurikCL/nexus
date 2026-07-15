@@ -443,6 +443,7 @@ class SesionEntrenamientoController extends Controller
             $character->increment('credits', 75);
             $creditsAwarded = 75;
         }
+        \App\Services\MisionProgresoService::registrar($user, 'entrenamiento', 1);
 
         return response()->json([
             'training_day'    => $day,
@@ -564,6 +565,7 @@ class SesionEntrenamientoController extends Controller
                 'date'        => $training->fecha->format('Y-m-d'),
             ]);
             $character->increment('credits', 75);
+            \App\Services\MisionProgresoService::registrar($character->user, 'entrenamiento', 1);
             $markedCount++;
             $results[] = ['handle' => $handle, 'name' => $character->name, 'status' => 'marcado'];
         }
@@ -588,6 +590,7 @@ class SesionEntrenamientoController extends Controller
                 $encargadoCharacter->increment('credits', 75);
                 $encargadoCredits += 75;
             }
+            \App\Services\MisionProgresoService::registrar($user, 'entrenamiento', 1);
         }
 
         $bonus = $markedCount * 10;

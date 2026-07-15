@@ -2420,7 +2420,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
   );
 }
 
-function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange, onCreditsChange }) {
+function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange, onCreditsChange, onUserUpdate }) {
   const isMobile = useIsMobile();
   const isAI = Boolean(npc.prompt);
   const [showTienda, setShowTienda] = useState(false);
@@ -2703,15 +2703,17 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       setMisionInfo(prev => ({ ...prev, estado: 'completada' }));
       setShowMisionPopup(false);
       onMisionChange?.();
+
+      // Las recompensas (créditos, hitos, títulos) ya se otorgaron en el servidor —
+      // refresca el usuario global para que se reflejen sin recargar la página
+      // (p. ej. el widget de Hitos en Comando).
+      apiFetch('/me').then((me) => onUserUpdate?.(me)).catch(() => {});
     } catch (e) {
-      const msg = String(e.message) === '403'
-        ? 'No cumples los hitos requeridos para completar esta misión.'
-        : 'Error al completar la misión';
-      toast(msg, { tone: 'error', icon: 'x' });
+      toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
       setMisionBusy(false);
     }
-  }, [misionInfo, onMisionChange]);
+  }, [misionInfo, onMisionChange, onUserUpdate]);
 
   const STATS = [
     { label: 'VID', val: npc.vida },
@@ -4129,7 +4131,7 @@ function OutgoingTradePanel({ trade, onCancelled }) {
 }
 
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
-export default function MapaView({ S, setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
+export default function MapaView({ S, setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed, onUserUpdate }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
   const [nivel, setNivel]         = useState('galaxy');
   const syncCredits = useCallback((c) => { S?.setCredits?.(c); }, [S]);
@@ -4493,6 +4495,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           }}
           onMisionChange={() => setLugarRefreshKey((k) => k + 1)}
           onCreditsChange={syncCredits}
+          onUserUpdate={onUserUpdate}
         />
       )}
 

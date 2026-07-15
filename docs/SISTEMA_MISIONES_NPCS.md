@@ -7,9 +7,11 @@ hoy en el código.
 > Fuentes principales: `app/Http/Controllers/Api/MisionController.php`,
 > `app/Http/Controllers/Api/MapController.php` (`npcCumpleRequisitos`, `attachMisionInfo`),
 > `app/Http/Controllers/Api/CharacterController.php::npcVictory`,
+> `app/Services/MisionProgresoService.php` (tracking automático de objetivos),
 > `app/Http/Controllers/Api/NpcChatController.php`, `app/Models/Mision.php`, `app/Models/MapNpc.php`,
 > `app/Models/CharacterHito.php`, `resources/js/sections/Misiones.jsx`, `resources/js/sections/Mapa.jsx`,
-> `resources/js/components/NpcCombatScreen.jsx`, `docs/NPC_IA.md`, migraciones en `database/migrations/`.
+> `resources/js/sections/Temporadas.jsx`, `resources/js/components/NpcCombatScreen.jsx`, `docs/NPC_IA.md`,
+> migraciones en `database/migrations/`.
 
 ---
 
@@ -80,15 +82,27 @@ esquema:
 | `creditos` | `character->increment('credits', valor)` |
 | `titulo` / `insignia` | **Sólo cosmético** — se muestra en la UI, no se persiste como efecto |
 
-### 1.4 Gating por hitos — la única validación real de finalización
+### 1.4 Gating de finalización — hitos **y** objetivos
+
+`POST /misiones/{id}/completar` (`MisionController::completar`) valida dos cosas antes de marcar
+la misión como completada — ambas son bloqueantes (HTTP 403 si fallan):
 
 ```php
+// 1) Hitos requeridos (character_hitos, comparación de texto)
 if ($mision->hito_requerimiento) {
     $requeridos = explode(',', $mision->hito_requerimiento);       // ej: "Sable robado recuperado, Kex derrotado"
     $tieneHitos = $character->hitos()->whereIn('hito', $requeridos)->pluck('hito');
     $faltantes  = array_diff($requeridos, $tieneHitos);
     if ($faltantes) return 403 "No cumples los hitos requeridos", faltantes;
 }
+
+// 2) Objetivos — progreso_json de mision_user vs meta de cada objetivo
+if ($mision->objetivos->isNotEmpty()) {
+    $progresoJson = json_decode($pivot->progreso_json, true) ?? [];
+    $faltantes = $mision->objetivos->filter(fn ($o) => ($progresoJson[$o->id] ?? 0) < $o->meta);
+    if ($faltantes->isNotEmpty()) return 403 "Aún no completas todos los objetivos", faltantes;
+}
+
 // marca completada, otorga recompensas...
 if ($mision->entregar_hito) {
     foreach (explode(',', $mision->entregar_hito) as $hito) {
@@ -97,47 +111,85 @@ if ($mision->entregar_hito) {
 }
 ```
 
-**Importante:** no existe ninguna validación server-side de que los `objetivos` de la misión
-estén realmente cumplidos antes de llamar a `completar` — el progreso de objetivos
-(`PATCH /misiones/{id}/progress`) se escribe manualmente (cliente o GM) y el único freno real
-para "completar" es el hito requerido, si lo hay. Los tipos de objetivo (`combate`, `viaje`,
-`dialogo`, etc.) no disparan progreso automáticamente desde eventos de juego — parecen pensados
-para un tracking automático futuro que hoy no existe.
+Este mismo par de condiciones se expone también como `cumple_hitos` + `objetivos_completos` →
+`puede_completar` en los endpoints de lectura (`attachMisionInfo` para el diálogo de NPC, ver §3;
+`porTemporada` para el pase de batalla), para que el frontend deshabilite el botón "Completar"
+antes de intentar la llamada. Pero la validación real y bloqueante vive en el servidor, en
+`completar()` — el frontend no puede saltársela.
 
-### 1.5 Ciclo de vida completo
+### 1.5 Tracking automático de objetivos — `MisionProgresoService`
+
+Antes, nada en el juego escribía `progreso_json` — sólo existía `PATCH /misiones/{id}/progress`
+para hacerlo a mano. Ahora `App\Services\MisionProgresoService::registrar($user, $tipo, $cantidad)`
+se llama desde los puntos del código donde ocurre un evento de juego real:
+
+1. Busca todas las misiones **activas** con al menos un objetivo de ese `tipo`.
+2. Incrementa `progreso_json[objetivo_id]` en `$cantidad` para cada uno (tope: `meta` del objetivo).
+3. Recalcula `progreso` (0-100) como el promedio de avance de **todos** los objetivos de la misión,
+   no sólo los del tipo recién incrementado.
+4. Sube `status` a `en-curso` si `progreso > 0` — **nunca** lo pone en `completada`; eso sigue
+   siendo una acción explícita del jugador vía `POST /completar` (que es quien realmente entrega
+   las recompensas).
+5. Si el usuario no tenía fila en `mision_user` para esa misión, la crea — auto-inscripción al
+   primer avance, no hace falta `POST /accept` antes de que el progreso empiece a contar.
+
+Tipos de objetivo con tracking automático conectado hoy:
+
+| `objetivo.tipo` | Se dispara desde | Cantidad |
+|---|---|---|
+| `combate` | `PvpCombatController::action()` — victoria PvP (al ganador) | +1 |
+| `combate` | `CharacterController::npcVictory` / `npcEspacioVictory` | +1 |
+| `entrenamiento` | `SesionEntrenamientoController::attend` / `attendScan` — cada asistente marcado (incluido el encargado) | +1 |
+| `tarea` | `TaskController::approve` — el tutor aprueba la tarea del pupilo | +1 |
+
+**`general` sigue siendo manual** — es un tipo "cajón de sastre" (viajar, comprar, equipar, enviar
+un mensaje, etc.) sin un único evento de juego al que engancharse; su progreso todavía depende de
+`PATCH /misiones/{id}/progress`. Lo mismo aplica a `viaje`/`dialogo` si se usan — no tienen hook
+automático hoy.
+
+### 1.6 Ciclo de vida completo
 
 ```
 1. Admin (tier caballero|maestro|granmaestro) crea la misión — POST /misiones
    → opcionalmente le asigna un npc_id, objetivos[], recompensas[], hito_requerimiento/entregar_hito
 
-2. El jugador visita el lugar del NPC en el mapa
+2. El jugador visita el lugar del NPC en el mapa (o abre el pase de batalla en Temporadas)
    → GET /map/lugar/{id} adjunta `mision_disponible` a cada NPC (ver §3)
+   → GET /misiones/temporada/{id} lista las misiones de temporada con su progreso
 
 3. El jugador acepta desde el diálogo — POST /misiones/{id}/accept
    → upsert mision_user: status=pendiente, progreso=0
-   (sin validación adicional del lado NPC más allá de lo que ya filtró su visibilidad)
+   (las misiones de temporada no requieren este paso: `completar` hace upsert igual si no existía)
 
-4. Progreso — PATCH /misiones/{id}/progress
-   → progreso, status, progreso_json (manual, no automático)
+4. Progreso
+   → automático para objetivos `combate`/`entrenamiento`/`tarea` — MisionProgresoService (§1.5)
+   → manual para el resto — PATCH /misiones/{id}/progress (progreso, status, progreso_json)
 
 5. Completar — POST /misiones/{id}/completar
-   → valida hito_requerimiento
+   → valida hito_requerimiento Y que todos los objetivos estén al 100% (ver §1.4)
    → marca status=completada, progreso=100
    → otorga recompensas (habilidad/objeto/creditos)
    → escribe entregar_hito en character_hitos
 ```
 
-### 1.6 Sin FK al mapa — la ubicación llega por el NPC
+### 1.7 Sin FK al mapa — la ubicación llega por el NPC
 
 Las misiones **no** tienen columnas hacia `map_sistemas/map_planetas/map_zonas/map_lugares`. Toda
 ubicación mostrada al jugador ("dada por {npc} en {lugar}") llega indirectamente:
 `misiones.npc_id → map_npcs.LugarID → map_lugares`.
 
-### 1.7 UI — `Misiones.jsx` vs `Admin.jsx`
+### 1.8 UI — `Misiones.jsx`, `Temporadas.jsx` y `Admin.jsx`
 
 - `Misiones.jsx` (vista de jugador): dos pestañas, **Comunidad** (barra de progreso global +
   participantes) e **Individual** (sólo misiones con NPC asignado, separadas en activas/
-  completadas). No hay CRUD de misiones aquí ni pestaña de temporada wireada todavía.
+  completadas). No hay CRUD de misiones aquí.
+- `Temporadas.jsx` → `MisionesTemporadaModal` (pase de batalla de la temporada activa): cada
+  misión de la lista es clickeable y abre `MisionDetallePopup` (modal apilado) con foto,
+  descripción, cada objetivo con su propia barra de progreso (`progreso_actual`/`meta`), hitos
+  requeridos (resaltados en verde si ya se cumplen) y recompensas. Incluye el botón **"Completar
+  misión"**, habilitado sólo cuando `puede_completar` es `true`, que llama al mismo
+  `POST /misiones/{id}/completar` que usa el diálogo de NPC — es el mismo endpoint, dos puntos de
+  entrada de UI distintos.
 - `Admin.jsx` → `MisionesAdmin`: formulario completo — selector de `tipo_mision`, campos
   condicionales (`temporada_id` / `puntos_requeridos` / selector de NPC), carga de
   `foto_mision`, tag-inputs para hitos, listas dinámicas de objetivos y recompensas.
@@ -197,11 +249,18 @@ del usuario actual y sus hitos, y adjunta:
 ```php
 npc.mision_disponible = {
   id, nombre, mision, descripcion, foto_mision,
-  hito_requerimiento, entregar_hito, objetivos[], recompensas[],
+  hito_requerimiento, entregar_hito,
+  objetivos: [{ id, nombre, descripcion, tipo, meta, unidad, progreso_actual, completado }],
+  recompensas[],
   estado,                      // el status del pivot mision_user, si existe
-  puede_completar: pivot && pivot.status !== 'completada' && cumpleHitos
+  puede_completar: pivot && pivot.status !== 'completada' && cumpleHitos && objetivosCompletos
 }
 ```
+
+`progreso_actual`/`completado` por objetivo salen de `progreso_json` del pivot del usuario —
+alimentado por `MisionProgresoService` (§1.5) para los tipos con tracking automático, o por
+`PATCH /progress` a mano para el resto. `porTemporada()` (usado por `Temporadas.jsx`) devuelve la
+misma forma de `objetivos[]` y el mismo `puede_completar`, calculado con la lógica idéntica.
 
 El frontend (`Mapa.jsx`) lee `npc.mision_disponible` directamente para:
 - pintar el badge de "misión disponible" en la `NpcCard` de la grilla del lugar,
@@ -282,10 +341,16 @@ Jugador visita el lugar del NPC ──▶ attachMisionInfo() adjunta mision_disp
                           │                           │
                           └──────────POST /accept──────┘
                                         │
-                        PATCH /progress (manual, sin auto-tracking)
+       ┌────────────────────────────────┴────────────────────────────────┐
+       ▼                                                                 ▼
+Evento de juego (combate ganado,                            PATCH /progress
+asistencia, tarea aprobada)                                  (manual — resto de tipos)
+       │
+       ▼
+MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca 'completada')
                                         │
                               POST /completar
-                          (revalida hito_requerimiento)
+              (revalida hito_requerimiento Y que los objetivos estén al 100%)
                                         │
                     ┌───────────────────┼────────────────────┐
                     ▼                   ▼                    ▼
@@ -298,6 +363,7 @@ Jugador visita el lugar del NPC ──▶ attachMisionInfo() adjunta mision_disp
                                         ▲
                                         │
         Derrotar un NPC (NpcCombatScreen, cliente) ──POST /npc-victory──▶ hito "{npc} derrotado"
+                                                                        ──▶ MisionProgresoService('combate')
         Atacar NPC hostil/neutral ──▶ ±reputación (independiente del sistema de misiones)
 ```
 
@@ -310,8 +376,11 @@ Jugador visita el lugar del NPC ──▶ attachMisionInfo() adjunta mision_disp
   `"{Nombre} derrotado"`) es una convención de contenido, no una restricción de esquema.
   El combate contra NPC es el único generador automático de hitos hoy; el resto de los hitos
   se otorgan manualmente vía `entregar_hito` al completar una misión.
-- El progreso de objetivos de misión es manual/confiado al cliente — los `tipo` de objetivo
-  (`combate`, `viaje`, `dialogo`...) sugieren una futura automatización que aún no existe.
+- El progreso de objetivos `combate`/`entrenamiento`/`tarea` se registra automáticamente
+  (`MisionProgresoService`, §1.5) desde eventos reales del juego; el resto de los `tipo`
+  (`general`, `viaje`, `dialogo`...) sigue dependiendo de `PATCH /progress` manual.
+- `completar()` ahora es un gate doble — hitos **y** objetivos — reforzado en el servidor, no sólo
+  en la UI (el botón deshabilitado en el cliente es una comodidad, no la protección real).
 - El diálogo con IA es una capa de presentación y de "world-building" (puede escribir eventos de
   lore) totalmente separada del pipeline de misiones — comparten el mismo NPC pero no se
   comunican entre sí en el backend.
