@@ -124,14 +124,21 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
   const stageRef = useRef(null);
   const playerHudRef = useRef(null);
   const npcHudRef = useRef(null);
-  const [strike, setStrike]       = useState(null);
-  const [floatText, setFloatText] = useState(null);
+  const [strike, setStrike]         = useState(null);
+  const [floatTexts, setFloatTexts] = useState([]);
 
   /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
   const resultTextFor = (hit, ranged, crit, dmg) => {
     if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
     if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
-    return { variant: 'hit', text: `−${dmg}` };
+    return { variant: 'hit', text: `HIT: ${dmg}` };
+  };
+
+  /* Texto flotante independiente de un golpe (curaciones): aparece sobre `ref` sin VFX de golpe */
+  const showFloatText = (ref, result) => {
+    if (!stageRef.current || !ref.current) return;
+    const pos = getRelativeCenter(ref.current, stageRef.current);
+    setFloatTexts((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y, ...result }]);
   };
 
   /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
@@ -405,11 +412,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         const heal = -selfDmg;
         healedHp.vida = Math.min(maxPlayer.vida, healedHp.vida + heal);
         entries.push({ text: `¡Curación! +${heal} vida`, type: 'success' });
+        showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       }
       if (selfDmgEscudo < 0) {
         const healEsc = -selfDmgEscudo;
         healedHp.escudo = Math.min(maxPlayer.escudo, healedHp.escudo + healEsc);
         entries.push({ text: `¡Curación! +${healEsc} escudo`, type: 'success' });
+        showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${healEsc}` });
       }
       if (selfDmg < 0 || selfDmgEscudo < 0) setPlayerHp(healedHp);
 
@@ -427,6 +436,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
         text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
         type: 'info',
       });
+      showFloatText(npcHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       setNpcHp(newNpcHp);
       endTurnAfter('player');
@@ -1125,23 +1135,29 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, onVictory, o
           <EnergyStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => { setFloatText({ key: strike.key, ...strike.result }); setStrike(null); }}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => { setFloatText({ key: strike.key, ...strike.result }); setStrike(null); }}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
           />
         ))}
 
-        {/* Resultado del ataque — texto flotante sobre el objetivo */}
-        {floatText && (
-          <FloatingCombatText key={floatText.key}
-            text={floatText.text} variant={floatText.variant}
-            onDone={() => setFloatText(null)}
+        {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
+        {floatTexts.map((ft) => (
+          <FloatingCombatText key={ft.id}
+            x={ft.x} y={ft.y} text={ft.text} variant={ft.variant}
+            onDone={() => setFloatTexts((prev) => prev.filter((f) => f.id !== ft.id))}
           />
-        )}
+        ))}
 
         {/* Log de combate — izquierda, colapsable (desktop; en mobile va integrado en la columna central) */}
         {!isMobile && (

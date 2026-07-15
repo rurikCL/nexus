@@ -73,7 +73,21 @@ function extractRollGroups(entry, { myId, attackerId }) {
 function resultTextFor(hit, ranged, crit, dmg) {
   if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
   if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
-  return { variant: 'hit', text: `−${dmg}` };
+  return { variant: 'hit', text: `HIT: ${dmg}` };
+}
+
+/* Detecta una curación (auto-curación u a distancia) en una entrada del log del backend */
+function classifyPvpHeal(entry, myId) {
+  const msgs = entry.messages ?? [];
+  const actorIsMe = entry.actor_id === myId;
+
+  const selfMatch = msgs.map((m) => m.match(/^¡Curación! \+(\d+) (?:vida|escudo)/)).find(Boolean);
+  if (selfMatch) return { healedIsMe: actorIsMe, heal: Number(selfMatch[1]) };
+
+  const targetMatch = msgs.map((m) => m.match(/cura \+(\d+) vida a/)).find(Boolean);
+  if (targetMatch) return { healedIsMe: !actorIsMe, heal: Number(targetMatch[1]) };
+
+  return null;
 }
 
 function useIsMobile() {
@@ -140,7 +154,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myHudRef                        = useRef(null);
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
-  const [floatText, setFloatText]       = useState(null);
+  const [floatTexts, setFloatTexts]     = useState([]);
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -187,11 +201,25 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const newEntries = (newCombat.log ?? []).slice(prevLen);
     const attackerId = newCombat.attacker?.id;
     let lastAttack = null;
+    let lastHeal = null;
     for (const entry of newEntries) {
       const groups = extractRollGroups(entry, { myId: userId, attackerId });
       for (const g of groups) await rollDice(g);
       const classified = classifyPvpAttack(entry, newCombat, userId);
       if (classified) lastAttack = classified;
+      const healed = classifyPvpHeal(entry, userId);
+      if (healed) lastHeal = healed;
+    }
+
+    if (lastHeal && stageRef.current) {
+      const healRef = lastHeal.healedIsMe ? myHudRef : oppHudRef;
+      if (healRef.current) {
+        const pos = getRelativeCenter(healRef.current, stageRef.current);
+        setFloatTexts((prev) => [...prev, {
+          id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y,
+          variant: 'heal', text: `Curación: ${lastHeal.heal}`,
+        }]);
+      }
     }
 
     if (lastAttack && stageRef.current) {
@@ -867,23 +895,29 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <EnergyStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => { setFloatText({ key: strike.key, ...strike.result }); setStrike(null); }}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => { setFloatText({ key: strike.key, ...strike.result }); setStrike(null); }}
+            onDone={() => {
+              setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
+              setStrike(null);
+            }}
           />
         ))}
 
-        {/* Resultado del ataque — texto flotante sobre el objetivo */}
-        {floatText && (
-          <FloatingCombatText key={floatText.key}
-            text={floatText.text} variant={floatText.variant}
-            onDone={() => setFloatText(null)}
+        {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
+        {floatTexts.map((ft) => (
+          <FloatingCombatText key={ft.id}
+            x={ft.x} y={ft.y} text={ft.text} variant={ft.variant}
+            onDone={() => setFloatTexts((prev) => prev.filter((f) => f.id !== ft.id))}
           />
-        )}
+        ))}
 
         {/* Log de combate (desktop; en mobile va integrado en la columna central) */}
         {!isMobile && (
