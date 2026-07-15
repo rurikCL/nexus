@@ -1,0 +1,54 @@
+/* ============================================================
+   NÉXUS — Texto flotante de resultado de combate
+   Aparece sobre el objetivo justo después del golpe de energía
+   (impacto/crítico/bloqueo/esquiva) y se desvanece flotando hacia
+   arriba. Solo anima transform y opacity; la temporización vive en
+   custom properties, igual que energy-strike.css.
+   ============================================================ */
+
+.nx-float-text {
+  --nx-float-jump-dur: 420ms;
+  --nx-float-fade-dur: 400ms;
+  --nx-float-fade-delay: 600ms;
+
+  position: absolute;
+  z-index: 550;
+  pointer-events: none;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65), 0 0 12px currentColor;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation:
+    nx-float-jump var(--nx-float-jump-dur) var(--ease-out) forwards,
+    nx-float-fade var(--nx-float-fade-dur) var(--ease-in)  forwards;
+  animation-delay: 0ms, var(--nx-float-fade-delay);
+}
+
+.nx-float-text-hit   { color: #ffd166; }
+.nx-float-text-crit  { color: #ff2d45; font-size: 1.5rem; }
+.nx-float-text-block { color: #94a3b8; font-size: 1rem; }
+.nx-float-text-dodge { color: #38cdf0; font-size: 1rem; }
+.nx-float-text-heal  { color: #10b981; }
+
+@keyframes nx-float-jump {
+  0%   { transform: translate(-50%, -50%) translateY(6px)   scale(0.5);  opacity: 0; }
+  18%  { transform: translate(-50%, -50%) translateY(-16px) scale(1.25); opacity: 1; }
+  35%  { transform: translate(-50%, -50%) translateY(-8px)  scale(0.95); }
+  55%  { transform: translate(-50%, -50%) translateY(-12px) scale(1.05); }
+  100% { transform: translate(-50%, -50%) translateY(-48px) scale(1); }
+}
+@keyframes nx-float-fade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-float-text {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms, 700ms !important;
+  }
+}

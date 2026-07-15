@@ -832,7 +832,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
         crumbs={[{ label: 'Galaxia' }, { label: sistema.nombre }]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px 220px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
         {/* ── visor del sistema ── */}
         <div className="nx-panel solid" style={{ position: 'relative', overflow: 'hidden', minHeight: isMobile ? 260 : 500,
           background: 'linear-gradient(180deg,#07101f,#04070f)' }}>
@@ -1025,15 +1025,15 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
             </Panel>
           )}
         </div>
-
-        {/* ── panel presentes ── */}
-        <PresentesPanel
-          presentes={sistema.presentes_personajes ?? []}
-          onChat={onChat}
-          onAttack={onAttack}
-          myUserId={myUserId}
-        />
       </div>
+
+      {/* ── footer presentes ── */}
+      <PresentesPanel
+        presentes={sistema.presentes_personajes ?? []}
+        onChat={onChat}
+        onAttack={onAttack}
+        myUserId={myUserId}
+      />
     </div>
   );
 }
@@ -1398,13 +1398,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
         crumbs={[...breadcrumbs, { label: zona.nombre }]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 220px', gap: isMobile ? 14 : 20, marginTop: 0, alignItems: 'start' }}>
-        {/* columna principal */}
-        <div style={{
-          position: 'relative',
-          borderRadius: 12,
-          overflow: 'hidden',
-        }}>
+      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
           {zonaImagen && (
             <div style={{
               position: 'absolute',
@@ -1472,17 +1466,16 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
               <LugarCard key={l.id} lugar={l} presentes={l.presentes_personajes ?? []} onClick={() => handleSelectLugar(l)} />
             ))}
           </div>
-          </div>
         </div>
-
-        {/* panel presentes */}
-        <PresentesPanel
-          presentes={zona.presentes_personajes ?? []}
-          onChat={onChat}
-          onAttack={onAttack}
-          myUserId={myUserId}
-        />
       </div>
+
+      {/* footer presentes */}
+      <PresentesPanel
+        presentes={zona.presentes_personajes ?? []}
+        onChat={onChat}
+        onAttack={onAttack}
+        myUserId={myUserId}
+      />
     </div>
   );
 }
@@ -3340,100 +3333,85 @@ function InfoRow({ label, value, color }) {
 /* ─── PANEL PRESENTES ───────────────────────────────────── */
 function PresentesPanel({ presentes = [], onChat, onAttack, myUserId }) {
   return (
-    <div style={{
-      width: 220, flexShrink: 0,
-      display: 'flex', flexDirection: 'column',
-      position: 'sticky', top: 0, alignSelf: 'flex-start',
-    }}>
-      <div className="nx-panel solid" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{
-          padding: '10px 14px', borderBottom: '1px solid var(--holo-line)',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <Icon name="user" size={13} style={{ color: 'var(--holo)', opacity: 0.7 }} />
-          <span className="nx-kicker" style={{ fontSize: 9, letterSpacing: '0.14em' }}>PRESENTES</span>
-          {presentes.length > 0 && (
-            <span style={{
-              marginLeft: 'auto', fontSize: 9, fontFamily: 'var(--font-data)',
-              color: 'var(--holo)', background: 'rgba(56,205,240,0.12)',
-              border: '1px solid rgba(56,205,240,0.25)', borderRadius: 10,
-              padding: '1px 7px',
-            }}>{presentes.length}</span>
-          )}
-        </div>
-
-        {presentes.length === 0 ? (
-          <div style={{
-            padding: '24px 14px', textAlign: 'center',
-            color: 'var(--txt-faint)', fontSize: 11,
-            fontFamily: 'var(--font-data)', lineHeight: 1.6,
-          }}>
-            Nadie en<br />este lugar
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {presentes.map((p) => {
-              const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
-              const photoUrl = mediaUrl(p.photo);
-              const isMe = p.user_id === myUserId;
-              return (
-                <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 12px',
-                  borderBottom: '1px solid rgba(56,205,240,0.06)',
-                }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                    backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
-                    backgroundSize: 'cover', backgroundPosition: 'center',
-                    background: photoUrl ? undefined : color,
-                    border: `2px solid ${color}55`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
-                    boxShadow: `0 0 8px ${color}44`,
-                  }}>
-                    {!photoUrl && (p.handle?.[0] ?? '?')}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: 11, color: 'var(--txt)', fontFamily: 'var(--font-data)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      fontWeight: 600,
-                    }}>
-                      @{p.handle}
-                    </div>
-                    {isMe && (
-                      <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>
-                        (tú)
-                      </div>
-                    )}
-                  </div>
-                  {!isMe && (
-                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                      <button onClick={() => onChat?.(p)} style={{
-                        background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.25)',
-                        borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: 'var(--holo)',
-                        fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.18)'; e.currentTarget.style.borderColor = 'var(--holo)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; }}
-                      >MSG</button>
-                      <button onClick={() => onAttack?.(p)} style={{
-                        background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
-                        borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: '#ef4444',
-                        fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.2)'; e.currentTarget.style.borderColor = '#ef4444'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.08)'; e.currentTarget.style.borderColor = 'rgba(220,38,38,0.3)'; }}
-                      >ATK</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+    <div className="nx-panel solid" style={{ marginTop: 16, padding: 0, overflow: 'hidden' }}>
+      <div style={{
+        padding: '10px 14px', borderBottom: presentes.length > 0 ? '1px solid var(--holo-line)' : 'none',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <Icon name="user" size={13} style={{ color: 'var(--holo)', opacity: 0.7 }} />
+        <span className="nx-kicker" style={{ fontSize: 9, letterSpacing: '0.14em' }}>PRESENTES</span>
+        {presentes.length > 0 && (
+          <span style={{
+            fontSize: 9, fontFamily: 'var(--font-data)',
+            color: 'var(--holo)', background: 'rgba(56,205,240,0.12)',
+            border: '1px solid rgba(56,205,240,0.25)', borderRadius: 10,
+            padding: '1px 7px',
+          }}>{presentes.length}</span>
         )}
       </div>
+
+      {presentes.length === 0 ? (
+        <div style={{
+          padding: '14px', textAlign: 'center',
+          color: 'var(--txt-faint)', fontSize: 11, fontFamily: 'var(--font-data)',
+        }}>
+          Nadie presente aquí
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 14px' }}>
+          {presentes.map((p) => {
+            const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
+            const photoUrl = mediaUrl(p.photo);
+            const isMe = p.user_id === myUserId;
+            return (
+              <div key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '5px 8px 5px 5px', borderRadius: 20,
+                background: 'rgba(255,255,255,0.02)', border: '1px solid var(--holo-line)',
+              }}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                  backgroundSize: 'cover', backgroundPosition: 'center',
+                  background: photoUrl ? undefined : color,
+                  border: `2px solid ${color}55`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+                  boxShadow: `0 0 8px ${color}44`,
+                }}>
+                  {!photoUrl && (p.handle?.[0] ?? '?')}
+                </div>
+                <div style={{
+                  fontSize: 11, color: 'var(--txt)', fontFamily: 'var(--font-data)',
+                  fontWeight: 600, whiteSpace: 'nowrap',
+                }}>
+                  @{p.handle}{isMe && <span style={{ color: 'var(--holo)' }}> (tú)</span>}
+                </div>
+                {!isMe && (
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => onChat?.(p)} style={{
+                      background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.25)',
+                      borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: 'var(--holo)',
+                      fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.18)'; e.currentTarget.style.borderColor = 'var(--holo)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; }}
+                    >MSG</button>
+                    <button onClick={() => onAttack?.(p)} style={{
+                      background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
+                      borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: '#ef4444',
+                      fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.2)'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.08)'; e.currentTarget.style.borderColor = 'rgba(220,38,38,0.3)'; }}
+                    >ATK</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

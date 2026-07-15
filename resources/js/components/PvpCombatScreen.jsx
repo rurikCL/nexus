@@ -7,6 +7,7 @@ import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
+import FloatingCombatText from './FloatingCombatText.jsx';
 
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
@@ -32,7 +33,10 @@ function classifyPvpAttack(entry, combat, myId) {
   }
 
   const hit = msgs.some((m) => /¡Impacto!|¡CRÍTICO!/.test(m));
-  return { actorIsMe, ranged, hit };
+  const crit = msgs.some((m) => /¡CRÍTICO!/.test(m));
+  const dmgMatch = msgs.join(' ').match(/−(\d+) daño/);
+  const dmg = dmgMatch ? Number(dmgMatch[1]) : 0;
+  return { actorIsMe, ranged, hit, crit, dmg };
 }
 
 /* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
@@ -63,6 +67,13 @@ function extractRollGroups(entry, { myId, attackerId }) {
     ]);
   }
   return groups;
+}
+
+/* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
+function resultTextFor(hit, ranged, crit, dmg) {
+  if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
+  if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
+  return { variant: 'hit', text: `−${dmg}` };
 }
 
 function useIsMobile() {
@@ -129,6 +140,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myHudRef                        = useRef(null);
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
+  const [floatText, setFloatText]       = useState(null);
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -200,6 +212,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         targetRef,
         from: getRelativeCenter(attackerRef.current, stageRef.current),
         to: getRelativeCenter(targetRef.current, stageRef.current),
+        result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg),
       });
     }
 
@@ -854,15 +867,23 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <EnergyStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
+            onDone={() => { setFloatText({ key: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }); setStrike(null); }}
           />
         ) : (
           <RangedStrikeEffect key={strike.key}
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
-            onDone={() => setStrike(null)}
+            onDone={() => { setFloatText({ key: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }); setStrike(null); }}
           />
         ))}
+
+        {/* Resultado del ataque — texto flotante sobre el objetivo */}
+        {floatText && (
+          <FloatingCombatText key={floatText.key}
+            x={floatText.x} y={floatText.y} text={floatText.text} variant={floatText.variant}
+            onDone={() => setFloatText(null)}
+          />
+        )}
 
         {/* Log de combate (desktop; en mobile va integrado en la columna central) */}
         {!isMobile && (
