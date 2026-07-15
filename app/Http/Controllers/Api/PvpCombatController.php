@@ -12,6 +12,8 @@ use App\Notifications\PvpCombatNotification;
 use App\Notifications\PvpTurnoPushRecordatorio;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class PvpCombatController extends Controller
@@ -39,6 +41,8 @@ class PvpCombatController extends Controller
         5 => [4],     // Shien/DjSo  → Ataru
         7 => [5, 6],  // Juyo/Vaapad → Shien, Niman
     ];
+
+    private const TERMINAL_STATUSES = ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'];
 
     /** POST /pvp/challenge */
     public function challenge(Request $request): JsonResponse
@@ -220,6 +224,77 @@ class PvpCombatController extends Controller
         }
 
         return response()->json(['combat' => $this->formatCombat($combat, $user->id)]);
+    }
+
+    /** POST /pvp/{id}/resumen-ia — crónica del duelo generada por IA para la tarjeta de resolución */
+    public function resumenIA(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        $combat = PvpCombat::with(self::WITHS)->findOrFail($id);
+
+        if (! $combat->involvedUser($user->id)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+        if (! in_array($combat->status, self::TERMINAL_STATUSES, true)) {
+            return response()->json(['error' => 'El combate no ha terminado'], 422);
+        }
+
+        // Se genera una sola vez por combate y queda cacheado en la BD.
+        if ($combat->resumen_ia) {
+            return response()->json(['resumen' => $combat->resumen_ia]);
+        }
+
+        $attackerName = $combat->attacker->character->name ?? 'El atacante';
+        $defenderName = $combat->defender->character->name ?? 'El defensor';
+
+        $transcript = collect($combat->log ?? [])
+            ->flatMap(fn ($entry) => $entry['messages'] ?? [])
+            ->implode("\n");
+        $transcript = mb_substr($transcript, 0, 6000);
+
+        $prompt = 'Eres el cronista de la Orden en NÉXUS. A continuación tienes la bitácora, turno a turno, '
+            ."de un duelo con sable de luz entre {$attackerName} y {$defenderName}. Escribe una crónica dramática "
+            .'del duelo, en español, en prosa corrida (sin listas, sin markdown, sin títulos), yendo directo a los '
+            .'momentos clave sin descripciones ambientales largas. '
+            .'LÍMITE ESTRICTO: no más de 90 palabras en total, ni una más. No inventes datos que contradigan la bitácora.'
+            ."\n\nBitácora:\n{$transcript}";
+
+        $response = Http::withToken(config('services.mistral.api_key'))
+            ->timeout(30)
+            ->post('https://api.mistral.ai/v1/chat/completions', [
+                'model' => 'open-mistral-nemo',
+                'messages' => [['role' => 'user', 'content' => $prompt]],
+                'max_tokens' => 260,
+                'temperature' => 0.8,
+            ]);
+
+        if ($response->failed()) {
+            Log::error('Mistral resumen de combate falló', ['status' => $response->status(), 'combat_id' => $id]);
+
+            return response()->json(['error' => 'No se pudo generar el resumen.'], 502);
+        }
+
+        $resumen = trim((string) $response->json('choices.0.message.content', ''));
+        if ($resumen === '') {
+            return response()->json(['error' => 'No se pudo generar el resumen.'], 502);
+        }
+
+        $resumen = self::limitarPalabras($resumen, 100);
+
+        $combat->update(['resumen_ia' => $resumen]);
+
+        return response()->json(['resumen' => $resumen]);
+    }
+
+    /** Red de seguridad: el modelo no siempre respeta el límite de palabras pedido en el prompt. */
+    private static function limitarPalabras(string $texto, int $max): string
+    {
+        $palabras = preg_split('/\s+/', trim($texto));
+        if (count($palabras) <= $max) {
+            return $texto;
+        }
+
+        return implode(' ', array_slice($palabras, 0, $max)).'…';
     }
 
     /** POST /pvp/{id}/action */

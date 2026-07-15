@@ -123,12 +123,31 @@ function fitText(ctx, text, maxWidth, baseFont, minFont = 18) {
   return size;
 }
 
+/** Envuelve `text` en líneas de máximo `maxWidth` px (con `ctx.font` ya seteado) y las dibuja centradas desde (cx, y), separadas por `lineHeight`. Devuelve el Y final. */
+function wrapText(ctx, text, cx, y, maxWidth, lineHeight) {
+  const words = text.split(/\s+/).filter(Boolean);
+  let line = '';
+  let cy = y;
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, cx, cy);
+      line = word;
+      cy += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) { ctx.fillText(line, cx, cy); cy += lineHeight; }
+  return cy;
+}
+
 /** Dibuja la tarjeta de resolución de combate y devuelve el canvas listo para exportar. */
-export async function drawCombatCard(combat) {
+export async function drawCombatCard(combat, resumenIA) {
   await ensureFonts();
 
   const W = 1080;
-  const H = 1350;
+  const H = resumenIA ? 1620 : 1350;
   const DPR = 2;
   const canvas = document.createElement('canvas');
   canvas.width = W * DPR;
@@ -263,6 +282,18 @@ export async function drawCombatCard(combat) {
     rowY += rowH;
   }
 
+  /* ── crónica del duelo (IA) ── */
+  if (resumenIA) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(150,200,255,0.55)';
+    ctx.font = '600 22px "JetBrains Mono"';
+    ctx.fillText('CRÓNICA DEL DUELO', W / 2, rowY + 30);
+
+    ctx.fillStyle = 'rgba(220,230,255,0.82)';
+    ctx.font = '400 27px "JetBrains Mono"';
+    wrapText(ctx, resumenIA, W / 2, rowY + 80, W - 200, 38);
+  }
+
   /* ── pie ── */
   const dateStr = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
   ctx.fillStyle = 'rgba(120,150,190,0.5)';
@@ -284,7 +315,16 @@ export default function CombatCardModal({ combat, onClose }) {
 
   useEffect(() => {
     cancelledRef.current = false;
-    drawCombatCard(combat)
+    const token = localStorage.getItem('nx-token');
+
+    fetch(`/api/pvp/${combat.id}/resumen-ia`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.resumen ?? null)
+      .catch(() => null)
+      .then((resumen) => drawCombatCard(combat, resumen))
       .then((canvas) => { if (!cancelledRef.current) setDataUrl(canvas.toDataURL('image/png')); })
       .catch(() => { if (!cancelledRef.current) setError(true); });
     return () => { cancelledRef.current = true; };
