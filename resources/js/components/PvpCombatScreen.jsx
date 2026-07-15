@@ -140,8 +140,20 @@ const isEffective = (atkForma, defForma) => {
 
 const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
-const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
+const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow', INI: 'zap' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+
+/* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */
+const mergeEffects = (buffs = [], debuffs = []) => Object.values(
+  [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
+    .reduce((acc, e) => {
+      const key = `${e.kind}-${e.stat}`;
+      acc[key] = acc[key]
+        ? { ...acc[key], amount: acc[key].amount + 1, turns: Math.max(acc[key].turns, e.turns) }
+        : { kind: e.kind, stat: e.stat, amount: 1, turns: e.turns };
+      return acc;
+    }, {})
+);
 
 export default function PvpCombatScreen({ combat: initialCombat, userId, onClose, lugarImagen }) {
   const [combat, setCombat]             = useState(initialCombat);
@@ -155,19 +167,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
   const [floatTexts, setFloatTexts]     = useState([]);
-  const [notifCountdown, setNotifCountdown] = useState(null);
-
-  /* Cuenta regresiva antes de que se le notifique al que no responda (ver PvpTurnoPushRecordatorio) */
-  useEffect(() => {
-    const turnoDesde = combat.turno_desde ? new Date(combat.turno_desde).getTime() : null;
-    const delaySeg = combat.notif_delay_seg ?? 30;
-    if (!turnoDesde || combat.status !== 'active') { setNotifCountdown(null); return; }
-
-    const tick = () => setNotifCountdown(Math.max(0, Math.round(delaySeg - (Date.now() - turnoDesde) / 1000)));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [combat.turno_desde, combat.notif_delay_seg, combat.status]);
+  /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
+     de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
+  const effectMaxTurnsRef = useRef({});
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -352,7 +354,25 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side', secondsLeft = null }) => {
+  /* Adjunta a cada efecto el % de rondas restantes respecto de la mayor duración
+     observada desde que apareció, para la barrita que se va reduciendo. */
+  const withDurationPct = (side, effects) => {
+    const store = effectMaxTurnsRef.current;
+    const activeKeys = new Set();
+    const withPct = effects.map(e => {
+      const key = `${side}-${e.kind}-${e.stat}`;
+      activeKeys.add(key);
+      const max = Math.max(store[key] ?? 0, e.turns);
+      store[key] = max;
+      return { ...e, pct: pct(e.turns, max) };
+    });
+    Object.keys(store).forEach(k => { if (k.startsWith(`${side}-`) && !activeKeys.has(k)) delete store[k]; });
+    return withPct;
+  };
+  const myEffects  = withDurationPct('my', mergeEffects(myBuffs, myDebuffs));
+  const oppEffects = withDurationPct('opp', mergeEffects(oppBuffs, oppDebuffs));
+
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, formaSide, effectsPosition = 'side' }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -366,28 +386,22 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
-    const effects = Object.values(
-      [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
-        .reduce((acc, e) => {
-          const key = `${e.kind}-${e.stat}`;
-          acc[key] = acc[key]
-            ? { ...acc[key], amount: acc[key].amount + 1, turns: Math.max(acc[key].turns, e.turns) }
-            : { kind: e.kind, stat: e.stat, amount: 1, turns: e.turns };
-          return acc;
-        }, {})
-    );
     const renderBadge = (e, i) => {
       const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
       const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
       return (
         <span key={`${e.kind}-${e.stat}-${i}`} title={`${e.kind === 'buff' ? 'Buff' : 'Debuff'} · ${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
+          display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0,
           fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
           background: `${c}18`, border: `1px solid ${c}55`, color: c, fontWeight: 700,
         }}>
-          {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
-          {e.kind === 'buff' ? '+' : '−'}{e.amount} {abbr}
-          <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns}r</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+            {BADGE_ICON[abbr] && <Icon name={BADGE_ICON[abbr]} size={8} />}
+            {e.kind === 'buff' ? '+' : '−'}{e.amount}
+          </span>
+          <div style={{ width: 18, height: 2, background: `${c}30`, borderRadius: 1 }}>
+            <div style={{ height: '100%', width: `${e.pct}%`, background: c, borderRadius: 1, transition: 'width 0.4s ease' }} />
+          </div>
         </span>
       );
     };
@@ -465,14 +479,6 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               </span>
             ))}
           </div>
-          {secondsLeft !== null && (
-            <div style={{
-              marginTop: 6, fontSize: 8, color: 'rgba(150,180,220,0.55)', fontFamily: 'var(--font-data)',
-              letterSpacing: '0.06em', textAlign: rev ? 'right' : 'left',
-            }}>
-              ⏱ {secondsLeft}s antes de notificar
-            </div>
-          )}
         </div>
       </div>
     );
@@ -859,9 +865,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
                 nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
-                buffs={oppBuffs} debuffs={oppDebuffs}
+                effects={oppEffects}
                 forma={oppCurrentForma} formaSide="right"
-                effectsPosition="below" secondsLeft={notifCountdown}
+                effectsPosition="below"
               />
             </div>
 
@@ -879,9 +885,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
                 nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
-                buffs={myBuffs} debuffs={myDebuffs}
+                effects={myEffects}
                 forma={myCurrentForma} formaSide="left"
-                effectsPosition="above" secondsLeft={notifCountdown}
+                effectsPosition="above"
               />
             </div>
 
@@ -895,8 +901,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
                 nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
-                buffs={oppBuffs} debuffs={oppDebuffs}
-                forma={oppCurrentForma} formaSide="right" secondsLeft={notifCountdown}
+                effects={oppEffects}
+                forma={oppCurrentForma} formaSide="right"
               />
             </div>
 
@@ -906,8 +912,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
                 nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
-                buffs={myBuffs} debuffs={myDebuffs}
-                forma={myCurrentForma} formaSide="left" secondsLeft={notifCountdown}
+                effects={myEffects}
+                forma={myCurrentForma} formaSide="left"
               />
             </div>
           </>
