@@ -1039,9 +1039,10 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
 }
 
 /* ─── VISTA PLANETA ─────────────────────────────────────── */
-function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, onPlanetaImagen, myUserId }) {
+function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, onTrade, onPlanetaImagen, myUserId }) {
   const [planeta, setPlaneta] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [shipPopup, setShipPopup] = useState(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -1074,7 +1075,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
         crumbs={[{ label: 'Galaxia' }, { label: planeta.sistema?.nombre }, { label: planeta.nombre }]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px 220px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
         {/* mapa del planeta */}
         <Panel title={planeta.nombre} kicker="MAPA PLANETARIO" icon="target"
           right={<Chip tone={hostilidadStyle(planeta.hostilidad).text !== '#8aa0c0' ? 'orange' : 'default'}>
@@ -1168,6 +1169,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
 
             {/* naves de jugadores presentes en el planeta — deriva lenta simulando vuelo orbital */}
             {presentesPlaneta.map((p, i) => {
+              const isMe = p.user_id === myUserId;
               const pos = shipPositions[i];
               const color = p.saber_color || 'var(--holo)';
               const ax = 8 + hashf(p.id * 17 + 4) * 14;
@@ -1175,22 +1177,26 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
               const dur = 16 + hashf(p.id * 5 + 2) * 12;
               const delay = -hashf(p.id * 13 + 6) * dur;
               return (
-                <div key={p.id} style={{
-                  position: 'absolute', left: pos.left, top: pos.top, zIndex: 2,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  animation: `nx-node-drift ${dur}s ease-in-out infinite`,
-                  animationDelay: `${delay}s`,
-                  '--ax': `${ax}px`, '--ay': `${ay}px`,
-                  pointerEvents: 'none',
-                }}>
+                <button key={p.id}
+                  onClick={() => !isMe && setShipPopup(p)}
+                  style={{
+                    position: 'absolute', left: pos.left, top: pos.top, zIndex: 2,
+                    background: 'transparent', border: 'none', padding: 0,
+                    cursor: isMe ? 'default' : 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                    animation: `nx-node-drift ${dur}s ease-in-out infinite`,
+                    animationDelay: `${delay}s`,
+                    '--ax': `${ax}px`, '--ay': `${ay}px`,
+                  }}
+                >
                   <Icon name="ship" size={18} style={{ color, filter: `drop-shadow(0 0 6px ${color})` }} />
                   <span style={{
                     fontSize: 8, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
                     whiteSpace: 'nowrap', textShadow: '0 1px 4px rgba(0,0,0,0.9)',
                   }}>
-                    {p.handle}
+                    {p.handle}{isMe ? ' (tú)' : ''}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -1241,15 +1247,24 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
             </Panel>
           )}
         </div>
-
-        {/* ── panel presentes ── */}
-        <PresentesPanel
-          presentes={planeta.presentes_personajes ?? []}
-          onChat={onChat}
-          onAttack={onAttack}
-          myUserId={myUserId}
-        />
       </div>
+
+      {/* popup de acciones sobre la nave de un jugador */}
+      {shipPopup && (
+        <Modal open onClose={() => setShipPopup(null)} title={`@${shipPopup.handle}`} kicker="ACCIONES" width={320}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Btn kind="ghost" icon="message" onClick={() => { onChat?.(shipPopup); setShipPopup(null); }}>
+              Enviar mensaje
+            </Btn>
+            <Btn kind="ghost" icon="coin" onClick={() => { onTrade?.(shipPopup); setShipPopup(null); }}>
+              Comerciar
+            </Btn>
+            <Btn kind="ghost" icon="swords" onClick={() => { onAttack?.(shipPopup); setShipPopup(null); }}>
+              Atacar
+            </Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -3844,6 +3859,259 @@ function PvpAttackConfirm({ target, onConfirm, onCancel, busy, lugarImagen }) {
   );
 }
 
+/* ─── PROPUESTA DE COMERCIO (construir oferta) ──────────── */
+function TradeOfferModal({ target, userCharacter, onClose, onSent }) {
+  const inventario = userCharacter?.rol_objetos ?? [];
+  const misCreditos = userCharacter?.credits ?? 0;
+
+  const [selected, setSelected]           = useState({});
+  const [offerCredits, setOfferCredits]   = useState(0);
+  const [requestCredits, setRequestCredits] = useState(0);
+  const [sending, setSending]             = useState(false);
+
+  const setCantidad = (objetoId, cantidad, max) => {
+    const v = Math.max(0, Math.min(max, Number(cantidad) || 0));
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (v > 0) next[objetoId] = v; else delete next[objetoId];
+      return next;
+    });
+  };
+
+  const items = Object.entries(selected).map(([rol_objeto_id, cantidad]) => ({
+    rol_objeto_id: Number(rol_objeto_id), cantidad,
+  }));
+  const ofertaVacia = offerCredits <= 0 && requestCredits <= 0 && items.length === 0;
+
+  const send = async () => {
+    if (ofertaVacia || sending) return;
+    setSending(true);
+    try {
+      await apiPost('/trades/propose', {
+        target_id: target.user_id,
+        offer_credits: offerCredits,
+        request_credits: requestCredits,
+        items,
+      });
+      toast('Propuesta de comercio enviada', { tone: 'success', icon: 'coin' });
+      onSent?.();
+    } catch (err) {
+      toast(err.message || 'No se pudo enviar la propuesta', { tone: 'error', icon: 'x' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Comerciar con @${target?.handle ?? '?'}`} kicker="PROPUESTA DE INTERCAMBIO" width={440}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <div className="nx-kicker" style={{ marginBottom: 8 }}>TU OFERTA</div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+            <span style={{ fontSize: 11, color: 'var(--txt-dim)' }}>Créditos a ofrecer (tienes {misCreditos})</span>
+            <input
+              type="number" min={0} max={misCreditos} className="nx-input"
+              value={offerCredits}
+              onChange={(e) => setOfferCredits(Math.max(0, Math.min(misCreditos, Number(e.target.value) || 0)))}
+            />
+          </label>
+
+          {inventario.length === 0 ? (
+            <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '6px 0' }}>No tienes objetos en tu inventario.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+              {inventario.map((obj) => {
+                const max = obj.pivot?.cantidad ?? 0;
+                const imgUrl = mediaUrl(obj.imagen);
+                return (
+                  <div key={obj.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+                    border: '1px solid var(--holo-line)', borderRadius: 8,
+                  }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+                      background: imgUrl ? `url(${imgUrl}) center/cover` : 'rgba(56,205,240,0.08)',
+                      display: 'grid', placeItems: 'center',
+                    }}>
+                      {!imgUrl && <Icon name="coin" size={14} style={{ color: 'var(--holo)', opacity: 0.5 }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt)' }}>{obj.nombre}</div>
+                      <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>x{max} disponibles</div>
+                    </div>
+                    <input
+                      type="number" min={0} max={max} className="nx-input"
+                      style={{ width: 56, fontSize: 11 }}
+                      value={selected[obj.id] ?? 0}
+                      onChange={(e) => setCantidad(obj.id, e.target.value, max)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="nx-kicker" style={{ marginBottom: 8 }}>QUÉ PIDES A CAMBIO</div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--txt-dim)' }}>Créditos que solicitas</span>
+            <input
+              type="number" min={0} className="nx-input"
+              value={requestCredits}
+              onChange={(e) => setRequestCredits(Math.max(0, Number(e.target.value) || 0))}
+            />
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn kind="primary" onClick={send} disabled={ofertaVacia || sending}>
+            {sending ? 'Enviando...' : 'Enviar propuesta'}
+          </Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─── PROPUESTA DE COMERCIO RECIBIDA ────────────────────── */
+function TradeRequestReceived({ trade, onAccept, onDecline, onCreditsChange, lugarImagen }) {
+  const [busy, setBusy] = useState(false);
+  const initiator = trade.initiator;
+  const color      = SABER_COLORS[initiator?.saber_color] ?? '#38cdf0';
+  const photoUrl   = mediaUrl(initiator?.photo_url);
+
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
+  const handleAccept = async () => {
+    setBusy(true);
+    try {
+      const d = await apiPost(`/trades/${trade.id}/accept`, {});
+      toast('¡Comercio completado!', { tone: 'success', icon: 'coin' });
+      if (d?.my_credits !== undefined) onCreditsChange?.(d.my_credits);
+      onAccept(d?.trade);
+    } catch (err) {
+      toast(err.message || 'Error al aceptar la propuesta', { tone: 'error', icon: 'x' });
+      setBusy(false);
+    }
+  };
+
+  const handleDecline = async () => {
+    setBusy(true);
+    try {
+      await apiPost(`/trades/${trade.id}/decline`, {});
+      onDecline();
+    } catch (err) {
+      toast(err.message || 'Error al rechazar la propuesta', { tone: 'error', icon: 'x' });
+      setBusy(false);
+    }
+  };
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {lugarImagen
+        ? <img src={lugarImagen} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+        : null
+      }
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: lugarImagen
+          ? 'linear-gradient(to bottom, rgba(4,7,15,0.55) 0%, rgba(4,7,15,0.82) 60%, rgba(4,7,15,0.97) 100%)'
+          : 'rgba(4,7,15,0.92)',
+      }} />
+
+      <div style={{
+        position: 'relative', zIndex: 1, width: '100%', maxWidth: 420, padding: '0 24px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div className="nx-display" style={{
+            fontSize: 9, color: '#E6B325', letterSpacing: '0.22em',
+            border: '1px solid rgba(230,179,37,0.4)', padding: '3px 14px', borderRadius: 2,
+          }}>
+            TRANSMISIÓN ENTRANTE
+          </div>
+          <div className="nx-display" style={{ fontSize: 14, color: '#fff', letterSpacing: '0.14em', textShadow: '0 0 24px rgba(230,179,37,0.4)' }}>
+            ⌬ PROPUESTA DE COMERCIO
+          </div>
+        </div>
+
+        <div style={{
+          width: 72, height: 72, borderRadius: 14, border: `2px solid ${color}`, overflow: 'hidden',
+          display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.06)', boxShadow: `0 0 24px ${color}44`,
+        }}>
+          {photoUrl
+            ? <img src={photoUrl} alt={initiator?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Icon name="user" size={28} style={{ color, opacity: 0.6 }} />
+          }
+        </div>
+
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{initiator?.name ?? 'Desconocido'}</div>
+          <div style={{ fontSize: 12, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>@{initiator?.handle ?? '?'} te propone un intercambio</div>
+        </div>
+
+        <div className="nx-panel solid" style={{ width: '100%', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 6 }}>TE OFRECE</div>
+            {trade.offer_credits > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--holocron-oro)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <Icon name="coin" size={12} /> {trade.offer_credits} créditos
+              </div>
+            )}
+            {trade.offer_items.length === 0 && trade.offer_credits <= 0 && (
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Nada</div>
+            )}
+            {trade.offer_items.map((it) => (
+              <div key={it.rol_objeto_id} style={{ fontSize: 12, color: 'var(--txt)' }}>
+                {it.nombre} ×{it.cantidad}
+              </div>
+            ))}
+          </div>
+          <div style={{ height: 1, background: 'var(--holo-line)' }} />
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 6 }}>A CAMBIO PIDE</div>
+            <div style={{ fontSize: 12, color: trade.request_credits > 0 ? 'var(--holocron-oro)' : 'var(--txt-faint)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {trade.request_credits > 0 ? <><Icon name="coin" size={12} /> {trade.request_credits} créditos</> : 'Nada'}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 14, width: '100%' }}>
+          <button onClick={handleDecline} disabled={busy} style={{
+            flex: 1, padding: '12px 0', borderRadius: 10, cursor: busy ? 'not-allowed' : 'pointer',
+            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.18)',
+            color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', fontSize: 11,
+            letterSpacing: '0.14em', transition: 'all 0.14s', opacity: busy ? 0.4 : 1,
+          }}
+            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.12)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; e.currentTarget.style.color = '#ff6b6b'; } }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+          >
+            RECHAZAR
+          </button>
+          <button onClick={handleAccept} disabled={busy} style={{
+            flex: 1, padding: '12px 0', borderRadius: 10, cursor: busy ? 'not-allowed' : 'pointer',
+            background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.5)',
+            color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 11,
+            letterSpacing: '0.14em', transition: 'all 0.14s', opacity: busy ? 0.4 : 1,
+          }}
+            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(230,179,37,0.26)'; e.currentTarget.style.borderColor = '#E6B325'; } }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.14)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.5)'; }}
+          >
+            {busy ? 'PROCESANDO…' : '⌬ ACEPTAR'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── VISTA PRINCIPAL ───────────────────────────────────── */
 export default function MapaView({ S, setMapLocation, initialLocation, userId, userCharacter, externalChatTarget, onExternalChatConsumed }) {
   /* niveles: galaxy | sistema | planeta | zona | lugar */
@@ -3869,6 +4137,24 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [pvpChallenging, setPvpChallenging]    = useState(false);
   const [pendingChallenge, setPendingChallenge] = useState(null);
   const pvpPollRef = useRef(null);
+  const [tradeTarget, setTradeTarget] = useState(null);
+  const [pendingTrade, setPendingTrade] = useState(null);
+  const tradePollRef = useRef(null);
+
+  // Polling para detectar propuestas de comercio entrantes mientras no haya una visible
+  useEffect(() => {
+    if (pendingTrade) return;
+    const checkTrade = () => {
+      apiFetch('/trades/active')
+        .then(d => {
+          if (d?.trade && !d.trade.i_am_initiator) setPendingTrade(d.trade);
+        })
+        .catch(() => {});
+    };
+    checkTrade();
+    tradePollRef.current = setInterval(checkTrade, 5000);
+    return () => clearInterval(tradePollRef.current);
+  }, [pendingTrade]);
 
   // Comprueba si hay un combate PvP activo o pendiente al entrar al mapa
   useEffect(() => {
@@ -4122,6 +4408,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           onTravel={triggerTravel}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
+          onTrade={setTradeTarget}
           onPlanetaImagen={setPlanetaImagen}
           myUserId={userId}
         />
@@ -4179,6 +4466,27 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           target={chatTarget}
           myUserId={userId}
           onClose={() => setChatTarget(null)}
+        />
+      )}
+
+      {/* Construir propuesta de comercio */}
+      {tradeTarget && (
+        <TradeOfferModal
+          target={tradeTarget}
+          userCharacter={userCharacter}
+          onClose={() => setTradeTarget(null)}
+          onSent={() => setTradeTarget(null)}
+        />
+      )}
+
+      {/* Propuesta de comercio recibida — overlay de aceptar/rechazar */}
+      {pendingTrade && (
+        <TradeRequestReceived
+          trade={pendingTrade}
+          lugarImagen={lugarImagen || zonaImagen || planetaImagen}
+          onAccept={() => setPendingTrade(null)}
+          onDecline={() => setPendingTrade(null)}
+          onCreditsChange={syncCredits}
         />
       )}
 
