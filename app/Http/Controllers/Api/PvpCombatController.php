@@ -587,10 +587,10 @@ class PvpCombatController extends Controller
             ));
 
             // Push diferido: solo llega si el oponente sigue sin responder pasado el plazo configurado
-            $delayMin = (float) Configuracion::valor('pvp_notif_push_delay_min', 5);
+            $delaySeg = (int) Configuracion::valor('pvp_notif_push_delay_seg', 30);
             $opponentUser->notify(
                 (new PvpTurnoPushRecordatorio($combat->id, $actorChar->name, count($log)))
-                    ->delay(now()->addMinutes($delayMin))
+                    ->delay(now()->addSeconds($delaySeg))
             );
         } else {
             $opponentUser->notify(new PvpCombatNotification(
@@ -634,6 +634,9 @@ class PvpCombatController extends Controller
             'planeta_id' => $c->planeta_id,
             'sistema_id' => $c->sistema_id,
             'log' => $c->log ?? [],
+            /* Para el contador de "tiempo restante antes de notificar" en el HUD de combate */
+            'turno_desde' => $c->updated_at?->toISOString(),
+            'notif_delay_seg' => (int) Configuracion::valor('pvp_notif_push_delay_seg', 30),
             /* Estado de habilidades desde perspectiva del jugador */
             'my_fuerza' => $isAtt ? $c->attacker_fuerza : $c->defender_fuerza,
             'my_fuerza_max' => $isAtt ? self::fuerzaConfig($att->character)['max'] : self::fuerzaConfig($def->character)['max'],

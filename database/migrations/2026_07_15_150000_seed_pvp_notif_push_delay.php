@@ -9,9 +9,9 @@ return new class extends Migration
     {
         DB::table('configuraciones')->insertOrIgnore([
             [
-                'nombre' => 'pvp_notif_push_delay_min',
+                'nombre' => 'pvp_notif_push_delay_seg',
                 'tipo_valor' => 'numerico',
-                'valor_numerico' => 5,
+                'valor_numerico' => 30,
                 'valor_texto' => null,
                 'activo' => true,
                 'created_at' => now(),
@@ -22,6 +22,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('configuraciones')->where('nombre', 'pvp_notif_push_delay_min')->delete();
+        DB::table('configuraciones')->where('nombre', 'pvp_notif_push_delay_seg')->delete();
     }
 };

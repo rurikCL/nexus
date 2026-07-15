@@ -11,7 +11,7 @@ use NotificationChannels\WebPush\WebPushMessage;
 
 /**
  * Recordatorio push de "es tu turno" — se programa con un delay configurable
- * (config `pvp_notif_push_delay_min`) y solo se envía si, al cumplirse el
+ * (config `pvp_notif_push_delay_seg`) y solo se envía si, al cumplirse el
  * plazo, el jugador todavía no respondió (el combate sigue activo y no se
  * registró ninguna acción nueva desde que se programó este recordatorio).
  * Así evitamos el spam de un push por cada acción cuando el jugador está

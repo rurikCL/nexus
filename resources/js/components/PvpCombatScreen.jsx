@@ -155,6 +155,19 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const oppHudRef                       = useRef(null);
   const [strike, setStrike]             = useState(null);
   const [floatTexts, setFloatTexts]     = useState([]);
+  const [notifCountdown, setNotifCountdown] = useState(null);
+
+  /* Cuenta regresiva antes de que se le notifique al que no responda (ver PvpTurnoPushRecordatorio) */
+  useEffect(() => {
+    const turnoDesde = combat.turno_desde ? new Date(combat.turno_desde).getTime() : null;
+    const delaySeg = combat.notif_delay_seg ?? 30;
+    if (!turnoDesde || combat.status !== 'active') { setNotifCountdown(null); return; }
+
+    const tick = () => setNotifCountdown(Math.max(0, Math.round(delaySeg - (Date.now() - turnoDesde) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [combat.turno_desde, combat.notif_delay_seg, combat.status]);
 
   const me  = combat.i_am_attacker ? combat.attacker : combat.defender;
   const opp = combat.i_am_attacker ? combat.defender : combat.attacker;
@@ -339,7 +352,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side' }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side', secondsLeft = null }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -452,6 +465,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               </span>
             ))}
           </div>
+          {secondsLeft !== null && (
+            <div style={{
+              marginTop: 6, fontSize: 8, color: 'rgba(150,180,220,0.55)', fontFamily: 'var(--font-data)',
+              letterSpacing: '0.06em', textAlign: rev ? 'right' : 'left',
+            }}>
+              ⏱ {secondsLeft}s antes de notificar
+            </div>
+          )}
         </div>
       </div>
     );
@@ -838,7 +859,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 buffs={oppBuffs} debuffs={oppDebuffs}
                 forma={oppCurrentForma} formaSide="right"
-                effectsPosition="below"
+                effectsPosition="below" secondsLeft={notifCountdown}
               />
             </div>
 
@@ -858,7 +879,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 buffs={myBuffs} debuffs={myDebuffs}
                 forma={myCurrentForma} formaSide="left"
-                effectsPosition="above"
+                effectsPosition="above" secondsLeft={notifCountdown}
               />
             </div>
 
@@ -873,7 +894,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={opp.name} handle={opp.handle} photoUrl={mediaUrl(opp.photo_url)} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 buffs={oppBuffs} debuffs={oppDebuffs}
-                forma={oppCurrentForma} formaSide="right"
+                forma={oppCurrentForma} formaSide="right" secondsLeft={notifCountdown}
               />
             </div>
 
@@ -884,7 +905,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={me.name} handle={me.handle} photoUrl={mediaUrl(me.photo_url)} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 buffs={myBuffs} debuffs={myDebuffs}
-                forma={myCurrentForma} formaSide="left"
+                forma={myCurrentForma} formaSide="left" secondsLeft={notifCountdown}
               />
             </div>
           </>
