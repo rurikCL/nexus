@@ -42,6 +42,7 @@ function mergeApiCombatants(apiList, currentUserId) {
       sponsor:   api.sponsor    ?? '',
       joined:    api.joined_year ? String(api.joined_year) : '',
       photo_url: api.photo_url  ?? null,
+      titulo_activo: api.titulo_activo ?? null,
       initials, color,
     };
   });
@@ -535,6 +536,11 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           <Avatar c={me} size={30} ring style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity .15s' }}>
             <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name ?? S.character.name}</div>
+            {user?.character?.titulo_activo && (
+              <div style={{ fontSize: 9, color: 'var(--holocron-oro)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.character.titulo_activo.nombre}
+              </div>
+            )}
             <div className="nx-data" style={{ fontSize: 9, color: 'var(--holo)' }}>{S.role === 'tutor' ? 'Tutor' : '@' + S.character.handle}</div>
           </div>
           {!sidebarCollapsed && (

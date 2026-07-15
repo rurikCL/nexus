@@ -26,39 +26,41 @@ class Character extends Model
     public const CAPACIDAD_CARGA_BASE = 10;
 
     protected $casts = [
-        'stats'          => 'array',
-        'gold'           => 'boolean',
-        'reputation'     => 'integer',
+        'stats' => 'array',
+        'gold' => 'boolean',
+        'reputation' => 'integer',
         'map_sistema_id' => 'integer',
         'map_planeta_id' => 'integer',
-        'map_zona_id'    => 'integer',
-        'map_lugar_id'   => 'integer',
-        'vida'           => 'integer',
-        'escudo'         => 'integer',
-        'defensa'        => 'integer',
-        'ataque'         => 'integer',
-        'movimiento'     => 'integer',
-        'iniciativa'     => 'integer',
-        'punteria'       => 'integer',
-        'puntos_libres'  => 'integer',
-        'habilidad_1'           => 'integer',
-        'habilidad_2'           => 'integer',
-        'habilidad_3'           => 'integer',
-        'habilidad_4'           => 'integer',
+        'map_zona_id' => 'integer',
+        'map_lugar_id' => 'integer',
+        'vida' => 'integer',
+        'escudo' => 'integer',
+        'defensa' => 'integer',
+        'ataque' => 'integer',
+        'movimiento' => 'integer',
+        'iniciativa' => 'integer',
+        'punteria' => 'integer',
+        'puntos_libres' => 'integer',
+        'habilidad_1' => 'integer',
+        'habilidad_2' => 'integer',
+        'habilidad_3' => 'integer',
+        'habilidad_4' => 'integer',
         'habilidades_por_forma' => 'array',
-        'current_forma'         => 'integer',
+        'current_forma' => 'integer',
     ];
 
     /** Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje */
     public function formaEspecializacion(): int
     {
         $n = (int) str_replace('forma', '', $this->cls ?? 'forma1');
+
         return $n >= 1 && $n <= 7 ? $n : 1;
     }
 
     public function getWinrateAttribute(): int
     {
         $total = ($this->wins ?? 0) + ($this->losses ?? 0);
+
         return $total > 0 ? (int) round($this->wins / $total * 100) : 0;
     }
 
@@ -168,6 +170,16 @@ class Character extends Model
         return $this->hasOne(CharacterSable::class)->where('activo', true);
     }
 
+    public function titulos(): HasMany
+    {
+        return $this->hasMany(CharacterTitulo::class);
+    }
+
+    public function tituloActivo(): HasOne
+    {
+        return $this->hasOne(CharacterTitulo::class)->where('activo', true);
+    }
+
     /**
      * Arma que se usa realmente en el ataque básico de combate: el sable
      * armado tiene prioridad sobre el arma clásica equipada.
@@ -179,26 +191,26 @@ class Character extends Model
             : $this->sableActivo()->with('cristal')->first();
         if ($sable) {
             return [
-                'id'          => null,
-                'nombre'      => $sable->nombre,
+                'id' => null,
+                'nombre' => $sable->nombre,
                 'tipo_ataque' => $sable->tipo_ataque,
-                'dano'        => $sable->dano,
-                'critico'     => $sable->critico,
-                'es_sable'    => true,
-                'color_hoja'  => $sable->color_hoja,
+                'dano' => $sable->dano,
+                'critico' => $sable->critico,
+                'es_sable' => true,
+                'color_hoja' => $sable->color_hoja,
             ];
         }
 
         $arma = $this->armaEquipada;
         if ($arma) {
             return [
-                'id'          => $arma->id,
-                'nombre'      => $arma->nombre,
+                'id' => $arma->id,
+                'nombre' => $arma->nombre,
                 'tipo_ataque' => $arma->tipo_ataque,
-                'dano'        => $arma->dano,
-                'critico'     => 0,
-                'es_sable'    => false,
-                'color_hoja'  => null,
+                'dano' => $arma->dano,
+                'critico' => 0,
+                'es_sable' => false,
+                'color_hoja' => null,
             ];
         }
 
@@ -219,19 +231,19 @@ class Character extends Model
         }
 
         return [
-            'ataque'     => $sable->sumaBono('bono_ataque'),
-            'defensa'    => $sable->sumaBono('bono_defensa'),
-            'punteria'   => $sable->sumaBono('bono_punteria'),
+            'ataque' => $sable->sumaBono('bono_ataque'),
+            'defensa' => $sable->sumaBono('bono_defensa'),
+            'punteria' => $sable->sumaBono('bono_punteria'),
             'movimiento' => $sable->sumaBono('bono_movimiento'),
             'iniciativa' => $sable->sumaBono('bono_iniciativa'),
-            'vida'       => $sable->sumaBono('bono_vida'),
-            'escudo'     => $sable->sumaBono('bono_escudo'),
-            'fuerza'             => $sable->sumaBono('bono_fuerza'),
-            'generacion_fuerza'  => $sable->sumaBono('bono_generacion_fuerza'),
+            'vida' => $sable->sumaBono('bono_vida'),
+            'escudo' => $sable->sumaBono('bono_escudo'),
+            'fuerza' => $sable->sumaBono('bono_fuerza'),
+            'generacion_fuerza' => $sable->sumaBono('bono_generacion_fuerza'),
         ];
     }
 
-    public function statsTemporadas(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    public function statsTemporadas(): HasManyThrough
     {
         return $this->hasManyThrough(StatsTemporada::class, User::class, 'id', 'user_id', 'user_id', 'id');
     }

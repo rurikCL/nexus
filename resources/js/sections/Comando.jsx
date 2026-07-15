@@ -1279,6 +1279,61 @@ function NaveEquipadaPanel() {
   );
 }
 
+function TitulosPanel({ user, onCharacterCreated }) {
+  const [busy, setBusy] = useState(null);
+  const titulos = user?.character?.titulos ?? [];
+  const activo = user?.character?.titulo_activo ?? null;
+
+  if (titulos.length === 0) return null;
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  const activar = async (titulo) => {
+    setBusy(titulo?.id ?? 'ninguno');
+    try {
+      const path = titulo ? `/titulos/${titulo.id}/activar` : '/titulos/desactivar';
+      const res = await fetch(`/api${path}`, { method: 'POST', headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      onCharacterCreated?.({
+        ...user.character,
+        titulo_activo: titulo ?? null,
+        titulos: titulos.map(t => ({ ...t, activo: titulo ? t.id === titulo.id : false })),
+      });
+      toast(titulo ? `Mostrando "${titulo.nombre}"` : 'Título retirado', { tone: 'success', icon: 'check' });
+    } catch {
+      toast('No se pudo actualizar tu título', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const chipStyle = (on) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: '6px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: 11,
+    fontFamily: 'var(--font-data)', letterSpacing: '0.03em',
+    background: on ? 'color-mix(in srgb, var(--holocron-oro) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+    border: `1px solid ${on ? 'var(--holocron-oro)' : 'var(--holo-line)'}`,
+    color: on ? 'var(--holocron-oro)' : 'var(--txt-faint)',
+    transition: 'all .14s',
+  });
+
+  return (
+    <Panel kicker="Reconocimientos" title="Títulos e Insignias" icon="medal">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <button onClick={() => activar(null)} disabled={busy !== null} style={chipStyle(!activo)}>
+          Ninguno
+        </button>
+        {titulos.map(t => (
+          <button key={t.id} onClick={() => activar(t)} disabled={busy !== null} style={chipStyle(activo?.id === t.id)}>
+            <Icon name={t.tipo === 'insignia' ? 'medal' : 'roster'} size={12} />
+            {t.nombre}
+          </button>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
   const me = S.byId('you') ?? {};
@@ -1480,6 +1535,11 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
             </div>
             <div style={{ textAlign: 'center' }}>
               <div className="nx-display" style={{ fontSize: 20 }}>{ch.name}</div>
+              {user?.character?.titulo_activo && (
+                <div className="nx-data" style={{ fontSize: 11, color: 'var(--holocron-oro)', marginTop: 2 }}>
+                  {user.character.titulo_activo.nombre}
+                </div>
+              )}
               <div className="nx-data" style={{ fontSize: 12, color: 'var(--holo)', marginTop: 2 }}>@{ch.handle}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -1493,6 +1553,8 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
             </div>
           </div>
         </Panel>
+
+        <TitulosPanel user={user} onCharacterCreated={onCharacterCreated} />
 
         <Panel kicker="Cristal de poder" title="Color de Sable" icon="zap">
           {ch.side === 'oscuro' ? (

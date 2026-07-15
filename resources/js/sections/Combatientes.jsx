@@ -152,6 +152,9 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
           <div style={{ position: 'relative', zIndex: 1, flex: 1, minWidth: 220 }}>
             <div className="nx-kicker">{c.sector || 'Academia Orbital'}{c.sponsor ? ` · ${c.sponsor}` : ''}</div>
             <h1 className="nx-display" style={{ fontSize: 28, margin: '4px 0 8px' }}>{c.name}</h1>
+            {c.titulo_activo && (
+              <div className="nx-data" style={{ fontSize: 12, color: 'var(--holocron-oro)', margin: '-4px 0 8px' }}>{c.titulo_activo.nombre}</div>
+            )}
             <p style={{ fontSize: 13, color: 'var(--txt-dim)', margin: '0 0 12px', maxWidth: 380, fontStyle: 'italic' }}>"{c.bio}"</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <TierBadge tier={c.tier} />

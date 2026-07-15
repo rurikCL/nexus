@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Character;
 use App\Models\StatsTemporada;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -14,9 +13,9 @@ class CombatantController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $characters = Character::with('user.tutor.character')
+        $characters = Character::with('user.tutor.character', 'tituloActivo')
             ->get()
-            ->map(fn($c) => $this->formatCombatant($c))
+            ->map(fn ($c) => $this->formatCombatant($c))
             ->sortByDesc('wins')
             ->values();
 
@@ -25,7 +24,7 @@ class CombatantController extends Controller
 
     public function show(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user.tutor.character')
+        $character = Character::with('user.tutor.character', 'tituloActivo')
             ->where('handle', $handle)
             ->firstOrFail();
 
@@ -34,7 +33,7 @@ class CombatantController extends Controller
 
     public function showPublic(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user.tutor.character')
+        $character = Character::with('user.tutor.character', 'tituloActivo')
             ->where('handle', $handle)
             ->firstOrFail();
 
@@ -49,33 +48,34 @@ class CombatantController extends Controller
         $stats = StatsTemporada::totalsForUser($character->user_id);
 
         return [
-            'id'          => $character->user_id,
-            'handle'      => $character->handle,
-            'name'        => $character->name,
-            'bio'         => $character->bio,
-            'cls'         => $character->cls,
+            'id' => $character->user_id,
+            'handle' => $character->handle,
+            'name' => $character->name,
+            'bio' => $character->bio,
+            'cls' => $character->cls,
             'saber_color' => $character->saber_color,
-            'sector'      => $character->sector,
-            'sponsor'     => $character->sponsor,
+            'sector' => $character->sector,
+            'sponsor' => $character->sponsor,
             'joined_year' => $character->joined_year,
-            'credits'     => $character->credits,
-            'wins'        => $stats['wins'],
-            'losses'      => $stats['losses'],
-            'streak'      => $stats['streak'],
-            'winrate'     => $stats['winrate'],
-            'stats'       => $character->stats,
-            'gold'        => $character->gold,
-            'side'        => $character->side ?? 'luminoso',
-            'tier'        => $character->user->tier ?? 'iniciado',
-            'photo_url'   => $character->photo
-                ? Storage::disk('public')->url($character->photo) . '?v=' . $character->updated_at->timestamp
+            'credits' => $character->credits,
+            'wins' => $stats['wins'],
+            'losses' => $stats['losses'],
+            'streak' => $stats['streak'],
+            'winrate' => $stats['winrate'],
+            'stats' => $character->stats,
+            'gold' => $character->gold,
+            'side' => $character->side ?? 'luminoso',
+            'tier' => $character->user->tier ?? 'iniciado',
+            'titulo_activo' => $character->tituloActivo?->only(['id', 'nombre', 'tipo']),
+            'photo_url' => $character->photo
+                ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                 : null,
-            'tutor'       => $character->user->tutor
+            'tutor' => $character->user->tutor
                 ? [
-                    'id'     => $character->user->tutor->id,
-                    'name'   => $character->user->tutor->character?->name ?? $character->user->tutor->name,
+                    'id' => $character->user->tutor->id,
+                    'name' => $character->user->tutor->character?->name ?? $character->user->tutor->name,
                     'handle' => $character->user->tutor->character?->handle,
-                    'tier'   => $character->user->tutor->tier,
+                    'tier' => $character->user->tutor->tier,
                 ]
                 : null,
         ];
