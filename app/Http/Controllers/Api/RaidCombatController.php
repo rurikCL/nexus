@@ -254,6 +254,8 @@ class RaidCombatController extends Controller
             } else {
                 $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
             }
+            $entry['dice'] = ['atk' => $roll['atk_dado'], 'def' => $roll['def_dado']];
+            $entry['hit'] = $roll['gana_atacante'];
         } elseif ($skill === 'stance') {
             $forma = (int) ($data['forma'] ?? 1);
             if ($forma < 1 || $forma > 7) {
@@ -273,7 +275,10 @@ class RaidCombatController extends Controller
             $critico = $arma['critico'] ?? 0;
             $esCritico = $atkDado >= (20 - $critico);
             $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
-            $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
+            $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}";
+            $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
+            $entry['hit'] = $esCritico || $atkRoll > $defRoll;
+            $entry['crit'] = $esCritico;
 
             if ($esCritico || $atkRoll > $defRoll) {
                 $dmg = ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0);
@@ -328,6 +333,7 @@ class RaidCombatController extends Controller
                 }
                 $esUnoMismo = $targetPlayer->id === $myPlayer->id;
                 $targetChar = $targetPlayer->user->character;
+                $entry['target_user_id'] = $targetUserId;
 
                 $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
                 $entry['messages'][] = $esUnoMismo
@@ -379,11 +385,15 @@ class RaidCombatController extends Controller
                 $useAtq = $hab->tipo === 'melee';
                 $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
                 $defVal = $useAtq ? $npcEffective['defensa'] : $npcEffective['movimiento'];
-                $atkRoll = random_int(1, 20) + $atkVal;
-                $defRoll = random_int(1, 20) + $defVal;
+                $atkDado = random_int(1, 20);
+                $defDado = random_int(1, 20);
+                $atkRoll = $atkDado + $atkVal;
+                $defRoll = $defDado + $defVal;
 
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre} contra {$raid->npc->nombre}: "
-                    ."1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
+                    ."1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}";
+                $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
+                $entry['hit'] = $atkRoll > $defRoll;
 
                 if ($atkRoll > $defRoll) {
                     $effective = self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
@@ -589,20 +599,29 @@ class RaidCombatController extends Controller
         $defVal = $targetStats['defensa'];
         $atkRoll = $atkDado + $atkVal;
         $defRoll = $defDado + $defVal;
-        $esCritico = $atkDado === 20;
+        $esCritico = $atkDado >= 18; // Todos los jefes obtienen crítico con 18, 19 o 20 en el dado
 
-        $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => [
-            "{$npc->nombre} {$accion} contra {$targetChar->name}: 1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}",
-        ]];
+        $log[] = [
+            'turn' => count($log) + 1, 'actor' => 'npc',
+            'target_user_id' => $target->user_id,
+            'dice' => ['atk' => $atkDado, 'def' => $defDado],
+            'messages' => [
+                "{$npc->nombre} {$accion} contra {$targetChar->name}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}",
+            ],
+        ];
 
         if (! ($esCritico || $atkRoll > $defRoll)) {
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$targetChar->name} esquiva/bloquea el ataque de {$npc->nombre}."]];
+            $log[] = [
+                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $target->user_id,
+                'messages' => ["{$targetChar->name} esquiva/bloquea el ataque de {$npc->nombre}."],
+            ];
 
             return;
         }
 
         if ($esCritico) {
             $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su furia y golpea a todos los combatientes."];
+            $targets = [];
             foreach ($activos as $rp) {
                 $rpChar = $rp->user->character;
                 $rpEffective = self::isEffective($formaAtaque, (int) $rp->current_forma);
@@ -617,8 +636,9 @@ class RaidCombatController extends Controller
                 $rp->save();
                 $desc = self::describeDano($d, $dE, $dP, $escudoAntes);
                 $msgs[] = "{$rpChar->name}: {$desc}".($rpEffective ? ' (¡forma efectiva!)' : '');
+                $targets[] = ['user_id' => $rp->user_id, 'effective' => $rpEffective];
             }
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => $msgs];
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'crit' => true, 'hit' => true, 'aoe' => true, 'targets' => $targets, 'messages' => $msgs];
         } else {
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
             $dmg = $effective ? (int) round($dmgBase * 1.5) : $dmgBase;
@@ -643,7 +663,11 @@ class RaidCombatController extends Controller
             $target->save();
 
             $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerf, $escudoAntes);
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => [($effective ? '¡Forma efectiva! ×1.5 — ' : '')."¡Impacto! {$desc}"]];
+            $log[] = [
+                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'crit' => false,
+                'target_user_id' => $target->user_id, 'effective' => $effective,
+                'messages' => [($effective ? '¡Forma efectiva! ×1.5 — ' : '')."¡Impacto! {$desc}"],
+            ];
         }
 
         if ($raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count() === 0) {
@@ -677,6 +701,7 @@ class RaidCombatController extends Controller
     {
         $npc = $raid->npc;
         $npcBase = self::getNpcStats($npc);
+        $npcEffective = self::getEffectiveStats($npcBase, $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $current = $raid->turn_order[$raid->turn_index] ?? null;
 
         $jugadores = $raid->jugadores->sortBy('slot')->map(function (RaidCombatPlayer $rp) use ($current) {
@@ -688,6 +713,7 @@ class RaidCombatController extends Controller
                 : collect();
             $fCfg = self::fuerzaConfig($ch);
             $baseStats = self::getCombatStats($ch);
+            $effStats = self::getEffectiveStats($baseStats, $rp->buffs ?? [], $rp->debuffs ?? []);
 
             return [
                 'user_id' => $rp->user_id,
@@ -702,6 +728,14 @@ class RaidCombatController extends Controller
                 'fuerza' => $rp->fuerza,
                 'fuerza_max' => $fCfg['max'],
                 'current_forma' => $rp->current_forma,
+                'ataque' => $effStats['ataque'],
+                'defensa' => $effStats['defensa'],
+                'punteria' => $effStats['punteria'],
+                'movimiento' => $effStats['movimiento'],
+                'ataque_base' => $baseStats['ataque'],
+                'defensa_base' => $baseStats['defensa'],
+                'punteria_base' => $baseStats['punteria'],
+                'movimiento_base' => $baseStats['movimiento'],
                 'cooldowns' => $rp->cooldowns ?? [],
                 'buffs' => $rp->buffs ?? [],
                 'debuffs' => $rp->debuffs ?? [],
@@ -741,6 +775,14 @@ class RaidCombatController extends Controller
                 'escudo' => $raid->npc_escudo,
                 'max_escudo' => $npcBase['escudo'],
                 'forma' => $raid->npc_forma,
+                'ataque' => $npcEffective['ataque'],
+                'defensa' => $npcEffective['defensa'],
+                'punteria' => $npcEffective['punteria'],
+                'movimiento' => $npcEffective['movimiento'],
+                'ataque_base' => $npcBase['ataque'],
+                'defensa_base' => $npcBase['defensa'],
+                'punteria_base' => $npcBase['punteria'],
+                'movimiento_base' => $npcBase['movimiento'],
                 'buffs' => $raid->npc_buffs ?? [],
                 'debuffs' => $raid->npc_debuffs ?? [],
             ],
