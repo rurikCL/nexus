@@ -1758,7 +1758,7 @@ export default function AdminView() {
 /* ─────────────────────────────────────────────────────────────
    MISIONES ADMIN — CRUD completo con objetivos y recompensas inline
 ───────────────────────────────────────────────────────────── */
-const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual'];
+const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual', 'global'];
 const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo'];
 const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad'];
 
@@ -2085,7 +2085,7 @@ function MisionesAdmin() {
   const rmRec  = (i) => set('recompensas', form.recompensas.filter((_, x) => x !== i));
   const setRec = (i, k, v) => set('recompensas', form.recompensas.map((r, x) => x === i ? { ...r, [k]: v } : r));
 
-  const tipoColor = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0' };
+  const tipoColor = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0', global: '#8b5cf6' };
 
   /* ── FORM ── */
   if (editing !== null) {
@@ -2188,6 +2188,11 @@ function MisionesAdmin() {
                 value={form.npc_id ? +form.npc_id : null}
                 onChange={id => set('npc_id', id)}
               />
+            </div>
+          )}
+          {form.tipo_mision === 'global' && (
+            <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '8px 10px', borderRadius: 6, background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.25)' }}>
+              Esta misión estará disponible para todos los usuarios sin necesidad de una temporada asociada. Cada usuario debe aceptarla desde su vista de Misiones para empezar a registrar progreso.
             </div>
           )}
 
@@ -2376,8 +2381,8 @@ function MisionesAdmin() {
   }
 
   /* ── LIST ── */
-  const TIPOS = [{ v: '', l: 'Todas' }, { v: 'temporada', l: 'Temporada' }, { v: 'comunidad', l: 'Comunidad' }, { v: 'individual', l: 'Individual' }];
-  const tipoC = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0' };
+  const TIPOS = [{ v: '', l: 'Todas' }, { v: 'temporada', l: 'Temporada' }, { v: 'comunidad', l: 'Comunidad' }, { v: 'individual', l: 'Individual' }, { v: 'global', l: 'Global' }];
+  const tipoC = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0', global: '#8b5cf6' };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

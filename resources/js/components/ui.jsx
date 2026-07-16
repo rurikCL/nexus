@@ -129,7 +129,7 @@ export function TierBadge({ tier, sm }) {
     <span className="nx-data" style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: sm ? 9 : 10,
       letterSpacing: '0.14em', textTransform: 'uppercase', color: t.color,
-      padding: sm ? '2px 6px' : '3px 8px', border: `1px solid ${t.color}55`,
+      padding: sm ? '2px 6px' : '3px 8px', border: `1px solid color-mix(in srgb, ${t.color} 55%, transparent)`,
       borderRadius: 'var(--radius-sm)', background: `color-mix(in srgb, ${t.color} 12%, transparent)` }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.color, boxShadow: `0 0 6px ${t.color}` }} />
       {t.label}

@@ -405,7 +405,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     competitivo:  <CompetitivoView S={S} user={user} />,
     temporadas:   <TemporadasView S={S} user={user} onUserUpdate={onUserUpdate} />,
-    misiones:     <MisionesView S={S} user={user} />,
+    misiones:     <MisionesView S={S} user={user} onUserUpdate={onUserUpdate} />,
     mapa: <MapaView S={S} setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} onUserUpdate={onUserUpdate} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,
@@ -574,13 +574,21 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
           <div className="nx-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {mapLocation?.nombre && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '4px 10px',
-                background: 'rgba(56,205,240,0.06)',
-                border: '1px solid rgba(56,205,240,0.18)',
-                borderRadius: 8, flexShrink: 0, maxWidth: 180, overflow: 'hidden',
-              }}>
+              <button
+                type="button"
+                onClick={() => go('mapa')}
+                title="Ir al mapa"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '8px 10px',
+                  background: 'rgba(56,205,240,0.06)',
+                  border: '1px solid rgba(56,205,240,0.18)',
+                  borderRadius: 8, flexShrink: 0, maxWidth: 180, overflow: 'hidden',
+                  cursor: 'pointer', transition: 'all var(--dur-fast) var(--ease-standard)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'rgba(56,205,240,0.14)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(56,205,240,0.18)'; e.currentTarget.style.background = 'rgba(56,205,240,0.06)'; }}
+              >
                 <Icon name="target" size={11} style={{ color: 'var(--holo)', opacity: 0.7, flexShrink: 0 }} />
                 <span style={{
                   fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
@@ -589,7 +597,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
                 }}>
                   {mapLocation.nombre.toUpperCase()}
                 </span>
-              </div>
+              </button>
             )}
             <div className="nx-panel" style={{ padding: '6px 11px', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ color: 'var(--holocron-oro)' }}><Icon name="coin" size={14} /></span>
@@ -617,8 +625,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
               )}
             </button>
 
-            {/* Widget de prueba de transmisiones */}
-            <div style={{ position: 'relative' }}>
+            {/* Widget de prueba de transmisiones — solo administradores */}
+            {isAdmin && <div style={{ position: 'relative' }}>
               <button
                 className="nx-btn nx-btn-ghost"
                 title="Probar Transmisión"
@@ -662,7 +670,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         </header>
 

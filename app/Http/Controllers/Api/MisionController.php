@@ -210,6 +210,62 @@ class MisionController extends Controller
         return response()->json(['misiones' => $misiones]);
     }
 
+    // ── GET /api/misiones/global ───────────────────────────────────────────────
+    // Misiones globales: visibles para todos los usuarios, sin temporada asociada.
+    // El usuario debe aceptarlas explícitamente antes de poder progresar/completarlas.
+    public function global(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $character = $user->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
+
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
+            ->where('tipo_mision', 'global')
+            ->where('activa', true)
+            ->orderBy('orden')
+            ->get()
+            ->map(function ($m) use ($user, $characterHitos) {
+                $base = $this->formatMision($m);
+
+                $pivot = $m->users()->where('user_id', $user->id)->first()?->pivot;
+                $aceptada = $pivot !== null;
+                $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+
+                $requeridos = $m->hito_requerimiento
+                    ? array_filter(array_map('trim', explode(',', $m->hito_requerimiento)))
+                    : [];
+                $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+
+                $objetivosConProgreso = $m->objetivos->map(fn ($o) => [
+                    'id' => $o->id,
+                    'nombre' => $o->nombre,
+                    'descripcion' => $o->descripcion,
+                    'tipo' => $o->tipo,
+                    'meta' => $o->meta,
+                    'unidad' => $o->unidad,
+                    'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+                    'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
+                    'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
+                ])->values();
+
+                $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
+                $completada = $pivot?->status === 'completada';
+
+                return array_merge($base, [
+                    'objetivos' => $objetivosConProgreso,
+                    'aceptada' => $aceptada,
+                    'completada_por_mi' => $completada,
+                    'status' => $pivot?->status ?? null,
+                    'progreso' => $pivot?->progreso ?? 0,
+                    'cumple_hitos' => $cumpleHitos,
+                    'objetivos_completos' => $objetivosCompletos,
+                    'puede_completar' => $aceptada && ! $completada && $cumpleHitos && $objetivosCompletos,
+                ]);
+            });
+
+        return response()->json(['misiones' => $misiones]);
+    }
+
     // ── POST /api/misiones ────────────────────────────────────────────────────
     public function store(Request $request): JsonResponse
     {
@@ -224,7 +280,7 @@ class MisionController extends Controller
             'mision' => 'required|string',
             'descripcion' => 'nullable|string',
             'foto_mision' => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
-            'tipo_mision' => 'sometimes|in:temporada,comunidad,individual',
+            'tipo_mision' => 'sometimes|in:temporada,comunidad,individual,global',
             'temporada_id' => 'nullable|integer|exists:temporadas,id',
             'npc_id' => 'nullable|integer|exists:map_npcs,id',
             'puntos_requeridos' => 'sometimes|integer|min:0',
@@ -284,7 +340,7 @@ class MisionController extends Controller
             'mision' => 'sometimes|string',
             'descripcion' => 'nullable|string',
             'foto_mision' => $request->hasFile('foto_mision') ? 'nullable|file|image|max:5120' : 'nullable|string|max:500',
-            'tipo_mision' => 'sometimes|in:temporada,comunidad,individual',
+            'tipo_mision' => 'sometimes|in:temporada,comunidad,individual,global',
             'temporada_id' => 'nullable|integer|exists:temporadas,id',
             'npc_id' => 'nullable|integer|exists:map_npcs,id',
             'puntos_requeridos' => 'sometimes|integer|min:0',
