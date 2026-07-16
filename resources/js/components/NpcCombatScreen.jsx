@@ -1238,8 +1238,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           <div style={{
             position: 'absolute', left: 14, top: 14, zIndex: 10,
             width: logCollapsed ? 36 : 'clamp(150px, 26%, 240px)',
-            height: logCollapsed ? 'auto' : 'calc(100% - 230px)',
-            maxHeight: 'calc(100% - 230px)',
+            maxHeight: 'calc(100% - 260px)',
             background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
             borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
             display: 'flex', flexDirection: 'column',
