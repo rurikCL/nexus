@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from './components/ui.jsx';
 
 const BG = (
@@ -119,25 +119,89 @@ function LoginForm({ onLogin, onSwitch }) {
   );
 }
 
+/* ── SELECTOR DE SEDE ── */
+function SedePicker({ sedes, loading, value, onChange }) {
+  if (loading) {
+    return <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '6px 0' }}>Cargando sedes...</div>;
+  }
+  if (sedes.length === 0) {
+    return (
+      <div style={{ fontSize: 11, color: 'var(--holocron-naranja)', padding: '6px 0' }}>
+        No hay sedes disponibles aún. Contacta a un administrador.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'grid', gap: 6, maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
+      {sedes.map((s) => {
+        const active = value === s.id;
+        return (
+          <button
+            type="button"
+            key={s.id}
+            onClick={() => onChange(s.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', textAlign: 'left',
+              borderRadius: 'var(--radius-md)', cursor: 'pointer', transition: 'all 0.15s',
+              border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+              background: active ? 'color-mix(in srgb, var(--holo) 12%, transparent)' : 'rgba(255,255,255,0.02)',
+            }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+              background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
+            }}>
+              {s.imagen_url
+                ? <img src={s.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <Icon name="target" size={16} style={{ color: 'var(--holo)' }} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{s.nombre}</div>
+              {(s.ubicacion || s.pais || s.region) && (
+                <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 1 }}>
+                  {[s.ubicacion, s.region, s.pais].filter(Boolean).join(' · ')}
+                </div>
+              )}
+            </div>
+            {active && <Icon name="check" size={14} style={{ color: 'var(--holo)', flexShrink: 0 }} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── REGISTRO ── */
 function RegisterForm({ onLogin, onSwitch }) {
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
+  const [sedeId, setSedeId]     = useState(null);
+  const [sedes, setSedes]       = useState([]);
+  const [sedesLoading, setSedesLoading] = useState(true);
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+
+  useEffect(() => {
+    fetch('/api/public/sedes', { headers: { Accept: 'application/json' } })
+      .then((r) => r.json())
+      .then((d) => setSedes(d.sedes ?? []))
+      .catch(() => {})
+      .finally(() => setSedesLoading(false));
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (password !== confirm) { setError('Las contraseñas no coinciden.'); return; }
+    if (!sedeId) { setError('Debes elegir tu sede.'); return; }
     setLoading(true);
     try {
       const res  = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ name, email, password, password_confirmation: confirm }),
+        body: JSON.stringify({ name, email, password, password_confirmation: confirm, sede_id: sedeId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -173,6 +237,11 @@ function RegisterForm({ onLogin, onSwitch }) {
 
       <PwField value={password} onChange={e => setPassword(e.target.value)} label="Contraseña" placeholder="Mínimo 8 caracteres" />
       <PwField value={confirm}  onChange={e => setConfirm(e.target.value)}  label="Confirmar contraseña" />
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        <label className="nx-label">Sede</label>
+        <SedePicker sedes={sedes} loading={sedesLoading} value={sedeId} onChange={setSedeId} />
+      </div>
 
       <button type="submit" disabled={loading} className="nx-btn nx-btn-accent" style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 2, fontSize: 13 }}>
         {loading

@@ -456,6 +456,29 @@ const ENTITY_CONFIG = {
     ],
     defaults: { tipo_valor: 'numerico', activo: true },
   },
+
+  sedes: {
+    label: 'Sedes', icon: 'target', group: 'SISTEMA',
+    columns: [
+      { key: 'id',        label: 'ID',      w: 52 },
+      { key: 'nombre',    label: 'Nombre',  bold: true },
+      { key: 'ubicacion', label: 'Ubicación', dim: true },
+      { key: 'pais',      label: 'País',    dim: true },
+      { key: 'region',    label: 'Región',  dim: true },
+      { key: 'activa',    label: 'Activa',  type: 'bool', w: 60 },
+    ],
+    fields: [
+      { key: 'nombre',            label: 'Nombre de la sede',    type: 'text',   required: true, span: 2 },
+      { key: 'ubicacion',         label: 'Ubicación',            type: 'text',   span: 2, hint: 'Dirección o referencia del lugar físico' },
+      { key: 'pais',              label: 'País',                 type: 'text' },
+      { key: 'region',            label: 'Región',               type: 'text' },
+      { key: 'costo_membresia',   label: 'Costo de Membresía (cr)',  type: 'number', min: 0 },
+      { key: 'costo_mensualidad', label: 'Costo de Mensualidad (cr)', type: 'number', min: 0 },
+      { key: 'activa',            label: 'Activa',               type: 'toggle' },
+      { key: 'imagen',            label: 'Foto de la sede',      type: 'file', span: 2 },
+    ],
+    defaults: { activa: true },
+  },
 };
 
 /* ─── FIELD INPUT ────────────────────────────────────────── */

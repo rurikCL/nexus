@@ -27,6 +27,7 @@ class User extends Authenticatable
         'grado',
         'clase',
         'tutor_id',
+        'sede_id',
         'password',
     ];
 
@@ -71,6 +72,11 @@ class User extends Authenticatable
     public function tutor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'tutor_id');
+    }
+
+    public function sede(): BelongsTo
+    {
+        return $this->belongsTo(Sede::class);
     }
 
     public function events(): BelongsToMany

@@ -21,6 +21,14 @@ class ChallengeController extends Controller
         ]);
 
         $user = $request->user();
+        $target = User::findOrFail($data['target_id']);
+
+        /* Las sedes clasifican a los miembros por ubicación física real — no se puede
+         * desafiar a alguien de otra sede. Si alguno de los dos aún no tiene sede
+         * asignada (cuentas previas a esta funcionalidad), no se bloquea el desafío. */
+        if ($user->sede_id && $target->sede_id && $user->sede_id !== $target->sede_id) {
+            return response()->json(['message' => 'No puedes desafiar a alguien de otra sede — no están físicamente en el mismo lugar.'], 422);
+        }
 
         $challenge = Challenge::create([
             'challenger_id' => $user->id,
@@ -30,7 +38,6 @@ class ChallengeController extends Controller
             'status'        => 'pendiente',
         ]);
 
-        $target = User::find($data['target_id']);
         $target->notify(new DesafioRecibido($user, $data['stake'] ?? 0));
 
         return response()->json([

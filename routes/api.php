@@ -41,6 +41,7 @@ use Illuminate\Support\Facades\Route;
 // Public auth routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::get('/public/sedes', [AuthController::class, 'sedes']);
 
 // Instagram OAuth callback (pública — Meta redirige aquí sin Bearer token)
 Route::get('/instagram/callback', [InstagramController::class, 'callback']);

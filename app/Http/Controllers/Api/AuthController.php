@@ -3,16 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Sede;
 use App\Models\StatsTemporada;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
+    /** GET /public/sedes — para el selector de sede en el formulario de registro (sin auth). */
+    public function sedes(): JsonResponse
+    {
+        $sedes = Sede::where('activa', true)->orderBy('nombre')->get()->map(fn ($s) => [
+            'id' => $s->id,
+            'nombre' => $s->nombre,
+            'ubicacion' => $s->ubicacion,
+            'pais' => $s->pais,
+            'region' => $s->region,
+            'imagen_url' => $s->imagen ? Storage::disk('public')->url($s->imagen) : null,
+        ]);
+
+        return response()->json(['sedes' => $sedes]);
+    }
+
     public function login(Request $request): JsonResponse
     {
         $request->validate([
@@ -59,6 +76,7 @@ class AuthController extends Controller
             'name'     => 'required|string|max:100',
             'email'    => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::min(8)],
+            'sede_id'  => 'required|integer|exists:sedes,id',
         ]);
 
         $user = User::create([
@@ -66,6 +84,7 @@ class AuthController extends Controller
             'email'    => $request->email,
             'password' => Hash::make($request->password),
             'tier'     => 'iniciado',
+            'sede_id'  => $request->sede_id,
         ]);
 
         $token = $user->createToken('nexus-api')->plainTextToken;

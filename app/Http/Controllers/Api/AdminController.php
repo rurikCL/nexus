@@ -18,6 +18,7 @@ use App\Models\Role;
 use App\Models\RolCharacterObjeto;
 use App\Models\RolHabilidad;
 use App\Models\RolObjeto;
+use App\Models\Sede;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,6 +46,7 @@ class AdminController extends Controller
             // Usado solo por options() para los selectores de habilidad de las naves.
             'rol_habilidades_nave' => RolHabilidad::class,
             'configuraciones'    => Configuracion::class,
+            'sedes'       => Sede::class,
             default            => abort(404, "Entidad no reconocida: {$entity}"),
         };
     }

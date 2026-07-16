@@ -75,6 +75,14 @@ class PvpCombatController extends Controller
             return response()->json(['error' => 'Ambos jugadores necesitan un personaje'], 422);
         }
 
+        /* Las sedes clasifican a los miembros por ubicación física real — no se puede
+         * retar a alguien de otra sede porque no se está físicamente cerca. Si alguno de
+         * los dos aún no tiene sede asignada (cuentas previas a esta funcionalidad), no
+         * se bloquea el reto. */
+        if ($attacker->sede_id && $defender->sede_id && $attacker->sede_id !== $defender->sede_id) {
+            return response()->json(['error' => 'No puedes retar a alguien de otra sede — no están físicamente en el mismo lugar.'], 422);
+        }
+
         $attackerBusy = PvpCombat::whereIn('status', ['active', 'pending'])
             ->where(fn ($q) => $q->where('attacker_id', $attacker->id)->orWhere('defender_id', $attacker->id))
             ->exists();

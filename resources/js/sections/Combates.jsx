@@ -1186,15 +1186,16 @@ export function ChallengeModal({ open, onClose, S, initialOppId }) {
           headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ target_id: opp.userId, stake, fecha_desafio: fecha || null }),
         });
-        if (!res.ok) throw new Error('Error al enviar desafío');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || 'Error al enviar desafío');
       } else {
         // Combatiente demo (seed) — acción local
         S.createChallenge(oppId, stake);
       }
       onClose();
       toast(`Desafío enviado a ${opp.name}`, { tone: 'success', icon: 'swords', desc: 'Combate oficial pendiente de aceptación' });
-    } catch {
-      toast('No se pudo enviar el desafío', { tone: 'error', icon: 'x' });
+    } catch (err) {
+      toast(err.message || 'No se pudo enviar el desafío', { tone: 'error', icon: 'x' });
     } finally {
       setSending(false);
     }

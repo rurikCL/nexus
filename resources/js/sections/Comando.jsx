@@ -293,6 +293,19 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
               {(() => { const c = NX.CLASSES.find(x => x.id === ch.cls); return c ? <Chip icon={c.icon}>{c.num} · {c.name}</Chip> : null; })()}
               <Chip tone="dim" icon="user">@{ch.handle}</Chip>
               <span className="nx-chip dim" style={{ borderColor: `${sab}66` }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: sab, boxShadow: `0 0 8px ${sab}` }} />Sable {ch.saber}</span>
+              {user?.sede && (
+                <span className="nx-chip dim" style={{ gap: 6, paddingLeft: 4 }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                    background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center',
+                  }}>
+                    {user.sede.imagen_url
+                      ? <img src={user.sede.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Icon name="target" size={10} style={{ color: 'var(--holo)' }} />}
+                  </span>
+                  Sede {user.sede.nombre}
+                </span>
+              )}
             </div>
           </div>
         </div>
