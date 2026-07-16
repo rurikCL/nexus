@@ -269,6 +269,12 @@ export function ArmadoSableView({ user, onUserUpdate }) {
     () => SLOTS.reduce((acc, s) => acc + (objetoPorId(form[`${s.key}_id`])?.consumo_energia ?? 0), 0),
     [form, objetoPorId]
   );
+  /* Sin núcleo instalado no hay una capacidad real que mostrar — sin este chequeo la
+     barra queda pegada al 100% (llena) desde la primera pieza con consumo y no vuelve
+     a cambiar de ancho aunque se agreguen más piezas, dando la impresión de que "no se
+     actualiza". */
+  const sinNucleo = energiaMaxima <= 0;
+  const pctEnergia = sinNucleo ? 0 : Math.min(100, (consumoEnergia / energiaMaxima) * 100);
   const sobreConsumo = consumoEnergia > energiaMaxima;
 
   const setSlot = (key, value) => setForm((f) => ({ ...f, [`${key}_id`]: value ? Number(value) : null }));
@@ -362,9 +368,9 @@ export function ArmadoSableView({ user, onUserUpdate }) {
               <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%',
-                  width: `${energiaMaxima > 0 ? Math.min(100, (consumoEnergia / energiaMaxima) * 100) : (consumoEnergia > 0 ? 100 : 0)}%`,
-                  background: sobreConsumo ? '#ff2d45' : '#38cdf0',
-                  boxShadow: sobreConsumo ? '0 0 8px #ff2d45' : consumoEnergia > 0 ? '0 0 8px #38cdf0' : 'none',
+                  width: `${pctEnergia}%`,
+                  background: sinNucleo ? 'rgba(255,255,255,0.25)' : (sobreConsumo ? '#ff2d45' : '#38cdf0'),
+                  boxShadow: sinNucleo ? 'none' : (sobreConsumo ? '0 0 8px #ff2d45' : consumoEnergia > 0 ? '0 0 8px #38cdf0' : 'none'),
                   transition: 'width 0.2s ease, background 0.2s ease',
                 }} />
               </div>
@@ -372,10 +378,17 @@ export function ArmadoSableView({ user, onUserUpdate }) {
                 fontSize: 11, fontFamily: 'var(--font-data)', flexShrink: 0,
                 color: sobreConsumo ? '#ff6b6b' : 'var(--holo)',
               }}>
-                {consumoEnergia}/{energiaMaxima} EN
+                {consumoEnergia}/{sinNucleo ? '—' : energiaMaxima} EN
               </span>
             </div>
-            {sobreConsumo && (
+            {sinNucleo && consumoEnergia > 0 ? (
+              <div style={{
+                fontSize: 11, color: '#ff6b6b', background: 'rgba(255,45,69,0.1)',
+                border: '1px solid rgba(255,45,69,0.35)', borderRadius: 6, padding: '6px 10px', marginBottom: 4,
+              }}>
+                ⚠ Instala un Núcleo de Energía para definir la capacidad — sin uno, el sable no podrá guardarse.
+              </div>
+            ) : sobreConsumo && (
               <div style={{
                 fontSize: 11, color: '#ff6b6b', background: 'rgba(255,45,69,0.1)',
                 border: '1px solid rgba(255,45,69,0.35)', borderRadius: 6, padding: '6px 10px', marginBottom: 4,
