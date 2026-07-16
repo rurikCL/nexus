@@ -405,7 +405,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     competitivo:  <CompetitivoView S={S} user={user} />,
     temporadas:   <TemporadasView S={S} user={user} onUserUpdate={onUserUpdate} />,
-    misiones:     <MisionesView S={S} user={user} />,
+    misiones:     <MisionesView S={S} user={user} onUserUpdate={onUserUpdate} />,
     mapa: <MapaView S={S} setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} onUserUpdate={onUserUpdate} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,

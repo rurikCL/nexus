@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Static sub-routes MUST come before {mision} wildcard routes
     Route::get('/misiones/comunidad', [MisionController::class, 'comunidad']);
     Route::get('/misiones/individual', [MisionController::class, 'individual']);
+    Route::get('/misiones/global', [MisionController::class, 'global']);
     Route::get('/misiones/temporada/{temporadaId}', [MisionController::class, 'porTemporada']);
     Route::get('/misiones/npcs-mision', [MisionController::class, 'npcsMision']);
     Route::patch('/misiones/{mision}', [MisionController::class, 'update']);
