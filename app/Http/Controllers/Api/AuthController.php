@@ -76,7 +76,6 @@ class AuthController extends Controller
             'name'     => 'required|string|max:100',
             'email'    => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::min(8)],
-            'sede_id'  => 'required|integer|exists:sedes,id',
         ]);
 
         $user = User::create([
@@ -84,7 +83,6 @@ class AuthController extends Controller
             'email'    => $request->email,
             'password' => Hash::make($request->password),
             'tier'     => 'iniciado',
-            'sede_id'  => $request->sede_id,
         ]);
 
         $token = $user->createToken('nexus-api')->plainTextToken;

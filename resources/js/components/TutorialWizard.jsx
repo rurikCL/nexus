@@ -22,7 +22,7 @@ const SABERS_LIST = [
   { id: 'rojo',    label: 'Rojo',    color: '#ff2d45' },
 ];
 
-const STEPS = ['bienvenida', 'identidad', 'lado', 'clase', 'sable', 'tutor', 'listo'];
+const STEPS = ['bienvenida', 'identidad', 'sede', 'lado', 'clase', 'sable', 'tutor', 'listo'];
 
 export default function TutorialWizard({ user, onComplete }) {
   const [step, setStep]     = useState(0);
@@ -34,6 +34,8 @@ export default function TutorialWizard({ user, onComplete }) {
     name:        user?.name ?? '',
     handle:      '',
     bio:         '',
+    sede_id:     null,
+    sede_nombre: '',
     side:        '',
     cls:         '',
     saber_color: 'azul',
@@ -70,8 +72,9 @@ export default function TutorialWizard({ user, onComplete }) {
 
   const canNext = () => {
     if (step === 1) return form.name.trim().length > 0 && form.handle.trim().length > 0;
-    if (step === 2) return !!form.side;
-    if (step === 3) return !!form.cls;
+    if (step === 2) return !!form.sede_id;
+    if (step === 3) return !!form.side;
+    if (step === 4) return !!form.cls;
     return true;
   };
 
@@ -80,6 +83,22 @@ export default function TutorialWizard({ user, onComplete }) {
     setError(null);
     const token = localStorage.getItem('nx-token');
     try {
+      const sedeRes = await fetch('/api/me/sede', {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sede_id: form.sede_id }),
+      });
+      if (!sedeRes.ok) {
+        const sedeData = await sedeRes.json().catch(() => ({}));
+        setError(sedeData.message ?? 'Error al guardar la sede.');
+        setSaving(false);
+        return;
+      }
+
       const res = await fetch('/api/character', {
         method: 'POST',
         headers: {
@@ -180,11 +199,12 @@ export default function TutorialWizard({ user, onComplete }) {
         <div key={animKey} className="nx-fade" style={{ width: '100%', maxWidth: 660 }}>
           {step === 0 && <StepBienvenida user={user} />}
           {step === 1 && <StepIdentidad form={form} set={set} />}
-          {step === 2 && <StepLado form={form} setSide={setSide} />}
-          {step === 3 && <StepClase form={form} set={set} />}
-          {step === 4 && <StepSable form={form} set={set} />}
-          {step === 5 && <StepTutor form={form} set={set} token={localStorage.getItem('nx-token')} />}
-          {step === 6 && <StepListo form={form} error={error} />}
+          {step === 2 && <StepSede form={form} set={set} token={localStorage.getItem('nx-token')} />}
+          {step === 3 && <StepLado form={form} setSide={setSide} />}
+          {step === 4 && <StepClase form={form} set={set} />}
+          {step === 5 && <StepSable form={form} set={set} />}
+          {step === 6 && <StepTutor form={form} set={set} token={localStorage.getItem('nx-token')} />}
+          {step === 7 && <StepListo form={form} error={error} />}
         </div>
       </div>
 
@@ -370,7 +390,109 @@ function StepIdentidad({ form, set }) {
   );
 }
 
-/* ─── Step 2: Lado ─── */
+/* ─── Step 2: Sede ─── */
+function StepSede({ form, set, token }) {
+  const [sedes, setSedes]     = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/public/sedes', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => setSedes(d.sedes ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const select = (s) => {
+    set('sede_id', s.id);
+    set('sede_nombre', s.nombre);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+      <div>
+        <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
+          PASO 2 · SEDE
+        </div>
+        <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>¿A qué sede perteneces?</h2>
+        <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
+          Clasifica a los combatientes por ubicación física real — solo podrás retar en combate
+          a rivales de tu misma sede.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="nx-data" style={{ textAlign: 'center', color: 'var(--txt-faint)', fontSize: 11, padding: '40px 0' }}>
+          CARGANDO SEDES...
+        </div>
+      ) : sedes.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '32px 20px',
+          border: '1px dashed var(--holo-line)', borderRadius: 8,
+        }}>
+          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', letterSpacing: '0.15em' }}>
+            NO HAY SEDES DISPONIBLES — CONTACTA A UN ADMINISTRADOR
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+          {sedes.map(s => {
+            const active = form.sede_id === s.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => select(s)}
+                style={{
+                  display: 'flex', flexDirection: 'column', gap: 10, padding: '14px', textAlign: 'left', cursor: 'pointer',
+                  border: `2px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  borderRadius: 10,
+                  background: active
+                    ? 'color-mix(in srgb, var(--holo) 10%, transparent)'
+                    : 'rgba(255,255,255,0.02)',
+                  boxShadow: active ? '0 0 22px color-mix(in srgb, var(--holo) 28%, transparent)' : 'none',
+                  transition: 'all 0.22s',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = 'var(--holo-dim)'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--holo-line)'; }}
+              >
+                <div style={{
+                  width: '100%', height: 90, borderRadius: 8, overflow: 'hidden', flexShrink: 0,
+                  background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
+                }}>
+                  {s.imagen_url
+                    ? <img src={s.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Icon name="target" size={26} style={{ color: 'var(--holo)', opacity: 0.6 }} />}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: active ? 'var(--txt)' : 'var(--txt-dim)' }}>
+                    {s.nombre}
+                  </div>
+                  {(s.ubicacion || s.pais || s.region) && (
+                    <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 3, lineHeight: 1.4 }}>
+                      {[s.ubicacion, s.region, s.pais].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                {active && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.18em',
+                  }}>
+                    ✓ SELECCIONADA
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Step 3: Lado ─── */
 const SIDES = [
   {
     id: 'luminoso',
@@ -393,7 +515,7 @@ function StepLado({ form, setSide }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
       <div>
         <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
-          PASO 2 · ALINEACIÓN
+          PASO 3 · ALINEACIÓN
         </div>
         <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>¿A qué lado perteneces?</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
@@ -450,13 +572,13 @@ function StepLado({ form, setSide }) {
   );
 }
 
-/* ─── Step 3: Clase ─── */
+/* ─── Step 4: Clase ─── */
 function StepClase({ form, set }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div>
         <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
-          PASO 3 · FORMA DE COMBATE
+          PASO 4 · FORMA DE COMBATE
         </div>
         <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>Elige tu estilo de lucha</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
@@ -506,7 +628,7 @@ function StepClase({ form, set }) {
   );
 }
 
-/* ─── Step 4: Sable ─── */
+/* ─── Step 5: Sable ─── */
 function StepSable({ form, set }) {
   const isDark = form.side === 'oscuro';
 
@@ -514,7 +636,7 @@ function StepSable({ form, set }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
       <div>
         <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
-          PASO 4 · CRISTAL KYBER
+          PASO 5 · CRISTAL KYBER
         </div>
         <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>Color de tu sable</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
@@ -579,7 +701,7 @@ function StepSable({ form, set }) {
   );
 }
 
-/* ─── Step 5: Tutor ─── */
+/* ─── Step 6: Tutor ─── */
 const TIER_LABEL = { caballero: 'Caballero', maestro: 'Maestro', granmaestro: 'Gran Maestro' };
 const TIER_COLOR = { caballero: '#3aa0ff', maestro: '#b15cff', granmaestro: '#ffb01f' };
 
@@ -610,7 +732,7 @@ function StepTutor({ form, set, token }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
       <div>
         <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
-          PASO 5 · MENTOR · OPCIONAL
+          PASO 6 · MENTOR · OPCIONAL
         </div>
         <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>¿Tienes un tutor?</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
@@ -697,7 +819,7 @@ function StepTutor({ form, set, token }) {
   );
 }
 
-/* ─── Step 6: Listo ─── */
+/* ─── Step 7: Listo ─── */
 function StepListo({ form, error }) {
   const cls        = NX.CLASSES.find(c => c.id === form.cls);
   const side       = SIDES.find(s => s.id === form.side);
@@ -764,6 +886,19 @@ function StepListo({ form, error }) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Sede row */}
+        <div style={{
+          padding: '12px 20px', borderTop: '1px solid var(--holo-line)',
+          background: 'rgba(255,255,255,0.02)',
+        }}>
+          <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', letterSpacing: '0.2em', marginBottom: 5 }}>
+            SEDE
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--holo)' }}>
+            {form.sede_nombre || '—'}
+          </div>
         </div>
 
         {/* Tutor row (optional) */}
