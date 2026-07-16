@@ -3240,11 +3240,11 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
     <div onMouseDown={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 1300,
       background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(6px)',
-      display: 'grid', placeItems: 'center', padding: isMobile ? 8 : 20,
+      display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? 8 : 20,
       animation: 'nx-fade-up 0.25s ease both',
     }}>
       <div onMouseDown={e => e.stopPropagation()} className="nx-panel solid nx-panel-glow" style={{
-        width: 480, maxWidth: '100%', maxHeight: isMobile ? '92vh' : '86vh', overflowY: 'auto',
+        width: 480, maxWidth: '100%', minWidth: 0, maxHeight: isMobile ? '92vh' : '86vh', overflowY: 'auto',
       }}>
         {mision.foto_mision && (
           <div style={{ height: isMobile ? 90 : 140, overflow: 'hidden' }}>

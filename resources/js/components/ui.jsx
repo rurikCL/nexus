@@ -183,10 +183,10 @@ export function Modal({ open, onClose, title, kicker, children, width = 540, zIn
   return createPortal(
     <div onMouseDown={onClose} style={{
       position: 'fixed', inset: 0, zIndex, background: 'rgba(2,5,12,0.72)',
-      backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'start center',
+      backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
       padding: '40px 20px 20px', overflowY: 'auto' }}>
       <div className="nx-panel solid nx-panel-glow nx-fade" onMouseDown={(e) => e.stopPropagation()}
-        style={{ width, maxWidth: '100%' }}>
+        style={{ width, maxWidth: '100%', minWidth: 0 }}>
         <header className="nx-panel-head">
           <div style={{ flex: 1 }}>
             {kicker && <div className="nx-kicker" style={{ marginBottom: 2 }}>{kicker}</div>}

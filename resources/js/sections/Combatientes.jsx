@@ -128,8 +128,8 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
   }, []);
 
   return createPortal(
-    <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(5px)', display: 'grid', placeItems: 'start center', padding: '40px 24px 24px', overflowY: 'auto' }}>
-      <div className="nx-panel solid nx-fade" onMouseDown={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: '100%', overflow: 'hidden' }}>
+    <div onMouseDown={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,5,12,0.78)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '40px 24px 24px', overflowY: 'auto' }}>
+      <div className="nx-panel solid nx-fade" onMouseDown={(e) => e.stopPropagation()} style={{ width: 720, maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
         {/* Banner vista pública */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', background: 'color-mix(in srgb, var(--holo) 12%, transparent)', borderBottom: '1px solid var(--holo-line)' }}>
           <span className="nx-kicker" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="link" size={13} /> Vista pública · perfil externo</span>
