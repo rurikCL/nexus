@@ -103,6 +103,12 @@ function classifyPvpFlee(entry, myId) {
   return { actorIsMe, success };
 }
 
+/* Detecta una expresión/emoji usada por alguno de los dos jugadores */
+function classifyPvpEmoji(entry, myId) {
+  if (entry.type !== 'emoji' || !entry.emoji) return null;
+  return { actorIsMe: entry.actor_id === myId, emoji: entry.emoji };
+}
+
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
   useEffect(() => {
@@ -241,6 +247,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     let lastAttack = null;
     let lastHeal = null;
     let lastFlee = null;
+    let lastEmoji = null;
     for (const entry of newEntries) {
       const groups = extractRollGroups(entry, { myId: userId, attackerId });
       for (const g of groups) await rollDice(g);
@@ -250,6 +257,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       if (healed) lastHeal = healed;
       const fled = classifyPvpFlee(entry, userId);
       if (fled) lastFlee = fled;
+      const emoted = classifyPvpEmoji(entry, userId);
+      if (emoted && !emoted.actorIsMe) lastEmoji = emoted;
+    }
+
+    if (lastEmoji) {
+      setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: lastEmoji.emoji });
     }
 
     if (lastHeal && stageRef.current) {
@@ -356,6 +369,17 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       if (d?.combat) await revealWithDice(d.combat);
     } catch { /* ignore */ }
     finally { setBusy(false); }
+  };
+
+  /* Expresión cosmética: no consume turno, se muestra al instante en local y se sincroniza
+     al rival (que la verá al llegar en su próximo polling del combate). */
+  const sendEmoji = async (it) => {
+    setEmojiPicker(false);
+    setEmojiBurst({ id: `${Date.now()}`, emoji: it.emoji });
+    try {
+      const d = await apiPost(`/pvp/${combat.id}/emoji`, { emote_id: it.id });
+      if (d?.combat) await revealWithDice(d.combat);
+    } catch { /* ignore */ }
   };
 
   const isPending  = combat.status === 'pending';
@@ -991,7 +1015,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         {emojiPicker && (
           <EmojiRing
             anchorRef={myAvatarRef} stageRef={stageRef}
-            onSelect={(it) => { setEmojiBurst({ id: `${Date.now()}`, emoji: it.emoji }); setEmojiPicker(false); }}
+            onSelect={sendEmoji}
             onClose={() => setEmojiPicker(false)}
           />
         )}

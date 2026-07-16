@@ -10,6 +10,7 @@ use App\Models\RolHabilidad;
 use App\Models\User;
 use App\Notifications\PvpCombatNotification;
 use App\Notifications\PvpTurnoPushRecordatorio;
+use App\Services\MisionProgresoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -43,6 +44,18 @@ class PvpCombatController extends Controller
     ];
 
     private const TERMINAL_STATUSES = ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'];
+
+    /* Expresiones disponibles en combate PvP — whitelist autoritativa del servidor
+     * (el cliente solo envía el id; emoji/label/desc los define el backend). */
+    private const EMOTES = [
+        'saludar' => ['emoji' => '👋',  'label' => 'Saludar',     'desc' => 'saluda a su rival'],
+        'reir' => ['emoji' => '😂',  'label' => 'Reír',        'desc' => 'se ríe de su rival'],
+        'llorar' => ['emoji' => '😢',  'label' => 'Llorar',      'desc' => 'llora'],
+        'impresion' => ['emoji' => '😲',  'label' => 'Impresión',   'desc' => 'se muestra impresionado'],
+        'enojo' => ['emoji' => '😠',  'label' => 'Enojarse',    'desc' => 'se enoja'],
+        'dormir' => ['emoji' => '😴',  'label' => 'Dormir',      'desc' => 'finge dormirse de aburrimiento'],
+        'adios' => ['emoji' => '🖐️', 'label' => 'Decir adiós', 'desc' => 'se despide'],
+    ];
 
     /** POST /pvp/challenge */
     public function challenge(Request $request): JsonResponse
@@ -593,7 +606,7 @@ class PvpCombatController extends Controller
                     'character_id' => $winnerChar->id,
                     'hito' => "{$loserChar->name} derrotado",
                 ]);
-                \App\Services\MisionProgresoService::registrar($winnerUser, 'combate', 1);
+                MisionProgresoService::registrar($winnerUser, 'combate', 1);
             }
         }
 
@@ -699,6 +712,43 @@ class PvpCombatController extends Controller
                 $combat->fresh(self::WITHS),
                 $user->id
             ),
+        ]);
+    }
+
+    /** POST /pvp/{id}/emoji — expresión cosmética, disponible en cualquier momento (no consume turno) */
+    public function emoji(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'emote_id' => ['required', 'string', 'in:'.implode(',', array_keys(self::EMOTES))],
+        ]);
+
+        $user = $request->user();
+        $combat = PvpCombat::with(self::WITHS)->findOrFail($id);
+
+        if (! $combat->involvedUser($user->id)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+        if ($combat->status !== 'active') {
+            return response()->json(['error' => 'El combate no está activo'], 422);
+        }
+
+        $isAttacker = $user->id === $combat->attacker_id;
+        $actorChar = $isAttacker ? $combat->attacker->character : $combat->defender->character;
+        $emote = self::EMOTES[$data['emote_id']];
+
+        $log = $combat->log ?? [];
+        $log[] = [
+            'turn' => count($log) + 1,
+            'actor_id' => $user->id,
+            'type' => 'emoji',
+            'emoji' => $emote['emoji'],
+            'messages' => ["{$actorChar->name} {$emote['desc']} {$emote['emoji']} ({$emote['label']})"],
+        ];
+        $combat->log = $log;
+        $combat->save();
+
+        return response()->json([
+            'combat' => $this->formatCombat($combat->fresh(self::WITHS), $user->id),
         ]);
     }
 

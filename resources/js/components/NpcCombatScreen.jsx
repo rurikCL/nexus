@@ -145,6 +145,16 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     return { variant: 'hit', text: `HIT: ${dmg}` };
   };
 
+  /* Expresión cosmética: no consume turno. Combate contra NPC = solo local, sin sincronizar rival. */
+  const sendEmoji = (it) => {
+    setEmojiPicker(false);
+    setEmojiBurst({ id: `${Date.now()}`, emoji: it.emoji });
+    setLog(prev => [...prev, {
+      text: `${player.nombre} ${it.desc} ${it.emoji} (${it.label})`,
+      type: 'info', id: prev.length, ronda, actor: 'player',
+    }]);
+  };
+
   /* Texto flotante independiente de un golpe (curaciones): aparece sobre `ref` sin VFX de golpe */
   const showFloatText = (ref, result) => {
     if (!stageRef.current || !ref.current) return;
@@ -1186,7 +1196,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         {emojiPicker && (
           <EmojiRing
             anchorRef={playerAvatarRef} stageRef={stageRef}
-            onSelect={(it) => { setEmojiBurst({ id: `${Date.now()}`, emoji: it.emoji }); setEmojiPicker(false); }}
+            onSelect={sendEmoji}
             onClose={() => setEmojiPicker(false)}
           />
         )}

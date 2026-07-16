@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { getRelativeCenter } from './combatFx.jsx';
 
+/* `desc` debe calzar en significado con PvpCombatController::EMOTES (el backend define su
+   propia copia autoritativa para el registro de combate PvP; esta es la usada en combate
+   contra NPC, donde el log es puramente local). */
 export const EMOTES = [
-  { id: 'saludar',    emoji: '👋', label: 'Saludar' },
-  { id: 'reir',       emoji: '😂', label: 'Reír' },
-  { id: 'llorar',     emoji: '😢', label: 'Llorar' },
-  { id: 'impresion',  emoji: '😲', label: 'Impresión' },
-  { id: 'enojo',      emoji: '😠', label: 'Enojarse' },
-  { id: 'dormir',     emoji: '😴', label: 'Dormir' },
-  { id: 'adios',      emoji: '🖐️', label: 'Decir adiós' },
+  { id: 'saludar',    emoji: '👋',  label: 'Saludar',      desc: 'saluda a su rival' },
+  { id: 'reir',       emoji: '😂',  label: 'Reír',         desc: 'se ríe de su rival' },
+  { id: 'llorar',     emoji: '😢',  label: 'Llorar',       desc: 'llora' },
+  { id: 'impresion',  emoji: '😲',  label: 'Impresión',    desc: 'se muestra impresionado' },
+  { id: 'enojo',      emoji: '😠',  label: 'Enojarse',     desc: 'se enoja' },
+  { id: 'dormir',     emoji: '😴',  label: 'Dormir',       desc: 'finge dormirse de aburrimiento' },
+  { id: 'adios',      emoji: '🖐️', label: 'Decir adiós',  desc: 'se despide' },
 ];
 
 /** Duración total del emoji central — debe calzar con emoji-expressions.css. */
