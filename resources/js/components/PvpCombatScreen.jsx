@@ -1066,7 +1066,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{
             position: 'absolute', left: 14, top: 14, zIndex: 10,
             width: logCollapsed ? 36 : 'clamp(160px, 26%, 280px)',
-            maxHeight: 'calc(100% - 270px)',
+            height: logCollapsed ? 'auto' : 'calc(100% - 240px)',
+            maxHeight: 'calc(100% - 240px)',
             background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
             borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
             display: 'flex', flexDirection: 'column',
