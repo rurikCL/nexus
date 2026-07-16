@@ -43,6 +43,8 @@ function mergeApiCombatants(apiList, currentUserId) {
       joined:    api.joined_year ? String(api.joined_year) : '',
       photo_url: api.photo_url  ?? null,
       titulo_activo: api.titulo_activo ?? null,
+      sedeId:    api.sede_id     ?? null,
+      sedeNombre: api.sede_nombre ?? null,
       initials, color,
     };
   });
@@ -398,7 +400,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     'modulos-entrenamiento': <ModulosEntrenamientoView user={user} />,
     tareas: <TareasView S={S} user={user} />,
     eventos: <EventosView S={S} go={go} user={user} />,
-    ranking: <RankingView S={S} />,
+    ranking: <RankingView S={S} user={user} />,
     combates: <CombatesView S={S} user={user} initialViewCombat={combatToView} onClearViewCombat={() => setCombatToView(null)} />,
     combatientes: <CombatientesView S={S} />,
     competitivo:  <CompetitivoView S={S} user={user} />,

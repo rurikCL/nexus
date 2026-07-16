@@ -13,7 +13,7 @@ class CombatantController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $characters = Character::with('user.tutor.character', 'tituloActivo')
+        $characters = Character::with('user.tutor.character', 'user.sede', 'tituloActivo')
             ->get()
             ->map(fn ($c) => $this->formatCombatant($c))
             ->sortByDesc('wins')
@@ -24,7 +24,7 @@ class CombatantController extends Controller
 
     public function show(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user.tutor.character', 'tituloActivo')
+        $character = Character::with('user.tutor.character', 'user.sede', 'tituloActivo')
             ->where('handle', $handle)
             ->firstOrFail();
 
@@ -33,7 +33,7 @@ class CombatantController extends Controller
 
     public function showPublic(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user.tutor.character', 'tituloActivo')
+        $character = Character::with('user.tutor.character', 'user.sede', 'tituloActivo')
             ->where('handle', $handle)
             ->firstOrFail();
 
@@ -66,6 +66,8 @@ class CombatantController extends Controller
             'gold' => $character->gold,
             'side' => $character->side ?? 'luminoso',
             'tier' => $character->user->tier ?? 'iniciado',
+            'sede_id' => $character->user->sede_id,
+            'sede_nombre' => $character->user->sede?->nombre,
             'titulo_activo' => $character->tituloActivo?->only(['id', 'nombre', 'tipo']),
             'photo_url' => $character->photo
                 ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp

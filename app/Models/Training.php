@@ -11,7 +11,7 @@ class Training extends Model
     /** Rangos que pueden marcar asistencia en cualquier sesión, sean o no encargados de ella. */
     public const TRAINER_TIERS = ['caballero', 'maestro', 'granmaestro'];
 
-    protected $fillable = ['titulo', 'fecha', 'created_by', 'closed_at', 'closed_by'];
+    protected $fillable = ['titulo', 'fecha', 'created_by', 'sede_id', 'closed_at', 'closed_by'];
 
     protected $casts = [
         'fecha'     => 'date:Y-m-d',
@@ -21,6 +21,11 @@ class Training extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function sede(): BelongsTo
+    {
+        return $this->belongsTo(Sede::class);
     }
 
     public function closedBy(): BelongsTo

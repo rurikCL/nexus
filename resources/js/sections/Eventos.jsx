@@ -30,6 +30,8 @@ function mapEvent(e) {
     status:      e.status,
     date,
     location:    e.location ?? 'Por definir',
+    sedeId:      e.sede_id ?? null,
+    sedeNombre:  e.sede_nombre ?? null,
     reward:      e.reward ?? 0,
     rewardBadge: e.reward_badge ?? null,
     capacity:    e.capacity ?? 0,
@@ -56,6 +58,8 @@ export function EventosView({ S, go, user }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('todos');
+  const [sedes, setSedes] = useState([]);
+  const [activeSede, setActiveSede] = useState(user?.sede?.id ?? null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -67,6 +71,10 @@ export function EventosView({ S, go, user }) {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+
+  useEffect(() => {
+    apiCall('GET', '/api/public/sedes').then(d => setSedes(d.sedes ?? [])).catch(() => {});
+  }, []);
 
   const toggleReg = async (e) => {
     if (e.mine) {
@@ -99,12 +107,14 @@ export function EventosView({ S, go, user }) {
     }
   };
 
-  const list = events.filter(e => {
-    if (filter === 'mis') return e.mine;
-    if (filter === 'abiertos') return e.status === 'ABIERTO' || e.status === 'PRÓXIMO';
-    if (filter === 'realizados') return e.status === 'REALIZADO';
-    return true;
-  });
+  const list = events
+    .filter(e => activeSede == null || e.sedeId == null || e.sedeId === activeSede)
+    .filter(e => {
+      if (filter === 'mis') return e.mine;
+      if (filter === 'abiertos') return e.status === 'ABIERTO' || e.status === 'PRÓXIMO';
+      if (filter === 'realizados') return e.status === 'REALIZADO';
+      return true;
+    });
   const misCount = events.filter(e => e.mine).length;
   const canCreateEvent = EVENT_ADMIN_TIERS.includes(user?.tier);
 
@@ -132,6 +142,17 @@ export function EventosView({ S, go, user }) {
         )}
       </div>
 
+      {sedes.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button onClick={() => setActiveSede(null)} className={`nx-chip ${activeSede === null ? '' : 'dim'}`}
+            style={{ cursor: 'pointer', borderColor: activeSede === null ? 'var(--holo)' : undefined }}>Todas las sedes</button>
+          {sedes.map(s => (
+            <button key={s.id} onClick={() => setActiveSede(s.id)} className={`nx-chip ${activeSede === s.id ? '' : 'dim'}`}
+              style={{ cursor: 'pointer', borderColor: activeSede === s.id ? 'var(--holo)' : undefined }}>{s.nombre}</button>
+          ))}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {[['todos','Todos'],['abiertos','Abiertos'],['mis','Mis eventos'],['realizados','Finalizados']].map(([k, label]) => (
           <button key={k} onClick={() => setFilter(k)} className={`nx-chip ${filter === k ? '' : 'dim'}`}
@@ -150,6 +171,7 @@ export function EventosView({ S, go, user }) {
         open={creating}
         onClose={() => setCreating(false)}
         onCreated={(newEvent) => { setEvents(prev => [newEvent, ...prev]); setCreating(false); }}
+        sedes={sedes}
       />
     </div>
   );
@@ -204,6 +226,11 @@ function EventCard({ e, onToggleReg, onClaim }) {
           <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', display: 'flex', alignItems: 'center', gap: 5 }}>
             <Icon name="target" size={12} /> {e.location}
           </span>
+          {e.sedeNombre && (
+            <span className="nx-data" style={{ fontSize: 11, color: 'var(--holo)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="shield" size={12} /> Sede {e.sedeNombre}
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
@@ -230,8 +257,8 @@ function EventCard({ e, onToggleReg, onClaim }) {
   );
 }
 
-function CreateEventModal({ open, onClose, onCreated }) {
-  const empty = { name: '', type: 'EXHIBICIÓN', date: '', location: '', capacity: 30, reward: 300, rewardBadge: '', desc: '' };
+function CreateEventModal({ open, onClose, onCreated, sedes }) {
+  const empty = { name: '', type: 'EXHIBICIÓN', date: '', location: '', sedeId: '', capacity: 30, reward: 300, rewardBadge: '', desc: '' };
   const [f, setF] = useState(empty);
   const [sending, setSending] = useState(false);
   useEffect(() => { if (open) setF(empty); }, [open]);
@@ -246,6 +273,7 @@ function CreateEventModal({ open, onClose, onCreated }) {
         type:         f.type,
         event_date:   f.date || null,
         location:     f.location || null,
+        sede_id:      f.sedeId || null,
         capacity:     +f.capacity || null,
         reward:       +f.reward || 0,
         reward_badge: f.rewardBadge.trim() || null,
@@ -290,6 +318,13 @@ function CreateEventModal({ open, onClose, onCreated }) {
             <label className="nx-label">Cupos</label>
             <input className="nx-input nx-data" type="number" value={f.capacity} onChange={e => setF({ ...f, capacity: e.target.value })} />
           </div>
+        </div>
+        <div>
+          <label className="nx-label">Sede</label>
+          <select className="nx-select" value={f.sedeId} onChange={e => setF({ ...f, sedeId: e.target.value })}>
+            <option value="">Todas las sedes</option>
+            {(sedes ?? []).map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>

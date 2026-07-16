@@ -17,6 +17,7 @@ class EventController extends Controller
             'type'         => 'required|in:EXHIBICIÓN,CEREMONIA,DEMOSTRACIÓN,TALLER,GALA,CHARLA',
             'event_date'   => 'nullable|date',
             'location'     => 'nullable|string|max:255',
+            'sede_id'      => 'nullable|integer|exists:sedes,id',
             'capacity'     => 'nullable|integer|min:1',
             'reward'       => 'nullable|integer|min:0',
             'reward_badge' => 'nullable|string|max:100',
@@ -25,6 +26,7 @@ class EventController extends Controller
         ]);
 
         $event = Event::create(array_merge(['status' => 'ABIERTO'], $data));
+        $event->load('sede');
 
         return response()->json(['event' => $event], 201);
     }
@@ -32,7 +34,7 @@ class EventController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $events = Event::orderBy('event_date')->get();
+        $events = Event::with('sede')->orderBy('event_date')->get();
 
         $myEventIds = $user->events()->pluck('events.id')->toArray();
         $myRegistrations = EventRegistration::where('user_id', $user->id)
@@ -47,6 +49,8 @@ class EventController extends Controller
                 'status'       => $event->status,
                 'event_date'   => $event->event_date,
                 'location'     => $event->location,
+                'sede_id'      => $event->sede_id,
+                'sede_nombre'  => $event->sede?->nombre,
                 'reward'       => $event->reward,
                 'reward_badge' => $event->reward_badge,
                 'capacity'     => $event->capacity,

@@ -21,13 +21,15 @@ class SesionEntrenamientoController extends Controller
 
     private function formatTraining(Training $training, int $authUserId): array
     {
-        $training->loadMissing(['encargados.character', 'attendance']);
+        $training->loadMissing(['encargados.character', 'attendance', 'sede']);
 
         return [
             'id'               => $training->id,
             'titulo'           => $training->titulo,
             'fecha'            => $training->fecha->format('Y-m-d'),
             'closed_at'        => $training->closed_at?->toIso8601String(),
+            'sede_id'          => $training->sede_id,
+            'sede_nombre'      => $training->sede?->nombre,
             'encargados'       => $training->encargados->map(fn($u) => [
                 'id'        => $u->id,
                 'name'      => $u->name,
@@ -140,7 +142,7 @@ class SesionEntrenamientoController extends Controller
     {
         $authUserId = $request->user()->id;
 
-        $trainings = Training::with(['encargados.character'])
+        $trainings = Training::with(['encargados.character', 'sede'])
             ->withCount([
                 'attendance',
                 'planNodes as node_count',
@@ -154,6 +156,8 @@ class SesionEntrenamientoController extends Controller
                 'titulo'           => $t->titulo,
                 'fecha'            => $t->fecha->format('Y-m-d'),
                 'closed_at'        => $t->closed_at?->toIso8601String(),
+                'sede_id'          => $t->sede_id,
+                'sede_nombre'      => $t->sede?->nombre,
                 'encargados'       => $t->encargados->map(fn($u) => [
                     'id'        => $u->id,
                     'name'      => $u->name,
@@ -193,6 +197,7 @@ class SesionEntrenamientoController extends Controller
         $data = $request->validate([
             'titulo'        => 'required|string|in:Entrenamiento Oficial,Entrenamiento Libre,Actividad,Taller,Reunión',
             'fecha'         => 'required|date_format:Y-m-d',
+            'sede_id'       => 'nullable|integer|exists:sedes,id',
             'encargados'    => 'nullable|array',
             'encargados.*'  => 'integer|exists:users,id',
         ]);
@@ -201,6 +206,7 @@ class SesionEntrenamientoController extends Controller
             'titulo'     => $data['titulo'],
             'fecha'      => $data['fecha'],
             'created_by' => $user->id,
+            'sede_id'    => $data['sede_id'] ?? $user->sede_id,
         ]);
 
         $training->encargados()->sync($data['encargados'] ?? []);
@@ -225,6 +231,7 @@ class SesionEntrenamientoController extends Controller
             'planNodes.modulo',
             'planNodes.creador.character',
             'attendance.user.character',
+            'sede',
         ])->findOrFail($id);
 
         $authUser   = $request->user();
@@ -255,6 +262,8 @@ class SesionEntrenamientoController extends Controller
             'titulo'           => $training->titulo,
             'fecha'            => $training->fecha->format('Y-m-d'),
             'closed_at'        => $training->closed_at?->toIso8601String(),
+            'sede_id'          => $training->sede_id,
+            'sede_nombre'      => $training->sede?->nombre,
             'is_closed'        => $training->isClosed(),
             'i_am_encargado'   => $this->isEncargado($training, $authUserId),
             'encargados'       => $training->encargados->map(fn($u) => [

@@ -544,14 +544,21 @@ function CloseModal({ sesion, onClose, onClosed }) {
 }
 
 /* ─── CREATE MODAL ───────────────────────────────────────────── */
-function CreateModal({ onClose, onCreated }) {
-  const [form, setForm]       = useState({ titulo: SESION_TIPOS[0], fecha: new Date().toISOString().slice(0, 10), encargados: [] });
+function CreateModal({ onClose, onCreated, user }) {
+  const [form, setForm]       = useState({
+    titulo: SESION_TIPOS[0], fecha: new Date().toISOString().slice(0, 10),
+    sede_id: user?.sede?.id ?? '', encargados: [],
+  });
   const [usuarios, setUsuarios] = useState([]);
+  const [sedes, setSedes]       = useState([]);
   const [saving, setSaving]   = useState(false);
 
   useEffect(() => {
     api('GET', '/admin/usuarios/options')
       .then(r => setUsuarios(r.options ?? []))
+      .catch(() => {});
+    api('GET', '/public/sedes')
+      .then(r => setSedes(r.sedes ?? []))
       .catch(() => {});
   }, []);
 
@@ -562,7 +569,7 @@ function CreateModal({ onClose, onCreated }) {
     if (!form.fecha) { toast('Selecciona una fecha', { tone: 'error' }); return; }
     setSaving(true);
     try {
-      const res = await api('POST', '/sesiones', form);
+      const res = await api('POST', '/sesiones', { ...form, sede_id: form.sede_id || null });
       toast('Sesión creada', { tone: 'success', icon: 'check', desc: res.titulo });
       onCreated(res);
     } catch (err) {
@@ -584,6 +591,13 @@ function CreateModal({ onClose, onCreated }) {
         <div>
           <label className="nx-label">Fecha <span style={{ color: 'var(--holocron-naranja)' }}>*</span></label>
           <input type="date" className="nx-input" value={form.fecha} onChange={e => upd('fecha', e.target.value)} />
+        </div>
+        <div>
+          <label className="nx-label">Sede</label>
+          <select className="nx-select" value={form.sede_id} onChange={e => upd('sede_id', e.target.value)}>
+            <option value="">Sin sede específica</option>
+            {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
         </div>
         <div>
           <label className="nx-label">Encargados</label>
@@ -635,6 +649,11 @@ function SesionCard({ sesion, onClick }) {
             {new Date(sesion.fecha + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--txt)', lineHeight: 1.3 }}>{sesion.titulo}</div>
+          {sesion.sede_nombre && (
+            <div style={{ fontSize: 10, color: 'var(--holo)', fontFamily: 'var(--font-data)', marginTop: 3 }}>
+              <Icon name="target" size={10} /> {sesion.sede_nombre}
+            </div>
+          )}
         </div>
         <Chip tone={closed ? 'dim' : 'green'} style={{ flexShrink: 0, marginLeft: 8 }}>
           {closed ? 'Cerrada' : 'Activa'}
@@ -973,6 +992,8 @@ export default function SesionesView({ user }) {
   const [loading, setLoading]         = useState(true);
   const [activeSesion, setActiveSesion] = useState(null);
   const [showCreate, setShowCreate]   = useState(false);
+  const [sedes, setSedes]             = useState([]);
+  const [activeSede, setActiveSede]   = useState(user?.sede?.id ?? null);
   const canCreate = TRAINER_TIERS.includes(user?.tier ?? '');
 
   const load = useCallback(async () => {
@@ -988,6 +1009,14 @@ export default function SesionesView({ user }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api('GET', '/public/sedes').then(r => setSedes(r.sedes ?? [])).catch(() => {});
+  }, []);
+
+  const sesionesFiltradas = activeSede == null
+    ? sesiones
+    : sesiones.filter(s => s.sede_id == null || s.sede_id === activeSede);
 
   if (activeSesion) {
     return (
@@ -1014,14 +1043,27 @@ export default function SesionesView({ user }) {
         )}
       </div>
 
+      {sedes.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+          <button onClick={() => setActiveSede(null)} className={`nx-chip ${activeSede === null ? '' : 'dim'}`}
+            style={{ cursor: 'pointer', borderColor: activeSede === null ? 'var(--holo)' : undefined }}>Todas las sedes</button>
+          {sedes.map(s => (
+            <button key={s.id} onClick={() => setActiveSede(s.id)} className={`nx-chip ${activeSede === s.id ? '' : 'dim'}`}
+              style={{ cursor: 'pointer', borderColor: activeSede === s.id ? 'var(--holo)' : undefined }}>{s.nombre}</button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
           <div className="nx-kicker" style={{ animation: 'nx-pulse 1.4s infinite' }}>CARGANDO SESIONES...</div>
         </div>
-      ) : sesiones.length === 0 ? (
+      ) : sesionesFiltradas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--txt-faint)' }}>
           <div style={{ marginBottom: 10 }}><Icon name="calendar" size={36} /></div>
-          <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>Sin sesiones registradas</div>
+          <div className="nx-display" style={{ fontSize: 16, marginBottom: 6 }}>
+            {sesiones.length === 0 ? 'Sin sesiones registradas' : 'Sin sesiones en esta sede'}
+          </div>
           <div style={{ fontSize: 13, maxWidth: 320, margin: '0 auto 18px' }}>
             {canCreate ? 'Crea la primera sesión para comenzar.' : 'Los encargados registrarán sesiones próximamente.'}
           </div>
@@ -1029,7 +1071,7 @@ export default function SesionesView({ user }) {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-          {sesiones.map(s => (
+          {sesionesFiltradas.map(s => (
             <SesionCard key={s.id} sesion={s} onClick={() => setActiveSesion(s.id)} />
           ))}
         </div>
@@ -1037,6 +1079,7 @@ export default function SesionesView({ user }) {
 
       {showCreate && (
         <CreateModal
+          user={user}
           onClose={() => setShowCreate(false)}
           onCreated={sesion => { setShowCreate(false); setActiveSesion(sesion.id); load(); }}
         />
