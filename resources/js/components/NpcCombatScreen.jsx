@@ -819,7 +819,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       minWidth: minW, borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
       background: bg, border: `1px solid ${border}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      gap: 3, padding: '6px 8px', opacity: disabled ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+      gap: 2, padding: '3px 6px', opacity: disabled ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
     }}
       onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = hoverBg; e.currentTarget.style.borderColor = hoverBorder; } }}
       onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; }}
@@ -941,7 +941,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           {/* Habilidades (grid 2x2) + otras opciones (grid 2x2) */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
             {/* Habilidades */}
-            <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 6 }}>
+            <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
               {habilidades.length === 0 ? (
                 <div style={{ gridColumn: '1 / -1', gridRow: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
@@ -963,7 +963,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                         background: disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
                         border: `1px solid ${disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
+                        gap: 1, padding: '2px 5px', opacity: disabled ? 0.45 : 1,
                         position: 'relative', transition: 'all 0.13s',
                       }}
                       onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
@@ -1016,7 +1016,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch' }} />
 
             {/* Otras opciones */}
-            <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 6 }}>
+            <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
               {!naveMode && (
                 <ActionBtn onClick={() => isPlayerTurn && doPlayerBasicAttack()}
                   disabled={!isPlayerTurn}
@@ -1087,7 +1087,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       borderTop: '1px solid rgba(56,205,240,0.13)',
       borderRadius: isMobile ? 10 : 0,
       padding: isMobile ? '8px 10px 12px' : '6px 12px 8px', display: 'flex', flexDirection: 'column', gap: 5,
-      minHeight: isMobile ? 210 : 190,
+      minHeight: isMobile ? 195 : 175,
     }}>
       {actionBarInner}
     </div>
@@ -1173,7 +1173,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             </div>
 
             {/* Jugador HUD — abajo izquierda */}
-            <div ref={playerHudRef} style={{ position: 'absolute', bottom: 210, left: 14, zIndex: 10, width: 'clamp(360px, 55%, 520px)' }}>
+            <div ref={playerHudRef} style={{ position: 'absolute', bottom: 195, left: 14, zIndex: 10, width: 'clamp(360px, 55%, 520px)' }}>
               <HUD
                 hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
                 nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
@@ -1232,7 +1232,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           <div style={{
             position: 'absolute', left: 14, top: 14, zIndex: 10,
             width: logCollapsed ? 36 : 'clamp(150px, 26%, 240px)',
-            maxHeight: 'calc(100% - 380px)',
+            maxHeight: 'calc(100% - 365px)',
             background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
             borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
             display: 'flex', flexDirection: 'column',

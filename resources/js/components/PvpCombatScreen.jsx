@@ -744,7 +744,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         {/* Habilidades (grid 2x2) + otras opciones (grid 2x2) */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
           {/* Habilidades */}
-          <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 6 }}>
+          <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
             {myHabilidades.length === 0 ? (
               <div style={{ gridColumn: '1 / -1', gridRow: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
@@ -770,7 +770,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                         : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
                       border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
+                      gap: 1, padding: '2px 5px', opacity: disabled ? 0.45 : 1,
                       position: 'relative', transition: 'all 0.13s',
                     }}
                     onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
@@ -834,14 +834,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch' }} />
 
           {/* Otras opciones */}
-          <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 6 }}>
+          <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
             {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
             {!me.es_nave && (
               <button onClick={() => doAction('unarmed')} disabled={busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
               }}
                 onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
@@ -869,7 +869,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
               }}
                 onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
@@ -886,7 +886,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
               }}
                 onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(16,185,129,0.18)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.22)'; }}
@@ -901,7 +901,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
               background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+              gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
             }}
               onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
@@ -924,7 +924,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       borderTop: '1px solid rgba(56,205,240,0.13)',
       borderRadius: isMobile ? 10 : 0,
       padding: isMobile ? '8px 10px 12px' : '6px 16px 8px', display: 'flex', flexDirection: 'column', gap: 5,
-      minHeight: isMobile ? 210 : 190,
+      minHeight: isMobile ? 195 : 175,
     }}>
       {actionBarInner}
     </div>
@@ -1005,7 +1005,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             </div>
 
             {/* Mi HUD — abajo izquierda */}
-            <div ref={myHudRef} style={{ position: 'absolute', bottom: 210, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
+            <div ref={myHudRef} style={{ position: 'absolute', bottom: 195, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
                 hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
                 nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
@@ -1072,7 +1072,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{
             position: 'absolute', left: 14, top: 14, zIndex: 10,
             width: logCollapsed ? 36 : 'clamp(160px, 26%, 280px)',
-            maxHeight: 'calc(100% - 380px)',
+            maxHeight: 'calc(100% - 365px)',
             background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
             borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
             display: 'flex', flexDirection: 'column',
