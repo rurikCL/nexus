@@ -40,6 +40,11 @@ class MapNpc extends Model
         'hito_requerimiento',
         'fecha_inicio',
         'fecha_fin',
+        'habilidad_1',
+        'habilidad_2',
+        'habilidad_3',
+        'habilidad_4',
+        'raid_slots',
     ];
 
     protected $casts = [
@@ -54,6 +59,11 @@ class MapNpc extends Model
         'forma' => 'integer',
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
+        'habilidad_1' => 'integer',
+        'habilidad_2' => 'integer',
+        'habilidad_3' => 'integer',
+        'habilidad_4' => 'integer',
+        'raid_slots' => 'integer',
     ];
 
     public function lugar(): BelongsTo
@@ -64,6 +74,40 @@ class MapNpc extends Model
     public function mision(): BelongsTo
     {
         return $this->belongsTo(Mision::class, 'MisionID');
+    }
+
+    public function habilidad1(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_1');
+    }
+
+    public function habilidad2(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_2');
+    }
+
+    public function habilidad3(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_3');
+    }
+
+    public function habilidad4(): BelongsTo
+    {
+        return $this->belongsTo(RolHabilidad::class, 'habilidad_4');
+    }
+
+    /** IDs de las hasta 4 habilidades asignadas (tipo jefe), sin nulos. */
+    public function habilidadIds(): array
+    {
+        return array_values(array_filter([
+            $this->habilidad_1, $this->habilidad_2, $this->habilidad_3, $this->habilidad_4,
+        ]));
+    }
+
+    /** Cupos configurados para el Combate RAID de este jefe (mínimo 2, por defecto 4). */
+    public function raidCupos(): int
+    {
+        return max(2, $this->raid_slots ?: 4);
     }
 
     /** Naves que este NPC (tipo "vendedor_naves") tiene a la venta. */

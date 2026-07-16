@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\NpcVendedorController;
 use App\Http\Controllers\Api\PirataEncuentroController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\PvpCombatController;
+use App\Http\Controllers\Api\RaidCombatController;
 use App\Http\Controllers\Api\RolHabilidadController;
 use App\Http\Controllers\Api\SableController;
 use App\Http\Controllers\Api\SesionEntrenamientoController;
@@ -223,6 +224,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pvp/{id}/accept', [PvpCombatController::class, 'accept']);
     Route::post('/pvp/{id}/decline', [PvpCombatController::class, 'decline']);
     Route::post('/pvp/{id}/cancel', [PvpCombatController::class, 'cancel']);
+
+    // Combate RAID (N jugadores vs 1 NPC jefe, cupos configurables en el NPC)
+    Route::post('/raid/join/{npcId}', [RaidCombatController::class, 'join']);
+    Route::get('/raid/active', [RaidCombatController::class, 'active']);
+    Route::get('/raid/{id}', [RaidCombatController::class, 'show']);
+    Route::post('/raid/{id}/ready', [RaidCombatController::class, 'ready']);
+    Route::post('/raid/{id}/action', [RaidCombatController::class, 'action']);
+    Route::post('/raid/{id}/leave', [RaidCombatController::class, 'leave']);
 
     Route::post('/trades/propose', [TradeController::class, 'propose']);
     Route::get('/trades/active', [TradeController::class, 'active']);

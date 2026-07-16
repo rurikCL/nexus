@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
+import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen.jsx';
 
 /* ─── helpers ─────────────────────────────────────────── */
 const AUTH = () => {
@@ -2471,7 +2472,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
   );
 }
 
-function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onMisionChange, onCreditsChange, onUserUpdate }) {
+function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onRaidJoin, onMisionChange, onCreditsChange, onUserUpdate }) {
   const isMobile = useIsMobile();
   const isAI = Boolean(npc.prompt);
   const [showTienda, setShowTienda] = useState(false);
@@ -2534,9 +2535,14 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
   const isEntrenador = npcTipo === 'entrenador';
   const isVendedor       = npcTipo === 'vendedor';
   const isVendedorNaves  = npcTipo === 'vendedor_naves';
-  const isNeutral    = !isAliado && !isHostil && !isEntrenador;
+  const isJefe       = npcTipo === 'jefe';
+  const isNeutral    = !isAliado && !isHostil && !isEntrenador && !isJefe;
 
   const startCombat = useCallback(() => { onCombatStart?.(npcTipo); onClose(); }, [npcTipo]);
+
+  /* Los jefes se combaten en Combate RAID (varios jugadores vs 1, cupos configurables): en vez de iniciar
+     un combate normal, se une a la cola de espera de ese NPC. */
+  const joinRaid = useCallback(() => { onRaidJoin?.(npc); onClose(); }, [npc]);
 
   const attackNeutral = useCallback(() => {
     postReputation(-50);
@@ -3025,7 +3031,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
             )}
             {!isAliado && npc.ataque > 0 && (
               <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,45,69,0.15)' }}>
-                <button onClick={isNeutral ? attackNeutral : startCombat} style={{
+                <button onClick={isJefe ? joinRaid : (isNeutral ? attackNeutral : startCombat)} style={{
                   width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
                   border: '1px solid rgba(255,45,69,0.28)', borderRadius: 8, padding: '9px 11px',
                   cursor: 'pointer', fontSize: 12, color: '#ff6b6b',
@@ -3035,7 +3041,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.28)'; }}
                 >
                   <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(255,45,69,0.2)', display: 'grid', placeItems: 'center', fontSize: 10, flexShrink: 0 }}>⚔</span>
-                  <span>ATACAR{isNeutral ? ' (−rep)' : ''}</span>
+                  <span>{isJefe ? 'UNIRSE AL ASALTO' : `ATACAR${isNeutral ? ' (−rep)' : ''}`}</span>
                 </button>
               </div>
             )}
@@ -3137,7 +3143,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                 </button>
               )}
               {!isAliado && npc.ataque > 0 && (
-                <button onClick={isNeutral ? attackNeutral : startCombat} style={{
+                <button onClick={isJefe ? joinRaid : (isNeutral ? attackNeutral : startCombat)} style={{
                   width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
                   border: '1px solid rgba(255,45,69,0.28)', borderRadius: 8, padding: '9px 11px',
                   cursor: 'pointer', fontSize: 12, color: '#ff6b6b',
@@ -3147,7 +3153,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.28)'; }}
                 >
                   <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(255,45,69,0.2)', display: 'grid', placeItems: 'center', fontSize: 10, flexShrink: 0 }}>⚔</span>
-                  <span>ATACAR{isNeutral ? ' (−rep)' : ''}</span>
+                  <span>{isJefe ? 'UNIRSE AL ASALTO' : `ATACAR${isNeutral ? ' (−rep)' : ''}`}</span>
                 </button>
               )}
               {npcOptions.map((opt, i) => (
@@ -4196,6 +4202,8 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     try { const s = localStorage.getItem('nx-npc-combat'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [activeNaveCombat, setActiveNaveCombat] = useState(null);
+  const [raidQueueNpcId, setRaidQueueNpcId] = useState(null);
+  const [activeRaidId, setActiveRaidId] = useState(null);
   const [lugarImagen,   setLugarImagen]   = useState(null);
   const [zonaImagen,    setZonaImagen]    = useState(null);
   const [planetaImagen, setPlanetaImagen] = useState(null);
@@ -4245,6 +4253,17 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
         .catch(() => {});
     };
     checkCombat();
+  }, []);
+
+  // Restaura un combate RAID en cola/activo (p.ej. tras recargar la página)
+  useEffect(() => {
+    apiFetch('/raid/active')
+      .then(d => {
+        if (!d?.raid) return;
+        if (d.raid.status === 'esperando') setRaidQueueNpcId(d.raid.npc?.id ?? null);
+        else if (d.raid.status === 'activo') setActiveRaidId(d.raid.id);
+      })
+      .catch(() => {});
   }, []);
 
   // Polling para detectar retos entrantes cuando no hay combate activo
@@ -4547,6 +4566,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
             localStorage.setItem('nx-npc-combat', JSON.stringify(session));
             setActiveNpcCombat(session);
           }}
+          onRaidJoin={(npc) => setRaidQueueNpcId(npc.id)}
           onMisionChange={() => setLugarRefreshKey((k) => k + 1)}
           onCreditsChange={syncCredits}
           onUserUpdate={onUserUpdate}
@@ -4644,6 +4664,24 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           }}
           onDefeat={(hp) => { persistNaveDano(activeNaveCombat.player?.owned_id, hp); setActiveNaveCombat(null); }}
           onFlee={(hp) => { persistNaveDano(activeNaveCombat.player?.owned_id, hp); setActiveNaveCombat(null); }}
+        />
+      )}
+
+      {/* Cola de espera de Combate RAID (varios jugadores vs 1 jefe, cupos configurables) */}
+      {raidQueueNpcId && (
+        <RaidQueueModal
+          npcId={raidQueueNpcId}
+          onClose={() => setRaidQueueNpcId(null)}
+          onStarted={(id) => { setRaidQueueNpcId(null); setActiveRaidId(id); }}
+        />
+      )}
+
+      {/* Combate RAID activo — overlay bloqueante */}
+      {activeRaidId && (
+        <RaidCombatScreen
+          raidId={activeRaidId}
+          lugarImagen={lugarImagen || zonaImagen || planetaImagen}
+          onClose={() => setActiveRaidId(null)}
         />
       )}
 
