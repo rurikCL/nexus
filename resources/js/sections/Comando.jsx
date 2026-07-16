@@ -166,7 +166,101 @@ const TIER_COLOR = {
   maestro: '#FF6B00', granmaestro: '#E6B325',
 };
 
-export function ComandoView({ S, go, user, onGoToCombat }) {
+/** Modal para elegir/cambiar la sede propia — lista todas las sedes activas. */
+function SedeChangeModal({ open, currentId, onClose, onChanged }) {
+  const [sedes, setSedes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const token = localStorage.getItem('nx-token');
+    setLoading(true);
+    fetch('/api/public/sedes', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setSedes(d.sedes ?? []))
+      .catch(() => toast('No se pudo cargar la lista de sedes', { tone: 'error', icon: 'x' }))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  if (!open) return null;
+
+  const elegir = async (sedeId) => {
+    if (sedeId === currentId) { onClose(); return; }
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('nx-token');
+      const res = await fetch('/api/me/sede', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sede_id: sedeId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? 'No se pudo cambiar de sede.');
+      toast('Sede actualizada', { tone: 'success', icon: 'check', desc: data.sede?.nombre });
+      onChanged(data.sede);
+      onClose();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo cambiar de sede', { tone: 'error', icon: 'x' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div onMouseDown={onClose} className="nx-saber-modal-backdrop" style={{ zIndex: 1400 }}>
+      <div onMouseDown={e => e.stopPropagation()} className="nx-panel solid nx-panel-glow" style={{
+        width: '100%', maxWidth: 420, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <header className="nx-panel-head">
+          <div style={{ flex: 1 }}>
+            <div className="nx-kicker">Membresía</div>
+            <div className="nx-display" style={{ fontSize: 14 }}>Cambiar de Sede</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: 7 }} onClick={onClose}><Icon name="x" size={15} /></button>
+        </header>
+        <div className="nx-panel-body" style={{ overflowY: 'auto', display: 'grid', gap: 6 }}>
+          {loading ? (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>Cargando sedes...</div>
+          ) : sedes.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>No hay sedes disponibles.</div>
+          ) : sedes.map(s => {
+            const active = s.id === currentId;
+            return (
+              <button key={s.id} disabled={saving} onClick={() => elegir(s.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', textAlign: 'left',
+                borderRadius: 'var(--radius-md)', cursor: saving ? 'wait' : 'pointer', transition: 'all 0.15s',
+                border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                background: active ? 'color-mix(in srgb, var(--holo) 12%, transparent)' : 'rgba(255,255,255,0.02)',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+                  background: 'rgba(56,205,240,0.08)', display: 'grid', placeItems: 'center',
+                }}>
+                  {s.imagen_url
+                    ? <img src={s.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Icon name="target" size={16} style={{ color: 'var(--holo)' }} />}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{s.nombre}</div>
+                  {(s.ubicacion || s.pais || s.region) && (
+                    <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 1 }}>
+                      {[s.ubicacion, s.region, s.pais].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                {active && <Icon name="check" size={14} style={{ color: 'var(--holo)', flexShrink: 0 }} />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
   const me = S.byId('you') ?? {};
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
@@ -192,6 +286,7 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
   const [overIdx,     setOverIdx]             = useState(null);
   const [activaTemporada, setActivaTemporada] = useState(null);
   const [showAllHitos, setShowAllHitos]       = useState(false);
+  const [showSedeModal, setShowSedeModal]     = useState(false);
   const hitos = user?.character?.hitos ?? [];
   const saveTimer = useRef(null);
 
@@ -293,22 +388,40 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
               {(() => { const c = NX.CLASSES.find(x => x.id === ch.cls); return c ? <Chip icon={c.icon}>{c.num} · {c.name}</Chip> : null; })()}
               <Chip tone="dim" icon="user">@{ch.handle}</Chip>
               <span className="nx-chip dim" style={{ borderColor: `${sab}66` }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: sab, boxShadow: `0 0 8px ${sab}` }} />Sable {ch.saber}</span>
-              {user?.sede && (
-                <span className="nx-chip dim" style={{ gap: 6, paddingLeft: 4 }}>
-                  <span style={{
-                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-                    background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center',
-                  }}>
-                    {user.sede.imagen_url
-                      ? <img src={user.sede.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <Icon name="target" size={10} style={{ color: 'var(--holo)' }} />}
-                  </span>
-                  Sede {user.sede.nombre}
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowSedeModal(true)}
+                title="Cambiar de sede"
+                className="nx-chip dim"
+                style={{ gap: 6, paddingLeft: user?.sede ? 4 : undefined, cursor: 'pointer', border: 'none' }}
+              >
+                {user?.sede ? (
+                  <>
+                    <span style={{
+                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+                      background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center',
+                    }}>
+                      {user.sede.imagen_url
+                        ? <img src={user.sede.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <Icon name="target" size={10} style={{ color: 'var(--holo)' }} />}
+                    </span>
+                    Sede {user.sede.nombre}
+                  </>
+                ) : (
+                  <><Icon name="target" size={11} />Sin sede — asignar</>
+                )}
+                <Icon name="edit" size={9} style={{ opacity: 0.5 }} />
+              </button>
             </div>
           </div>
         </div>
+
+        <SedeChangeModal
+          open={showSedeModal}
+          currentId={user?.sede?.id ?? null}
+          onClose={() => setShowSedeModal(false)}
+          onChanged={(sede) => onUserUpdate?.({ ...user, sede })}
+        />
       </section>
 
       {/* Widgets reordenables — grilla de 2 columnas */}

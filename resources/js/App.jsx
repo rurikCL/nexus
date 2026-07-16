@@ -391,7 +391,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   };
 
   const VIEWS = {
-    comando: <ComandoView S={S} go={go} user={user} onGoToCombat={(combat) => { setCombatToView(combat); go('combates'); }} />,
+    comando: <ComandoView S={S} go={go} user={user} onUserUpdate={onUserUpdate} onGoToCombat={(combat) => { setCombatToView(combat); go('combates'); }} />,
     personaje: <PersonajeView S={S} user={user} go={go} onCharacterCreated={(char) => onUserUpdate?.({ ...user, character: char })} />,
     sesiones: <SesionesView user={user} />,
     entrenamiento: <TrainingView S={S} user={user} go={go} />,

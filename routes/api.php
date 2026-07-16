@@ -57,6 +57,7 @@ Route::post('/broadcasting/auth', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [MeController::class, 'show']);
+    Route::patch('/me/sede', [MeController::class, 'updateSede']);
 
     Route::post('/character', [CharacterController::class, 'upsert']);
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);

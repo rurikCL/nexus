@@ -69,7 +69,7 @@ class AdminController extends Controller
             'zonas'      => ['planeta:id,nombre'],
             'lugares'    => ['zona:id,nombre'],
             'npcs'       => ['lugar:id,nombre', 'naves', 'objetos'],
-            'usuarios'   => ['tutor:id,name', 'roles:id,name,label'],
+            'usuarios'   => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
             default      => [],

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Character;
 use App\Models\CharacterSable;
 use App\Models\RolHabilidad;
+use App\Models\Sede;
 use App\Models\StatsTemporada;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,22 @@ class MeController extends Controller
         return array_merge($h->toArray(), [
             'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
         ]);
+    }
+
+    private function formatSede(?Sede $sede): ?array
+    {
+        if (! $sede) {
+            return null;
+        }
+
+        return [
+            'id' => $sede->id,
+            'nombre' => $sede->nombre,
+            'ubicacion' => $sede->ubicacion,
+            'pais' => $sede->pais,
+            'region' => $sede->region,
+            'imagen_url' => $sede->imagen ? Storage::disk('public')->url($sede->imagen) : null,
+        ];
     }
 
     public function tutors(): JsonResponse
@@ -85,14 +102,7 @@ class MeController extends Controller
             'clase' => $user->clase,
             'is_tutor' => $user->isTutor(),
             'roles' => $user->roles->pluck('name'),
-            'sede' => $user->sede ? [
-                'id' => $user->sede->id,
-                'nombre' => $user->sede->nombre,
-                'ubicacion' => $user->sede->ubicacion,
-                'pais' => $user->sede->pais,
-                'region' => $user->sede->region,
-                'imagen_url' => $user->sede->imagen ? Storage::disk('public')->url($user->sede->imagen) : null,
-            ] : null,
+            'sede' => $this->formatSede($user->sede),
             'character' => $character ? [
                 'id' => $character->id,
                 'handle' => $character->handle,
@@ -155,5 +165,19 @@ class MeController extends Controller
                 ],
             ] : null,
         ]);
+    }
+
+    /** PATCH /me/sede — el propio usuario cambia su sede (ej. si se mudó de lugar físico). */
+    public function updateSede(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'sede_id' => 'required|integer|exists:sedes,id',
+        ]);
+
+        $user = $request->user();
+        $user->update(['sede_id' => $data['sede_id']]);
+        $user->load('sede');
+
+        return response()->json(['sede' => $this->formatSede($user->sede)]);
     }
 }
