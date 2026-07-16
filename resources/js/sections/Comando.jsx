@@ -280,7 +280,14 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
           <Avatar c={me} size={isMobile ? 64 : 86} ring />
           <div style={{ flex: 1, minWidth: isMobile ? 140 : 220 }}>
             <div className="nx-kicker">Combatiente{me.sector ? ` · ${me.sector}` : ''}</div>
-            <h1 className="nx-display" style={{ fontSize: isMobile ? 22 : 30, margin: '4px 0 8px', color: 'var(--txt)' }}>{ch.name}</h1>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '4px 0 8px', flexWrap: 'wrap' }}>
+              <h1 className="nx-display" style={{ fontSize: isMobile ? 22 : 30, margin: 0, color: 'var(--txt)' }}>{ch.name}</h1>
+              {user?.character?.titulo_activo && (
+                <span className="nx-data" style={{ fontSize: isMobile ? 11 : 13, color: 'var(--holocron-oro)' }}>
+                  {user.character.titulo_activo.nombre}
+                </span>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <TierBadge tier={myTier} />
               {(() => { const c = NX.CLASSES.find(x => x.id === ch.cls); return c ? <Chip icon={c.icon}>{c.num} · {c.name}</Chip> : null; })()}
@@ -1204,6 +1211,267 @@ function NaveMiniStatBar({ label, value, max, color }) {
   );
 }
 
+/** 4 slots para instalar mejoras (rol_objetos tipo mejora_nave) en una nave poseída. */
+/* Bonos de mejora de nave mostrados como badges — reutiliza las etiquetas/colores
+   de los stats de combate ya definidos para el sable (BONUS_FIELDS) y agrega los
+   propios de nave (carga, salto, costo de reparación). */
+const NAVE_BONUS_FIELDS = [
+  ...BONUS_FIELDS.filter(b => [
+    'bono_ataque', 'bono_defensa', 'bono_punteria', 'bono_movimiento', 'bono_iniciativa', 'bono_vida', 'bono_escudo',
+  ].includes(b.key)),
+  { key: 'bono_capacidad_carga', label: 'CARGA', color: '#f59e0b', icon: 'box' },
+  { key: 'bono_capacidad_salto', label: 'SALTO', color: '#a78bfa', icon: 'zap' },
+  { key: 'bono_costo_reparacion', label: 'REPARO', color: '#22c55e', icon: 'shield' },
+];
+
+function MejoraSlot({ slot, mejora, onClick, disabled }) {
+  const isEmpty = !mejora;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={isEmpty ? `Asignar mejora ${slot}` : mejora.nombre}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        padding: 14, borderRadius: 'var(--radius-md)', cursor: disabled ? 'wait' : 'pointer',
+        background: isEmpty ? 'rgba(255,255,255,.025)' : 'color-mix(in srgb, var(--holo) 8%, rgba(255,255,255,.03))',
+        border: `1px solid ${isEmpty ? 'var(--holo-line)' : 'var(--holo)'}`,
+        boxShadow: isEmpty ? 'none' : '0 0 14px -6px var(--holo)',
+        opacity: disabled ? 0.6 : 1, transition: 'all .18s', flex: 1, minWidth: 0,
+      }}
+      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--holo) 10%, rgba(255,255,255,.03))'; } }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = isEmpty ? 'var(--holo-line)' : 'var(--holo)';
+        e.currentTarget.style.background = isEmpty ? 'rgba(255,255,255,.025)' : 'color-mix(in srgb, var(--holo) 8%, rgba(255,255,255,.03))';
+      }}
+    >
+      {isEmpty ? (
+        <>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', border: '1px dashed var(--holo-line)', display: 'grid', placeItems: 'center', opacity: 0.5 }}>
+            <Icon name="plus" size={16} />
+          </div>
+          <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Slot {slot}
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%',
+            display: 'grid', placeItems: 'center',
+            background: 'color-mix(in srgb, var(--holo) 15%, rgba(4,9,18,.8))',
+            border: '1px solid var(--holo)',
+            boxShadow: '0 0 12px -4px var(--holo)',
+            overflow: 'hidden',
+          }}>
+            {mejora.imagen
+              ? <img src={mediaUrl(mejora.imagen)} alt={mejora.nombre} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+              : <Icon name="box" size={18} style={{ color: 'var(--holo)' }} />
+            }
+          </div>
+          <div style={{ textAlign: 'center', minWidth: 0 }}>
+            <div className="nx-display" style={{ fontSize: 9, color: 'var(--holo)', lineHeight: 1.2, overflowWrap: 'break-word' }}>
+              {mejora.nombre}
+            </div>
+          </div>
+        </>
+      )}
+    </button>
+  );
+}
+
+function MejoraBadges({ mejora }) {
+  const badges = NAVE_BONUS_FIELDS.filter(b => mejora[b.key]);
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      {badges.map(b => (
+        <span key={b.key} style={{
+          fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+          padding: '2px 6px', borderRadius: 3,
+          background: `${b.color}18`, border: `1px solid ${b.color}40`,
+          color: b.color, whiteSpace: 'nowrap', lineHeight: 1.4,
+        }}>
+          {mejora[b.key] > 0 ? '+' : ''}{mejora[b.key]} {b.label}
+        </span>
+      ))}
+      {mejora.bono_cooldown ? (
+        <span style={{
+          fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+          padding: '2px 6px', borderRadius: 3,
+          background: '#f59e0b18', border: '1px solid #f59e0b40',
+          color: '#f59e0b', whiteSpace: 'nowrap', lineHeight: 1.4,
+        }}>
+          {mejora.bono_cooldown} CD{mejora.mejora_habilidad ? `: ${mejora.mejora_habilidad.nombre}` : ''}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function MejoraPickerRow({ mejora, selected, onAssign }) {
+  return (
+    <div onClick={onAssign} style={{
+      display: 'flex', alignItems: 'flex-start', gap: 11,
+      padding: '10px 12px', borderRadius: 'var(--radius-md)',
+      border: `1px solid ${selected ? 'var(--holo)' : 'var(--holo-line)'}`,
+      background: selected ? 'color-mix(in srgb, var(--holo) 10%, rgba(255,255,255,.03))' : 'rgba(255,255,255,.02)',
+      cursor: 'pointer', transition: 'all .15s',
+    }}
+      onMouseEnter={e => { if (!selected) { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--holo) 8%, transparent)'; } }}
+      onMouseLeave={e => { if (!selected) { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.background = 'rgba(255,255,255,.02)'; } }}
+    >
+      <div style={{
+        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+        display: 'grid', placeItems: 'center',
+        background: 'rgba(56,205,240,0.12)', border: '1px solid rgba(56,205,240,0.28)',
+        overflow: 'hidden',
+      }}>
+        {mejora.imagen
+          ? <img src={mediaUrl(mejora.imagen)} alt={mejora.nombre} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+          : <Icon name="box" size={20} style={{ color: 'var(--holo)' }} />
+        }
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt)', lineHeight: 1.2 }}>{mejora.nombre}</div>
+          {selected && <Chip tone="green" icon="check">Instalada</Chip>}
+        </div>
+        {mejora.efecto && (
+          <div style={{ fontSize: 11, color: 'var(--txt-dim)', marginBottom: 6 }}>{mejora.efecto}</div>
+        )}
+        <MejoraBadges mejora={mejora} />
+      </div>
+    </div>
+  );
+}
+
+function MejoraPickerModal({ open, onClose, mejoras, onAssign, onUnassign, slotIndex, currentId }) {
+  /* Bloquea el scroll de la página mientras el modal está abierto */
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(4,7,15,0.85)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'rgba(5,10,22,0.98)', border: '1px solid var(--holo-line)',
+        borderRadius: 'var(--radius-lg)', boxShadow: '0 24px 80px rgba(0,0,0,.7)',
+        width: '100%', maxWidth: 520, maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid var(--holo-line)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: 'var(--holo)' }}><Icon name="box" size={16} /></span>
+          <div style={{ flex: 1 }}>
+            <div className="nx-display" style={{ fontSize: 14 }}>Seleccionar Mejora</div>
+            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 2 }}>SLOT {slotIndex} — Elige una mejora para tu nave</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost" style={{ padding: 7 }} onClick={onClose}>
+            <Icon name="x" size={15} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {currentId && (
+            <button onClick={onUnassign} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 12px', marginBottom: 10, borderRadius: 'var(--radius-md)',
+              border: '1px dashed var(--holo-line)', background: 'rgba(255,255,255,.02)',
+              color: 'var(--txt-dim)', cursor: 'pointer', fontSize: 12,
+            }}>
+              <Icon name="x" size={13} /> Quitar mejora de este slot
+            </button>
+          )}
+          {mejoras.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--txt-faint)' }}>
+              <div className="nx-data" style={{ fontSize: 11, letterSpacing: '0.1em' }}>NO POSEES MEJORAS DE NAVE</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {mejoras.map(m => (
+                <MejoraPickerRow key={m.id} mejora={m} selected={m.id === currentId} onAssign={() => onAssign(m)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function NaveMejorasSlots({ owned, onChanged }) {
+  const [mejoras, setMejoras] = useState([]);
+  const [busySlot, setBusySlot] = useState(null);
+  const [pickerSlot, setPickerSlot] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  useEffect(() => {
+    fetch(`/api/naves/${owned.id}/mejoras-options`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { mejoras: [] })
+      .then(d => setMejoras(d.mejoras ?? []))
+      .catch(() => {});
+  }, [owned.id]);
+
+  const setSlot = async (slot, objetoId) => {
+    setBusySlot(slot);
+    try {
+      const res = await fetch(`/api/naves/${owned.id}/mejoras/${slot}`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ objeto_id: objetoId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? data.error ?? 'No se pudo actualizar la mejora.');
+      setPickerSlot(null);
+      onChanged?.();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo actualizar la mejora', { tone: 'error' });
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--holo-line)' }}>
+      <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 8 }}>Mejoras instaladas (4 slots)</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        {[1, 2, 3, 4].map(slot => (
+          <MejoraSlot
+            key={slot} slot={slot} mejora={owned[`mejora${slot}`]}
+            disabled={busySlot === slot}
+            onClick={() => setPickerSlot(slot)}
+          />
+        ))}
+      </div>
+      {mejoras.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 8 }}>
+          No posees mejoras de nave en tu inventario. Consíguelas con un vendedor.
+        </div>
+      )}
+
+      <MejoraPickerModal
+        open={pickerSlot != null}
+        onClose={() => setPickerSlot(null)}
+        mejoras={mejoras}
+        slotIndex={pickerSlot}
+        currentId={pickerSlot ? (owned[`mejora${pickerSlot}`]?.id ?? null) : null}
+        onAssign={(m) => setSlot(pickerSlot, m.id)}
+        onUnassign={() => setSlot(pickerSlot, null)}
+      />
+    </div>
+  );
+}
+
 function NaveEquipadaPanel() {
   const [naves, setNaves] = useState([]);
   const [naveEquipadaId, setNaveEquipadaId] = useState(null);
@@ -1272,26 +1540,27 @@ function NaveEquipadaPanel() {
                   <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{equipada.nave?.nombre}</div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                     <Chip tone="green" icon="check">Equipada</Chip>
-                    <Chip tone="dim">+{equipada.nave?.capacidad_carga ?? 0} carga</Chip>
+                    <Chip tone="dim">+{equipada.capacidad_carga_max ?? 0} carga</Chip>
                   </div>
                 </div>
                 <Btn kind="ghost" sm onClick={desequipar} disabled={busy === 'unequip'}>Desequipar</Btn>
               </div>
               <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
-                <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.nave?.vida ?? 0}            color="#4ade80" />
-                <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.nave?.escudo ?? 0}          color="#38cdf0" />
-                <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.nave?.capacidad_salto ?? 0} color="var(--holocron-oro)" />
+                <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.vida_max ?? 0}            color="#4ade80" />
+                <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.escudo_max ?? 0}          color="#38cdf0" />
+                <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.capacidad_salto_max ?? 0} color="var(--holocron-oro)" />
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <Btn kind="ghost" sm icon="fuel" onClick={() => reabastecer(equipada)}
-                  disabled={busy === `fuel-${equipada.id}` || equipada.combustible_actual >= (equipada.nave?.capacidad_salto ?? 0)}>
+                  disabled={busy === `fuel-${equipada.id}` || equipada.combustible_actual >= (equipada.capacidad_salto_max ?? 0)}>
                   Reabastecer ({fmtCr(equipada.nave?.costo_combustible)})
                 </Btn>
                 <Btn kind="ghost" sm icon="shield" onClick={() => reparar(equipada)}
-                  disabled={busy === `fix-${equipada.id}` || (equipada.vida_actual >= (equipada.nave?.vida ?? 0) && equipada.escudo_actual >= (equipada.nave?.escudo ?? 0))}>
-                  Reparar ({fmtCr(equipada.nave?.costo_reparacion)})
+                  disabled={busy === `fix-${equipada.id}` || (equipada.vida_actual >= (equipada.vida_max ?? 0) && equipada.escudo_actual >= (equipada.escudo_max ?? 0))}>
+                  Reparar ({fmtCr(equipada.costo_reparacion_final)})
                 </Btn>
               </div>
+              <NaveMejorasSlots owned={equipada} onChanged={load} />
             </div>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>

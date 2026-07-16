@@ -2030,6 +2030,14 @@ function postNpcVictory(npcId) {
     .catch(() => {});
 }
 
+/* Persiste el HP/escudo restante de la nave equipada tras un encuentro naval contra
+   NPC (emboscada pirata o encuentro espacial), sin importar el desenlace — de lo
+   contrario el daño sufrido se pierde y la nave siempre vuelve a verse a full. */
+function persistNaveDano(ownedId, hp) {
+  if (!ownedId || !hp) return Promise.resolve();
+  return apiPost(`/naves/${ownedId}/registrar-dano`, { vida: hp.vida, escudo: hp.escudo }).catch(() => {});
+}
+
 function postNaveEspacioVictory(npcEspacioId) {
   const token = localStorage.getItem('nx-token');
   return fetch('/api/character/npc-espacio-victory', {
@@ -2040,6 +2048,12 @@ function postNaveEspacioVictory(npcEspacioId) {
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d?.hito) toast(`🏆 Hito obtenido: "${d.hito}"`, { tone: 'success', icon: 'star' }); })
     .catch(() => {});
+}
+
+/* Suma un campo de bono (bono_ataque, bono_capacidad_salto, etc.) entre las 4 mejoras
+   instaladas en una nave poseída — espejo de CharacterNave::sumaBono en el backend. */
+function sumaBonoNave(owned, campo) {
+  return [1, 2, 3, 4].reduce((acc, i) => acc + (owned?.[`mejora${i}`]?.[campo] ?? 0), 0);
 }
 
 /* ─── STATS DE COMBATE NAVAL — nave del jugador y encuentro enemigo ── */
@@ -2053,9 +2067,18 @@ function getNaveCombatPlayerStats(owned) {
   const allHabilidadesData = Object.fromEntries(habs.map((h) => [String(h.id), h]));
 
   return {
-    vida: nave.vida, escudo: nave.escudo,
-    ataque: nave.ataque, defensa: nave.maniobrabilidad,
-    movimiento: nave.maniobrabilidad, iniciativa: nave.velocidad, punteria: nave.ataque,
+    /* id de la nave poseída (character_naves), para persistir el daño al terminar el
+       encuentro — ver registrar-dano en Mapa.jsx onVictory/onDefeat/onFlee. */
+    owned_id: owned.id,
+    /* vida/escudo ACTUALES (persisten el daño hasta reparar en el hangar) — el máximo
+       real de la nave (con mejoras) viaja aparte en vida_max/escudo_max. */
+    vida: owned.vida_actual, escudo: owned.escudo_actual,
+    vida_max: owned.vida_max ?? nave.vida, escudo_max: owned.escudo_max ?? nave.escudo,
+    ataque: nave.ataque + sumaBonoNave(owned, 'bono_ataque'),
+    defensa: nave.maniobrabilidad + sumaBonoNave(owned, 'bono_defensa'),
+    movimiento: nave.maniobrabilidad + sumaBonoNave(owned, 'bono_movimiento'),
+    iniciativa: nave.velocidad + sumaBonoNave(owned, 'bono_iniciativa'),
+    punteria: nave.ataque + sumaBonoNave(owned, 'bono_punteria'),
     nombre: nave.nombre, photo: mediaUrl(nave.imagen),
     maxFuerza: 10, fuerzaPorTurno: 2,
     arma_equipada: null,
@@ -2185,7 +2208,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
     try {
       const d = await apiPost(`/npcs/${npc.id}/naves/${item.id}/comprar`, {});
       if (d?.credits !== undefined) onCreditsChange?.(d.credits);
-      toast(`${item.nombre} adquirida`, { tone: 'success', icon: 'coin', desc: `-${item.precio_final} cr` });
+      toast('¡Gracias por su compra!', { tone: 'success', icon: 'coin', desc: `${item.nombre} · -${item.precio_final} cr` });
       load();
     } catch (err) {
       toast(err?.message || 'No se pudo completar la compra', { tone: 'error', icon: 'x' });
@@ -2203,8 +2226,9 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
     try {
       const d = await apiPost(`/npcs/${npc.id}/objetos/${confirmItem.id}/comprar`, { cantidad });
       if (d?.credits !== undefined) onCreditsChange?.(d.credits);
-      toast(`${confirmItem.nombre} x${cantidad} adquirido${cantidad > 1 ? 's' : ''}`, {
-        tone: 'success', icon: 'coin', desc: `-${d?.precio_pagado ?? confirmItem.precio_final * cantidad} cr`,
+      toast('¡Gracias por su compra!', {
+        tone: 'success', icon: 'coin',
+        desc: `${confirmItem.nombre} x${cantidad} · -${d?.precio_pagado ?? confirmItem.precio_final * cantidad} cr`,
       });
       cerrarConfirmacion();
       load();
@@ -4270,11 +4294,14 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
         origen: pvpAttackTarget.__origin === 'nave' ? 'nave' : 'normal',
       });
       if (d?.combat) {
+        if (d.nave_advertencia) {
+          toast(d.nave_advertencia, { tone: 'warning', icon: 'ship' });
+        }
         setActivePvpCombat(d.combat);
         setPvpAttackTarget(null);
       }
-    } catch {
-      toast('No se pudo iniciar el combate', { tone: 'error', icon: 'x' });
+    } catch (e) {
+      toast(e?.message || 'No se pudo iniciar el combate', { tone: 'error', icon: 'x' });
       setPvpAttackTarget(null);
     } finally {
       setPvpChallenging(false);
@@ -4573,7 +4600,8 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           npc={activeNaveCombat.npc}
           player={activeNaveCombat.player}
           naveMode
-          onVictory={async () => {
+          onVictory={async (hp) => {
+            await persistNaveDano(activeNaveCombat.player?.owned_id, hp);
             if (activeNaveCombat.pirataEncuentroId) {
               try {
                 const d = await apiPost(`/pirata-encuentros/${activeNaveCombat.pirataEncuentroId}/victoria`, {});
@@ -4588,8 +4616,8 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
             }
             setActiveNaveCombat(null);
           }}
-          onDefeat={() => setActiveNaveCombat(null)}
-          onFlee={() => setActiveNaveCombat(null)}
+          onDefeat={(hp) => { persistNaveDano(activeNaveCombat.player?.owned_id, hp); setActiveNaveCombat(null); }}
+          onFlee={(hp) => { persistNaveDano(activeNaveCombat.player?.owned_id, hp); setActiveNaveCombat(null); }}
         />
       )}
 
