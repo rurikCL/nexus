@@ -198,7 +198,7 @@ function GlobalCard({ mision, completed, onOpen }) {
   );
 }
 
-function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
+export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
   const [busy, setBusy] = useState(false);
   const done = mision.status === 'completada';
   const hitosReq = mision.hito_requerimiento
