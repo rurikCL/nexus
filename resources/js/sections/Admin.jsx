@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return w;
+}
+
 /* ─── AUTH ─────────────────────────────────────────────── */
 const AUTH = () => {
   const t = localStorage.getItem('nx-token');
@@ -251,14 +261,17 @@ const ENTITY_CONFIG = {
       { key: 'forma', label: 'Forma', options: [0,1,2,3,4,5,6,7].map(n => ({ value: String(n), label: n === 0 ? 'Universal (0)' : `Forma ${n}` })) },
     ],
     columns: [
-      { key: 'id',           label: 'ID',      w: 52 },
-      { key: 'icono',        label: 'Icono',   type: 'image', w: 52 },
-      { key: 'nombre',       label: 'Nombre',  bold: true },
-      { key: 'tipo',         label: 'Tipo',    dim: true, w: 80 },
-      { key: 'forma',        label: 'Forma',   dim: true, w: 56 },
-      { key: 'objetivo',     label: 'Obj',     dim: true, w: 60 },
-      { key: 'damage',       label: 'Daño',    dim: true, w: 56 },
-      { key: 'cooldown',     label: 'CD',      dim: true, w: 48 },
+      { key: 'icono',              label: 'Icono',  type: 'image', w: 52 },
+      { key: 'nombre',             label: 'Nombre', bold: true },
+      { key: 'tipo',                label: 'Tipo',   dim: true, w: 80 },
+      { key: 'forma',               label: 'Forma',  dim: true, w: 56 },
+      { key: 'costo_fuerza',        label: 'Fz',     dim: true, w: 48 },
+      { key: 'objetivo',            label: 'Obj',    dim: true, w: 60 },
+      { key: 'damage',              label: 'DA',     dim: true, w: 52 },
+      { key: 'damage_escudo',       label: 'DE',     dim: true, w: 52 },
+      { key: 'damage_perforante',   label: 'DP',     dim: true, w: 52 },
+      { key: 'buff',   label: 'Buff',   dim: true, w: 56, resolve: r => (r.buff?.length   > 0 ? 'Sí' : 'No') },
+      { key: 'debuff', label: 'Debuff', dim: true, w: 64, resolve: r => (r.debuff?.length > 0 ? 'Sí' : 'No') },
     ],
     fields: [
       { key: 'nombre',       label: 'Nombre',                type: 'text',      required: true },
@@ -1562,6 +1575,8 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
 
 /* ─── ADMIN VIEW ─────────────────────────────────────────── */
 export default function AdminView() {
+  const isMobile = useWindowWidth() < 640;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 640);
   const [activeEntity, setActiveEntity] = useState('sistemas');
   const [relatedOptions, setRelatedOptions] = useState({});
 
@@ -1593,7 +1608,7 @@ export default function AdminView() {
 
   return (
     <div className="nx-fade" style={{
-      display: 'grid', gridTemplateColumns: '200px 1fr',
+      display: 'flex',
       height: 'calc(100vh - 100px)', minHeight: 500,
       border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-lg)',
       overflow: 'hidden', background: 'rgba(4,7,15,0.5)',
@@ -1601,29 +1616,55 @@ export default function AdminView() {
 
       {/* ── sidebar interno ── */}
       <aside style={{
+        width: sidebarCollapsed ? 52 : 200, flexShrink: 0,
         borderRight: '1px solid var(--holo-line)',
-        display: 'flex', flexDirection: 'column', overflowY: 'auto',
-        background: 'rgba(4,7,15,0.4)',
+        display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden',
+        background: 'rgba(4,7,15,0.4)', transition: 'width 0.2s ease',
       }}>
-        <div style={{ padding: '14px 12px 10px', borderBottom: '1px solid var(--holo-line)' }}>
-          <div className="nx-kicker" style={{ marginBottom: 2 }}>PANEL</div>
-          <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>Configuración</div>
+        <div style={{
+          padding: '10px 8px', borderBottom: '1px solid var(--holo-line)',
+          display: 'flex', alignItems: 'center', gap: 8,
+          justifyContent: sidebarCollapsed ? 'center' : 'space-between',
+        }}>
+          {!sidebarCollapsed && (
+            <div style={{ minWidth: 0 }}>
+              <div className="nx-kicker" style={{ marginBottom: 2 }}>PANEL</div>
+              <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Configuración</div>
+            </div>
+          )}
+          <button onClick={() => setSidebarCollapsed(c => !c)}
+            title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
+            style={{
+              width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(255,255,255,.04)', border: '1px solid var(--holo-line)', borderRadius: 6,
+              cursor: 'pointer', color: 'var(--txt-dim)',
+            }}
+          >
+            <span style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .2s', display: 'flex' }}>
+              <Icon name="chevron" size={13} />
+            </span>
+          </button>
         </div>
 
         <nav style={{ flex: 1, padding: 6 }}>
           {GROUPS.map(group => (
             <div key={group}>
-              <div className="nx-kicker" style={{ padding: '10px 8px 4px', fontSize: 9, letterSpacing: '0.16em' }}>
-                {group}
-              </div>
+              {!sidebarCollapsed && (
+                <div className="nx-kicker" style={{ padding: '10px 8px 4px', fontSize: 9, letterSpacing: '0.16em' }}>
+                  {group}
+                </div>
+              )}
               {Object.entries(ENTITY_CONFIG)
                 .filter(([, c]) => c.group === group)
                 .map(([key, c]) => {
                   const active = activeEntity === key;
                   return (
-                    <button key={key} onClick={() => setActiveEntity(key)}
+                    <button key={key}
+                      onClick={() => { setActiveEntity(key); if (isMobile) setSidebarCollapsed(true); }}
+                      title={c.label}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                        justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                         padding: '7px 10px', borderRadius: 'var(--radius-sm)', border: 'none',
                         background: active ? 'color-mix(in srgb, var(--holo) 12%, transparent)' : 'transparent',
                         color: active ? 'var(--txt)' : 'var(--txt-dim)',
@@ -1637,7 +1678,7 @@ export default function AdminView() {
                       <span style={{ color: active ? 'var(--holo)' : 'inherit', flexShrink: 0 }}>
                         <Icon name={c.icon} size={13} />
                       </span>
-                      {c.label}
+                      {!sidebarCollapsed && c.label}
                     </button>
                   );
                 })}
@@ -1647,7 +1688,7 @@ export default function AdminView() {
       </aside>
 
       {/* ── contenido ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
         {/* header */}
         <div style={{
           padding: '11px 16px', borderBottom: '1px solid var(--holo-line)',
