@@ -72,7 +72,7 @@ class NpcVendedorController extends Controller
         $precio = $this->precioFinal((int) $nave->costo, (int) $nave->pivot->interes);
 
         if ($character->credits < $precio) {
-            return response()->json(['message' => 'No tienes créditos suficientes.'], 422);
+            return response()->json(['message' => 'No tienes suficientes créditos para realizar la compra.'], 422);
         }
 
         $character->decrement('credits', $precio);
@@ -149,7 +149,7 @@ class NpcVendedorController extends Controller
         $total          = $precioUnitario * $cantidad;
 
         if ($character->credits < $total) {
-            return response()->json(['message' => 'No tienes créditos suficientes.'], 422);
+            return response()->json(['message' => 'No tienes suficientes créditos para realizar la compra.'], 422);
         }
 
         $character->decrement('credits', $total);

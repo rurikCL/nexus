@@ -29,7 +29,8 @@ class NaveController extends Controller
         $naves = $character->naves()
             ->with([
                 'nave.habilidad1', 'nave.habilidad2', 'nave.habilidad3', 'nave.habilidad4',
-                'mejora1', 'mejora2', 'mejora3', 'mejora4',
+                'mejora1.mejoraHabilidad:id,nombre', 'mejora2.mejoraHabilidad:id,nombre',
+                'mejora3.mejoraHabilidad:id,nombre', 'mejora4.mejoraHabilidad:id,nombre',
             ])
             ->get();
 
@@ -161,6 +162,7 @@ class NaveController extends Controller
 
         $mejoras = $character->rolObjetos()
             ->where('tipo', 'mejora_nave')
+            ->with('mejoraHabilidad:id,nombre')
             ->get();
 
         return response()->json(['mejoras' => $mejoras]);

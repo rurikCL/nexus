@@ -2208,7 +2208,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
     try {
       const d = await apiPost(`/npcs/${npc.id}/naves/${item.id}/comprar`, {});
       if (d?.credits !== undefined) onCreditsChange?.(d.credits);
-      toast(`${item.nombre} adquirida`, { tone: 'success', icon: 'coin', desc: `-${item.precio_final} cr` });
+      toast('¡Gracias por su compra!', { tone: 'success', icon: 'coin', desc: `${item.nombre} · -${item.precio_final} cr` });
       load();
     } catch (err) {
       toast(err?.message || 'No se pudo completar la compra', { tone: 'error', icon: 'x' });
@@ -2226,8 +2226,9 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
     try {
       const d = await apiPost(`/npcs/${npc.id}/objetos/${confirmItem.id}/comprar`, { cantidad });
       if (d?.credits !== undefined) onCreditsChange?.(d.credits);
-      toast(`${confirmItem.nombre} x${cantidad} adquirido${cantidad > 1 ? 's' : ''}`, {
-        tone: 'success', icon: 'coin', desc: `-${d?.precio_pagado ?? confirmItem.precio_final * cantidad} cr`,
+      toast('¡Gracias por su compra!', {
+        tone: 'success', icon: 'coin',
+        desc: `${confirmItem.nombre} x${cantidad} · -${d?.precio_pagado ?? confirmItem.precio_final * cantidad} cr`,
       });
       cerrarConfirmacion();
       load();
