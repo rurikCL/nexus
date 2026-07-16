@@ -2,6 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import QrScanner from 'qr-scanner';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
 
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const fn = () => setW(window.innerWidth);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return w;
+}
+
 /* ─── AUTH ─────────────────────────────────────────────────── */
 const api = async (method, path, body) => {
   const res = await fetch(`/api${path}`, {
@@ -447,6 +457,7 @@ function AttendanceScanModal({ sesionId, onClose }) {
 
 /* ─── CLOSE MODAL ────────────────────────────────────────────── */
 function CloseModal({ sesion, onClose, onClosed }) {
+  const isMobile = useWindowWidth() < 640;
   const [form, setForm] = useState({ focus: 'Técnica', effort: 7, note: '', tags: [] });
   const [saving, setSaving] = useState(false);
 
@@ -478,7 +489,7 @@ function CloseModal({ sesion, onClose, onClosed }) {
           Esta acción es irreversible. Se registrará la bitácora global y se cerrará la sesión para nuevas asistencias.
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <div>
             <label className="nx-label">Foco de la sesión</label>
             <select className="nx-select" value={form.focus} onChange={e => upd('focus', e.target.value)}>
@@ -666,6 +677,7 @@ function SesionCard({ sesion, onClick }) {
 
 /* ─── SESSION DETAIL ─────────────────────────────────────────── */
 function SesionDetalle({ id, user, onBack }) {
+  const isMobile = useWindowWidth() < 640;
   const [sesion, setSesion]     = useState(null);
   const [loading, setLoading]   = useState(true);
   const [editPlan, setEditPlan] = useState(false);
@@ -746,14 +758,14 @@ function SesionDetalle({ id, user, onBack }) {
         >
           <Icon name="arrow" size={12} style={{ transform: 'rotate(180deg)' }} /> Volver
         </button>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div className="nx-kicker" style={{ fontSize: 9 }}>{dateStr.toUpperCase()}</div>
-          <div className="nx-display" style={{ fontSize: 18 }}>{sesion.titulo}</div>
+          <div className="nx-display" style={{ fontSize: 18, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sesion.titulo}</div>
         </div>
         <Chip tone={isClosed ? 'dim' : 'green'}>{isClosed ? 'Cerrada' : 'Activa'}</Chip>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 18, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 18, alignItems: 'start' }}>
 
         {/* ── Plan ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

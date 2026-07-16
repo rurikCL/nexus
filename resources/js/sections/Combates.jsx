@@ -836,27 +836,29 @@ export function CombatViewScreen({ combat, onClose, S }) {
 
 /* ===================== RANKING ===================== */
 export function RankingView({ S }) {
+  const isMobile = useWindowWidth() < 640;
   const rk = S.ranking;
   const podium = rk.slice(0, 3);
   const rest = rk.slice(3);
   const order = [1, 0, 2]; // visual: 2º, 1º, 3º
+  const tableCols = isMobile ? '28px 1fr 60px' : '36px 1fr 110px 70px 70px 90px';
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
       <Panel kicker="Temporada 3 · Liga Orbital" title="Escalera de Combate" icon="trophy"
-        right={<div style={{ display: 'flex', gap: 6 }}>{Object.keys(NX.TIERS).map(k => <TierBadge key={k} tier={k} sm />)}</div>}>
+        right={<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{Object.keys(NX.TIERS).map(k => <TierBadge key={k} tier={k} sm />)}</div>}>
         {/* Podio */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, alignItems: 'end', marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: isMobile ? 8 : 14, alignItems: 'end', marginBottom: 20 }}>
           {order.map((idx) => {
             const c = podium[idx]; if (!c) return <div key={idx} />;
             const place = idx + 1;
             const h = place === 1 ? 168 : place === 2 ? 138 : 116;
             const medal = place === 1 ? 'var(--holocron-oro)' : place === 2 ? '#cbd5e1' : '#cd7f32';
             return (
-              <div key={c.id} className="nx-panel solid" style={{ padding: 16, textAlign: 'center', height: h, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', borderColor: place === 1 ? 'var(--holocron-oro)' : undefined, boxShadow: place === 1 ? '0 0 30px -10px var(--holocron-oro)' : undefined }}>
+              <div key={c.id} className="nx-panel solid" style={{ padding: isMobile ? 10 : 16, textAlign: 'center', height: h, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', borderColor: place === 1 ? 'var(--holocron-oro)' : undefined, boxShadow: place === 1 ? '0 0 30px -10px var(--holocron-oro)' : undefined }}>
                 <div className="nx-num" style={{ position: 'absolute', top: 10, left: 0, right: 0, fontSize: place === 1 ? 30 : 22, color: medal }}>#{place}</div>
                 <Avatar c={c} size={place === 1 ? 56 : 46} ring style={{ margin: '0 auto 8px' }} />
-                <div style={{ fontWeight: 700, fontSize: place === 1 ? 15 : 13, color: c.id === 'you' ? 'var(--holocron-naranja)' : 'var(--txt)' }}>{c.name}</div>
+                <div style={{ fontWeight: 700, fontSize: place === 1 ? 15 : 13, color: c.id === 'you' ? 'var(--holocron-naranja)' : 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
                 <div className="nx-num" style={{ fontSize: 13, color: medal, marginTop: 2 }}>{c.wins}W · {c.winrate}%</div>
               </div>
             );
@@ -865,27 +867,34 @@ export function RankingView({ S }) {
 
         {/* Tabla resto */}
         <div style={{ display: 'grid', gap: 6 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 70px 70px 90px', gap: 10, padding: '0 12px' }}>
-            {['#', 'Combatiente', 'Tier', 'Récord', 'Efic.', 'Créditos'].map((h, i) => (
-              <div key={h} className="nx-kicker" style={{ fontSize: 9, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: tableCols, gap: 10, padding: '0 12px' }}>
+            {(isMobile ? ['#', 'Combatiente', 'Efic.'] : ['#', 'Combatiente', 'Tier', 'Récord', 'Efic.', 'Créditos']).map((h, i) => (
+              <div key={h} className="nx-kicker" style={{ fontSize: 9, textAlign: i >= (isMobile ? 2 : 3) ? 'right' : 'left' }}>{h}</div>
             ))}
           </div>
           {rest.map((c, i) => {
             const isYou = c.id === 'you';
             return (
-              <div key={c.id} className="nx-panel solid" style={{ display: 'grid', gridTemplateColumns: '36px 1fr 110px 70px 70px 90px', gap: 10, padding: '10px 12px', alignItems: 'center', borderColor: isYou ? 'var(--holocron-naranja)' : undefined, background: isYou ? 'color-mix(in srgb, var(--holocron-naranja) 8%, var(--space-panel-solid))' : undefined }}>
+              <div key={c.id} className="nx-panel solid" style={{ display: 'grid', gridTemplateColumns: tableCols, gap: 10, padding: '10px 12px', alignItems: 'center', borderColor: isYou ? 'var(--holocron-naranja)' : undefined, background: isYou ? 'color-mix(in srgb, var(--holocron-naranja) 8%, var(--space-panel-solid))' : undefined }}>
                 <span className="nx-num" style={{ fontSize: 15, color: 'var(--txt-faint)' }}>{i + 4}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <Avatar c={c} size={30} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: isYou ? 700 : 500, color: isYou ? 'var(--holocron-naranja)' : 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
                     <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>@{c.handle}</div>
+                    {isMobile && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                        <TierBadge tier={c.tier} sm />
+                        <span className="nx-num" style={{ fontSize: 10, color: 'var(--txt-dim)' }}>{c.wins}-{c.losses}</span>
+                        <span className="nx-num" style={{ fontSize: 10, color: 'var(--holocron-oro)' }}>{(c.credits / 1000).toFixed(1)}k</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <TierBadge tier={c.tier} sm />
-                <span className="nx-num" style={{ fontSize: 13, textAlign: 'right' }}>{c.wins}-{c.losses}</span>
+                {!isMobile && <TierBadge tier={c.tier} sm />}
+                {!isMobile && <span className="nx-num" style={{ fontSize: 13, textAlign: 'right' }}>{c.wins}-{c.losses}</span>}
                 <span className="nx-num" style={{ fontSize: 13, textAlign: 'right', color: 'var(--holo)' }}>{c.winrate}%</span>
-                <span className="nx-num" style={{ fontSize: 13, textAlign: 'right', color: 'var(--holocron-oro)' }}>{(c.credits / 1000).toFixed(1)}k</span>
+                {!isMobile && <span className="nx-num" style={{ fontSize: 13, textAlign: 'right', color: 'var(--holocron-oro)' }}>{(c.credits / 1000).toFixed(1)}k</span>}
               </div>
             );
           })}

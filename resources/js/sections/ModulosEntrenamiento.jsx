@@ -51,6 +51,16 @@ const RANGO_LABEL = {
   maestro:     'Maestros',
 };
 
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return w;
+}
+
 const TOKEN = () => localStorage.getItem('nx-token');
 
 const api = {
@@ -220,6 +230,7 @@ function ModuloCard({ modulo, isAdmin, onEdit, onDelete, onClick }) {
 
 /* ---- Modal de detalle ---- */
 function ModuloDetailModal({ modulo, onClose }) {
+  const isMobile = useWindowWidth() < 640;
   if (!modulo) return null;
   const forma = NX.CLASSES.find(c => c.id === modulo.forma);
   const nivelColor = NIVEL_COLOR[modulo.nivel_dificultad] ?? '#38cdf0';
@@ -229,7 +240,7 @@ function ModuloDetailModal({ modulo, onClose }) {
       <div style={{ display: 'grid', gap: 20 }}>
         {/* Fotos */}
         {modulo.fotos?.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)', gap: 8 }}>
             {modulo.fotos.map((src, i) => (
               <div key={i} style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', aspectRatio: '1' }}>
                 <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -329,6 +340,7 @@ const EMPTY_FORM = {
 };
 
 function ModuloForm({ initial, onSave, onClose, saving }) {
+  const isMobile = useWindowWidth() < 640;
   const [form, setForm] = useState(() => initial
     ? { ...EMPTY_FORM, ...initial, objetivos: initial.objetivos ?? [], fotos: initial.fotos ?? [], revisado_por: initial.revisado_por?.id ?? '', estado: initial.estado ?? 'pendiente' }
     : { ...EMPTY_FORM });
@@ -413,7 +425,7 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
         </div>
 
         {/* Foco / Forma / Nivel / Rango / Esfuerzo */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <div>
             <label className="nx-label">Foco</label>
             <select className="nx-select" value={form.foco} onChange={e => set('foco', e.target.value)}>
@@ -500,7 +512,7 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
           </div>
 
           {form.fotos.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)', gap: 8 }}>
               {form.fotos.map((src, i) => (
                 <div key={i} style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', aspectRatio: '1' }}>
                   <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.75 }} />
@@ -522,7 +534,7 @@ function ModuloForm({ initial, onSave, onClose, saving }) {
         </div>
 
         {/* Estado + Revisado por */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
           <div>
             <label className="nx-label">Estado</label>
             <select className="nx-select" value={form.estado} onChange={e => set('estado', e.target.value)}>
