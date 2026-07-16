@@ -37,8 +37,8 @@ function classifyPvpAttack(entry, combat, myId) {
 
   const hit = msgs.some((m) => /¡Impacto!|¡CRÍTICO!/.test(m));
   const crit = msgs.some((m) => /¡CRÍTICO!/.test(m));
-  const dmgMatch = msgs.join(' ').match(/−(\d+) daño/);
-  const dmg = dmgMatch ? Number(dmgMatch[1]) : 0;
+  // Un mismo mensaje puede reportar dos cifras de daño (p. ej. escudo perforado) — se suman todas.
+  const dmg = [...msgs.join(' ').matchAll(/−(\d+) daño/g)].reduce((sum, m) => sum + Number(m[1]), 0);
   return { actorIsMe, ranged, hit, crit, dmg };
 }
 
@@ -770,6 +770,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                     {!isSelf && (
                       <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
                         DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
+                        {!!hab.damage_perforante && (
+                          <span style={{ color: '#8aa0c0' }}>
+                            {' '}+{effective ? Math.round(hab.damage_perforante * 1.5) : hab.damage_perforante}P
+                          </span>
+                        )}
                       </span>
                     )}
                     {isSelf && (
@@ -814,7 +819,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               }}>
                 {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
               </span>
-              <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {me.arma_equipada?.dano ?? 3}</span>
+              <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                DMG {me.arma_equipada?.dano ?? 3}
+                {!!me.arma_equipada?.dano_perforante && (
+                  <span style={{ color: '#8aa0c0' }}> +{me.arma_equipada.dano_perforante}P</span>
+                )}
+              </span>
             </button>
           )}
 

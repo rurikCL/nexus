@@ -20,6 +20,7 @@ class RolHabilidad extends Model
         'efecto',
         'damage',
         'damage_escudo',
+        'damage_perforante',
         'cooldown',
         'objetivo',
         'buff',
@@ -32,6 +33,7 @@ class RolHabilidad extends Model
         'costo_fuerza'  => 'integer',
         'damage'        => 'integer',
         'damage_escudo' => 'integer',
+        'damage_perforante' => 'integer',
         'cooldown'      => 'integer',
         'duracion'      => 'integer',
     ];

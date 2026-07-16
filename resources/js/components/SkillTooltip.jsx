@@ -39,6 +39,7 @@ export function SkillTooltip({ hab }) {
             ? <Chip color="#ff7043">DMG ESC +{hab.damage_escudo}</Chip>
             : <Chip color="#38cdf0">CURA ESC +{-hab.damage_escudo}</Chip>
         )}
+        {!!hab.damage_perforante && <Chip color="#8aa0c0">DMG PERF +{hab.damage_perforante}</Chip>}
       </div>
 
       {hab.efecto && (

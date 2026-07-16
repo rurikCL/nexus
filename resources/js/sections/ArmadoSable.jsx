@@ -46,6 +46,7 @@ export const BONUS_FIELDS = [
   { key: 'bono_vida',       label: 'VID', color: '#ff2d45', icon: 'zap'    },
   { key: 'bono_escudo',     label: 'ESC', color: '#26e3e3', icon: 'shield' },
   { key: 'bono_dano',       label: 'DMG', color: '#ff5f2e', icon: 'flame'    },
+  { key: 'bono_dano_perforante', label: 'DMGP', color: '#8aa0c0', icon: 'fire' },
   { key: 'bono_critico',    label: 'CRT', color: '#f43f5e', icon: 'target'   },
   { key: 'bono_fuerza',     label: 'FZ',  color: '#22c55e', icon: 'dumbbell' },
   { key: 'bono_generacion_fuerza', label: 'GEN', color: '#84cc16', icon: 'trending' },

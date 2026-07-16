@@ -242,14 +242,38 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       .catch(() => {});
   }, []);
 
-  /* Mientras haya escudo (>0), absorbe TODO el golpe (dmg + dmgEscudo si corresponde)
-     sin dejar pasar nada a la vida. Con el escudo ya en 0, solo dmg pasa directo a la vida. */
-  const applyDmg = (dmg, hp, dmgEscudo = 0) => {
-    if (hp.escudo > 0) {
-      const total = dmg + Math.max(0, dmgEscudo);
-      return { escudo: Math.max(0, hp.escudo - total), vida: hp.vida };
+  /* Daño con tres componentes: dmg (normal), dmgEscudo (extra solo contra escudo)
+     y dmgPerforante (ignora el escudo, siempre pasa a la vida). Sin escudo, todo
+     (dmg + dmgPerforante) pasa a la vida. Con escudo: si dmgEscudo por sí solo no
+     agota el escudo restante, este absorbe dmg + dmgEscudo por completo (sin dejar
+     pasar nada) y solo el perforante llega a la vida; si dmgEscudo por sí solo SÍ
+     agota el escudo, éste queda en 0 y el resto (dmg + dmgPerforante) pasa directo
+     a la vida. Misma lógica que PvpCombatController::applyDamage. */
+  const applyDmg = (dmg, hp, dmgEscudo = 0, dmgPerforante = 0) => {
+    if (hp.escudo <= 0) {
+      return { escudo: 0, vida: Math.max(0, hp.vida - dmg - dmgPerforante) };
     }
-    return { escudo: 0, vida: Math.max(0, hp.vida - dmg) };
+    const escudoTrasComponenteEscudo = Math.max(0, hp.escudo - Math.max(0, dmgEscudo));
+    if (escudoTrasComponenteEscudo > 0) {
+      return { escudo: Math.max(0, escudoTrasComponenteEscudo - dmg), vida: Math.max(0, hp.vida - dmgPerforante) };
+    }
+    return { escudo: 0, vida: Math.max(0, hp.vida - dmg - dmgPerforante) };
+  };
+
+  /* Describe en texto el reparto de daño entre escudo y vida — misma lógica que applyDmg */
+  const describeDano = (dmg, dmgEscudo, dmgPerforante, escudoAntes) => {
+    if (escudoAntes <= 0) {
+      return `−${dmg + dmgPerforante} daño a la vida`;
+    }
+    const escudoTrasComponenteEscudo = Math.max(0, escudoAntes - Math.max(0, dmgEscudo));
+    if (escudoTrasComponenteEscudo > 0) {
+      const totalEscudo = dmg + Math.max(0, dmgEscudo);
+      return dmgPerforante > 0
+        ? `−${totalEscudo} daño al escudo, −${dmgPerforante} daño perforante a la vida`
+        : `−${totalEscudo} daño al escudo`;
+    }
+    const totalVida = dmg + dmgPerforante;
+    return `−${Math.max(0, dmgEscudo)} daño al escudo — ¡escudo perforado! −${totalVida} daño a la vida`;
   };
 
   /* Iniciativa — solo si es combate nuevo (no restaurado) */
@@ -474,16 +498,18 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     if (hit) {
       let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
       let dmgEscudo = hab.damage_escudo ?? 0;
+      let dmgPerforante = hab.damage_perforante ?? 0;
       const effective = formaEsEfectiva(hab.forma, npc.forma ?? 0);
       if (effective) {
         dmg = Math.round(dmg * 1.5);
         dmgEscudo = Math.round(dmgEscudo * 1.5);
+        dmgPerforante = Math.round(dmgPerforante * 1.5);
         entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
       }
-      const tieneEscudo = npcHp.escudo > 0;
-      dmgAplicado = tieneEscudo ? dmg + Math.max(0, dmgEscudo) : dmg;
-      newNpcHp = applyDmg(dmg, npcHp, dmgEscudo);
-      entries.push({ text: `¡Impacto! −${dmgAplicado} daño ${tieneEscudo ? 'al escudo' : 'a la vida'}`, type: 'success' });
+      dmgAplicado = dmg + dmgPerforante + (npcHp.escudo > 0 ? Math.max(0, dmgEscudo) : 0);
+      const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, npcHp.escudo);
+      newNpcHp = applyDmg(dmg, npcHp, dmgEscudo, dmgPerforante);
+      entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
 
       if (habDebuff.length > 0) {
         setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);
@@ -580,15 +606,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     let newNpcHp = { ...npcHp };
     let dmg = 0;
+    let dmgTotal = 0;
     if (hit) {
       dmg = (arma?.dano ?? 3) + (esCritico ? 1 : 0);
-      newNpcHp = applyDmg(dmg, npcHp);
-      entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) −${dmg} daño` : `¡Impacto! −${dmg} daño`, type: 'success' });
+      const dmgPerforante = arma?.dano_perforante ?? 0;
+      dmgTotal = dmg + dmgPerforante;
+      const descDano = describeDano(dmg, 0, dmgPerforante, npcHp.escudo);
+      newNpcHp = applyDmg(dmg, npcHp, 0, dmgPerforante);
+      entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) ${descDano}` : `¡Impacto! ${descDano}`, type: 'success' });
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit, crit: esCritico, dmg });
+    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit, crit: esCritico, dmg: dmgTotal });
 
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
@@ -940,6 +970,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                       {!isSelf && (
                         <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
                           DMG {hab.damage}
+                          {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
                         </span>
                       )}
                       {isSelf && (
@@ -980,7 +1011,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                   }}>
                     {player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
                   </span>
-                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>DMG {player.arma_equipada?.dano ?? 3}</span>
+                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                    DMG {player.arma_equipada?.dano ?? 3}
+                    {!!player.arma_equipada?.dano_perforante && (
+                      <span style={{ color: '#8aa0c0' }}> +{player.arma_equipada.dano_perforante}P</span>
+                    )}
+                  </span>
                 </ActionBtn>
               </>
             )}

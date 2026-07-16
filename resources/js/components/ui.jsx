@@ -48,6 +48,8 @@ export const ICON_PATHS = {
   message:   'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
   ship:      'M12 2v13M12 2 7 9h10zM4 21l8-4 8 4M6 15l-2 6M18 15l2 6',
   fuel:      'M6 3h7v10H6zM13 6h2l3 3v8a1.5 1.5 0 0 1-3 0v-4h-2M8 3v0M11 3v0M6 21h7',
+  box:       'M3 8l9-5 9 5-9 5-9-5zM3 8v9l9 5 9-5V8M12 13v9',
+  settings:  'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.07-.4.1-.8.1-1.2z',
 };
 export function Icon({ name, size = 18, stroke = 1.8, fill = false, style, ...rest }) {
   const d = ICON_PATHS[name];
