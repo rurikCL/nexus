@@ -280,7 +280,14 @@ export function ComandoView({ S, go, user, onGoToCombat }) {
           <Avatar c={me} size={isMobile ? 64 : 86} ring />
           <div style={{ flex: 1, minWidth: isMobile ? 140 : 220 }}>
             <div className="nx-kicker">Combatiente{me.sector ? ` · ${me.sector}` : ''}</div>
-            <h1 className="nx-display" style={{ fontSize: isMobile ? 22 : 30, margin: '4px 0 8px', color: 'var(--txt)' }}>{ch.name}</h1>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '4px 0 8px', flexWrap: 'wrap' }}>
+              <h1 className="nx-display" style={{ fontSize: isMobile ? 22 : 30, margin: 0, color: 'var(--txt)' }}>{ch.name}</h1>
+              {user?.character?.titulo_activo && (
+                <span className="nx-data" style={{ fontSize: isMobile ? 11 : 13, color: 'var(--holocron-oro)' }}>
+                  {user.character.titulo_activo.nombre}
+                </span>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <TierBadge tier={myTier} />
               {(() => { const c = NX.CLASSES.find(x => x.id === ch.cls); return c ? <Chip icon={c.icon}>{c.num} · {c.name}</Chip> : null; })()}
@@ -1204,6 +1211,72 @@ function NaveMiniStatBar({ label, value, max, color }) {
   );
 }
 
+/** 4 slots para instalar mejoras (rol_objetos tipo mejora_nave) en una nave poseída. */
+function NaveMejorasSlots({ owned, onChanged }) {
+  const [mejoras, setMejoras] = useState([]);
+  const [busySlot, setBusySlot] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  useEffect(() => {
+    fetch(`/api/naves/${owned.id}/mejoras-options`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { mejoras: [] })
+      .then(d => setMejoras(d.mejoras ?? []))
+      .catch(() => {});
+  }, [owned.id]);
+
+  const setSlot = async (slot, objetoId) => {
+    setBusySlot(slot);
+    try {
+      const res = await fetch(`/api/naves/${owned.id}/mejoras/${slot}`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ objeto_id: objetoId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? data.error ?? 'No se pudo actualizar la mejora.');
+      onChanged?.();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo actualizar la mejora', { tone: 'error' });
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--holo-line)' }}>
+      <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 6 }}>Mejoras instaladas (4 slots)</div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {[1, 2, 3, 4].map(slot => {
+          const current = owned[`mejora${slot}`];
+          return (
+            <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 9, color: 'var(--txt-faint)', width: 46, flexShrink: 0, fontFamily: 'var(--font-data)' }}>Slot {slot}</span>
+              <select className="nx-select" style={{ flex: 1, fontSize: 11 }}
+                value={current?.id ?? ''}
+                disabled={busySlot === slot}
+                onChange={e => setSlot(slot, e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">— Vacío —</option>
+                {current && !mejoras.some(m => m.id === current.id) && (
+                  <option value={current.id}>{current.nombre}</option>
+                )}
+                {mejoras.map(m => (
+                  <option key={m.id} value={m.id}>{m.nombre}</option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+      {mejoras.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 6 }}>
+          No posees mejoras de nave en tu inventario. Consíguelas con un vendedor.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NaveEquipadaPanel() {
   const [naves, setNaves] = useState([]);
   const [naveEquipadaId, setNaveEquipadaId] = useState(null);
@@ -1272,26 +1345,27 @@ function NaveEquipadaPanel() {
                   <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{equipada.nave?.nombre}</div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                     <Chip tone="green" icon="check">Equipada</Chip>
-                    <Chip tone="dim">+{equipada.nave?.capacidad_carga ?? 0} carga</Chip>
+                    <Chip tone="dim">+{equipada.capacidad_carga_max ?? 0} carga</Chip>
                   </div>
                 </div>
                 <Btn kind="ghost" sm onClick={desequipar} disabled={busy === 'unequip'}>Desequipar</Btn>
               </div>
               <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
-                <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.nave?.vida ?? 0}            color="#4ade80" />
-                <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.nave?.escudo ?? 0}          color="#38cdf0" />
-                <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.nave?.capacidad_salto ?? 0} color="var(--holocron-oro)" />
+                <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.vida_max ?? 0}            color="#4ade80" />
+                <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.escudo_max ?? 0}          color="#38cdf0" />
+                <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.capacidad_salto_max ?? 0} color="var(--holocron-oro)" />
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <Btn kind="ghost" sm icon="fuel" onClick={() => reabastecer(equipada)}
-                  disabled={busy === `fuel-${equipada.id}` || equipada.combustible_actual >= (equipada.nave?.capacidad_salto ?? 0)}>
+                  disabled={busy === `fuel-${equipada.id}` || equipada.combustible_actual >= (equipada.capacidad_salto_max ?? 0)}>
                   Reabastecer ({fmtCr(equipada.nave?.costo_combustible)})
                 </Btn>
                 <Btn kind="ghost" sm icon="shield" onClick={() => reparar(equipada)}
-                  disabled={busy === `fix-${equipada.id}` || (equipada.vida_actual >= (equipada.nave?.vida ?? 0) && equipada.escudo_actual >= (equipada.nave?.escudo ?? 0))}>
-                  Reparar ({fmtCr(equipada.nave?.costo_reparacion)})
+                  disabled={busy === `fix-${equipada.id}` || (equipada.vida_actual >= (equipada.vida_max ?? 0) && equipada.escudo_actual >= (equipada.escudo_max ?? 0))}>
+                  Reparar ({fmtCr(equipada.costo_reparacion_final)})
                 </Btn>
               </div>
+              <NaveMejorasSlots owned={equipada} onChanged={load} />
             </div>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>

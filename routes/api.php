@@ -193,6 +193,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/naves/{ownedId}/equipar', [NaveController::class, 'equipar']);
     Route::post('/naves/{ownedId}/reabastecer', [NaveController::class, 'reabastecer']);
     Route::post('/naves/{ownedId}/reparar', [NaveController::class, 'reparar']);
+    Route::post('/naves/{ownedId}/registrar-dano', [NaveController::class, 'registrarDano']);
+    Route::get('/naves/{ownedId}/mejoras-options', [NaveController::class, 'mejorasOptions']);
+    Route::post('/naves/{ownedId}/mejoras/{slot}', [NaveController::class, 'equiparMejora']);
 
     // Sesiones de entrenamiento
     Route::get('/sesiones/disponibles', [SesionEntrenamientoController::class, 'disponibles']);

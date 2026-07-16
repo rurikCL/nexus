@@ -48,6 +48,7 @@ const TIPO_OBJETO_OPTS = [
   { value: 'empunadura',         label: 'Empuñadura' },
   { value: 'modulo_activacion',  label: 'Módulo de Activación' },
   { value: 'accesorio',          label: 'Accesorio' },
+  { value: 'mejora_nave',        label: 'Mejora de Nave' },
 ];
 const TIPO_NPC_OPTS   = [
   'aliado', 'neutral', 'hostil', 'entrenador', 'mercader', { value: 'mision', label: 'misión' }, 'jefe',
@@ -319,6 +320,11 @@ const ENTITY_CONFIG = {
       { key: 'consumo_energia', label: 'Consumo de Energía', type: 'number', min: 0, hint: 'Energía que consume esta pieza al instalarse en un sable' },
       { key: 'energia_maxima',  label: 'Energía Máxima',     type: 'number', min: 0, hint: 'Solo si tipo = nucleo_energia · energía máxima total que el sable puede soportar' },
       { key: 'color_hoja',      label: 'Color de hoja',   type: 'select', options: SABER_OPTS, hint: 'Solo si tipo = cristal · define el color del sable al activarlo' },
+      { key: 'bono_capacidad_carga', label: 'Bono Capacidad de Carga', type: 'number', min: -999, hint: 'Solo si tipo = mejora_nave · aumenta la capacidad de carga de la nave' },
+      { key: 'bono_capacidad_salto', label: 'Bono Capacidad de Salto', type: 'number', min: -999, hint: 'Solo si tipo = mejora_nave · aumenta el combustible máximo (salto hiperespacial) de la nave' },
+      { key: 'bono_costo_reparacion', label: 'Bono Costo de Reparación', type: 'number', min: -999999, hint: 'Solo si tipo = mejora_nave · negativo = abarata reparar la nave (mínimo 0 créditos)' },
+      { key: 'mejora_habilidad_id', label: 'Habilidad afectada (cooldown)', type: 'relatedSelect', related: 'rol_habilidades_nave', span: 2, hint: 'Solo si tipo = mejora_nave · habilidad de nave cuyo cooldown reduce "Bono Cooldown"' },
+      { key: 'bono_cooldown',   label: 'Bono Cooldown', type: 'number', min: -99, hint: 'Solo si tipo = mejora_nave · negativo = reduce el cooldown (en rondas) de la habilidad seleccionada' },
     ],
     defaults: { activo: true },
   },

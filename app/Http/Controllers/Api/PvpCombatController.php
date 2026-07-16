@@ -94,11 +94,22 @@ class PvpCombatController extends Controller
          * cualquier otro caso (vista de lugar, zona, sistema, o falta de nave de
          * alguno de los dos) el combate es PvP normal de personaje. */
         $modo = 'normal';
+        $naveAdvertencia = null;
         if (($data['origen'] ?? 'normal') === 'nave') {
             $attackerNave = self::getNaveOwned($attacker->character);
             $defenderNave = self::getNaveOwned($defender->character);
             if ($attackerNave && $attackerNave->nave && $defenderNave && $defenderNave->nave) {
                 $modo = 'naval';
+
+                if ($attackerNave->vida_actual <= 0) {
+                    return response()->json([
+                        'error' => 'Tu nave está rota — no puedes combatir. Repárala en el hangar antes de volver a intentarlo.',
+                    ], 422);
+                }
+                if ($attackerNave->vida_actual < $attackerNave->nave->vida || $attackerNave->escudo_actual < $attackerNave->nave->escudo) {
+                    $naveAdvertencia = "Tu nave está dañada ({$attackerNave->vida_actual}/{$attackerNave->nave->vida} vida, "
+                        ."{$attackerNave->escudo_actual}/{$attackerNave->nave->escudo} escudo) — considera repararla en el hangar.";
+                }
             }
         }
 
@@ -157,6 +168,7 @@ class PvpCombatController extends Controller
 
         return response()->json([
             'combat' => $this->formatCombat($combat->load(self::WITHS), $attacker->id),
+            'nave_advertencia' => $naveAdvertencia,
         ], 201);
     }
 
@@ -465,10 +477,18 @@ class PvpCombatController extends Controller
                 return response()->json(['error' => "Fuerza insuficiente ({$myFuerza}/{$hab->costo_fuerza})"], 422);
             }
 
-            /* Gastar fuerza y registrar cooldown */
+            /* Gastar fuerza y registrar cooldown (las mejoras de nave pueden reducir el
+             * cooldown de una habilidad específica — ver CharacterNave::bonoCooldownParaHabilidad) */
             $myFuerza -= $hab->costo_fuerza;
-            if ($hab->cooldown > 0) {
-                $myCooldowns[(string) $skillId] = $hab->cooldown;
+            $habCooldown = $hab->cooldown;
+            if ($combat->modo === 'naval') {
+                $actorNaveOwned = self::getNaveOwned($actorChar);
+                if ($actorNaveOwned) {
+                    $habCooldown = max(0, $habCooldown + $actorNaveOwned->bonoCooldownParaHabilidad($hab->id));
+                }
+            }
+            if ($habCooldown > 0) {
+                $myCooldowns[(string) $skillId] = $habCooldown;
             }
 
             /* Aplicar buff al actor (siempre al usar la habilidad) */
@@ -883,14 +903,16 @@ class PvpCombatController extends Controller
         if ($naveOwned && $naveOwned->nave) {
             $nave = $naveOwned->nave;
 
+            /* Bonos de las mejoras instaladas en los 4 slots de la nave (rol_objetos
+             * tipo mejora_nave) — ver CharacterNave::sumaBono(). */
             return [
-                'vida' => $naveOwned->vida_actual,
-                'escudo' => $naveOwned->escudo_actual,
-                'ataque' => $nave->ataque,
-                'defensa' => $nave->maniobrabilidad,
-                'movimiento' => $nave->maniobrabilidad,
-                'iniciativa' => $nave->velocidad,
-                'punteria' => $nave->ataque,
+                'vida' => min($naveOwned->vida_actual, $naveOwned->maxVidaConMejoras()),
+                'escudo' => min($naveOwned->escudo_actual, $naveOwned->maxEscudoConMejoras()),
+                'ataque' => $nave->ataque + $naveOwned->sumaBono('bono_ataque'),
+                'defensa' => $nave->maniobrabilidad + $naveOwned->sumaBono('bono_defensa'),
+                'movimiento' => $nave->maniobrabilidad + $naveOwned->sumaBono('bono_movimiento'),
+                'iniciativa' => $nave->velocidad + $naveOwned->sumaBono('bono_iniciativa'),
+                'punteria' => $nave->ataque + $naveOwned->sumaBono('bono_punteria'),
             ];
         }
 
@@ -1026,18 +1048,18 @@ class PvpCombatController extends Controller
     {
         $naveOwned = $modo === 'naval' ? self::getNaveOwned($char) : null;
         if ($naveOwned && $naveOwned->nave) {
-            return (int) $naveOwned->nave->vida;
+            return $naveOwned->maxVidaConMejoras();
         }
 
         return (int) self::getCombatStats($char, $modo)['vida'];
     }
 
-    /** Escudo máximo para topar curaciones de escudo: escudo base de la nave si el combate es naval, o de combate del personaje */
+    /** Escudo máximo para topar curaciones de escudo: escudo base de la nave (+mejoras) si el combate es naval, o de combate del personaje */
     private static function getMaxEscudo(?object $char, string $modo = 'normal'): int
     {
         $naveOwned = $modo === 'naval' ? self::getNaveOwned($char) : null;
         if ($naveOwned && $naveOwned->nave) {
-            return (int) $naveOwned->nave->escudo;
+            return $naveOwned->maxEscudoConMejoras();
         }
 
         return (int) self::getCombatStats($char, $modo)['escudo'];

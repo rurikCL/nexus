@@ -100,7 +100,11 @@ function SpaceBackground() {
 export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false }) {
   const d20 = () => Math.floor(Math.random() * 20) + 1;
 
-  const maxPlayer = { vida: player.vida, escudo: player.escudo };
+  /* En combate naval, `player.vida`/`.escudo` es el HP/escudo ACTUAL (posiblemente
+     dañado, persiste hasta reparar) — el máximo real de la nave viaja aparte en
+     `vida_max`/`escudo_max`. Fuera de combate naval no se pasan (el personaje siempre
+     empieza cada combate a full), así que caen de vuelta a player.vida/escudo. */
+  const maxPlayer = { vida: player.vida_max ?? player.vida, escudo: player.escudo_max ?? player.escudo };
   const maxNpc    = { vida: Math.max(npc.vida, 1), escudo: npc.escudo ?? 0 };
 
   const npcAtk = Math.max(npc.ataque,     1);
@@ -112,7 +116,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const maxFuerza      = player.maxFuerza      ?? 10;
   const fuerzaPorTurno = player.fuerzaPorTurno ?? 2;
 
-  const [playerHp,     setPlayerHp]     = useState(initialState?.playerHp ?? { vida: maxPlayer.vida, escudo: maxPlayer.escudo });
+  const [playerHp,     setPlayerHp]     = useState(initialState?.playerHp ?? { vida: player.vida, escudo: player.escudo });
   const [npcHp,        setNpcHp]        = useState(initialState?.npcHp    ?? { vida: maxNpc.vida,    escudo: maxNpc.escudo    });
   const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
   const [currTurn,     setCurrTurn]     = useState(initialState?.currTurn  ?? null);
@@ -573,7 +577,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     if (success) {
       localStorage.removeItem(NPC_COMBAT_LS);
       setPhase('fled');
-      onFlee?.();
+      onFlee?.(playerHp);
     } else {
       endTurnAfter('player');
     }
@@ -1306,8 +1310,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         planetaNombre={planetaNombre} lugarNombre={lugarNombre} lugarImagen={lugarImagen} planetaImagen={planetaImagen}
         onClose={() => {
           localStorage.removeItem(NPC_COMBAT_LS);
-          if (phase === 'victory') onVictory?.();
-          else onDefeat?.();
+          if (phase === 'victory') onVictory?.(playerHp);
+          else onDefeat?.(playerHp);
         }}
       />,
       container
