@@ -23,7 +23,7 @@ class NpcVendedorController extends Controller
     }
 
     /** GET /npcs/{npc}/tienda-naves */
-    public function tiendaNaves(int $npcId): JsonResponse
+    public function tiendaNaves(Request $request, int $npcId): JsonResponse
     {
         $npc = MapNpc::with('naves.habilidad1', 'naves.habilidad2', 'naves.habilidad3', 'naves.habilidad4')
             ->findOrFail($npcId);
@@ -51,7 +51,10 @@ class NpcVendedorController extends Controller
                 ->values(),
         ])->values();
 
-        return response()->json(['naves' => $naves]);
+        return response()->json([
+            'naves'   => $naves,
+            'credits' => $request->user()->character?->credits,
+        ]);
     }
 
     /** POST /npcs/{npc}/naves/{nave}/comprar */
@@ -115,7 +118,11 @@ class NpcVendedorController extends Controller
             'capacidad' => $character->capacidadCarga(),
         ] : null;
 
-        return response()->json(['objetos' => $objetos, 'inventario' => $inventario]);
+        return response()->json([
+            'objetos'    => $objetos,
+            'inventario' => $inventario,
+            'credits'    => $character?->credits,
+        ]);
     }
 
     /** POST /npcs/{npc}/objetos/{objeto}/comprar */

@@ -781,8 +781,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                         ? 'rgba(16,185,129,0.12)'
                         : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
                       border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      gap: 1, padding: '2px 5px', opacity: disabled ? 0.45 : 1,
+                      display: 'flex', flexDirection: 'row', alignItems: 'stretch', textAlign: 'left',
+                      gap: 6, padding: 4, opacity: disabled ? 0.45 : 1,
                       position: 'relative', transition: 'all 0.13s',
                     }}
                     onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
@@ -805,37 +805,52 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                         color: '#10b981', fontFamily: 'var(--font-data)', fontWeight: 700, zIndex: 1,
                       }}>EFF</div>
                     )}
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
-                    <span style={{
-                      fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
-                    }}>{hab.nombre}</span>
-                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                      {!isSelf && (
-                        <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
-                          DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
-                          {!!hab.damage_perforante && (
-                            <span style={{ color: '#8aa0c0' }}>
-                              {' '}+{effective ? Math.round(hab.damage_perforante * 1.5) : hab.damage_perforante}P
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      {isSelf && (
-                        <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
-                      )}
+                    {/* Imagen de la habilidad */}
+                    <div style={{
+                      width: 40, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
+                      background: 'rgba(0,0,0,0.28)', display: 'grid', placeItems: 'center',
+                    }}>
+                      {hab.icono_url
+                        ? <img src={hab.icono_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontSize: 16, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
+                      }
+                    </div>
+                    {/* Nombre + datos */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
                       <span style={{
-                        fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
-                        background: noFuerza ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
-                        color: noFuerza ? '#ff6b6b' : '#38cdf0',
-                      }}>
-                        ⚡{hab.costo_fuerza}
-                      </span>
-                      {hab.forma > 0 && (
-                        <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
-                          F{formaLabel(hab.forma)}
+                        fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', fontWeight: 700, letterSpacing: '0.02em',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+                      }}>{hab.nombre}</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.55)', fontFamily: 'var(--font-data)' }}>
+                          {hab.tipo === 'melee' ? '⚔ Melee' : hab.tipo === 'nave' ? '🚀 Nave' : '◎ Distancia'}
                         </span>
-                      )}
+                        {!isSelf && (
+                          <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
+                            DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
+                            {!!hab.damage_perforante && (
+                              <span style={{ color: '#8aa0c0' }}>
+                                {' '}+{effective ? Math.round(hab.damage_perforante * 1.5) : hab.damage_perforante}P
+                              </span>
+                            )}
+                          </span>
+                        )}
+                        {isSelf && (
+                          <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                        )}
+                        <span style={{
+                          fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                          background: noFuerza ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                          color: noFuerza ? '#ff6b6b' : '#38cdf0',
+                        }}>
+                          ⚡{hab.costo_fuerza}
+                        </span>
+                        {hab.forma > 0 && (
+                          <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
+                            F{formaLabel(hab.forma)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -858,7 +873,15 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
               >
-                <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
+                {me.arma_equipada?.imagen ? (
+                  <div style={{ width: 26, height: 26, borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
+                    <img src={mediaUrl(me.arma_equipada.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ) : me.arma_equipada?.es_sable ? (
+                  <Icon name="sword" size={18} style={{ color: NX.SABERS[me.arma_equipada.color_hoja] ?? '#ff9955', filter: `drop-shadow(0 0 4px ${NX.SABERS[me.arma_equipada.color_hoja] ?? '#ff9955'})` }} />
+                ) : (
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>✊</span>
+                )}
                 <span style={{
                   fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
                   maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -886,7 +909,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
               >
-                <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+                {NX.CLASSES[myCurrentForma - 1]?.img ? (
+                  <div style={{ width: 22, height: 22, borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
+                    <img src={NX.CLASSES[myCurrentForma - 1].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+                )}
                 <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[myCurrentForma - 1] ?? `F${myCurrentForma}`}</span>
                 <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
               </button>

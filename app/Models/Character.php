@@ -213,6 +213,7 @@ class Character extends Model
                 'critico' => 0,
                 'es_sable' => false,
                 'color_hoja' => null,
+                'imagen' => $arma->imagen,
             ];
         }
 

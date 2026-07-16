@@ -887,6 +887,7 @@ class PvpCombatController extends Controller
         return [
             'id' => $h->id,
             'nombre' => $h->nombre,
+            'icono_url' => $h->icono ? Storage::disk('public')->url($h->icono) : null,
             'tipo' => $h->tipo,
             'forma' => $h->forma,
             'costo_fuerza' => $h->costo_fuerza,

@@ -1993,6 +1993,7 @@ function getPlayerCombatStats(character) {
           tipo_ataque: character.arma_efectiva.tipo_ataque,
           es_sable: character.arma_efectiva.es_sable ?? false,
           color_hoja: character.arma_efectiva.color_hoja ?? null,
+          imagen: character.arma_efectiva.imagen ?? null,
         }
       : null,
     current_forma:         formaEspecializacion(character),
@@ -2181,6 +2182,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
   const isNaves = tipo === 'vendedor_naves';
   const [items, setItems]         = useState([]);
   const [inventario, setInventario] = useState(null); // { ocupado, capacidad } — solo objetos
+  const [credits, setCredits]     = useState(null);
   const [loading, setLoading]     = useState(true);
   const [busy, setBusy]           = useState(null);
   const [confirmItem, setConfirmItem] = useState(null); // objeto pendiente de confirmar
@@ -2194,6 +2196,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
       .then((d) => {
         setItems(isNaves ? (d.naves ?? []) : (d.objetos ?? []));
         setInventario(d.inventario ?? null);
+        if (d.credits !== undefined) setCredits(d.credits);
       })
       .catch(() => toast('No se pudo cargar la tienda', { tone: 'error', icon: 'x' }))
       .finally(() => setLoading(false));
@@ -2207,7 +2210,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
     setBusy(item.id);
     try {
       const d = await apiPost(`/npcs/${npc.id}/naves/${item.id}/comprar`, {});
-      if (d?.credits !== undefined) onCreditsChange?.(d.credits);
+      if (d?.credits !== undefined) { onCreditsChange?.(d.credits); setCredits(d.credits); }
       toast('¡Gracias por su compra!', { tone: 'success', icon: 'coin', desc: `${item.nombre} · -${item.precio_final} cr` });
       load();
     } catch (err) {
@@ -2225,7 +2228,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
     setConfirming(true);
     try {
       const d = await apiPost(`/npcs/${npc.id}/objetos/${confirmItem.id}/comprar`, { cantidad });
-      if (d?.credits !== undefined) onCreditsChange?.(d.credits);
+      if (d?.credits !== undefined) { onCreditsChange?.(d.credits); setCredits(d.credits); }
       toast('¡Gracias por su compra!', {
         tone: 'success', icon: 'coin',
         desc: `${confirmItem.nombre} x${cantidad} · -${d?.precio_pagado ?? confirmItem.precio_final * cantidad} cr`,
@@ -2362,6 +2365,21 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
         </div>
       </div>
 
+      {/* Créditos disponibles del jugador — para saber de un vistazo qué se puede pagar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        marginTop: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)',
+        background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)',
+      }}>
+        <span style={{ fontSize: 11, color: 'var(--txt-dim)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="coin" size={14} style={{ color: 'var(--holocron-oro)' }} />
+          Tus créditos
+        </span>
+        <span className="nx-num" style={{ fontSize: 16, color: 'var(--holocron-oro)' }}>
+          {credits != null ? `${credits} cr` : '—'}
+        </span>
+      </div>
+
       {confirmItem && (
         <Modal open onClose={cerrarConfirmacion} title="Confirmar compra" kicker={npc.nombre} width={420} zIndex={1310}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
@@ -2427,11 +2445,19 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px',
-            background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)', borderRadius: 'var(--radius-md)', marginBottom: 18,
+            background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)', borderRadius: 'var(--radius-md)', marginBottom: 8,
           }}>
             <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>Total a pagar</span>
             <span className="nx-num" style={{ fontSize: 18, color: 'var(--holocron-oro)' }}>{confirmItem.precio_final * cantidad} cr</span>
           </div>
+          {credits != null && (
+            <div style={{
+              fontSize: 11, marginBottom: 18, textAlign: 'right',
+              color: credits < confirmItem.precio_final * cantidad ? '#ff6b6b' : 'var(--txt-faint)',
+            }}>
+              Tus créditos: {credits} cr
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <Btn kind="ghost" onClick={cerrarConfirmacion} disabled={confirming}>Cancelar</Btn>
