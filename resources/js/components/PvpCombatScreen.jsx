@@ -10,6 +10,7 @@ import RangedStrikeEffect from './RangedStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
 import FleeEffect from './FleeEffect.jsx';
 import CombatCardModal from './CombatCard.jsx';
+import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
@@ -182,10 +183,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const stageRef                        = useRef(null);
   const myHudRef                        = useRef(null);
   const oppHudRef                       = useRef(null);
+  const myAvatarRef                     = useRef(null);
   const [strike, setStrike]             = useState(null);
   const [fleeFx, setFleeFx]             = useState(null);
   const [showCombatCard, setShowCombatCard] = useState(false);
   const [floatTexts, setFloatTexts]     = useState([]);
+  const [emojiPicker, setEmojiPicker]   = useState(false);
+  const [emojiBurst, setEmojiBurst]     = useState(null);
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
   const effectMaxTurnsRef = useRef({});
@@ -413,7 +417,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myEffects  = withDurationPct('my', mergeEffects(myBuffs, myDebuffs));
   const oppEffects = withDurationPct('opp', mergeEffects(oppBuffs, oppDebuffs));
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, effectsPosition = 'side' }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, effectsPosition = 'side', avatarRef, onAvatarClick }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -460,11 +464,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           position: 'relative',
           width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'visible',
         }}>
-          <div style={{
-            width: '100%', height: '100%', borderRadius: 10, overflow: 'hidden',
-            border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
-            display: 'grid', placeItems: 'center',
-          }}>
+          <div ref={avatarRef} onClick={onAvatarClick} title={onAvatarClick ? 'Expresarse' : undefined}
+            className={onAvatarClick ? 'nx-emoji-avatar-trigger' : undefined}
+            style={{
+              width: '100%', height: '100%', borderRadius: 10, overflow: 'hidden',
+              border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)',
+              display: 'grid', placeItems: 'center',
+            }}>
             {photoUrl
               ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <Icon name="user" size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
@@ -949,6 +955,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 effects={myEffects}
                 forma={myFormaProp}
                 effectsPosition="above"
+                avatarRef={myAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
               />
             </div>
 
@@ -975,9 +982,21 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
                 forma={myFormaProp}
+                avatarRef={myAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
               />
             </div>
           </>
+        )}
+
+        {emojiPicker && (
+          <EmojiRing
+            anchorRef={myAvatarRef} stageRef={stageRef}
+            onSelect={(it) => { setEmojiBurst({ id: `${Date.now()}`, emoji: it.emoji }); setEmojiPicker(false); }}
+            onClose={() => setEmojiPicker(false)}
+          />
+        )}
+        {emojiBurst && (
+          <EmojiBurst key={emojiBurst.id} emoji={emojiBurst.emoji} onDone={() => setEmojiBurst(null)} />
         )}
 
         {/* Golpe de energía (melee) o mira (a distancia) sobre el stage */}

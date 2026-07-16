@@ -9,6 +9,7 @@ import FloatingCombatText from './FloatingCombatText.jsx';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { NpcCombatCardModal } from './CombatCard.jsx';
+import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -130,9 +131,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const stageRef = useRef(null);
   const playerHudRef = useRef(null);
   const npcHudRef = useRef(null);
+  const playerAvatarRef = useRef(null);
   const [strike, setStrike]         = useState(null);
   const [floatTexts, setFloatTexts] = useState([]);
   const [showCombatCard, setShowCombatCard] = useState(false);
+  const [emojiPicker, setEmojiPicker] = useState(false);
+  const [emojiBurst, setEmojiBurst]   = useState(null);
 
   /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
   const resultTextFor = (hit, ranged, crit, dmg) => {
@@ -662,7 +666,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const npcBadges    = naveMode ? npcBadgesFull.filter(naveBadgeFilter)    : npcBadgesFull;
   const playerBadges = naveMode ? playerBadgesFull.filter(naveBadgeFilter) : playerBadgesFull;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side' }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side', avatarRef, onAvatarClick }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -719,10 +723,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         padding: isMobile ? 8 : 14, display: 'flex', flexDirection: rev ? 'row-reverse' : 'row',
         gap: isMobile ? 8 : 14, alignItems: 'flex-start', flex: 1, minWidth: 0,
       }}>
-        <div style={{
-          width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-          border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
-        }}>
+        <div ref={avatarRef} onClick={onAvatarClick} title={onAvatarClick ? 'Expresarse' : undefined}
+          className={onAvatarClick ? 'nx-emoji-avatar-trigger' : undefined}
+          style={{
+            width: isMobile ? 74 : 130, height: isMobile ? 62 : 100, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+            border: `2px solid ${borderColor}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
+          }}>
           {photoUrl
             ? <img src={photoUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <Icon name={fallbackIcon} size={26} style={{ color: 'var(--holo)', opacity: 0.5 }} />
@@ -1142,6 +1148,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 buffs={playerBuffs}
                 forma={naveMode ? 0 : currentForma} formaSide="left"
                 effectsPosition="above"
+                avatarRef={playerAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
               />
             </div>
 
@@ -1170,9 +1177,21 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 fallbackIcon={naveMode ? 'ship' : 'user'}
                 buffs={playerBuffs}
                 forma={naveMode ? 0 : currentForma} formaSide="left"
+                avatarRef={playerAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
               />
             </div>
           </>
+        )}
+
+        {emojiPicker && (
+          <EmojiRing
+            anchorRef={playerAvatarRef} stageRef={stageRef}
+            onSelect={(it) => { setEmojiBurst({ id: `${Date.now()}`, emoji: it.emoji }); setEmojiPicker(false); }}
+            onClose={() => setEmojiPicker(false)}
+          />
+        )}
+        {emojiBurst && (
+          <EmojiBurst key={emojiBurst.id} emoji={emojiBurst.emoji} onDone={() => setEmojiBurst(null)} />
         )}
 
         {/* Golpe de energía (melee) o mira (a distancia) */}

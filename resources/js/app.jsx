@@ -7,6 +7,7 @@ import './styles/hud.css';
 import './styles/energy-strike.css';
 import './styles/flee-effect.css';
 import './styles/floating-combat-text.css';
+import './styles/emoji-expressions.css';
 import App from './App.jsx';
 import Login from './Login.jsx';
 import TutorialWizard from './components/TutorialWizard.jsx';
