@@ -880,7 +880,7 @@ const ITEM_TYPES = [
 const EQUIP_TABS = [
   { value: 'inventario', label: 'Inventario',   icon: 'roster' },
   { value: 'sable',      label: 'Sable de Luz', icon: 'sword'  },
-  { value: 'nave',       label: 'Nave',         icon: 'ship'   },
+  { value: 'nave',       label: 'Hangar',       icon: 'ship'   },
 ];
 
 /* Tarjeta informativa para objetos que no son armas: no son equipables aquí,
@@ -1208,6 +1208,24 @@ function NaveMiniStatBar({ label, value, max, color }) {
       </div>
       <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', width: 44, textAlign: 'right', flexShrink: 0 }}>{value}/{max}</span>
     </div>
+  );
+}
+
+/** Atributo de combate de una nave (Ataque/Velocidad/Maniobrabilidad) — muestra el valor
+    efectivo y, si las mejoras instaladas le dan un bono, cuánto de ese valor es bono. */
+function NaveCombatStat({ label, icon, color, base, efectivo }) {
+  const baseVal = base ?? 0;
+  const efectivoVal = efectivo ?? baseVal;
+  const bono = efectivoVal - baseVal;
+  return (
+    <span className="nx-data" style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10,
+      padding: '4px 9px', borderRadius: 4, background: `${color}14`, border: `1px solid ${color}40`, color,
+    }}>
+      <Icon name={icon} size={11} />
+      {label} {efectivoVal}
+      {bono > 0 && <span style={{ color: '#4ade80' }}>(+{bono})</span>}
+    </span>
   );
 }
 
@@ -1549,6 +1567,11 @@ function NaveEquipadaPanel() {
                 <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.vida_max ?? 0}            color="#4ade80" />
                 <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.escudo_max ?? 0}          color="#38cdf0" />
                 <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.capacidad_salto_max ?? 0} color="var(--holocron-oro)" />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <NaveCombatStat label="Ataque"         icon="sword"  color="#ff7043" base={equipada.nave?.ataque}         efectivo={equipada.ataque_efectivo} />
+                <NaveCombatStat label="Velocidad"      icon="zap"    color="#E6B325" base={equipada.nave?.velocidad}      efectivo={equipada.velocidad_efectiva} />
+                <NaveCombatStat label="Maniobrabilidad" icon="target" color="#a78bfa" base={equipada.nave?.maniobrabilidad} efectivo={equipada.maniobrabilidad_efectiva} />
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <Btn kind="ghost" sm icon="fuel" onClick={() => reabastecer(equipada)}

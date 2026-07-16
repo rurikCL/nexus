@@ -32,7 +32,10 @@ class CharacterNave extends Model
     /* Máximos ya incluyendo las mejoras instaladas — se calculan al vuelo (ver
      * accessors abajo) para que el frontend (hangar, HUD de combate) no tenga
      * que reimplementar la suma de bonos. */
-    protected $appends = ['vida_max', 'escudo_max', 'capacidad_carga_max', 'capacidad_salto_max', 'costo_reparacion_final'];
+    protected $appends = [
+        'vida_max', 'escudo_max', 'capacidad_carga_max', 'capacidad_salto_max', 'costo_reparacion_final',
+        'ataque_efectivo', 'velocidad_efectiva', 'maniobrabilidad_efectiva',
+    ];
 
     /** Los 4 slots de mejora — cualquier slot acepta cualquier rol_objeto tipo "mejora_nave". */
     const MEJORA_SLOTS = ['mejora_1', 'mejora_2', 'mejora_3', 'mejora_4'];
@@ -112,6 +115,26 @@ class CharacterNave extends Model
         return max(0, ($this->nave?->costo_reparacion ?? 0) + $this->sumaBono('bono_costo_reparacion'));
     }
 
+    /** Ataque de la nave, incluyendo el bono de las mejoras instaladas (reutiliza bono_ataque del sable). */
+    public function ataqueConMejoras(): int
+    {
+        return ($this->nave?->ataque ?? 0) + $this->sumaBono('bono_ataque');
+    }
+
+    /** Velocidad de la nave (alimenta la iniciativa en combate), incluyendo el bono de las mejoras instaladas. */
+    public function velocidadConMejoras(): int
+    {
+        return ($this->nave?->velocidad ?? 0) + $this->sumaBono('bono_iniciativa');
+    }
+
+    /** Maniobrabilidad de la nave (alimenta defensa y movimiento en combate), incluyendo el bono de
+     *  las mejoras instaladas — un único stat de nave, así que suma tanto bono_defensa como
+     *  bono_movimiento de las mejoras (igual que la maniobrabilidad base alimenta ambos roles). */
+    public function maniobrabilidadConMejoras(): int
+    {
+        return ($this->nave?->maniobrabilidad ?? 0) + $this->sumaBono('bono_defensa') + $this->sumaBono('bono_movimiento');
+    }
+
     public function getVidaMaxAttribute(): int
     {
         return $this->maxVidaConMejoras();
@@ -135,5 +158,20 @@ class CharacterNave extends Model
     public function getCostoReparacionFinalAttribute(): int
     {
         return $this->costoReparacionConMejoras();
+    }
+
+    public function getAtaqueEfectivoAttribute(): int
+    {
+        return $this->ataqueConMejoras();
+    }
+
+    public function getVelocidadEfectivaAttribute(): int
+    {
+        return $this->velocidadConMejoras();
+    }
+
+    public function getManiobrabilidadEfectivaAttribute(): int
+    {
+        return $this->maniobrabilidadConMejoras();
     }
 }
