@@ -503,7 +503,7 @@ export async function drawCombatCard(combat, resumenIA) {
     topAction: winnerSummary.topAction,
     blocks: winnerSummary.blocks,
     hp: combat[`${winnerSide}_hp`],
-    maxHp: winnerData.stats?.vida ?? combat[`${winnerSide}_hp`],
+    maxHp: winnerData.vida_max ?? winnerData.stats?.vida ?? combat[`${winnerSide}_hp`],
   };
 
   return renderResultCard({

@@ -953,7 +953,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{ position: 'absolute', inset: 8, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div ref={oppHudRef}>
               <HUD
-                hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
+                hp={oppHp} maxHp={opp.vida_max} escudo={oppEscudo} maxEscudo={opp.escudo_max}
                 nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
@@ -973,7 +973,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
             <div ref={myHudRef}>
               <HUD
-                hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
+                hp={myHp} maxHp={me.vida_max} escudo={myEscudo} maxEscudo={me.escudo_max}
                 nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
@@ -990,7 +990,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             {/* Oponente HUD — arriba derecha */}
             <div ref={oppHudRef} style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
-                hp={oppHp} maxHp={opp.stats.vida} escudo={oppEscudo} maxEscudo={opp.stats.escudo}
+                hp={oppHp} maxHp={opp.vida_max} escudo={oppEscudo} maxEscudo={opp.escudo_max}
                 nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
@@ -1001,7 +1001,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             {/* Mi HUD — abajo izquierda */}
             <div ref={myHudRef} style={{ position: 'absolute', bottom: 100, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
-                hp={myHp} maxHp={me.stats.vida} escudo={myEscudo} maxEscudo={me.stats.escudo}
+                hp={myHp} maxHp={me.vida_max} escudo={myEscudo} maxEscudo={me.escudo_max}
                 nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}

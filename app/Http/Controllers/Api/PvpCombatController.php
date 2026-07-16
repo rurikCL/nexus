@@ -824,6 +824,12 @@ class PvpCombatController extends Controller
             'photo_url' => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
             'nave_imagen' => $naveOwned?->nave?->imagen,
             'stats' => self::getCombatStats($ch, $modo),
+            /* Máximos reales (no el daño persistido) — para las barras de vida/escudo del HUD.
+             * En modo naval, `stats.vida`/`stats.escudo` son el HP/escudo actual de la nave
+             * (persiste entre combates), no su capacidad máxima; sin esto la barra de una nave
+             * dañada o destruida sin reparar se ve como "0 vida" y sin escudo. */
+            'vida_max' => self::getMaxVida($ch, $modo),
+            'escudo_max' => self::getMaxEscudo($ch, $modo),
             'habilidades' => $habilidades,
             'current_forma' => $currentForma,
             'arma_equipada' => $ch?->armaEfectiva(),

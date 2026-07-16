@@ -1891,6 +1891,7 @@ function MisionesAdmin() {
   const [habilidades, setHabilidades]   = useState([]);
   const [objetos, setObjetos]           = useState([]);
   const [npcsOptions, setNpcsOptions]   = useState([]);
+  const [temporadasOptions, setTemporadasOptions] = useState([]);
 
   /* Load habilidades options once */
   useEffect(() => {
@@ -1910,6 +1911,13 @@ function MisionesAdmin() {
   useEffect(() => {
     api('GET', '/misiones/npcs-mision')
       .then(d => setNpcsOptions(d.npcs ?? []))
+      .catch(() => {});
+  }, []);
+
+  /* Load temporadas once */
+  useEffect(() => {
+    api('GET', '/temporadas')
+      .then(d => setTemporadasOptions(d.temporadas ?? []))
       .catch(() => {});
   }, []);
 
@@ -2076,8 +2084,17 @@ function MisionesAdmin() {
           {/* Campos según tipo */}
           {form.tipo_mision === 'temporada' && (
             <div>
-              <label className="nx-label">ID de Temporada</label>
-              <input className="nx-input" type="number" min="1" value={form.temporada_id} onChange={e => set('temporada_id', e.target.value)} placeholder="ID de la temporada" />
+              <label className="nx-label">Temporada</label>
+              <select className="nx-select" value={form.temporada_id ?? ''}
+                onChange={e => set('temporada_id', e.target.value ? +e.target.value : '')}>
+                <option value="">— Seleccionar temporada —</option>
+                {temporadasOptions.map(t => (
+                  <option key={t.id} value={t.id}>{t.nombre}</option>
+                ))}
+              </select>
+              {temporadasOptions.length === 0 && (
+                <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando temporadas...</div>
+              )}
             </div>
           )}
           {form.tipo_mision === 'comunidad' && (
