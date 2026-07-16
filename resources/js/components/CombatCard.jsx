@@ -245,7 +245,7 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
   await ensureFonts();
 
   const W = 1080;
-  const H = 1350 + (winnerHighlights ? 300 : 0) + (resumenIA ? 270 : 0) + (location ? 260 : 0);
+  const H = 1350 + (winnerHighlights ? 300 : 0) + (resumenIA ? 270 : 0) + (location ? 360 : 0);
   const DPR = 2;
   const canvas = document.createElement('canvas');
   canvas.width = W * DPR;
@@ -426,8 +426,8 @@ async function renderResultCard({ winner, loser, rounds, subtitle, rows, resumen
       { label: 'LUGAR', value: location.lugar, img: lugarImg, rounded: true },
     ].filter(c => c.value);
     const locXs = locCols.length === 1 ? [W / 2] : [W * 0.3, W * 0.7];
-    const imgY = rowY + 100;
-    const imgSize = 100;
+    const imgSize = 200;
+    const imgY = rowY + 65 + imgSize / 2;
 
     locCols.forEach((col, i) => {
       const x = locXs[i];
