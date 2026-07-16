@@ -10,6 +10,7 @@ use App\Models\RolHabilidad;
 use App\Models\User;
 use App\Notifications\PvpCombatNotification;
 use App\Notifications\PvpTurnoPushRecordatorio;
+use App\Services\MisionProgresoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -43,6 +44,18 @@ class PvpCombatController extends Controller
     ];
 
     private const TERMINAL_STATUSES = ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'];
+
+    /* Expresiones disponibles en combate PvP — whitelist autoritativa del servidor
+     * (el cliente solo envía el id; emoji/label/desc los define el backend). */
+    private const EMOTES = [
+        'saludar' => ['emoji' => '👋',  'label' => 'Saludar',     'desc' => 'saluda a su rival'],
+        'reir' => ['emoji' => '😂',  'label' => 'Reír',        'desc' => 'se ríe de su rival'],
+        'llorar' => ['emoji' => '😢',  'label' => 'Llorar',      'desc' => 'llora'],
+        'impresion' => ['emoji' => '😲',  'label' => 'Impresión',   'desc' => 'se muestra impresionado'],
+        'enojo' => ['emoji' => '😠',  'label' => 'Enojarse',    'desc' => 'se enoja'],
+        'dormir' => ['emoji' => '😴',  'label' => 'Dormir',      'desc' => 'finge dormirse de aburrimiento'],
+        'adios' => ['emoji' => '🖐️', 'label' => 'Decir adiós', 'desc' => 'se despide'],
+    ];
 
     /** POST /pvp/challenge */
     public function challenge(Request $request): JsonResponse
@@ -395,14 +408,17 @@ class PvpCombatController extends Controller
 
             if ($esCritico || $atkRoll > $defRoll) {
                 $dmg = ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0);
+                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0);
+                $oppEscudoAntes = $isAttacker ? $combat->defender_escudo : $combat->attacker_escudo;
                 if ($isAttacker) {
                     [$combat->defender_hp, $combat->defender_escudo] =
-                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg);
+                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, 0, $dmgPerforante);
                 } else {
                     [$combat->attacker_hp, $combat->attacker_escudo] =
-                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg);
+                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, 0, $dmgPerforante);
                 }
-                $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) −{$dmg} daño" : "¡Impacto! −{$dmg} daño";
+                $descDano = self::describeDano($dmg, 0, $dmgPerforante, $oppEscudoAntes);
+                $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) {$descDano}" : "¡Impacto! {$descDano}";
             } else {
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
             }
@@ -472,6 +488,7 @@ class PvpCombatController extends Controller
 
             $dmg = (int) ($hab->damage ?? 0);
             $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
+            $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
 
             /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
             if ($hab->objetivo === 'self') {
@@ -540,19 +557,18 @@ class PvpCombatController extends Controller
                     if ($effective) {
                         $dmg = (int) round($dmg * 1.5);
                         $dmgEscudo = (int) round($dmgEscudo * 1.5);
+                        $dmgPerforante = (int) round($dmgPerforante * 1.5);
                         $entry['messages'][] = "¡Forma efectiva! ×1.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
                     }
 
                     $oppEscudoAntes = $isAttacker ? $combat->defender_escudo : $combat->attacker_escudo;
-                    $tieneEscudo = $oppEscudoAntes > 0;
-                    $dmgAplicado = $tieneEscudo ? $dmg + max(0, $dmgEscudo) : $dmg;
 
                     if ($isAttacker) {
                         [$combat->defender_hp, $combat->defender_escudo] =
-                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo);
+                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                     } else {
                         [$combat->attacker_hp, $combat->attacker_escudo] =
-                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo);
+                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                     }
 
                     /* Debuffs al oponente solo si impacta */
@@ -563,8 +579,8 @@ class PvpCombatController extends Controller
                     $debuffDesc = ! empty($habDebuff)
                         ? ' (penaliza: '.implode(', ', $habDebuff).')'
                         : '';
-                    $objetivoDano = $tieneEscudo ? 'al escudo' : 'a la vida';
-                    $entry['messages'][] = "¡Impacto! −{$dmgAplicado} daño {$objetivoDano}{$debuffDesc}";
+                    $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
+                    $entry['messages'][] = "¡Impacto! {$descDano}{$debuffDesc}";
 
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
@@ -590,7 +606,7 @@ class PvpCombatController extends Controller
                     'character_id' => $winnerChar->id,
                     'hito' => "{$loserChar->name} derrotado",
                 ]);
-                \App\Services\MisionProgresoService::registrar($winnerUser, 'combate', 1);
+                MisionProgresoService::registrar($winnerUser, 'combate', 1);
             }
         }
 
@@ -699,6 +715,43 @@ class PvpCombatController extends Controller
         ]);
     }
 
+    /** POST /pvp/{id}/emoji — expresión cosmética, disponible en cualquier momento (no consume turno) */
+    public function emoji(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'emote_id' => ['required', 'string', 'in:'.implode(',', array_keys(self::EMOTES))],
+        ]);
+
+        $user = $request->user();
+        $combat = PvpCombat::with(self::WITHS)->findOrFail($id);
+
+        if (! $combat->involvedUser($user->id)) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+        if ($combat->status !== 'active') {
+            return response()->json(['error' => 'El combate no está activo'], 422);
+        }
+
+        $isAttacker = $user->id === $combat->attacker_id;
+        $actorChar = $isAttacker ? $combat->attacker->character : $combat->defender->character;
+        $emote = self::EMOTES[$data['emote_id']];
+
+        $log = $combat->log ?? [];
+        $log[] = [
+            'turn' => count($log) + 1,
+            'actor_id' => $user->id,
+            'type' => 'emoji',
+            'emoji' => $emote['emoji'],
+            'messages' => ["{$actorChar->name} {$emote['desc']} {$emote['emoji']} ({$emote['label']})"],
+        ];
+        $combat->log = $log;
+        $combat->save();
+
+        return response()->json([
+            'combat' => $this->formatCombat($combat->fresh(self::WITHS), $user->id),
+        ]);
+    }
+
     // ─────────────────────────── helpers ──────────────────────────────────────
 
     private function formatCombat(PvpCombat $c, int $myId): array
@@ -788,6 +841,7 @@ class PvpCombatController extends Controller
             'costo_fuerza' => $h->costo_fuerza,
             'damage' => $h->damage,
             'damage_escudo' => $h->damage_escudo,
+            'damage_perforante' => $h->damage_perforante,
             'cooldown' => $h->cooldown,
             'objetivo' => $h->objetivo,
             'buff' => $h->buff ?? [],
@@ -984,19 +1038,56 @@ class PvpCombatController extends Controller
     }
 
     /**
-     * Aplica daño. Mientras el objetivo tenga escudo (>0), el escudo absorbe TODO
-     * el golpe (dmg + dmgEscudo si corresponde) sin dejar pasar nada a la vida,
-     * aunque el golpe sea mayor que el escudo restante. Recién cuando el escudo
-     * ya está en 0 el daño (solo dmg, sin dmgEscudo) pasa directo a la vida.
+     * Aplica daño con tres componentes: dmg (normal), dmgEscudo (extra solo
+     * contra escudo) y dmgPerforante (ignora el escudo, siempre pasa a la vida).
+     *
+     * - Sin escudo: todo (dmg + dmgPerforante) pasa a la vida.
+     * - Con escudo, si el componente dmgEscudo por sí solo NO agota el escudo
+     *   restante: el escudo absorbe dmg + dmgEscudo por completo (sin dejar
+     *   pasar nada, aunque el golpe sea mayor que el escudo restante) — solo
+     *   el perforante llega a la vida.
+     * - Con escudo, si el componente dmgEscudo por sí solo SÍ agota el escudo
+     *   restante: el escudo queda en 0 y el resto (dmg + dmgPerforante) pasa
+     *   directo a la vida.
      */
-    private static function applyDamage(int $hp, int $escudo, int $dmg, int $dmgEscudo = 0): array
+    private static function applyDamage(int $hp, int $escudo, int $dmg, int $dmgEscudo = 0, int $dmgPerforante = 0): array
     {
-        if ($escudo > 0) {
-            $total = $dmg + max(0, $dmgEscudo);
-
-            return [$hp, max(0, $escudo - $total)];
+        if ($escudo <= 0) {
+            return [max(0, $hp - $dmg - $dmgPerforante), 0];
         }
 
-        return [max(0, $hp - $dmg), 0];
+        $escudoTrasComponenteEscudo = max(0, $escudo - max(0, $dmgEscudo));
+        if ($escudoTrasComponenteEscudo > 0) {
+            return [max(0, $hp - $dmgPerforante), max(0, $escudoTrasComponenteEscudo - $dmg)];
+        }
+
+        return [max(0, $hp - $dmg - $dmgPerforante), 0];
+    }
+
+    /**
+     * Describe en texto el reparto de daño entre escudo y vida, según la misma
+     * lógica de `applyDamage`. `escudoAntes` es el escudo del objetivo antes
+     * del golpe.
+     */
+    private static function describeDano(int $dmg, int $dmgEscudo, int $dmgPerforante, int $escudoAntes): string
+    {
+        if ($escudoAntes <= 0) {
+            return '−'.($dmg + $dmgPerforante).' daño a la vida';
+        }
+
+        $escudoTrasComponenteEscudo = max(0, $escudoAntes - max(0, $dmgEscudo));
+        if ($escudoTrasComponenteEscudo > 0) {
+            $totalEscudo = $dmg + max(0, $dmgEscudo);
+            $msg = "−{$totalEscudo} daño al escudo";
+            if ($dmgPerforante > 0) {
+                $msg .= ", −{$dmgPerforante} daño perforante a la vida";
+            }
+
+            return $msg;
+        }
+
+        $totalVida = $dmg + $dmgPerforante;
+
+        return '−'.max(0, $dmgEscudo)." daño al escudo — ¡escudo perforado! −{$totalVida} daño a la vida";
     }
 }

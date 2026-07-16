@@ -268,13 +268,14 @@ const ENTITY_CONFIG = {
       { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
       { key: 'damage',       label: 'Daño base',             type: 'number',    min: -999, hint: 'Negativo = cura esa cantidad de vida en vez de dañar (al usuario si Objetivo=self, al rival si Objetivo=target)' },
       { key: 'damage_escudo', label: 'Daño a Escudo',         type: 'number',    min: -999, hint: 'Extra que se SUMA al Daño base pero solo golpea escudo (mientras el objetivo tenga escudo). Si el escudo ya está en 0, este extra no se aplica y solo pega el Daño base a la vida. Negativo = restaura esa cantidad de escudo.' },
+      { key: 'damage_perforante', label: 'Daño Perforante',   type: 'number',    min: 0, hint: 'Ignora el escudo por completo: siempre pasa directo a la vida, tenga o no tenga escudo el objetivo.' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
       { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
       { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario' },
       { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
       { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
     ],
-    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, cooldown: 0, duracion: 2 },
+    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
   },
 
   rol_objetos: {
@@ -296,6 +297,7 @@ const ENTITY_CONFIG = {
       { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · el resto son componentes de sable de luz" },
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
+      { key: 'dano_perforante', label: 'Daño Perforante', type: 'number', min: 0, hint: 'solo si tipo = arma · ignora el escudo, siempre pasa directo a la vida' },
       { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
       { key: 'costo',       label: 'Costo (cr)',  type: 'number', min: 0, hint: 'Costo base usado por NPCs vendedores (se le aplica el interés de cada uno)' },
       { key: 'activo',      label: 'Activo',      type: 'toggle' },
@@ -310,6 +312,7 @@ const ENTITY_CONFIG = {
       { key: 'bono_vida',       label: 'Bono Vida',       type: 'number', min: -999 },
       { key: 'bono_escudo',     label: 'Bono Escudo',     type: 'number', min: -999 },
       { key: 'bono_dano',       label: 'Bono Daño',       type: 'number', min: -999, hint: 'Se suma al daño melee fijo del sable' },
+      { key: 'bono_dano_perforante', label: 'Bono Daño Perforante', type: 'number', min: -999, hint: 'Se suma al daño perforante del sable (ignora el escudo, pasa directo a la vida)' },
       { key: 'bono_critico',    label: 'Bono Crítico (CRT)', type: 'number', min: 0, hint: 'CRT 2 = crítico con 20, 19 o 18 natural. Un crítico siempre impacta y hace +1 de daño' },
       { key: 'bono_fuerza',     label: 'Bono Fuerza',    type: 'number', min: -999, hint: 'Aumenta el máximo de Fuerza en combate (base 10)' },
       { key: 'bono_generacion_fuerza', label: 'Bono Generación de Fuerza', type: 'number', min: -999, hint: 'Aumenta la Fuerza recuperada por turno (base 2)' },
@@ -404,23 +407,8 @@ const ENTITY_CONFIG = {
     defaults: {},
   },
 
-  rol_character_objeto: {
-    label: 'Asignación Objetos', icon: 'link', group: 'SISTEMA',
-    columns: [
-      { key: 'id', label: 'ID', w: 52 },
-      { key: 'character', label: 'Personaje', resolve: r => r.character?.handle || r.character?.name || '—', bold: true },
-      { key: 'rol_objeto', label: 'Objeto', resolve: r => r.rol_objeto?.nombre ?? '—' },
-      { key: 'created_at', label: 'Asignado', resolve: r => r.created_at?.slice(0, 10), dim: true },
-    ],
-    fields: [
-      { key: 'character_id',  label: 'Personaje', type: 'relatedSelect', related: 'personajes', required: true },
-      { key: 'rol_objeto_id', label: 'Objeto',    type: 'relatedSelect', related: 'rol_objetos', required: true },
-    ],
-    defaults: {},
-  },
-
   misiones: {
-    label: 'Misiones', icon: 'target', group: 'SISTEMA',
+    label: 'Misiones', icon: 'target', group: 'ROL',
     custom: true,
   },
 

@@ -36,8 +36,12 @@ export function summarizeCombat(combat) {
     let entryDmg = 0;
     let blocked = false;
     for (const m of msgs) {
-      const dmgMatch = m.match(/−(\d+) daño/);
-      if (dmgMatch) { entryDmg += Number(dmgMatch[1]); side.dmgDealt += Number(dmgMatch[1]); }
+      // Un mismo mensaje puede reportar dos cifras de daño (p. ej. "−2 daño al
+      // escudo — ¡escudo perforado! −3 daño a la vida") — se suman todas.
+      for (const dmgMatch of m.matchAll(/−(\d+) daño/g)) {
+        entryDmg += Number(dmgMatch[1]);
+        side.dmgDealt += Number(dmgMatch[1]);
+      }
       if (/¡CRÍTICO!/.test(m)) side.crits += 1;
       const healMatch = m.match(/\+(\d+) (?:vida|escudo)/);
       if (healMatch) side.healDone += Number(healMatch[1]);
@@ -80,8 +84,10 @@ export function summarizeNpcLog(log = []) {
     rounds = Math.max(rounds, entry.ronda ?? 1);
     const side = totals[entry.actor];
     if (!side) continue; // entradas 'system' (iniciativa, cambio de estancia, etc.)
-    const dmgMatch = entry.text.match(/−(\d+) daño/);
-    if (dmgMatch) side.dmgDealt += Number(dmgMatch[1]);
+    // Un mismo mensaje puede reportar dos cifras de daño (p. ej. escudo perforado) — se suman todas.
+    for (const dmgMatch of entry.text.matchAll(/−(\d+) daño/g)) {
+      side.dmgDealt += Number(dmgMatch[1]);
+    }
     if (/¡CRÍTICO!/.test(entry.text)) side.crits += 1;
     const healMatch = entry.text.match(/\+(\d+) (?:vida|escudo)/);
     if (healMatch) side.healDone += Number(healMatch[1]);

@@ -213,6 +213,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/pvp/{id}', [PvpCombatController::class, 'show']);
     Route::post('/pvp/{id}/resumen-ia', [PvpCombatController::class, 'resumenIA']);
     Route::post('/pvp/{id}/action', [PvpCombatController::class, 'action']);
+    Route::post('/pvp/{id}/emoji', [PvpCombatController::class, 'emoji']);
     Route::post('/pvp/{id}/accept', [PvpCombatController::class, 'accept']);
     Route::post('/pvp/{id}/decline', [PvpCombatController::class, 'decline']);
 

@@ -29,7 +29,7 @@ class CharacterSable extends Model
         'activo' => 'boolean',
     ];
 
-    protected $appends = ['dano', 'critico', 'tipo_ataque', 'color_hoja', 'consumo_energia', 'energia_maxima'];
+    protected $appends = ['dano', 'dano_perforante', 'critico', 'tipo_ataque', 'color_hoja', 'consumo_energia', 'energia_maxima'];
 
     /** Daño base del ataque cuerpo a cuerpo con un sable de luz armado. */
     const DANO_BASE = 6;
@@ -102,6 +102,12 @@ class CharacterSable extends Model
     public function getDanoAttribute(): int
     {
         return self::DANO_BASE + $this->sumaBono('bono_dano');
+    }
+
+    /** Daño perforante: solo lo que aportan los componentes instalados (sin base). */
+    public function getDanoPerforanteAttribute(): int
+    {
+        return $this->sumaBono('bono_dano_perforante');
     }
 
     /**

@@ -790,6 +790,7 @@ function WeaponCard({ objeto, selected, onClick }) {
   const isUnarmed = !objeto;
   const img = objeto ? mediaUrl(objeto.imagen) : null;
   const dano = isUnarmed ? 3 : (objeto.dano ?? null);
+  const danoPerforante = isUnarmed ? 0 : (objeto.dano_perforante ?? 0);
   const tipoAtaque = isUnarmed ? null : objeto.tipo_ataque;
 
   return (
@@ -832,6 +833,11 @@ function WeaponCard({ objeto, selected, onClick }) {
           {dano != null && (
             <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
               <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {dano}
+            </span>
+          )}
+          {danoPerforante > 0 && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <Icon name="fire" size={12} style={{ color: '#8aa0c0' }} /> +{danoPerforante}P
             </span>
           )}
           {tipoAtaque && (
@@ -1136,6 +1142,9 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
           {/* Daño */}
           {habilidad.damage > 0 && (
             <Badge color="#ff6b6b">✦ {habilidad.damage} DMG</Badge>
+          )}
+          {habilidad.damage_perforante > 0 && (
+            <Badge color="#8aa0c0">✦ {habilidad.damage_perforante} DMG PERF</Badge>
           )}
           {/* Cooldown */}
           {habilidad.cooldown > 0 && (
@@ -1931,6 +1940,11 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                     <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
                       <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {sableActivo.dano} DMG melee
                     </span>
+                    {sableActivo.dano_perforante > 0 && (
+                      <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+                        <Icon name="fire" size={12} style={{ color: '#8aa0c0' }} /> +{sableActivo.dano_perforante}P
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--txt-faint)', flexBasis: '100%' }}>

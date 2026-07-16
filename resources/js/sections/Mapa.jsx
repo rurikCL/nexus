@@ -1988,6 +1988,7 @@ function getPlayerCombatStats(character) {
       ? {
           nombre: character.arma_efectiva.nombre,
           dano: character.arma_efectiva.dano,
+          dano_perforante: character.arma_efectiva.dano_perforante ?? 0,
           critico: character.arma_efectiva.critico ?? 0,
           tipo_ataque: character.arma_efectiva.tipo_ataque,
           es_sable: character.arma_efectiva.es_sable ?? false,
