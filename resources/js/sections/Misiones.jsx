@@ -198,7 +198,7 @@ function GlobalCard({ mision, completed, onOpen }) {
   );
 }
 
-function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
+export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
   const [busy, setBusy] = useState(false);
   const done = mision.status === 'completada';
   const hitosReq = mision.hito_requerimiento
@@ -367,20 +367,26 @@ function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
 // MISIONES DE COMUNIDAD
 // ─────────────────────────────────────────────────────────────
 function ComunidadSection({ misiones, onReload, user }) {
+  const [selectedId, setSelectedId] = useState(null);
+  const selected = misiones.find(m => m.id === selectedId) ?? null;
+
   return (
     <Panel kicker="Global" title="Misiones de Comunidad" icon="roster">
       {misiones.length === 0 && <Empty label="No hay misiones de comunidad activas" />}
-      <div style={{ display: 'grid', gap: 18 }}>
+      <div style={{ display: 'grid', gap: 14 }}>
         {misiones.map(m => (
-          <ComunidadCard key={m.id} mision={m} userId={user?.id} />
+          <ComunidadCard key={m.id} mision={m} userId={user?.id} onOpen={() => setSelectedId(m.id)} />
         ))}
       </div>
+
+      {selected && (
+        <ComunidadMisionPopup mision={selected} userId={user?.id} onClose={() => setSelectedId(null)} />
+      )}
     </Panel>
   );
 }
 
-function ComunidadCard({ mision, userId }) {
-  const [open, setOpen] = useState(false);
+function ComunidadCard({ mision, userId, onOpen }) {
   const isMobile = useIsMobile();
   const totalPuntos = mision.total_progreso ?? 0;
   const requeridos  = mision.puntos_requeridos ?? 100;
@@ -389,38 +395,75 @@ function ComunidadCard({ mision, userId }) {
   const yoParticipo = mision.participantes?.some(p => p.id === userId);
 
   return (
-    <div className="nx-panel solid" style={{
-      overflow: 'hidden',
+    <button onClick={onOpen} className="nx-panel solid" style={{
+      display: 'flex', gap: 14, textAlign: 'left', width: '100%', cursor: 'pointer',
+      color: 'inherit', font: 'inherit', padding: '14px 16px',
       opacity: completada ? 0.75 : 1,
       filter: completada ? 'grayscale(1)' : 'none',
       border: completada ? '1px solid rgba(120,120,120,0.4)' : '1px solid rgba(230,179,37,0.3)',
     }}>
-      <div style={{ padding: '14px 16px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10 }}>
-          {mision.foto_mision && (
-            <img src={mediaUrl(mision.foto_mision)} alt={mision.nombre} style={{
-              width: isMobile ? 64 : 110, height: isMobile ? 64 : 110, objectFit: 'cover', borderRadius: 10,
-              border: '1px solid rgba(230,179,37,0.35)', flexShrink: 0,
-            }} />
-          )}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-              <span style={{ fontWeight: 700, fontSize: 15 }}>{mision.nombre}</span>
-              <Chip tone={completada ? 'green' : ''}>{completada ? '✓ Completada' : 'En curso'}</Chip>
-              {mision.activa === false && <Chip tone="dim">Inactiva</Chip>}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{mision.mision}</div>
-          </div>
-          {mision.fecha_termino && (
-            <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', flexShrink: 0 }}>
-              <Icon name="clock" size={10} /> {fmtDate(mision.fecha_termino)}
-            </div>
-          )}
+      {mision.foto_mision && (
+        <img src={mediaUrl(mision.foto_mision)} alt={mision.nombre} style={{
+          width: isMobile ? 56 : 84, height: isMobile ? 56 : 84, objectFit: 'cover', borderRadius: 10,
+          border: '1px solid rgba(230,179,37,0.35)', flexShrink: 0,
+        }} />
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>{mision.nombre}</span>
+          <Chip tone={completada ? 'green' : ''}>{completada ? '✓ Completada' : 'En curso'}</Chip>
+          {mision.activa === false && <Chip tone="dim">Inactiva</Chip>}
+          {yoParticipo && <Chip tone="dim">Participando</Chip>}
         </div>
+        <div style={{ fontSize: 13, color: 'var(--txt-dim)', marginBottom: 8 }}>{mision.mision}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+          <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>PROGRESO COMUNIDAD</span>
+          <span className="nx-num" style={{ fontSize: 11, color: completada ? '#10b981' : '#E6B325' }}>
+            {totalPuntos} / {requeridos} pts
+          </span>
+        </div>
+        <div style={{ height: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${progresoPct}%`,
+            background: completada ? '#10b981' : '#E6B325',
+            borderRadius: 4, transition: 'width 0.5s ease',
+            boxShadow: completada ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(230,179,37,0.5)',
+          }} />
+        </div>
+      </div>
+      {mision.fecha_termino && (
+        <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', flexShrink: 0 }}>
+          <Icon name="clock" size={10} /> {fmtDate(mision.fecha_termino)}
+        </div>
+      )}
+    </button>
+  );
+}
 
-        {/* Barra de progreso global */}
-        <div style={{ marginBottom: 12 }}>
+function ComunidadMisionPopup({ mision, userId, onClose }) {
+  const isMobile = useIsMobile();
+  const totalPuntos = mision.total_progreso ?? 0;
+  const requeridos  = mision.puntos_requeridos ?? 100;
+  const progresoPct = pct(totalPuntos, requeridos);
+  const completada  = progresoPct >= 100;
+
+  return (
+    <Modal open onClose={onClose} kicker="Misión de Comunidad" title={mision.nombre} zIndex={1100}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        {mision.foto_mision && (
+          <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <img src={mediaUrl(mision.foto_mision)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+        )}
+
+        {mision.mision && (
+          <p style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, margin: 0 }}>{mision.mision}</p>
+        )}
+        {mision.descripcion && (
+          <p style={{ fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{mision.descripcion}</p>
+        )}
+
+        <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
             <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>PROGRESO COMUNIDAD</span>
             <span className="nx-num" style={{ fontSize: 11, color: completada ? '#10b981' : '#E6B325' }}>
@@ -432,15 +475,13 @@ function ComunidadCard({ mision, userId }) {
               height: '100%', width: `${progresoPct}%`,
               background: completada ? '#10b981' : '#E6B325',
               borderRadius: 4, transition: 'width 0.5s ease',
-              boxShadow: completada ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(230,179,37,0.5)',
             }} />
           </div>
         </div>
 
-        {/* Objetivos */}
         {(mision.objetivos ?? []).length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 6 }}>OBJETIVOS</div>
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>OBJETIVOS</div>
             <div style={{ display: 'grid', gap: 5 }}>
               {mision.objetivos.map(obj => (
                 <div key={obj.id} style={{
@@ -462,10 +503,9 @@ function ComunidadCard({ mision, userId }) {
           </div>
         )}
 
-        {/* Recompensas */}
         {(mision.recompensas ?? []).length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 6 }}>RECOMPENSAS</div>
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>RECOMPENSAS</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {mision.recompensas.map((r, i) => (
                 <div key={r.id ?? i} style={{
@@ -486,50 +526,40 @@ function ComunidadCard({ mision, userId }) {
           </div>
         )}
 
-        {/* Participantes */}
         <div>
-          <button
-            className="nx-data"
-            style={{ fontSize: 11, color: '#E6B325', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '.08em', marginBottom: open ? 10 : 0 }}
-            onClick={() => setOpen(o => !o)}
-          >
-            <Icon name={open ? 'chevdown' : 'chevron'} size={11} />{' '}
+          <div className="nx-kicker" style={{ marginBottom: 8 }}>
             {(mision.participantes ?? []).length} participante{mision.participantes?.length !== 1 ? 's' : ''}
-            {yoParticipo && <span style={{ color: '#10b981', marginLeft: 6 }}>· Participando</span>}
-          </button>
-
-          {open && (
-            <div style={{ display: 'grid', gap: 6 }}>
-              {(mision.participantes ?? []).map(p => {
-                const av = {
-                  initials: (p.name ?? '?').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase(),
-                  color: hashColor(p.handle ?? String(p.id)),
-                  name: p.name, tier: p.tier,
-                };
-                const pp = pct(p.progreso ?? 0, requeridos);
-                return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Avatar c={av} size={26} />
-                    <span style={{ fontSize: 12, color: 'var(--txt-dim)', width: isMobile ? 78 : 130, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.name}
-                    </span>
-                    <div className="nx-bar" style={{ flex: 1 }}>
-                      <i style={{ width: `${pp}%`, background: pp >= 100 ? '#10b981' : '#E6B325' }} />
-                    </div>
-                    <span className="nx-num" style={{ fontSize: 10, width: 38, textAlign: 'right', color: 'var(--txt-faint)' }}>
-                      {p.progreso ?? 0} pt
-                    </span>
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {(mision.participantes ?? []).map(p => {
+              const av = {
+                initials: (p.name ?? '?').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase(),
+                color: hashColor(p.handle ?? String(p.id)),
+                name: p.name, tier: p.tier,
+              };
+              const pp = pct(p.progreso ?? 0, requeridos);
+              return (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar c={av} size={26} />
+                  <span style={{ fontSize: 12, color: p.id === userId ? '#10b981' : 'var(--txt-dim)', width: isMobile ? 90 : 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {p.name}
+                  </span>
+                  <div className="nx-bar" style={{ flex: 1 }}>
+                    <i style={{ width: `${pp}%`, background: pp >= 100 ? '#10b981' : '#E6B325' }} />
                   </div>
-                );
-              })}
-              {(mision.participantes ?? []).length === 0 && (
-                <span style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Aún sin participantes</span>
-              )}
-            </div>
-          )}
+                  <span className="nx-num" style={{ fontSize: 10, width: 38, textAlign: 'right', color: 'var(--txt-faint)' }}>
+                    {p.progreso ?? 0} pt
+                  </span>
+                </div>
+              );
+            })}
+            {(mision.participantes ?? []).length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Aún sin participantes</span>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -538,10 +568,12 @@ function ComunidadCard({ mision, userId }) {
 // ─────────────────────────────────────────────────────────────
 function IndividualSection({ misiones, onReload }) {
   const isMobile = useIsMobile();
+  const [selectedId, setSelectedId] = useState(null);
   const misionesNpc = misiones.filter(m => m.npc);
   const activas      = misionesNpc.filter(m => m.status !== 'completada');
   const completadas  = misionesNpc.filter(m => m.status === 'completada');
   const gridCols = isMobile ? '1fr' : 'repeat(3, 1fr)';
+  const selected = misionesNpc.find(m => m.id === selectedId) ?? null;
 
   return (
     <Panel kicker="NPC" title="Misiones Individuales" icon="target">
@@ -554,7 +586,7 @@ function IndividualSection({ misiones, onReload }) {
           marginBottom: completadas.length ? 18 : 0,
         }}>
           {activas.map(m => (
-            <IndividualCard key={m.id} mision={m} onReload={onReload} />
+            <IndividualCard key={m.id} mision={m} onOpen={() => setSelectedId(m.id)} />
           ))}
         </div>
       )}
@@ -565,115 +597,151 @@ function IndividualSection({ misiones, onReload }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 14 }}>
             {completadas.map(m => (
-              <IndividualCard key={m.id} mision={m} completed onReload={onReload} />
+              <IndividualCard key={m.id} mision={m} completed onOpen={() => setSelectedId(m.id)} />
             ))}
           </div>
         </>
+      )}
+
+      {selected && (
+        <IndividualMisionPopup mision={selected} onClose={() => setSelectedId(null)} />
       )}
     </Panel>
   );
 }
 
-function IndividualCard({ mision, completed, onReload }) {
+function IndividualCard({ mision, completed, onOpen }) {
   const isMobile = useIsMobile();
   const npc = mision.npc;
 
   return (
-    <div className="nx-panel solid" style={{
-      padding: '14px 16px',
+    <button onClick={onOpen} className="nx-panel solid" style={{
+      display: 'flex', gap: 12, textAlign: 'left', width: '100%', cursor: 'pointer',
+      color: 'inherit', font: 'inherit', padding: '14px 16px',
       opacity: completed ? 0.7 : 1,
       filter: completed ? 'grayscale(1)' : 'none',
       border: completed
         ? '1px solid rgba(120,120,120,0.35)'
         : '1px solid var(--holo-line)',
     }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
-        {(mision.foto_mision || npc?.imagen_mini) && (
-          <img
-            src={mision.foto_mision ? mediaUrl(mision.foto_mision) : mediaUrl(npc.imagen_mini)}
-            alt={mision.nombre}
-            style={{ width: isMobile ? 64 : 96, height: isMobile ? 64 : 96, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--holo-line)', flexShrink: 0 }}
-          />
-        )}
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-            <span style={{ fontWeight: 700, fontSize: 14 }}>{mision.nombre}</span>
-            {completed
-              ? <Chip tone="green">✓ Completada</Chip>
-              : mision.mi_status === 'en-curso'
-                ? <Chip>En curso</Chip>
-                : <Chip tone="dim">Pendiente</Chip>
-            }
-          </div>
-          {npc && (
-            <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 4 }}>
-              <Icon name="user" size={10} /> {npc.nombre} · {npc.lugar ?? ''}
-            </div>
-          )}
-          <div style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{mision.mision}</div>
+      {(mision.foto_mision || npc?.imagen_mini) && (
+        <img
+          src={mision.foto_mision ? mediaUrl(mision.foto_mision) : mediaUrl(npc.imagen_mini)}
+          alt={mision.nombre}
+          style={{ width: isMobile ? 56 : 84, height: isMobile ? 56 : 84, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--holo-line)', flexShrink: 0 }}
+        />
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{mision.nombre}</span>
+          {completed
+            ? <Chip tone="green">✓ Completada</Chip>
+            : mision.status === 'en-curso'
+              ? <Chip>En curso</Chip>
+              : <Chip tone="dim">Pendiente</Chip>
+          }
         </div>
-        {mision.fecha_termino && (
-          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', flexShrink: 0 }}>
-            <Icon name="clock" size={10} /> {fmtDate(mision.fecha_termino)}
+        {npc && (
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 4 }}>
+            <Icon name="user" size={10} /> {npc.nombre} · {npc.lugar ?? ''}
+          </div>
+        )}
+        <div style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{mision.mision}</div>
+      </div>
+      {mision.fecha_termino && (
+        <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', flexShrink: 0 }}>
+          <Icon name="clock" size={10} /> {fmtDate(mision.fecha_termino)}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function IndividualMisionPopup({ mision, onClose }) {
+  const npc = mision.npc;
+  const done = mision.status === 'completada';
+
+  return (
+    <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Misión Individual'} title={mision.nombre} zIndex={1100}>
+      <div style={{ display: 'grid', gap: 16 }}>
+        {(mision.foto_mision || npc?.imagen_mini) && (
+          <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+            <img
+              src={mision.foto_mision ? mediaUrl(mision.foto_mision) : mediaUrl(npc.imagen_mini)}
+              alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
+        )}
+
+        {npc && (
+          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
+            <Icon name="user" size={11} /> {npc.nombre} · {npc.lugar ?? ''}
+          </div>
+        )}
+
+        {mision.mision && (
+          <p style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, margin: 0 }}>{mision.mision}</p>
+        )}
+        {mision.descripcion && (
+          <p style={{ fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{mision.descripcion}</p>
+        )}
+
+        {(mision.objetivos ?? []).length > 0 && (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>OBJETIVOS</div>
+            <div style={{ display: 'grid', gap: 5 }}>
+              {mision.objetivos.map(obj => {
+                const progreso = mision.progreso_json?.[obj.id] ?? 0;
+                const objPct   = pct(progreso, obj.meta);
+                const objDone  = objPct >= 100 || done;
+                return (
+                  <div key={obj.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 10px', borderRadius: 6,
+                    background: objDone ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${objDone ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                  }}>
+                    <div style={{
+                      width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                      background: objDone ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)',
+                      border: `1px solid ${objDone ? '#10b981' : 'rgba(255,255,255,0.15)'}`,
+                      display: 'grid', placeItems: 'center',
+                    }}>
+                      {objDone && <Icon name="check" size={9} style={{ color: '#10b981' }} />}
+                    </div>
+                    <span style={{ flex: 1, fontSize: 12, color: objDone ? '#10b981' : 'var(--txt-dim)' }}>{obj.nombre}</span>
+                    <span className="nx-num" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                      {progreso} / {obj.meta} {obj.unidad ?? ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {(mision.recompensas ?? []).length > 0 && (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>RECOMPENSAS</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {mision.recompensas.map((r, i) => (
+                <div key={r.id ?? i} style={{
+                  padding: '4px 10px', borderRadius: 6,
+                  background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <span style={{ fontSize: 12 }}>
+                    {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'habilidad' ? '⚡' : '📦'}
+                  </span>
+                  <span style={{ fontSize: 11, color: '#E6B325' }}>
+                    {r.nombre}{r.valor > 0 ? ` (${r.valor})` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Objetivos */}
-      {(mision.objetivos ?? []).length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 6 }}>OBJETIVOS</div>
-          <div style={{ display: 'grid', gap: 5 }}>
-            {mision.objetivos.map(obj => {
-              const progreso = mision.progreso_json?.[obj.id] ?? 0;
-              const objPct   = pct(progreso, obj.meta);
-              const done     = objPct >= 100 || completed;
-              return (
-                <div key={obj.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '6px 10px', borderRadius: 6,
-                  background: done ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${done ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'}`,
-                }}>
-                  <div style={{
-                    width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                    background: done ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)',
-                    border: `1px solid ${done ? '#10b981' : 'rgba(255,255,255,0.15)'}`,
-                    display: 'grid', placeItems: 'center',
-                  }}>
-                    {done && <Icon name="check" size={9} style={{ color: '#10b981' }} />}
-                  </div>
-                  <span style={{ flex: 1, fontSize: 12, color: done ? '#10b981' : 'var(--txt-dim)' }}>{obj.nombre}</span>
-                  <span className="nx-num" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
-                    {progreso} / {obj.meta} {obj.unidad ?? ''}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Recompensas */}
-      {(mision.recompensas ?? []).length > 0 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {mision.recompensas.map((r, i) => (
-            <div key={r.id ?? i} style={{
-              padding: '4px 10px', borderRadius: 6,
-              background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              <span style={{ fontSize: 12 }}>
-                {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'habilidad' ? '⚡' : '📦'}
-              </span>
-              <span style={{ fontSize: 11, color: '#E6B325' }}>
-                {r.nombre}{r.valor > 0 ? ` (${r.valor})` : ''}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    </Modal>
   );
 }

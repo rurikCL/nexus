@@ -21,6 +21,7 @@ class Mision extends Model
         'npc_id',
         'puntos_requeridos',
         'activa',
+        'notificar',
         'orden',
         'fecha_inicio',
         'fecha_termino',
@@ -32,11 +33,12 @@ class Mision extends Model
     ];
 
     protected $casts = [
-        'fecha_inicio'      => 'date',
-        'fecha_termino'     => 'date',
-        'activa'            => 'boolean',
+        'fecha_inicio' => 'date',
+        'fecha_termino' => 'date',
+        'activa' => 'boolean',
+        'notificar' => 'boolean',
         'puntos_requeridos' => 'integer',
-        'orden'             => 'integer',
+        'orden' => 'integer',
     ];
 
     // ── Relations ─────────────────────────────────────────────────────────────

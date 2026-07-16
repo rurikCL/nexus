@@ -138,7 +138,7 @@ import { CombatientesView } from './sections/Combatientes.jsx';
 import MapaView from './sections/Mapa.jsx';
 import AdminView from './sections/Admin.jsx';
 import { TemporadasView } from './sections/Temporadas.jsx';
-import { MisionesView } from './sections/Misiones.jsx';
+import { MisionesView, GlobalMisionPopup } from './sections/Misiones.jsx';
 import { CompetitivoView } from './sections/Competitivo.jsx';
 import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
 import SesionesView from './sections/Sesiones.jsx';
@@ -194,6 +194,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [mapLocation, setMapLocation] = useState(null);
   const [combatToView, setCombatToView] = useState(null);
   const [unreadMsgs, setUnreadMsgs] = useState([]);
+  const [misionNotifQueue, setMisionNotifQueue] = useState([]);
   const [externalChatTarget, setExternalChatTarget] = useState(null);
   const prevUnreadIds = useRef(new Set());
   const isAdmin  = user?.roles?.includes('administrador');
@@ -312,6 +313,21 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         })));
       }
     });
+  }, [user?.id]);
+
+  // Misiones globales marcadas para notificar al ingresar a la sesión —
+  // se muestran (una a la vez) solo si el usuario aún no las aceptó ni completó.
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+    fetch('/api/misiones/global', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const pendientes = (data?.misiones ?? []).filter(m => m.notificar && !m.aceptada && m.status !== 'completada');
+        if (pendientes.length) setMisionNotifQueue(pendientes);
+      })
+      .catch(() => {});
   }, [user?.id]);
 
   useEffect(() => {
@@ -701,6 +717,16 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       />
 
       <ToastHost />
+
+      {/* Popup de misión global pendiente de notificar al ingresar a la sesión */}
+      {misionNotifQueue[0] && (
+        <GlobalMisionPopup
+          mision={misionNotifQueue[0]}
+          onClose={() => setMisionNotifQueue(q => q.slice(1))}
+          onUpdate={() => {}}
+          onUserUpdate={onUserUpdate}
+        />
+      )}
     </div>
   );
 }

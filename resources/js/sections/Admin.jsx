@@ -1770,7 +1770,7 @@ const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, hab
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '',
-  puntos_requeridos: 100, activa: true, orden: 0,
+  puntos_requeridos: 100, activa: true, notificar: false, orden: 0,
   fecha_inicio: '', fecha_termino: '',
   hito_requerimiento: '', entregar_hito: '',
   objetivos: [], recompensas: [],
@@ -1787,6 +1787,7 @@ function misionFromApi(m) {
     npc_id:             m.npc_id            ?? '',
     puntos_requeridos:  m.puntos_requeridos ?? 100,
     activa:             m.activa            ?? true,
+    notificar:          m.notificar         ?? false,
     orden:              m.orden             ?? 0,
     fecha_inicio:         m.fecha_inicio          ?? '',
     fecha_termino:        m.fecha_termino         ?? '',
@@ -2191,8 +2192,22 @@ function MisionesAdmin() {
             </div>
           )}
           {form.tipo_mision === 'global' && (
-            <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '8px 10px', borderRadius: 6, background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.25)' }}>
-              Esta misión estará disponible para todos los usuarios sin necesidad de una temporada asociada. Cada usuario debe aceptarla desde su vista de Misiones para empezar a registrar progreso.
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '8px 10px', borderRadius: 6, background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                Esta misión estará disponible para todos los usuarios sin necesidad de una temporada asociada. Cada usuario debe aceptarla desde su vista de Misiones para empezar a registrar progreso.
+              </div>
+              <div>
+                <label className="nx-label">Notificar al ingresar</label>
+                <button onClick={() => set('notificar', !form.notificar)} style={{
+                  padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                  background: form.notificar ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${form.notificar ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                  color: form.notificar ? '#8b5cf6' : 'var(--txt-dim)',
+                }}>{form.notificar ? 'Sí — muestra popup al ingresar' : 'No'}</button>
+                <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
+                  Si está activo, a cada usuario que aún no la haya aceptado ni completado se le mostrará el popup de detalle de la misión apenas inicie sesión.
+                </div>
+              </div>
             </div>
           )}
 
