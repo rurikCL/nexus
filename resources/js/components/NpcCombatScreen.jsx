@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
@@ -52,11 +52,6 @@ const mediaUrl = (path) => {
 const NPC_COMBAT_LS = 'nx-npc-combat';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
-const combatCardBtnStyle = {
-  padding: '8px 20px', borderRadius: 7, cursor: 'pointer',
-  background: 'rgba(56,205,240,0.10)', border: '1px solid rgba(56,205,240,0.4)',
-  color: '#38cdf0', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em',
-};
 
 /* Fondo espacial autocontenido (estrellas + planetas) para combates navales */
 function pseudoRandom(seed) {
@@ -137,6 +132,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [showCombatCard, setShowCombatCard] = useState(false);
   const [emojiPicker, setEmojiPicker] = useState(false);
   const [emojiBurst, setEmojiBurst]   = useState(null);
+
+  /* Al terminar el combate se cierra la pantalla y se muestra de inmediato el resumen */
+  useLayoutEffect(() => {
+    if (phase === 'victory' || phase === 'defeat') setShowCombatCard(true);
+  }, [phase]);
 
   /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
   const resultTextFor = (hit, ranged, crit, dmg) => {
@@ -910,15 +910,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       {phase === 'victory' && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
           <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>⚡ VICTORIA</span>
-          <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-          <button onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); onVictory?.(); }} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
         </div>
       )}
       {phase === 'defeat' && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
           <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
-          <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-          <button onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); onDefeat?.(); }} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
         </div>
       )}
       {phase === 'battle' && (
@@ -1297,16 +1293,26 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           </div>
         )}
       </div>
-      {showCombatCard && (
-        <NpcCombatCardModal
-          phase={phase} player={player} npc={npc} log={log} ronda={ronda} naveMode={naveMode}
-          planetaNombre={planetaNombre} lugarNombre={lugarNombre} lugarImagen={lugarImagen} planetaImagen={planetaImagen}
-          onClose={() => setShowCombatCard(false)}
-        />
-      )}
     </div>
   );
 
   const container = document.getElementById('nx-content') ?? document.body;
+
+  /* Al terminar el combate se cierra la ventana y solo queda el resumen; al cerrarlo se vuelve al mapa */
+  if (showCombatCard) {
+    return createPortal(
+      <NpcCombatCardModal
+        phase={phase} player={player} npc={npc} log={log} ronda={ronda} naveMode={naveMode}
+        planetaNombre={planetaNombre} lugarNombre={lugarNombre} lugarImagen={lugarImagen} planetaImagen={planetaImagen}
+        onClose={() => {
+          localStorage.removeItem(NPC_COMBAT_LS);
+          if (phase === 'victory') onVictory?.();
+          else onDefeat?.();
+        }}
+      />,
+      container
+    );
+  }
+
   return createPortal(screen, container);
 }
