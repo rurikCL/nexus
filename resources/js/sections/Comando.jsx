@@ -393,7 +393,7 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                 onClick={() => setShowSedeModal(true)}
                 title="Cambiar de sede"
                 className="nx-chip dim"
-                style={{ gap: 6, paddingLeft: user?.sede ? 4 : undefined, cursor: 'pointer', border: 'none' }}
+                style={{ gap: 6, paddingLeft: user?.sede ? 4 : undefined, cursor: 'pointer' }}
               >
                 {user?.sede ? (
                   <>
