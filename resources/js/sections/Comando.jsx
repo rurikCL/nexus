@@ -1569,9 +1569,9 @@ function NaveEquipadaPanel() {
                 <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.capacidad_salto_max ?? 0} color="var(--holocron-oro)" />
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                <NaveCombatStat label="Ataque"         icon="sword"  color="#ff7043" base={equipada.nave?.ataque}         efectivo={equipada.ataque_efectivo} />
-                <NaveCombatStat label="Velocidad"      icon="zap"    color="#E6B325" base={equipada.nave?.velocidad}      efectivo={equipada.velocidad_efectiva} />
-                <NaveCombatStat label="Maniobrabilidad" icon="target" color="#a78bfa" base={equipada.nave?.maniobrabilidad} efectivo={equipada.maniobrabilidad_efectiva} />
+                <NaveCombatStat label="Atq" icon="sword"  color="#ff7043" base={equipada.nave?.ataque}         efectivo={equipada.ataque_efectivo} />
+                <NaveCombatStat label="Vel" icon="zap"    color="#E6B325" base={equipada.nave?.velocidad}      efectivo={equipada.velocidad_efectiva} />
+                <NaveCombatStat label="Man" icon="target" color="#a78bfa" base={equipada.nave?.maniobrabilidad} efectivo={equipada.maniobrabilidad_efectiva} />
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <Btn kind="ghost" sm icon="fuel" onClick={() => reabastecer(equipada)}
