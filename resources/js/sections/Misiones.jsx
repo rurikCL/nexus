@@ -170,7 +170,8 @@ function GlobalCard({ mision, completed, onOpen }) {
       display: 'flex', gap: 12, textAlign: 'left', width: '100%', cursor: 'pointer',
       color: 'inherit', font: 'inherit', padding: '14px 16px',
       opacity: completed ? 0.7 : 1,
-      border: completed ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(139,92,246,0.35)',
+      filter: completed ? 'grayscale(1)' : 'none',
+      border: completed ? '1px solid rgba(120,120,120,0.35)' : '1px solid rgba(139,92,246,0.35)',
     }}>
       {mision.foto_mision && (
         <img src={mediaUrl(mision.foto_mision)} alt={mision.nombre} style={{
@@ -390,8 +391,9 @@ function ComunidadCard({ mision, userId }) {
   return (
     <div className="nx-panel solid" style={{
       overflow: 'hidden',
-      border: completada ? '1px solid rgba(230,179,37,0.6)' : '1px solid rgba(230,179,37,0.3)',
-      boxShadow: completada ? '0 0 14px -6px rgba(230,179,37,0.5)' : 'none',
+      opacity: completada ? 0.75 : 1,
+      filter: completada ? 'grayscale(1)' : 'none',
+      border: completada ? '1px solid rgba(120,120,120,0.4)' : '1px solid rgba(230,179,37,0.3)',
     }}>
       <div style={{ padding: '14px 16px' }}>
         {/* Header */}
@@ -580,8 +582,9 @@ function IndividualCard({ mision, completed, onReload }) {
     <div className="nx-panel solid" style={{
       padding: '14px 16px',
       opacity: completed ? 0.7 : 1,
+      filter: completed ? 'grayscale(1)' : 'none',
       border: completed
-        ? '1px solid rgba(16,185,129,0.3)'
+        ? '1px solid rgba(120,120,120,0.35)'
         : '1px solid var(--holo-line)',
     }}>
       {/* Header */}
