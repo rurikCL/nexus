@@ -345,6 +345,15 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [combat.log]);
 
+  const cancelChallenge = async () => {
+    if (busy || !isPending) return;
+    setBusy(true);
+    try {
+      await apiPost(`/pvp/${combat.id}/cancel`, {});
+      onClose({});
+    } catch { /* toast shown by apiPost */ setBusy(false); }
+  };
+
   const doAction = async (skillId) => {
     if (busy || !combat.is_my_turn || combat.status !== 'active') return;
     setBusy(true);
@@ -377,8 +386,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     } catch { /* ignore */ }
   };
 
-  const isPending  = combat.status === 'pending';
-  const isDeclined = combat.status === 'declined';
+  const isPending   = combat.status === 'pending';
+  const isDeclined  = combat.status === 'declined';
+  const isCancelled = combat.status === 'cancelled';
   const isOver = combat.status !== 'active' && !isPending;
   const iWon   = (combat.status === 'attacker_won'  &&  combat.i_am_attacker)
               || (combat.status === 'defender_won'  && !combat.i_am_attacker)
@@ -389,10 +399,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
   const overPayload = iWon ? { won: true } : iFled ? { fled: true } : { won: false };
 
-  /* Al terminar el combate se cierra la pantalla y se muestra de inmediato el resumen */
+  /* Al terminar el combate se cierra la pantalla y se muestra de inmediato el resumen
+     (un reto rechazado o cancelado no llegó a combatirse, así que no hay nada que resumir) */
   useLayoutEffect(() => {
-    if (isOver && !isDeclined) setShowCombatCard(true);
-  }, [isOver, isDeclined]);
+    if (isOver && !isDeclined && !isCancelled) setShowCombatCard(true);
+  }, [isOver, isDeclined, isCancelled]);
 
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
@@ -683,19 +694,27 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   /* Contenido de la barra de acciones — compartido entre el layout desktop (absoluto) y mobile (flex, dentro de la columna) */
   const actionBarInner = (
     isPending ? (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
         <span style={{ color: '#E6B325', fontSize: 12, fontFamily: 'var(--font-data)', letterSpacing: '0.15em' }}>
           ⚔ RETO ENVIADO
         </span>
         <span style={{ color: 'rgba(150,200,255,0.45)', fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.12em', animation: 'nx-pulse 1.5s infinite' }}>
           ESPERANDO RESPUESTA DE {(opp.name ?? '').toUpperCase()}…
         </span>
+        <button onClick={cancelChallenge} disabled={busy} style={{
+          padding: '6px 20px', borderRadius: 7, cursor: busy ? 'not-allowed' : 'pointer',
+          background: 'rgba(255,45,69,0.08)', border: '1px solid rgba(255,45,69,0.3)',
+          color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 9, letterSpacing: '0.14em',
+          opacity: busy ? 0.5 : 1,
+        }}>CANCELAR RETO</button>
       </div>
     ) : isOver ? (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-        {isDeclined ? (
+        {(isDeclined || isCancelled) ? (
           <>
-            <span style={{ fontSize: 16, color: '#E6B325', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>✗ RETO RECHAZADO</span>
+            <span style={{ fontSize: 16, color: '#E6B325', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>
+              {isCancelled ? '✗ RETO CANCELADO' : '✗ RETO RECHAZADO'}
+            </span>
             <button onClick={() => onClose({})} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(230,179,37,0.10)', border: '1px solid rgba(230,179,37,0.4)', color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CERRAR</button>
           </>
         ) : iWon ? (

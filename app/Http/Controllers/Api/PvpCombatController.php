@@ -224,6 +224,31 @@ class PvpCombatController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** POST /pvp/{id}/cancel */
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+        $combat = PvpCombat::with(self::WITHS)->findOrFail($id);
+
+        if ($combat->attacker_id !== $user->id) {
+            return response()->json(['error' => 'Solo quien retó puede cancelar'], 403);
+        }
+        if ($combat->status !== 'pending') {
+            return response()->json(['error' => 'El reto ya no está pendiente'], 422);
+        }
+
+        $combat->status = 'cancelled';
+        $combat->save();
+
+        $combat->defender->notify(new PvpCombatNotification(
+            'Reto cancelado',
+            "{$user->character->name} canceló el reto de combate",
+            $combat->id
+        ));
+
+        return response()->json(['ok' => true]);
+    }
+
     /** GET /pvp/active */
     public function active(Request $request): JsonResponse
     {

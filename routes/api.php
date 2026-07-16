@@ -219,6 +219,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/pvp/{id}/emoji', [PvpCombatController::class, 'emoji']);
     Route::post('/pvp/{id}/accept', [PvpCombatController::class, 'accept']);
     Route::post('/pvp/{id}/decline', [PvpCombatController::class, 'decline']);
+    Route::post('/pvp/{id}/cancel', [PvpCombatController::class, 'cancel']);
 
     Route::post('/trades/propose', [TradeController::class, 'propose']);
     Route::get('/trades/active', [TradeController::class, 'active']);
