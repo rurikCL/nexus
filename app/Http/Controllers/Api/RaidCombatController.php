@@ -48,16 +48,17 @@ class RaidCombatController extends Controller
     private const MIN_JUGADORES = 2;
 
     /* Expresiones disponibles en combate RAID — whitelist autoritativa del servidor
-     * (el cliente solo envía el id; emoji/label/desc los define el backend). Misma
-     * lista que PvpCombatController::EMOTES. */
+     * (el cliente solo envía el id; emoji/label/desc los define el backend). Set de
+     * coordinación grupal, distinto del whitelist de burla de duelo de PvpCombatController
+     * — debe calzar exactamente con EmojiExpressions.jsx::RAID_EMOTES (mismos ids). */
     private const EMOTES = [
-        'saludar' => ['emoji' => '👋',  'label' => 'Saludar',     'desc' => 'saluda al grupo'],
-        'reir' => ['emoji' => '😂',  'label' => 'Reír',        'desc' => 'se ríe'],
-        'llorar' => ['emoji' => '😢',  'label' => 'Llorar',      'desc' => 'llora'],
-        'impresion' => ['emoji' => '😲',  'label' => 'Impresión',   'desc' => 'se muestra impresionado'],
-        'enojo' => ['emoji' => '😠',  'label' => 'Enojarse',    'desc' => 'se enoja'],
-        'dormir' => ['emoji' => '😴',  'label' => 'Dormir',      'desc' => 'finge dormirse de aburrimiento'],
-        'adios' => ['emoji' => '🖐️', 'label' => 'Decir adiós', 'desc' => 'se despide'],
+        'tristeza' => ['emoji' => '😢',  'label' => 'Tristeza',     'desc' => 'está triste'],
+        'curar' => ['emoji' => '💚',  'label' => '¡Cúrenme!',    'desc' => 'pide curación'],
+        'atacar' => ['emoji' => '⚔️',  'label' => '¡Ataquen!',    'desc' => 'pide concentrar el ataque'],
+        'cuidado' => ['emoji' => '⚠️',  'label' => '¡Cuidado!',    'desc' => 'advierte peligro'],
+        'bien' => ['emoji' => '👍',  'label' => '¡Bien hecho!', 'desc' => 'felicita al grupo'],
+        'vamos' => ['emoji' => '🔥',  'label' => '¡Vamos!',      'desc' => 'anima al grupo'],
+        'asombro' => ['emoji' => '😲',  'label' => 'Asombro',      'desc' => 'se muestra asombrado'],
     ];
 
     /** Cupos de la cola para un jefe: lo configurado en el NPC (raid_slots), con un piso de MIN_JUGADORES. */

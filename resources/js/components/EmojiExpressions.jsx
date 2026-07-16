@@ -14,6 +14,19 @@ export const EMOTES = [
   { id: 'adios',      emoji: '🖐️', label: 'Decir adiós',  desc: 'se despide' },
 ];
 
+/* Set de coordinación para RAID — reemplaza el tono de "burla de duelo" de EMOTES
+   por señales útiles en un combate grupal. `desc` debe calzar en significado con
+   RaidCombatController::EMOTES (whitelist autoritativa del servidor). */
+export const RAID_EMOTES = [
+  { id: 'tristeza', emoji: '😢',  label: 'Tristeza',      desc: 'está triste' },
+  { id: 'curar',    emoji: '💚',  label: '¡Cúrenme!',     desc: 'pide curación' },
+  { id: 'atacar',   emoji: '⚔️',  label: '¡Ataquen!',     desc: 'pide concentrar el ataque' },
+  { id: 'cuidado',  emoji: '⚠️',  label: '¡Cuidado!',     desc: 'advierte peligro' },
+  { id: 'bien',     emoji: '👍',  label: '¡Bien hecho!',  desc: 'felicita al grupo' },
+  { id: 'vamos',    emoji: '🔥',  label: '¡Vamos!',       desc: 'anima al grupo' },
+  { id: 'asombro',  emoji: '😲',  label: 'Asombro',       desc: 'se muestra asombrado' },
+];
+
 /** Duración total del emoji central — debe calzar con emoji-expressions.css. */
 export const EMOJI_BURST_MS = 1600;
 
@@ -27,7 +40,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
  * al presionarlo, para elegir una expresión. Se cierra al elegir un
  * emoticon o al hacer clic fuera del anillo.
  */
-export function EmojiRing({ anchorRef, stageRef, onSelect, onClose }) {
+export function EmojiRing({ anchorRef, stageRef, onSelect, onClose, emotes = EMOTES }) {
   const [items, setItems] = useState(null);
 
   useEffect(() => {
@@ -36,8 +49,8 @@ export function EmojiRing({ anchorRef, stageRef, onSelect, onClose }) {
     if (!stage || !anchor) return;
     const center = getRelativeCenter(anchor, stage);
     const stageRect = stage.getBoundingClientRect();
-    const n = EMOTES.length;
-    setItems(EMOTES.map((e, i) => {
+    const n = emotes.length;
+    setItems(emotes.map((e, i) => {
       const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
       return {
         ...e,
@@ -46,7 +59,7 @@ export function EmojiRing({ anchorRef, stageRef, onSelect, onClose }) {
         delay: i * 25,
       };
     }));
-  }, [anchorRef, stageRef]);
+  }, [anchorRef, stageRef, emotes]);
 
   if (!items) return null;
 

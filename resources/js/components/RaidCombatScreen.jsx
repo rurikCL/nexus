@@ -7,7 +7,7 @@ import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
-import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
+import { EmojiRing, EmojiBurst, RAID_EMOTES } from './EmojiExpressions.jsx';
 
 /* ============================================================
    NÉXUS — Combate RAID (varios jugadores vs 1 NPC jefe, cupos configurables)
@@ -826,6 +826,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         {emojiPicker && (
           <EmojiRing
             anchorRef={myAvatarRef} stageRef={stageRef}
+            emotes={RAID_EMOTES}
             onSelect={sendEmoji}
             onClose={() => setEmojiPicker(false)}
           />
