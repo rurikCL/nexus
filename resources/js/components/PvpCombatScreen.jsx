@@ -953,6 +953,20 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
               <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
             </button>
+
+            {/* Emote — abre el anillo de emoticones anclado al propio avatar */}
+            <button onClick={() => setEmojiPicker(v => !v)} style={{
+              minWidth: 0, borderRadius: 8, cursor: 'pointer',
+              background: 'rgba(230,179,37,0.07)', border: '1px solid rgba(230,179,37,0.22)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 2, padding: '3px 6px', transition: 'all 0.14s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.18)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.5)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.07)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.22)'; }}
+            >
+              <span style={{ fontSize: 18, lineHeight: 1 }}>😊</span>
+              <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
+            </button>
           </div>
         </div>
       </>
@@ -1029,7 +1043,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 effects={myEffects}
                 forma={myFormaProp}
                 effectsPosition="above"
-                avatarRef={myAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
+                avatarRef={myAvatarRef}
               />
             </div>
 
@@ -1056,7 +1070,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
                 forma={myFormaProp}
-                avatarRef={myAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
+                avatarRef={myAvatarRef}
               />
             </div>
           </>

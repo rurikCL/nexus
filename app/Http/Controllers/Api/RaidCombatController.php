@@ -47,6 +47,19 @@ class RaidCombatController extends Controller
     /** Mínimo de jugadores para poder iniciar el combate, sin importar los cupos configurados en el NPC. */
     private const MIN_JUGADORES = 2;
 
+    /* Expresiones disponibles en combate RAID — whitelist autoritativa del servidor
+     * (el cliente solo envía el id; emoji/label/desc los define el backend). Misma
+     * lista que PvpCombatController::EMOTES. */
+    private const EMOTES = [
+        'saludar' => ['emoji' => '👋',  'label' => 'Saludar',     'desc' => 'saluda al grupo'],
+        'reir' => ['emoji' => '😂',  'label' => 'Reír',        'desc' => 'se ríe'],
+        'llorar' => ['emoji' => '😢',  'label' => 'Llorar',      'desc' => 'llora'],
+        'impresion' => ['emoji' => '😲',  'label' => 'Impresión',   'desc' => 'se muestra impresionado'],
+        'enojo' => ['emoji' => '😠',  'label' => 'Enojarse',    'desc' => 'se enoja'],
+        'dormir' => ['emoji' => '😴',  'label' => 'Dormir',      'desc' => 'finge dormirse de aburrimiento'],
+        'adios' => ['emoji' => '🖐️', 'label' => 'Decir adiós', 'desc' => 'se despide'],
+    ];
+
     /** Cupos de la cola para un jefe: lo configurado en el NPC (raid_slots), con un piso de MIN_JUGADORES. */
     private static function slotsFor(MapNpc $npc): array
     {
@@ -199,6 +212,44 @@ class RaidCombatController extends Controller
         }
 
         return response()->json(['raid' => $this->formatRaid($raid, $user->id)]);
+    }
+
+    /** POST /raid/{id}/emoji — expresión cosmética, disponible en cualquier momento (no consume turno). */
+    public function emoji(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'emote_id' => ['required', 'string', 'in:'.implode(',', array_keys(self::EMOTES))],
+        ]);
+
+        $user = $request->user();
+        $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->findOrFail($id);
+
+        $myPlayer = $raid->jugadores->firstWhere('user_id', $user->id);
+        if (! $myPlayer) {
+            return response()->json(['error' => 'No participas en este combate.'], 403);
+        }
+        if (! $raid->isActive()) {
+            return response()->json(['error' => 'El combate no está activo.'], 422);
+        }
+
+        $actorChar = $myPlayer->user->character;
+        $emote = self::EMOTES[$data['emote_id']];
+
+        $log = $raid->log ?? [];
+        $log[] = [
+            'turn' => count($log) + 1,
+            'actor' => 'jugador',
+            'actor_id' => $user->id,
+            'type' => 'emoji',
+            'emoji' => $emote['emoji'],
+            'messages' => ["{$actorChar->name} {$emote['desc']} {$emote['emoji']} ({$emote['label']})"],
+        ];
+        $raid->log = $log;
+        $raid->save();
+
+        return response()->json([
+            'raid' => $this->formatRaid($raid->fresh(['npc', 'jugadores.user.character']), $user->id),
+        ]);
     }
 
     /** POST /raid/{id}/action — ataque/habilidad/cambio de forma/huida del jugador cuyo turno es. */

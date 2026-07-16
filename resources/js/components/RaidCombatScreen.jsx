@@ -7,6 +7,7 @@ import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
+import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
 /* ============================================================
    NÉXUS — Combate RAID (varios jugadores vs 1 NPC jefe, cupos configurables)
@@ -308,10 +309,13 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [animBusy, setAnimBusy] = useState(false);
   const [strike, setStrike] = useState(null);
   const [floatTexts, setFloatTexts] = useState([]);
+  const [emojiPicker, setEmojiPicker] = useState(false);
+  const [emojiBurst, setEmojiBurst] = useState(null);
   const pollRef = useRef(null);
   const logRef = useRef(null);
   const stageRef = useRef(null);
   const npcHudRef = useRef(null);
+  const myAvatarRef = useRef(null);
   const playerRefsMap = useRef(new Map());
   const prevLogLenRef = useRef(null);
   const animChainRef = useRef(Promise.resolve());
@@ -371,6 +375,17 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const playEntry = async (entry) => {
     if (!raid) return;
     if (entry.actor === 'sistema') { await sleep(220); return; }
+
+    /* Expresión cosmética de algún jugador — mostrar el burst salvo que sea la mía propia
+       (esa ya se mostró al instante al enviarla, en sendEmoji). No consume turno ni animación. */
+    if (entry.type === 'emoji') {
+      const myUserId = raid.jugadores.find(j => j.es_yo)?.user_id;
+      if (entry.actor_id !== myUserId) {
+        setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: entry.emoji });
+      }
+      await sleep(220);
+      return;
+    }
 
     const text = (entry.messages || []).join(' ');
     const dice = extractDice(text);
@@ -472,6 +487,17 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       setStancePicker(false);
       setPendingSelfHab(null);
     }
+  };
+
+  /* Expresión cosmética: no consume turno, se muestra al instante en local y se sincroniza
+     al resto del grupo (que la verán al llegar en su próximo polling del combate). */
+  const sendEmoji = async (it) => {
+    setEmojiPicker(false);
+    setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: it.emoji });
+    try {
+      const d = await apiPost(`/raid/${raid.id}/emoji`, { emote_id: it.id });
+      setRaid(d.raid);
+    } catch { /* ignore */ }
   };
 
   const clickHabilidad = (hab) => {
@@ -616,7 +642,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           {/* ── Barra inferior: vida/escudo de los jugadores (cantidad configurable por jefe) ── */}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(2, raid.jugadores.length)}, 1fr)`, gap: 8, padding: '10px 14px', background: 'rgba(4,9,20,0.6)', borderTop: '1px solid rgba(56,205,240,0.16)' }}>
             {raid.jugadores.map(j => (
-              <div key={j.user_id} ref={el => { if (el) playerRefsMap.current.set(j.user_id, el); }} style={{
+              <div key={j.user_id} ref={el => { if (el) { playerRefsMap.current.set(j.user_id, el); if (j.es_yo) myAvatarRef.current = el; } }} style={{
                 display: 'flex', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 8,
                 border: `1px solid ${j.es_mi_turno ? 'var(--holo)' : j.es_yo ? 'rgba(230,179,37,0.4)' : 'rgba(255,255,255,0.1)'}`,
                 background: j.es_mi_turno ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'rgba(255,255,255,0.02)',
@@ -762,6 +788,12 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                         <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formaLabel(me.current_forma)}</span>
                         <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
                       </ActionBtn>
+
+                      <ActionBtn onClick={() => setEmojiPicker(v => !v)} disabled={false}
+                        bg="rgba(230,179,37,0.07)" border="rgba(230,179,37,0.22)" hoverBg="rgba(230,179,37,0.18)" hoverBorder="rgba(230,179,37,0.5)">
+                        <span style={{ fontSize: 18, lineHeight: 1 }}>😊</span>
+                        <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
+                      </ActionBtn>
                     </div>
                   </div>
                 </>
@@ -790,6 +822,17 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         </div>
 
         {diceOverlay}
+
+        {emojiPicker && (
+          <EmojiRing
+            anchorRef={myAvatarRef} stageRef={stageRef}
+            onSelect={sendEmoji}
+            onClose={() => setEmojiPicker(false)}
+          />
+        )}
+        {emojiBurst && (
+          <EmojiBurst key={emojiBurst.id} emoji={emojiBurst.emoji} onDone={() => setEmojiBurst(null)} />
+        )}
 
         {/* Golpe de energía (dados + arco) entre atacante y objetivo */}
         {strike && (

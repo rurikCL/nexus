@@ -1103,6 +1103,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
                 <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
               </ActionBtn>
+
+              <ActionBtn onClick={() => setEmojiPicker(v => !v)}
+                disabled={false}
+                bg="rgba(230,179,37,0.07)" border="rgba(230,179,37,0.22)"
+                hoverBg="rgba(230,179,37,0.18)" hoverBorder="rgba(230,179,37,0.5)" minW={0}
+              >
+                <span style={{ fontSize: 18, lineHeight: 1 }}>😊</span>
+                <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
+              </ActionBtn>
             </div>
           </div>
         </>
@@ -1184,7 +1193,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 buffs={playerBuffs}
                 forma={naveMode ? 0 : currentForma} formaSide="left"
                 effectsPosition="above"
-                avatarRef={playerAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
+                avatarRef={playerAvatarRef}
               />
             </div>
 
@@ -1213,7 +1222,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 fallbackIcon={naveMode ? 'ship' : 'user'}
                 buffs={playerBuffs}
                 forma={naveMode ? 0 : currentForma} formaSide="left"
-                avatarRef={playerAvatarRef} onAvatarClick={() => setEmojiPicker(v => !v)}
+                avatarRef={playerAvatarRef}
               />
             </div>
           </>

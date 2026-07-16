@@ -231,6 +231,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/raid/{id}', [RaidCombatController::class, 'show']);
     Route::post('/raid/{id}/ready', [RaidCombatController::class, 'ready']);
     Route::post('/raid/{id}/action', [RaidCombatController::class, 'action']);
+    Route::post('/raid/{id}/emoji', [RaidCombatController::class, 'emoji']);
     Route::post('/raid/{id}/leave', [RaidCombatController::class, 'leave']);
 
     Route::post('/trades/propose', [TradeController::class, 'propose']);
