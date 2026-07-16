@@ -583,8 +583,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
               <Icon name="menu" size={18} />
             </button>
             <div className="nx-header-titles" style={{ flex: 1, minWidth: 0 }}>
-              <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', margin: 0 }}>{title}</h1>
-              <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.04em' }}>{sub}</div>
+              <h1 className="nx-display" style={{ fontSize: 16, color: 'var(--txt)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</h1>
+              <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
             </div>
           </div>
 

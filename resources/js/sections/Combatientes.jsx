@@ -39,7 +39,7 @@ export function CombatientesView({ S }) {
             <span style={{ position: 'absolute', left: 11, top: 11, color: 'var(--txt-faint)' }}><Icon name="filter" size={15} /></span>
             <input className="nx-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre, alias o sector..." style={{ paddingLeft: 34 }} />
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {['todos', ...Object.keys(NX.TIERS)].map(k => (
               <button key={k} onClick={() => setTierF(k)} className={`nx-chip ${tierF === k ? '' : 'dim'}`}
                 style={{ cursor: 'pointer', borderColor: tierF === k ? 'var(--holo)' : undefined }}>
