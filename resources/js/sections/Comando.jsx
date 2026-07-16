@@ -971,7 +971,7 @@ function HabilidadSlot({ slot, habilidad, onClick }) {
             }
           </div>
           <div style={{ textAlign: 'center', minWidth: 0 }}>
-            <div className="nx-display" style={{ fontSize: 10, color: 'var(--holo)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>
+            <div className="nx-display" style={{ fontSize: 10, color: 'var(--holo)', lineHeight: 1.2, overflowWrap: 'break-word' }}>
               {habilidad.nombre}
             </div>
             <div className="nx-data" style={{ fontSize: 8, color: 'var(--txt-faint)', marginTop: 2 }}>
@@ -1807,7 +1807,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginBottom: 10, letterSpacing: '0.06em' }}>
             {FORMA_LABELS[selectedForma - 1]} — 4 slots
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
             {[1, 2, 3, 4].map(slot => (
               <HabilidadSlot key={slot} slot={slot} habilidad={currentSlots[slot - 1] ?? null} onClick={() => handleOpenPicker(slot)} />
             ))}

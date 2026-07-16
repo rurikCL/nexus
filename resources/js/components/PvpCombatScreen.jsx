@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
@@ -161,11 +161,6 @@ const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow', INI: 'zap' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
-const combatCardBtnStyle = {
-  padding: '8px 20px', borderRadius: 7, cursor: 'pointer',
-  background: 'rgba(56,205,240,0.10)', border: '1px solid rgba(56,205,240,0.4)',
-  color: '#38cdf0', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em',
-};
 
 /* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */
 const mergeEffects = (buffs = [], debuffs = []) => Object.values(
@@ -391,6 +386,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               || (combat.status === 'fled_defender' &&  combat.i_am_attacker);
   const iFled  = (combat.status === 'fled_attacker' &&  combat.i_am_attacker)
               || (combat.status === 'fled_defender' && !combat.i_am_attacker);
+
+  const overPayload = iWon ? { won: true } : iFled ? { fled: true } : { won: false };
+
+  /* Al terminar el combate se cierra la pantalla y se muestra de inmediato el resumen */
+  useLayoutEffect(() => {
+    if (isOver && !isDeclined) setShowCombatCard(true);
+  }, [isOver, isDeclined]);
 
   const pct  = (v, m) => m > 0 ? Math.max(0, Math.min(100, (v / m) * 100)) : 0;
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
@@ -697,25 +699,13 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             <button onClick={() => onClose({})} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(230,179,37,0.10)', border: '1px solid rgba(230,179,37,0.4)', color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CERRAR</button>
           </>
         ) : iWon ? (
-          <>
-            <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>
-              {(combat.status === 'fled_attacker' || combat.status === 'fled_defender') ? '🏃 RIVAL HUYÓ — VICTORIA' : '⚡ VICTORIA'}
-            </span>
-            <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-            <button onClick={() => onClose({ won: true })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
-          </>
+          <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>
+            {(combat.status === 'fled_attacker' || combat.status === 'fled_defender') ? '🏃 RIVAL HUYÓ — VICTORIA' : '⚡ VICTORIA'}
+          </span>
         ) : iFled ? (
-          <>
-            <span style={{ fontSize: 16, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>🏃 HUISTE</span>
-            <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-            <button onClick={() => onClose({ fled: true })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
-          </>
+          <span style={{ fontSize: 16, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>🏃 HUISTE</span>
         ) : (
-          <>
-            <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
-            <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-            <button onClick={() => onClose({ won: false })} style={{ padding: '8px 28px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
-          </>
+          <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
         )}
       </div>
     ) : !combat.is_my_turn ? (
@@ -741,169 +731,175 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{myFuerza}/{myFuerzaMax}</span>
         </div>
 
-        {/* Botones de habilidades */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap' }}>
-          {myHabilidades.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
-            </div>
-          ) : (
-            myHabilidades.map(hab => {
-              const habId    = String(hab.id);
-              const cdLeft   = myCooldowns[habId] ?? 0;
-              const noFuerza = myFuerza < hab.costo_fuerza;
-              const effective = isEffective(hab.forma, oppLastForma);
-              const disabled = busy || cdLeft > 0 || noFuerza;
-              const isSelf   = hab.objetivo === 'self';
+        {/* Habilidades (grid 2x2) + otras opciones (grid 2x2) */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+          {/* Habilidades */}
+          <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
+            {myHabilidades.length === 0 ? (
+              <div style={{ gridColumn: '1 / -1', gridRow: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
+              </div>
+            ) : (
+              myHabilidades.map(hab => {
+                const habId    = String(hab.id);
+                const cdLeft   = myCooldowns[habId] ?? 0;
+                const noFuerza = myFuerza < hab.costo_fuerza;
+                const effective = isEffective(hab.forma, oppLastForma);
+                const disabled = busy || cdLeft > 0 || noFuerza;
+                const isSelf   = hab.objetivo === 'self';
 
-              return (
-                <button key={hab.id}
-                  onClick={() => !disabled && doAction(hab.id)}
-                  disabled={disabled}
-                  style={{
-                    flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 64 : 0, borderRadius: 8,
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                    background: effective
-                      ? 'rgba(16,185,129,0.12)'
-                      : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
-                    border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
-                    position: 'relative', transition: 'all 0.13s',
-                  }}
-                  onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
-                  onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
-                >
-                  {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
-                  {/* Overlay de cooldown */}
-                  {cdLeft > 0 && (
-                    <div style={{
-                      position: 'absolute', inset: 0, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: 'rgba(0,0,0,0.55)', zIndex: 2,
-                    }}>
-                      <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
-                    </div>
-                  )}
-                  {/* Indicador de efectividad */}
-                  {effective && (
-                    <div style={{
-                      position: 'absolute', top: 3, right: 4, fontSize: 8,
-                      color: '#10b981', fontFamily: 'var(--font-data)', fontWeight: 700, zIndex: 1,
-                    }}>EFF</div>
-                  )}
-                  <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
-                  <span style={{
-                    fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
-                  }}>{hab.nombre}</span>
-                  <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                    {!isSelf && (
-                      <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
-                        DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
-                        {!!hab.damage_perforante && (
-                          <span style={{ color: '#8aa0c0' }}>
-                            {' '}+{effective ? Math.round(hab.damage_perforante * 1.5) : hab.damage_perforante}P
-                          </span>
-                        )}
-                      </span>
+                return (
+                  <button key={hab.id}
+                    onClick={() => !disabled && doAction(hab.id)}
+                    disabled={disabled}
+                    style={{
+                      minWidth: 0, borderRadius: 8,
+                      cursor: disabled ? 'not-allowed' : 'pointer',
+                      background: effective
+                        ? 'rgba(16,185,129,0.12)'
+                        : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
+                      border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      gap: 1, padding: '2px 5px', opacity: disabled ? 0.45 : 1,
+                      position: 'relative', transition: 'all 0.13s',
+                    }}
+                    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                    onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
+                  >
+                    {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
+                    {/* Overlay de cooldown */}
+                    {cdLeft > 0 && (
+                      <div style={{
+                        position: 'absolute', inset: 0, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(0,0,0,0.55)', zIndex: 2,
+                      }}>
+                        <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
+                      </div>
                     )}
-                    {isSelf && (
-                      <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                    {/* Indicador de efectividad */}
+                    {effective && (
+                      <div style={{
+                        position: 'absolute', top: 3, right: 4, fontSize: 8,
+                        color: '#10b981', fontFamily: 'var(--font-data)', fontWeight: 700, zIndex: 1,
+                      }}>EFF</div>
                     )}
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
                     <span style={{
-                      fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
-                      background: noFuerza ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
-                      color: noFuerza ? '#ff6b6b' : '#38cdf0',
-                    }}>
-                      ⚡{hab.costo_fuerza}
-                    </span>
-                    {hab.forma > 0 && (
-                      <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
-                        F{formaLabel(hab.forma)}
+                      fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
+                    }}>{hab.nombre}</span>
+                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                      {!isSelf && (
+                        <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
+                          DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
+                          {!!hab.damage_perforante && (
+                            <span style={{ color: '#8aa0c0' }}>
+                              {' '}+{effective ? Math.round(hab.damage_perforante * 1.5) : hab.damage_perforante}P
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {isSelf && (
+                        <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                      )}
+                      <span style={{
+                        fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                        background: noFuerza ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                        color: noFuerza ? '#ff6b6b' : '#38cdf0',
+                      }}>
+                        ⚡{hab.costo_fuerza}
                       </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })
-          )}
+                      {hab.forma > 0 && (
+                        <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
+                          F{formaLabel(hab.forma)}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
 
-          <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch' }} />
 
-          {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
-          {!me.es_nave && (
-            <button onClick={() => doAction('unarmed')} disabled={busy} style={{
-              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-              background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
+          {/* Otras opciones */}
+          <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
+            {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
+            {!me.es_nave && (
+              <button onClick={() => doAction('unarmed')} disabled={busy} style={{
+                minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+              }}
+                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
+                <span style={{
+                  fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                  maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
+                  color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
+                }}>
+                  {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
+                </span>
+                <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                  DMG {me.arma_equipada?.dano ?? 3}
+                  {!!me.arma_equipada?.dano_perforante && (
+                    <span style={{ color: '#8aa0c0' }}> +{me.arma_equipada.dano_perforante}P</span>
+                  )}
+                </span>
+              </button>
+            )}
+
+            {/* Estancia (las naves no tienen estancias — solo combate normal) */}
+            {!me.es_nave && (
+              <button onClick={() => !busy && combat.is_my_turn && setStancePicker(true)} disabled={busy} style={{
+                minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+              }}
+                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
+              >
+                <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
+                <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[myCurrentForma - 1] ?? `F${myCurrentForma}`}</span>
+                <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+              </button>
+            )}
+
+            {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
+            {me.es_nave && (
+              <button onClick={() => doAction('evadir')} disabled={busy} style={{
+                minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+              }}
+                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(16,185,129,0.18)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'; } }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.22)'; }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>🌀</span>
+                <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>EVADIR</span>
+              </button>
+            )}
+
+            {/* Huir */}
+            <button onClick={() => doAction('flee')} disabled={busy} style={{
+              minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+              background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+              gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
             }}
-              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
+              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
             >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>{me.arma_equipada ? '🗡' : '✊'}</span>
-              <span style={{
-                fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
-                maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis',
-                color: (me.arma_equipada?.es_sable && NX.SABERS[me.arma_equipada.color_hoja]) || '#ff9955',
-              }}>
-                {me.arma_equipada ? me.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
-              </span>
-              <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
-                DMG {me.arma_equipada?.dano ?? 3}
-                {!!me.arma_equipada?.dano_perforante && (
-                  <span style={{ color: '#8aa0c0' }}> +{me.arma_equipada.dano_perforante}P</span>
-                )}
-              </span>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
+              <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
             </button>
-          )}
-
-          {/* Estancia (las naves no tienen estancias — solo combate normal) */}
-          {!me.es_nave && (
-            <button onClick={() => !busy && combat.is_my_turn && setStancePicker(true)} disabled={busy} style={{
-              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-              background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-            }}
-              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
-            >
-              <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
-              <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[myCurrentForma - 1] ?? `F${myCurrentForma}`}</span>
-              <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
-            </button>
-          )}
-
-          {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
-          {me.es_nave && (
-            <button onClick={() => doAction('evadir')} disabled={busy} style={{
-              minWidth: 54, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-              background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-            }}
-              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(16,185,129,0.18)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.22)'; }}
-            >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>🌀</span>
-              <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>EVADIR</span>
-            </button>
-          )}
-
-          {/* Huir */}
-          <button onClick={() => doAction('flee')} disabled={busy} style={{
-            minWidth: 50, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
-            background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 3, padding: '6px 8px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
-          }}
-            onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
-            <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
-          </button>
+          </div>
         </div>
       </>
     )
@@ -918,7 +914,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       borderTop: '1px solid rgba(56,205,240,0.13)',
       borderRadius: isMobile ? 10 : 0,
       padding: isMobile ? '8px 10px 12px' : '6px 16px 8px', display: 'flex', flexDirection: 'column', gap: 5,
-      minHeight: isMobile ? 110 : 92,
+      minHeight: isMobile ? 195 : 175,
     }}>
       {actionBarInner}
     </div>
@@ -934,7 +930,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       <div style={{
         position: 'relative',
         width: '100%', maxWidth: 900,
-        height: '100%', maxHeight: 640,
+        height: '100%', maxHeight: 720,
         borderRadius: 18, overflow: 'hidden',
         boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(56,205,240,0.18)',
       }}>
@@ -999,7 +995,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             </div>
 
             {/* Mi HUD — abajo izquierda */}
-            <div ref={myHudRef} style={{ position: 'absolute', bottom: 100, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
+            <div ref={myHudRef} style={{ position: 'absolute', bottom: 195, left: 14, zIndex: 10, width: 'clamp(380px, 48%, 480px)' }}>
               <HUD
                 hp={myHp} maxHp={me.vida_max} escudo={myEscudo} maxEscudo={me.escudo_max}
                 nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
@@ -1066,7 +1062,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{
             position: 'absolute', left: 14, top: 14, zIndex: 10,
             width: logCollapsed ? 36 : 'clamp(160px, 26%, 280px)',
-            maxHeight: 'calc(100% - 270px)',
+            maxHeight: 'calc(100% - 365px)',
             background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
             borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
             display: 'flex', flexDirection: 'column',
@@ -1121,12 +1117,18 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         )}
         </div>
       </div>
-      {showCombatCard && (
-        <CombatCardModal combat={combat} onClose={() => setShowCombatCard(false)} />
-      )}
     </div>
   );
 
   const container = document.getElementById('nx-content') ?? document.body;
+
+  /* Al terminar el combate se cierra la ventana y solo queda el resumen; al cerrarlo se vuelve al mapa */
+  if (showCombatCard) {
+    return createPortal(
+      <CombatCardModal combat={combat} onClose={() => onClose(overPayload)} />,
+      container
+    );
+  }
+
   return createPortal(screen, container);
 }

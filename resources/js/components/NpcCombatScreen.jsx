@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
@@ -52,11 +52,6 @@ const mediaUrl = (path) => {
 const NPC_COMBAT_LS = 'nx-npc-combat';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
-const combatCardBtnStyle = {
-  padding: '8px 20px', borderRadius: 7, cursor: 'pointer',
-  background: 'rgba(56,205,240,0.10)', border: '1px solid rgba(56,205,240,0.4)',
-  color: '#38cdf0', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em',
-};
 
 /* Fondo espacial autocontenido (estrellas + planetas) para combates navales */
 function pseudoRandom(seed) {
@@ -137,6 +132,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [showCombatCard, setShowCombatCard] = useState(false);
   const [emojiPicker, setEmojiPicker] = useState(false);
   const [emojiBurst, setEmojiBurst]   = useState(null);
+
+  /* Al terminar el combate se cierra la pantalla y se muestra de inmediato el resumen */
+  useLayoutEffect(() => {
+    if (phase === 'victory' || phase === 'defeat') setShowCombatCard(true);
+  }, [phase]);
 
   /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
   const resultTextFor = (hit, ranged, crit, dmg) => {
@@ -819,7 +819,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       minWidth: minW, borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
       background: bg, border: `1px solid ${border}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      gap: 3, padding: '6px 8px', opacity: disabled ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
+      gap: 2, padding: '3px 6px', opacity: disabled ? 0.35 : 1, transition: 'all 0.14s', flexShrink: 0,
     }}
       onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = hoverBg; e.currentTarget.style.borderColor = hoverBorder; } }}
       onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; }}
@@ -910,15 +910,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       {phase === 'victory' && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
           <span style={{ fontSize: 16, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>⚡ VICTORIA</span>
-          <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-          <button onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); onVictory?.(); }} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(16,185,129,0.18)', border: '1px solid rgba(16,185,129,0.5)', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>CONTINUAR →</button>
         </div>
       )}
       {phase === 'defeat' && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
           <span style={{ fontSize: 16, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.14em' }}>☠ DERROTA</span>
-          <button onClick={() => setShowCombatCard(true)} style={combatCardBtnStyle}>📸 TARJETA</button>
-          <button onClick={() => { localStorage.removeItem(NPC_COMBAT_LS); onDefeat?.(); }} style={{ padding: '8px 22px', borderRadius: 7, cursor: 'pointer', background: 'rgba(255,45,69,0.14)', border: '1px solid rgba(255,45,69,0.45)', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>RETIRARSE</button>
         </div>
       )}
       {phase === 'battle' && (
@@ -938,91 +934,95 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{playerFuerza}/{maxFuerza}</span>
           </div>
 
-          {/* Botones de habilidades */}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'stretch', flex: 1, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap' }}>
-            {habilidades.length === 0 ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
-              </div>
-            ) : (
-              habilidades.map(hab => {
-                const habId    = String(hab.id);
-                const cdLeft   = cooldowns[habId] ?? 0;
-                const noFuerza = playerFuerza < hab.costo_fuerza;
-                const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
-                const isSelf   = hab.objetivo === 'self';
+          {/* Habilidades (grid 2x2) + otras opciones (grid 2x2) */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+            {/* Habilidades */}
+            <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
+              {habilidades.length === 0 ? (
+                <div style={{ gridColumn: '1 / -1', gridRow: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
+                </div>
+              ) : (
+                habilidades.map(hab => {
+                  const habId    = String(hab.id);
+                  const cdLeft   = cooldowns[habId] ?? 0;
+                  const noFuerza = playerFuerza < hab.costo_fuerza;
+                  const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
+                  const isSelf   = hab.objetivo === 'self';
 
-                return (
-                  <button key={hab.id} onClick={() => !disabled && doPlayerSkill(hab)}
-                    disabled={disabled}
-                    style={{
-                      flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 64 : 0, borderRadius: 8,
-                      cursor: disabled ? 'not-allowed' : 'pointer',
-                      background: disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
-                      border: `1px solid ${disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      gap: 2, padding: '4px 6px', opacity: disabled ? 0.45 : 1,
-                      position: 'relative', transition: 'all 0.13s',
-                    }}
-                    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
-                    onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
-                  >
-                    {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
-                    {/* Overlay de cooldown */}
-                    {cdLeft > 0 && (
-                      <div style={{
-                        position: 'absolute', inset: 0, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: 'rgba(0,0,0,0.55)', zIndex: 2,
-                      }}>
-                        <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
-                      </div>
-                    )}
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
-                    <span style={{
-                      fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
-                    }}>{hab.nombre}</span>
-                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                      {!isSelf && (
-                        <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
-                          DMG {hab.damage}
-                          {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
-                        </span>
+                  return (
+                    <button key={hab.id} onClick={() => !disabled && doPlayerSkill(hab)}
+                      disabled={disabled}
+                      style={{
+                        minWidth: 0, borderRadius: 8,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        background: disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
+                        border: `1px solid ${disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 1, padding: '2px 5px', opacity: disabled ? 0.45 : 1,
+                        position: 'relative', transition: 'all 0.13s',
+                      }}
+                      onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                      onMouseLeave={e => { e.currentTarget.style.background = disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
+                    >
+                      {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
+                      {/* Overlay de cooldown */}
+                      {cdLeft > 0 && (
+                        <div style={{
+                          position: 'absolute', inset: 0, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'rgba(0,0,0,0.55)', zIndex: 2,
+                        }}>
+                          <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
+                        </div>
                       )}
-                      {isSelf && (
-                        <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
-                      )}
+                      <span style={{ fontSize: 14, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
                       <span style={{
-                        fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
-                        background: noFuerza && isPlayerTurn ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
-                        color: noFuerza && isPlayerTurn ? '#ff6b6b' : '#38cdf0',
-                      }}>
-                        ⚡{hab.costo_fuerza}
-                      </span>
-                      {hab.forma > 0 && (
-                        <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
-                          F{formaLabel(hab.forma)}
+                        fontSize: 8, color: 'var(--txt)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', textAlign: 'center',
+                      }}>{hab.nombre}</span>
+                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                        {!isSelf && (
+                          <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                            DMG {hab.damage}
+                            {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
+                          </span>
+                        )}
+                        {isSelf && (
+                          <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                        )}
+                        <span style={{
+                          fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                          background: noFuerza && isPlayerTurn ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                          color: noFuerza && isPlayerTurn ? '#ff6b6b' : '#38cdf0',
+                        }}>
+                          ⚡{hab.costo_fuerza}
                         </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })
-            )}
+                        {hab.forma > 0 && (
+                          <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
+                            F{formaLabel(hab.forma)}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
 
-            {!naveMode && (
-              <>
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
+            <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch' }} />
 
+            {/* Otras opciones */}
+            <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
+              {!naveMode && (
                 <ActionBtn onClick={() => isPlayerTurn && doPlayerBasicAttack()}
                   disabled={!isPlayerTurn}
                   bg="rgba(255,140,0,0.07)" border="rgba(255,140,0,0.22)"
-                  hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={58}
+                  hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={0}
                 >
                   <span style={{ fontSize: 16, lineHeight: 1 }}>{player.arma_equipada ? '🗡' : '✊'}</span>
                   <span style={{
                     fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
-                    maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis',
+                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
                     color: (player.arma_equipada?.es_sable && NX.SABERS[player.arma_equipada.color_hoja]) || '#ff9955',
                   }}>
                     {player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}
@@ -1034,50 +1034,40 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                     )}
                   </span>
                 </ActionBtn>
-              </>
-            )}
+              )}
 
-            {!naveMode && (
-              <>
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
-
+              {!naveMode && (
                 <ActionBtn onClick={() => isPlayerTurn && setStancePicker(true)}
                   disabled={!isPlayerTurn}
                   bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)"
-                  hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={54}
+                  hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={0}
                 >
                   <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>
-                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1] ?? `F${currentForma}`}</span>
+                  <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1] ?? `F${currentForma}`}</span>
                   <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
                 </ActionBtn>
-              </>
-            )}
+              )}
 
-            {naveMode && (
-              <>
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
-
+              {naveMode && (
                 <ActionBtn onClick={() => isPlayerTurn && doPlayerEvadir()}
                   disabled={!isPlayerTurn}
                   bg="rgba(16,185,129,0.07)" border="rgba(16,185,129,0.22)"
-                  hoverBg="rgba(16,185,129,0.18)" hoverBorder="rgba(16,185,129,0.5)" minW={54}
+                  hoverBg="rgba(16,185,129,0.18)" hoverBorder="rgba(16,185,129,0.5)" minW={0}
                 >
                   <span style={{ fontSize: 16, lineHeight: 1 }}>🌀</span>
                   <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>EVADIR</span>
                 </ActionBtn>
-              </>
-            )}
+              )}
 
-            <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch', margin: '2px 0' }} />
-
-            <ActionBtn onClick={() => isPlayerTurn && doPlayerFlee()}
-              disabled={!isPlayerTurn}
-              bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
-              hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={50}
-            >
-              <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
-              <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
-            </ActionBtn>
+              <ActionBtn onClick={() => isPlayerTurn && doPlayerFlee()}
+                disabled={!isPlayerTurn}
+                bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
+                hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={0}
+              >
+                <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
+                <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
+              </ActionBtn>
+            </div>
           </div>
         </>
       )}
@@ -1092,8 +1082,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       background: 'rgba(3,7,16,0.96)', backdropFilter: 'blur(16px)',
       borderTop: '1px solid rgba(56,205,240,0.13)',
       borderRadius: isMobile ? 10 : 0,
-      padding: '6px 12px 8px', display: 'flex', flexDirection: 'column', gap: 5,
-      minHeight: 90,
+      padding: isMobile ? '8px 10px 12px' : '6px 12px 8px', display: 'flex', flexDirection: 'column', gap: 5,
+      minHeight: isMobile ? 195 : 175,
     }}>
       {actionBarInner}
     </div>
@@ -1109,7 +1099,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       <div ref={stageRef} style={{
         position: 'relative',
         width: '100%', maxWidth: 900,
-        height: '100%', maxHeight: 640,
+        height: '100%', maxHeight: 720,
         borderRadius: 18,
         overflow: 'hidden',
         boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(56,205,240,0.18)',
@@ -1179,7 +1169,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             </div>
 
             {/* Jugador HUD — abajo izquierda */}
-            <div ref={playerHudRef} style={{ position: 'absolute', bottom: 90, left: 14, zIndex: 10, width: 'clamp(360px, 55%, 520px)' }}>
+            <div ref={playerHudRef} style={{ position: 'absolute', bottom: 195, left: 14, zIndex: 10, width: 'clamp(360px, 55%, 520px)' }}>
               <HUD
                 hp={playerHp.vida} maxHp={maxPlayer.vida} escudo={playerHp.escudo} maxEscudo={maxPlayer.escudo}
                 nombre={player.nombre} photoUrl={mediaUrl(player.photo)} ini={player.iniciativa}
@@ -1238,7 +1228,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           <div style={{
             position: 'absolute', left: 14, top: 14, zIndex: 10,
             width: logCollapsed ? 36 : 'clamp(150px, 26%, 240px)',
-            maxHeight: 'calc(100% - 260px)',
+            maxHeight: 'calc(100% - 365px)',
             background: 'rgba(4,9,20,0.88)', backdropFilter: 'blur(12px)',
             borderRadius: 10, border: '1px solid rgba(56,205,240,0.14)',
             display: 'flex', flexDirection: 'column',
@@ -1303,16 +1293,26 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           </div>
         )}
       </div>
-      {showCombatCard && (
-        <NpcCombatCardModal
-          phase={phase} player={player} npc={npc} log={log} ronda={ronda} naveMode={naveMode}
-          planetaNombre={planetaNombre} lugarNombre={lugarNombre} lugarImagen={lugarImagen} planetaImagen={planetaImagen}
-          onClose={() => setShowCombatCard(false)}
-        />
-      )}
     </div>
   );
 
   const container = document.getElementById('nx-content') ?? document.body;
+
+  /* Al terminar el combate se cierra la ventana y solo queda el resumen; al cerrarlo se vuelve al mapa */
+  if (showCombatCard) {
+    return createPortal(
+      <NpcCombatCardModal
+        phase={phase} player={player} npc={npc} log={log} ronda={ronda} naveMode={naveMode}
+        planetaNombre={planetaNombre} lugarNombre={lugarNombre} lugarImagen={lugarImagen} planetaImagen={planetaImagen}
+        onClose={() => {
+          localStorage.removeItem(NPC_COMBAT_LS);
+          if (phase === 'victory') onVictory?.();
+          else onDefeat?.();
+        }}
+      />,
+      container
+    );
+  }
+
   return createPortal(screen, container);
 }
