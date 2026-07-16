@@ -959,8 +959,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                         cursor: disabled ? 'not-allowed' : 'pointer',
                         background: disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
                         border: `1px solid ${disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
-                        display: 'flex', flexDirection: 'row', alignItems: 'stretch', textAlign: 'left',
-                        gap: 6, padding: 4, opacity: disabled ? 0.45 : 1,
+                        display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left',
+                        gap: 3, padding: 4, opacity: disabled ? 0.45 : 1,
                         position: 'relative', transition: 'all 0.13s',
                       }}
                       onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
@@ -976,47 +976,53 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                           <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
                         </div>
                       )}
-                      {/* Imagen de la habilidad */}
+                      {/* Cabecera: nombre de la habilidad */}
                       <div style={{
-                        width: 40, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
-                        background: 'rgba(0,0,0,0.28)', display: 'grid', placeItems: 'center',
+                        borderBottom: '1px solid rgba(56,205,240,0.16)', paddingBottom: 3,
                       }}>
-                        {(hab.icono_url || hab.icono)
-                          ? <img src={mediaUrl(hab.icono_url ?? hab.icono)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : <span style={{ fontSize: 16, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
-                        }
-                      </div>
-                      {/* Nombre + datos */}
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
                         <span style={{
                           fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', fontWeight: 700, letterSpacing: '0.02em',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block',
                         }}>{hab.nombre}</span>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                      </div>
+                      {/* Cuerpo: imagen a la izquierda, daño y demás a la derecha */}
+                      <div style={{ display: 'flex', flex: 1, minHeight: 0, alignItems: 'center', gap: 6 }}>
+                        <div style={{
+                          width: 34, height: 34, flexShrink: 0, borderRadius: 6, overflow: 'hidden',
+                          background: 'rgba(0,0,0,0.28)', display: 'grid', placeItems: 'center',
+                        }}>
+                          {(hab.icono_url || hab.icono)
+                            ? <img src={mediaUrl(hab.icono_url ?? hab.icono)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : <span style={{ fontSize: 16, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>
+                          }
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, justifyContent: 'center' }}>
                           <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.55)', fontFamily: 'var(--font-data)' }}>
                             {hab.tipo === 'melee' ? '⚔ Melee' : hab.tipo === 'nave' ? '🚀 Nave' : '◎ Distancia'}
                           </span>
-                          {!isSelf && (
-                            <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
-                              DMG {hab.damage}
-                              {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                            {!isSelf && (
+                              <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                                DMG {hab.damage}
+                                {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
+                              </span>
+                            )}
+                            {isSelf && (
+                              <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                            )}
+                            <span style={{
+                              fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                              background: noFuerza && isPlayerTurn ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                              color: noFuerza && isPlayerTurn ? '#ff6b6b' : '#38cdf0',
+                            }}>
+                              ⚡{hab.costo_fuerza}
                             </span>
-                          )}
-                          {isSelf && (
-                            <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
-                          )}
-                          <span style={{
-                            fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
-                            background: noFuerza && isPlayerTurn ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
-                            color: noFuerza && isPlayerTurn ? '#ff6b6b' : '#38cdf0',
-                          }}>
-                            ⚡{hab.costo_fuerza}
-                          </span>
-                          {hab.forma > 0 && (
-                            <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
-                              F{formaLabel(hab.forma)}
-                            </span>
-                          )}
+                            {hab.forma > 0 && (
+                              <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>
+                                F{formaLabel(hab.forma)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </button>
