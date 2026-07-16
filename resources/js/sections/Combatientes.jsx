@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+
+function useWindowWidth() {
+  const [w, setW] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return w;
+}
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { Empty, classIcon } from './Comando.jsx';
@@ -99,6 +109,7 @@ export function Mini({ label, value, tone }) {
 
 /* ---- Perfil público (vista externa compartible) ---- */
 export function PublicProfile({ c, S, onClose, onChallenge }) {
+  const isMobile = useWindowWidth() < 640;
   const cls    = NX.CLASSES.find(x => x.id === c.cls);
   const tasks  = S.tasks.filter(t => (t.pupil === c.id || t.pupil_id === c.userId) && t.status !== 'completada');
   const recent = S.combats.filter(m => m.a === c.id || m.b === c.id || m._a?.userId === c.userId || m._b?.userId === c.userId);
@@ -167,7 +178,7 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
 
         <div className="nx-panel-body" style={{ display: 'grid', gap: 18 }}>
           {/* Récord */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12 }}>
             {[
               { k: 'Victorias', v: c.wins, t: 'var(--holocron-naranja)', i: 'trophy' },
               { k: 'Derrotas', v: c.losses, t: 'var(--txt-dim)', i: 'x' },
@@ -199,7 +210,7 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
             </div>
           )}
 
-          <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18 }}>
             {/* Atributos */}
             <div>
               <div className="nx-kicker" style={{ marginBottom: 12 }}>Atributos de combate</div>
