@@ -216,8 +216,13 @@ const ENTITY_CONFIG = {
       { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
       { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
       { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del NPC, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
+      { key: 'habilidad_1',   label: 'Habilidad de Jefe — Slot 1', type: 'relatedSelect', related: 'rol_habilidades', span: 2, hint: 'Solo aplica si Tipo = jefe · usada en Combate RAID' },
+      { key: 'habilidad_2',   label: 'Habilidad de Jefe — Slot 2', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
+      { key: 'habilidad_3',   label: 'Habilidad de Jefe — Slot 3', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
+      { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
+      { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, raid_slots: 4 },
   },
 
   naves: {
