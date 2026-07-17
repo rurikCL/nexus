@@ -1006,7 +1006,11 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         <TargetPickerModal
           jugadores={raid.jugadores}
           onCancel={() => setPendingSelfHab(null)}
-          onPick={(targetUserId) => doAction({ skill: String(pendingSelfHab.id), target_user_id: targetUserId })}
+          onPick={(targetUserId) => {
+            const habId = pendingSelfHab.id;
+            setPendingSelfHab(null);
+            void doAction({ skill: String(habId), target_user_id: targetUserId });
+          }}
         />
       )}
     </div>,

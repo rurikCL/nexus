@@ -802,6 +802,8 @@ function ResultCardModal({ generate, fileName, onClose }) {
   };
 
   const canShareFiles = typeof navigator !== 'undefined' && !!navigator.share;
+  const showClose = !!dataUrl;
+  const showFallbackClose = error;
 
   return createPortal(
     <div style={{
@@ -828,7 +830,9 @@ function ResultCardModal({ generate, fileName, onClose }) {
           }} />
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button className="nx-btn nx-btn-ghost" onClick={onClose}>Cerrar</button>
+          {(showClose || showFallbackClose) && (
+            <button className="nx-btn nx-btn-ghost" onClick={onClose}>Cerrar</button>
+          )}
           {dataUrl && (
             <>
               <button className="nx-btn nx-btn-accent" onClick={download}>⬇ Descargar</button>
