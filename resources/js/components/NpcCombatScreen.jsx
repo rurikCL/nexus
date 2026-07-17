@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { playMenuClick } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -696,27 +696,27 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   };
 
   const clickSkill = (hab) => {
-    void playMenuClick();
+    void playClickHabilidad();
     void doPlayerSkill(hab);
   };
 
   const clickBasicAttack = () => {
-    void playMenuClick();
+    void playClickOpcion();
     void doPlayerBasicAttack();
   };
 
   const openStancePicker = () => {
-    void playMenuClick();
+    void playClickOpcion();
     setStancePicker(true);
   };
 
   const clickEvade = () => {
-    void playMenuClick();
+    void playClickOpcion();
     void doPlayerEvadir();
   };
 
   const clickFlee = () => {
-    void playMenuClick();
+    void playClickOpcion();
     void doPlayerFlee();
   };
 
@@ -1397,7 +1397,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                   const hasSlots = Array.isArray(porForma[String(f)]) && porForma[String(f)].some(Boolean);
                   return (
                     <button key={f} onClick={() => {
-                      void playMenuClick();
+                      void playClickOpcion();
                       if (active) { setStancePicker(false); return; }
                       setCurrentForma(f);
                       setStancePicker(false);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { playAtras } from '../utils/sounds.js';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
 import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen.jsx';
@@ -778,7 +779,7 @@ function VolverHeader({ onVolver, crumbs }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
       <button
-        onClick={onVolver}
+        onClick={() => { void playAtras(); onVolver(); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
           background: 'rgba(56,205,240,0.07)',
@@ -1668,7 +1669,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
           </p>
         </div>
 
-        <Btn kind="ghost" onClick={goBack}>← Volver</Btn>
+        <Btn kind="ghost" onClick={() => { void playAtras(); goBack(); }}>← Volver</Btn>
       </div>
     </div>
   );

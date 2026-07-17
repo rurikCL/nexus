@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import QrScanner from 'qr-scanner';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { playAtras } from '../utils/sounds.js';
 
 function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
@@ -772,7 +773,7 @@ function SesionDetalle({ id, user, onBack }) {
     <div className="nx-fade">
       {/* back + header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={onBack}
+        <button onClick={() => { void playAtras(); onBack(); }}
           style={{ background: 'none', border: '1px solid var(--holo-line)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', color: 'var(--txt-dim)', display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <Icon name="arrow" size={12} style={{ transform: 'rotate(180deg)' }} /> Volver

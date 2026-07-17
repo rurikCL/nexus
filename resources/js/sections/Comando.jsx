@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
-import { playMenuClick } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { BONUS_FIELDS } from './ArmadoSable.jsx';
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
@@ -1916,7 +1916,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const handleAssignHabilidad = async (habilidad) => {
     const slot = slotPicker;
     setSlotPicker(null);
-    void playMenuClick();
+    void playClickHabilidad();
     const newCurrent = [...currentSlots];
     newCurrent[slot - 1] = habilidad;
     const newFormaSlots = { ...formaSlots, [String(selectedForma)]: newCurrent };
@@ -2210,7 +2210,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
               const f = i + 1;
               const active = f === selectedForma;
               return (
-                <button key={f} onClick={() => setSelectedForma(f)} title={label} style={{
+                <button key={f} onClick={() => { void playClickOpcion(); setSelectedForma(f); }} title={label} style={{
                   padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
                   fontFamily: 'var(--font-data)', letterSpacing: '0.08em',
                   background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
@@ -2229,7 +2229,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
             {[1, 2, 3, 4].map(slot => (
-              <HabilidadSlot key={slot} slot={slot} habilidad={currentSlots[slot - 1] ?? null} onClick={() => handleOpenPicker(slot)} />
+              <HabilidadSlot key={slot} slot={slot} habilidad={currentSlots[slot - 1] ?? null} onClick={() => { void playClickOpcion(); handleOpenPicker(slot); }} />
             ))}
           </div>
         </Panel>

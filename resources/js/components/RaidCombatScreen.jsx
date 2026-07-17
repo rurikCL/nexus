@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { playMenuClick } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
@@ -615,7 +615,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   };
 
   const clickHabilidad = (hab) => {
-    void playMenuClick();
+    void playClickHabilidad();
     if (hab.objetivo === 'self') {
       setPendingSelfHab(hab);
     } else {
@@ -624,17 +624,17 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   };
 
   const clickAction = (payload) => {
-    void playMenuClick();
+    void playClickOpcion();
     void doAction(payload);
   };
 
   const openStancePicker = () => {
-    void playMenuClick();
+    void playClickOpcion();
     setStancePicker(true);
   };
 
   const clickStance = (forma) => {
-    void playMenuClick();
+    void playClickOpcion();
     void doAction({ skill: 'stance', forma });
   };
 
