@@ -367,20 +367,30 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const myAvatarRef = useRef(null);
   const playerRefsMap = useRef(new Map());
   const prevLogLenRef = useRef(null);
+  const revealQueueRef = useRef(Promise.resolve());
+  const loadInFlightRef = useRef(false);
   const revealRaidRef = useRef(null);
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
 
   const load = useCallback(async () => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     try {
       const d = await apiGet(`/raid/${raidId}`);
       await revealRaidRef.current?.(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo cargar el combate.');
+    } finally {
+      loadInFlightRef.current = false;
     }
   }, [raidId]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { prevLogLenRef.current = null; }, [raidId]);
+  useEffect(() => {
+    prevLogLenRef.current = null;
+    revealQueueRef.current = Promise.resolve();
+    loadInFlightRef.current = false;
+  }, [raidId]);
 
   useEffect(() => {
     if (!raid || raid.status !== 'activo') { clearInterval(pollRef.current); return; }
@@ -512,10 +522,16 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
   const playEntries = async (entries) => {
     setAnimBusy(true);
-    for (const entry of entries) {
-      await playEntry(entry);
+    try {
+      for (let i = 0; i < entries.length; i++) {
+        await playEntry(entries[i]);
+        if (i < entries.length - 1) {
+          await sleep(120);
+        }
+      }
+    } finally {
+      setAnimBusy(false);
     }
-    setAnimBusy(false);
   };
 
   /* Anima las entradas nuevas del log (dados + golpe + texto flotante) y solo entonces
@@ -523,15 +539,25 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
      cambien los números, no al revés. Se invoca explícitamente al recibir cada respuesta
      (acción propia, emoji, polling), nunca via setRaid directo. */
   const revealRaid = async (newRaid) => {
-    const newLog = newRaid.log ?? [];
-    const isFirstLoad = prevLogLenRef.current === null;
-    const newEntries = isFirstLoad ? [] : newLog.slice(prevLogLenRef.current);
-    prevLogLenRef.current = newLog.length;
+    revealQueueRef.current = revealQueueRef.current.then(async () => {
+      const newLog = newRaid.log ?? [];
+      const currentLen = prevLogLenRef.current;
+      const isFirstLoad = currentLen === null;
 
-    if (newEntries.length) {
-      await playEntries(newEntries);
-    }
-    setRaid(newRaid);
+      if (!isFirstLoad && newLog.length < currentLen) {
+        return;
+      }
+
+      const newEntries = isFirstLoad ? [] : newLog.slice(currentLen);
+      prevLogLenRef.current = newLog.length;
+
+      if (newEntries.length) {
+        await playEntries(newEntries);
+      }
+      setRaid(newRaid);
+    }).catch(() => {});
+
+    return revealQueueRef.current;
   };
   revealRaidRef.current = revealRaid;
 
