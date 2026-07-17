@@ -223,6 +223,9 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
         ...(d?.mision ?? {}),
         aceptada: true,
       });
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+        detail: { missionId: mision.id, status: 'aceptada' },
+      }));
       onClose();
     } catch (e) {
       toast(e?.message || 'No se pudo aceptar la misión', { tone: 'error', icon: 'x' });
@@ -255,6 +258,9 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
           .catch(() => {});
       }
       onClose();
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+        detail: { missionId: mision.id, status: 'completada' },
+      }));
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
