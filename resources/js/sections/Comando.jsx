@@ -5,6 +5,7 @@ import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { BONUS_FIELDS } from './ArmadoSable.jsx';
+import CharacterCardModal from '../components/CharacterCard.jsx';
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
 
@@ -127,6 +128,7 @@ const WIDGET_DEFAULT_ORDER = [
   { id: 'ranking',    cols: 1 },
   { id: 'hitos',      cols: 1 },
   { id: 'qr',         cols: 1 },
+  { id: 'carta',      cols: 1 },
 ];
 
 const fmtHitoDate = (d) => d
@@ -325,6 +327,7 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
   const [activaTemporada, setActivaTemporada] = useState(null);
   const [showAllHitos, setShowAllHitos]       = useState(false);
   const [showSedeModal, setShowSedeModal]     = useState(false);
+  const [showCardModal, setShowCardModal]     = useState(false);
   const hitos = user?.character?.hitos ?? [];
   const saveTimer = useRef(null);
 
@@ -713,6 +716,25 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
               </Panel>
             ),
             qr: <QrWidget url={publicProfileUrl} handle={ch.handle} right={panelRight(null)} />,
+            carta: (
+              <Panel title="Carta de Personaje" kicker="Imprimible · tamaño carta Magic" icon="sword" right={panelRight(null)}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+                  <div style={{
+                    width: 100, height: 140, borderRadius: 10, flexShrink: 0,
+                    border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,.03)',
+                    display: 'grid', placeItems: 'center', color: 'var(--holo)',
+                  }}>
+                    <Icon name="user" size={34} />
+                  </div>
+                  <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', textAlign: 'center', maxWidth: 220 }}>
+                    Genera una carta con tus datos y atributos de combate, lista para imprimir a 63×88mm.
+                  </div>
+                  <Btn kind="accent" icon="download" onClick={() => setShowCardModal(true)}>
+                    Generar Carta
+                  </Btn>
+                </div>
+              </Panel>
+            ),
           })[id];
 
           return (
@@ -750,6 +772,10 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
           {hitos.map((h) => <HitoRow key={h.id} hito={h} />)}
         </div>
       </Modal>
+
+      {showCardModal && (
+        <CharacterCardModal character={ch} user={user} onClose={() => setShowCardModal(false)} />
+      )}
     </div>
   );
 }

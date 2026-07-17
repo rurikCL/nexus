@@ -114,8 +114,9 @@ class MapNpc extends Model
 
     /**
      * Nivel de dificultad (representado con estrellas en la UI): otorga a este NPC
-     * un bono plano de +nivel en daño/curación, +floor(nivel/2) extra en críticos, y
-     * redefine el umbral de crítico (dado ≥ 21-nivel, ej. nivel 4 → crítico con 17-20).
+     * +1 a todos sus atributos por nivel, un bono plano adicional de +nivel en
+     * daño/curación, +floor(nivel/2) extra en críticos, y redefine el umbral de
+     * crítico (dado ≥ 21-nivel, ej. nivel 4 → crítico con 17-20).
      */
     public function nivelDificultad(): int
     {

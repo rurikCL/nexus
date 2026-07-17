@@ -107,9 +107,11 @@ class MapEnemigo extends Model
     }
 
     /**
-     * Nivel de dificultad base del catálogo (representado con estrellas en la UI). Al aparecer
-     * en un lugar concreto, este valor puede quedar sobrescrito por el nivel de la asignación
-     * (pivot `map_lugar_enemigos.nivel`) — ver LugarEncuentroController.
+     * Nivel de dificultad base del catálogo (representado con estrellas en la UI): otorga
+     * +1 a todos los atributos por nivel, un bono plano adicional de +nivel en daño/curación,
+     * +floor(nivel/2) extra en críticos, y redefine el umbral de crítico (dado ≥ 21-nivel).
+     * Al aparecer en un lugar concreto, este valor puede quedar sobrescrito por el nivel de
+     * la asignación (pivot `map_lugar_enemigos.nivel`) — ver LugarEncuentroController.
      */
     public function nivelDificultad(): int
     {
