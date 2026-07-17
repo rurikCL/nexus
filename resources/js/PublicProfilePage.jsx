@@ -13,6 +13,15 @@ function hashColor(str) {
 
 function mapPublicCombatant(p) {
   const initials = (p.name ?? '').split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+  const combatStats = p.combat_stats ?? {
+    vida: p.vida ?? 0,
+    escudo: p.escudo ?? 0,
+    defensa: p.defensa ?? 0,
+    ataque: p.ataque ?? 0,
+    movimiento: p.movimiento ?? 0,
+    iniciativa: p.iniciativa ?? 0,
+    punteria: p.punteria ?? 0,
+  };
   return {
     id:        `p${p.id}`,
     userId:    p.id,
@@ -28,6 +37,7 @@ function mapPublicCombatant(p) {
     streak:    p.streak ?? 0,
     winrate:   p.winrate ?? 0,
     stats:     p.stats ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
+    combat_stats: combatStats,
     gold:      p.gold ?? false,
     tier:      p.tier ?? 'iniciado',
     sector:    p.sector ?? '',

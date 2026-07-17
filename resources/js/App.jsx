@@ -18,6 +18,15 @@ function mergeApiCombatants(apiList, currentUserId) {
     const isMe     = api.id === currentUserId;
     const color    = hashColor(api.handle);
     const initials = api.name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+    const combatStats = api.combat_stats ?? {
+      vida: api.vida ?? 0,
+      escudo: api.escudo ?? 0,
+      defensa: api.defensa ?? 0,
+      ataque: api.ataque ?? 0,
+      movimiento: api.movimiento ?? 0,
+      iniciativa: api.iniciativa ?? 0,
+      punteria: api.punteria ?? 0,
+    };
 
     return {
       medals:    [],
@@ -36,6 +45,7 @@ function mergeApiCombatants(apiList, currentUserId) {
       total:    (api.wins ?? 0) + (api.losses ?? 0),
       credits:   api.credits    ?? 0,
       stats:     api.stats      ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
+      combat_stats: combatStats,
       gold:      api.gold       ?? false,
       tier:      api.tier       ?? 'iniciado',
       winrate:   api.winrate    ?? 0,
