@@ -232,8 +232,14 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const activeMissionsCount = missionDrawerItems.length;
 
   const enqueueMissionAlert = (mission) => {
-    if (!mission?.id) return;
-    setMisionNotifQueue(prev => prev.some(m => m.id === mission.id) ? prev : [...prev, mission]);
+    const missionId = mission?.mission_id ?? mission?.mision_id ?? mission?.id;
+    if (!missionId) return;
+    const normalized = {
+      ...mission,
+      id: missionId,
+      notification_id: mission?.notification_id ?? mission?._notifId ?? null,
+    };
+    setMisionNotifQueue(prev => prev.some(m => m.id === normalized.id) ? prev : [...prev, normalized]);
   };
 
   const go = (v) => {
@@ -402,7 +408,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
         .forEach(n => {
           if (n.data?.type === 'mision_lista_para_completar') {
-            enqueueMissionAlert({ ...n.data, id: n.id });
+            enqueueMissionAlert({ ...n.data, notification_id: n.id });
             return;
           }
           onTransmision?.({ ...n.data, _notifId: n.id });
@@ -579,7 +585,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
         if (notif?.type === 'mision_lista_para_completar') {
-          enqueueMissionAlert({ ...notif, id: notif.id ?? Date.now() });
+          enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now() });
           return;
         }
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
