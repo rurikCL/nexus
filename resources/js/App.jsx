@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from './data/seed.js';
-import { Icon, Avatar, Btn, ToastHost, toast } from './components/ui.jsx';
+import { Icon, Avatar, Btn, Chip, ToastHost, toast } from './components/ui.jsx';
 import { MissionCompleteBanner } from './components/MissionCompleteBanner.jsx';
 import { useStore } from './store/useStore.js';
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
@@ -180,6 +180,12 @@ const MENU_SLUGS = new Set([
   'configuracion',
   'armado-sable',
 ]);
+const MISSION_TYPE_LABELS = {
+  global: 'Global',
+  individual: 'Individual',
+  comunidad: 'Comunidad',
+  temporada: 'Temporada',
+};
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
@@ -206,6 +212,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [missionsOpen, setMissionsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [testOpen, setTestOpen] = useState(false);
   const [mapLocation, setMapLocation] = useState(null);
@@ -213,12 +220,15 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [unreadMsgs, setUnreadMsgs] = useState([]);
   const [misionNotifQueue, setMisionNotifQueue] = useState([]);
   const [missionAlertQueue, setMissionAlertQueue] = useState([]);
+  const [missionDrawerLoading, setMissionDrawerLoading] = useState(true);
+  const [missionDrawerItems, setMissionDrawerItems] = useState([]);
   const [externalChatTarget, setExternalChatTarget] = useState(null);
   const prevUnreadIds = useRef(new Set());
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
   const currentMissionAlert = missionAlertQueue[0] ?? null;
+  const activeMissionsCount = missionDrawerItems.length;
 
   const go = (v) => {
     setView(v);
@@ -230,6 +240,16 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const enqueueMissionAlert = (notif) => {
     if (!notif?.id) return;
     setMissionAlertQueue(prev => prev.some(n => n.id === notif.id) ? prev : [...prev, notif]);
+  };
+
+  const openNotifications = () => {
+    setMissionsOpen(false);
+    setNotifOpen(o => !o);
+  };
+
+  const openMissions = () => {
+    setNotifOpen(false);
+    setMissionsOpen(o => !o);
   };
 
   const dismissMissionAlert = (notifId) => {
@@ -419,6 +439,104 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         if (pendientes.length) setMisionNotifQueue(pendientes);
       })
       .catch(() => {});
+  }, [user?.id, user?.character?.hitos]);
+
+  const loadMissionDrawer = async () => {
+    if (!user?.id) {
+      setMissionDrawerItems([]);
+      setMissionDrawerLoading(false);
+      return;
+    }
+
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+
+    setMissionDrawerLoading(true);
+    try {
+      const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+      const fetchJson = (path) => fetch(path, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+      const [global, individual, comunidad, temporadas] = await Promise.all([
+        fetchJson('/api/misiones/global'),
+        fetchJson('/api/misiones/individual'),
+        fetchJson('/api/misiones/comunidad'),
+        fetchJson('/api/temporadas'),
+      ]);
+
+      const activeTemporadas = (temporadas?.temporadas ?? []).filter(t => t.activa);
+      const temporadaData = await Promise.all(activeTemporadas.map(async (t) => {
+        const data = await fetchJson(`/api/misiones/temporada/${t.id}`);
+        return { temporada: t, misiones: data?.misiones ?? [] };
+      }));
+
+      const normalizeObjetivos = (mision) => {
+        const progresoJson = Array.isArray(mision?.progreso_json)
+          ? mision.progreso_json
+          : (mision?.progreso_json && typeof mision.progreso_json === 'object')
+            ? mision.progreso_json
+            : {};
+        return (mision?.objetivos ?? []).map((obj) => {
+          const actual = obj.progreso_actual ?? progresoJson[String(obj.id)] ?? 0;
+          const meta = obj.meta ?? 0;
+          const porcentaje = meta > 0 ? Math.min(100, Math.round((actual / meta) * 100)) : 100;
+          return {
+            ...obj,
+            progreso_actual: actual,
+            completado: obj.completado ?? porcentaje >= 100,
+            porcentaje,
+          };
+        });
+      };
+
+      const flattenMission = (mision, tipo, extra = {}) => {
+        const objetivos = normalizeObjetivos(mision);
+        const progreso = typeof mision?.progreso === 'number'
+          ? mision.progreso
+          : objetivos.length > 0
+            ? Math.round(objetivos.reduce((sum, obj) => sum + (obj.porcentaje ?? 0), 0) / objetivos.length)
+            : 0;
+        const completada = mision?.status === 'completada' || mision?.completada_por_mi || extra.completada === true;
+        const aceptada = mision?.aceptada ?? ((mision?.status != null) || extra.aceptada === true);
+        return {
+          ...mision,
+          tipo_panel: tipo,
+          tipo_label: extra.tipo_label ?? MISSION_TYPE_LABELS[tipo] ?? tipo,
+          temporada_nombre: extra.temporada_nombre ?? mision?.temporada_nombre ?? null,
+          objetivos,
+          progreso,
+          completada,
+          aceptada,
+          status: mision?.status ?? (completada ? 'completada' : aceptada ? 'en-curso' : 'pendiente'),
+          puede_completar: mision?.puede_completar ?? false,
+        };
+      };
+
+      const items = [
+        ...((global?.misiones ?? []).map(m => flattenMission(m, 'global'))),
+        ...((individual?.misiones ?? []).map(m => flattenMission(m, 'individual'))),
+        ...((comunidad?.misiones ?? [])
+          .filter(m => m.aceptada || m.progreso > 0 || m.completada_por_mi)
+          .map(m => flattenMission(m, 'comunidad'))),
+        ...temporadaData.flatMap(({ temporada, misiones }) => (
+          misiones
+            .filter(m => m.status === 'en-curso' || m.progreso > 0 || m.completada_por_mi)
+            .map(m => flattenMission(m, 'temporada', { temporada_nombre: temporada.nombre }))
+        )),
+      ].filter(m => !m.completada && (m.aceptada || m.progreso > 0));
+
+      setMissionDrawerItems(items);
+    } catch {
+      setMissionDrawerItems([]);
+    } finally {
+      setMissionDrawerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMissionDrawer();
+    const handler = () => loadMissionDrawer();
+    window.addEventListener('nx-mision-updated', handler);
+    return () => window.removeEventListener('nx-mision-updated', handler);
   }, [user?.id, user?.character?.hitos]);
 
   useEffect(() => {
@@ -731,11 +849,19 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
                 </span>
               </button>
             )}
-            <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={() => setNotifOpen(o => !o)}>
+            <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={openNotifications}>
               <Icon name="bell" size={15} />
               {unread > 0 && (
                 <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holocron-naranja)', boxShadow: '0 0 6px var(--holocron-naranja)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
                   {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+            <button className="nx-btn nx-btn-ghost" style={{ padding: 7, position: 'relative' }} onClick={openMissions} title="Misiones en curso">
+              <Icon name="target" size={15} />
+              {activeMissionsCount > 0 && (
+                <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 8, background: 'var(--holo)', boxShadow: '0 0 6px var(--holo)', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontFamily: 'var(--font-data)', padding: '0 3px' }}>
+                  {activeMissionsCount > 9 ? '9+' : activeMissionsCount}
                 </span>
               )}
             </button>
@@ -796,11 +922,11 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
       {/* Overlay notificaciones */}
       <div
-        onClick={() => setNotifOpen(false)}
+        onClick={() => { setNotifOpen(false); setMissionsOpen(false); }}
         style={{
           position: 'fixed', inset: 0, zIndex: 29,
           background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(2px)',
-          opacity: notifOpen ? 1 : 0, pointerEvents: notifOpen ? 'auto' : 'none',
+          opacity: notifOpen || missionsOpen ? 1 : 0, pointerEvents: notifOpen || missionsOpen ? 'auto' : 'none',
           transition: 'opacity 0.25s',
         }}
       />
@@ -813,6 +939,14 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         onMarkRead={markRead}
         onMarkAllRead={markAllRead}
         onClose={() => setNotifOpen(false)}
+      />
+
+      <MissionDrawer
+        open={missionsOpen}
+        loading={missionDrawerLoading}
+        missions={missionDrawerItems}
+        onClose={() => setMissionsOpen(false)}
+        onGoToMisiones={() => { setMissionsOpen(false); go('misiones'); }}
       />
 
       <ToastHost />
@@ -989,6 +1123,223 @@ function NotifDrawer({ open, notifications, unread, onMarkRead, onMarkAllRead, o
         </div>
       </div>
     </div>
+  );
+}
+
+function MissionDrawer({ open, loading, missions, onClose, onGoToMisiones }) {
+  const groups = missions.reduce((acc, m) => {
+    const key = m.tipo_panel ?? 'global';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(m);
+    return acc;
+  }, {});
+  const totalObjetivos = missions.reduce((sum, m) => sum + (m.objetivos?.length ?? 0), 0);
+  const order = ['global', 'individual', 'comunidad', 'temporada'];
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 31,
+      width: 420, maxWidth: '100vw',
+      background: 'rgba(5,10,22,0.97)',
+      borderLeft: '1px solid var(--holo-line)',
+      backdropFilter: 'blur(14px)',
+      display: 'flex', flexDirection: 'column',
+      transform: open ? 'translateX(0)' : 'translateX(100%)',
+      transition: 'transform 0.28s var(--ease-standard)',
+      boxShadow: open ? '-20px 0 60px -10px rgba(0,0,0,0.7)' : 'none',
+    }}>
+      <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--holo-line)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: missions.length ? 14 : 0 }}>
+          <span style={{ color: 'var(--holo)' }}><Icon name="target" size={18} /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="nx-display" style={{ fontSize: 15 }}>Misiones en curso</div>
+            <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 1 }}>
+              {missions.length ? `${missions.length} activas · ${totalObjetivos} objetivos` : 'Sin misiones activas'}
+            </div>
+          </div>
+          <button className="nx-btn nx-btn-ghost" style={{ padding: 8 }} onClick={onClose} aria-label="Cerrar">
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Btn kind="ghost" iconRight="arrow" sm onClick={onGoToMisiones}>
+            Abrir misiones
+          </Btn>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--txt-faint)' }}>
+            <div className="nx-data" style={{ letterSpacing: '0.12em', textTransform: 'uppercase' }}>Cargando misiones...</div>
+          </div>
+        ) : missions.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--txt-faint)' }}>
+            <span style={{ opacity: 0.3 }}><Icon name="target" size={40} /></span>
+            <div className="nx-data" style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase' }}>No hay misiones en curso</div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 14, padding: 16 }}>
+            {order.filter(key => (groups[key] ?? []).length > 0).map(key => (
+              <MissionGroup key={key} label={MISSION_TYPE_LABELS[key] ?? key} items={groups[key]} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MissionGroup({ label, items }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <section style={{
+      border: '1px solid var(--holo-line)',
+      borderRadius: 10,
+      background: 'rgba(255,255,255,0.02)',
+      overflow: 'hidden',
+    }}>
+      <button onClick={() => setCollapsed(c => !c)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer',
+        borderBottom: collapsed ? 'none' : '1px solid var(--holo-line)',
+      }}>
+        <span className="nx-kicker" style={{ flex: 1, textAlign: 'left', fontSize: 9 }}>{label}</span>
+        <span style={{ color: 'var(--txt-faint)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform .2s' }}>
+          <Icon name="chevron" size={13} />
+        </span>
+      </button>
+
+      {!collapsed && (
+        <div style={{ display: 'grid', gap: 10, padding: 12 }}>
+          {items.map(m => <MissionItem key={`${m.tipo_panel}-${m.id}`} mision={m} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MissionItem({ mision }) {
+  const objetivos = mision.objetivos ?? [];
+  const progreso = typeof mision.progreso === 'number'
+    ? mision.progreso
+    : objetivos.length > 0
+      ? Math.round(objetivos.reduce((sum, obj) => sum + (obj.porcentaje ?? 0), 0) / objetivos.length)
+      : 0;
+
+  return (
+    <article style={{
+      padding: 12,
+      borderRadius: 10,
+      border: '1px solid rgba(56,205,240,0.18)',
+      background: 'rgba(56,205,240,0.04)',
+      display: 'grid',
+      gap: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          color: 'var(--holo)',
+          border: '1px solid var(--holo-line)',
+          background: 'rgba(56,205,240,0.06)',
+        }}>
+          <Icon name="target" size={16} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>{mision.nombre}</div>
+            <Chip tone={mision.completada ? 'green' : mision.puede_completar ? 'gold' : ''}>
+              {mision.completada ? 'Completada' : mision.puede_completar ? 'Lista' : 'En curso'}
+            </Chip>
+            <Chip tone="dim">{mision.tipo_label}</Chip>
+            {mision.temporada_nombre && <Chip tone="dim">{mision.temporada_nombre}</Chip>}
+          </div>
+          {mision.mision && (
+            <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginTop: 4, lineHeight: 1.5 }}>
+              {mision.mision}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>PROGRESO</span>
+          <span className="nx-num" style={{ fontSize: 11, color: 'var(--holo)' }}>{progreso}%</span>
+        </div>
+        <div style={{ height: 7, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            width: `${Math.max(0, Math.min(100, progreso))}%`,
+            background: 'linear-gradient(90deg, var(--holo), color-mix(in srgb, var(--holo) 55%, white))',
+            borderRadius: 4,
+            transition: 'width .3s ease',
+          }} />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        {objetivos.length > 0 ? objetivos.map(obj => {
+          const total = obj.meta ?? 0;
+          const actual = obj.progreso_actual ?? 0;
+          const pct = total > 0 ? Math.min(100, Math.round((actual / total) * 100)) : 100;
+          return (
+            <div key={obj.id} style={{
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: obj.completado ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${obj.completado ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.06)'}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name={obj.completado ? 'check' : 'target'} size={12} style={{ color: obj.completado ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--txt)', fontWeight: 600 }}>
+                  {obj.nombre}
+                </div>
+                <span className="nx-data" style={{ fontSize: 10, color: obj.completado ? '#10b981' : 'var(--txt-faint)' }}>
+                  {actual}/{total}{obj.unidad ? ` ${obj.unidad}` : ''}
+                </span>
+              </div>
+              {obj.descripcion && (
+                <div style={{ fontSize: 11, color: 'var(--txt-faint)', lineHeight: 1.45, marginTop: 3, marginLeft: 20 }}>
+                  {obj.descripcion}
+                </div>
+              )}
+              <div style={{ height: 4, marginTop: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${pct}%`,
+                  borderRadius: 2,
+                  background: obj.completado ? '#10b981' : 'var(--holo)',
+                }} />
+              </div>
+            </div>
+          );
+        }) : (
+          <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Sin objetivos definidos</div>
+        )}
+      </div>
+
+      {mision.recompensas?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {mision.recompensas.map((r, i) => (
+            <span key={r.id ?? i} style={{
+              fontSize: 10,
+              padding: '3px 8px',
+              borderRadius: 999,
+              background: 'rgba(230,179,37,0.08)',
+              border: '1px solid rgba(230,179,37,0.2)',
+              color: '#E6B325',
+            }}>
+              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
+              {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
+              {r.tipo !== 'habilidad' && r.valor > 0 ? ` x${r.valor}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 

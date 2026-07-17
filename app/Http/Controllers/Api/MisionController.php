@@ -85,6 +85,8 @@ class MisionController extends Controller
     public function comunidad(Request $request): JsonResponse
     {
         $user = $request->user();
+        $character = $user->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
         $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users.character'])
             ->where('tipo_mision', 'comunidad')
@@ -109,11 +111,26 @@ class MisionController extends Controller
                 $totalProgreso = $m->users->sum(fn ($u) => $u->pivot->progreso);
 
                 $miPivot = $m->users->firstWhere('id', $user->id);
+                $miProgresoJson = $miPivot?->pivot->progreso_json ? json_decode($miPivot->pivot->progreso_json, true) : [];
+                $objetivosConProgreso = $this->buildObjetivosConProgreso($m, $miProgresoJson);
+                $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
+                $requeridos = $m->hito_requerimiento
+                    ? array_filter(array_map('trim', explode(',', $m->hito_requerimiento)))
+                    : [];
+                $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
                 return array_merge($base, [
+                    'objetivos' => $objetivosConProgreso,
                     'participantes' => $participantes,
                     'total_progreso' => $totalProgreso,
                     'completada_por_mi' => $miPivot?->pivot->status === 'completada',
+                    'status' => $miPivot?->pivot->status ?? null,
+                    'progreso' => $miPivot?->pivot->progreso ?? 0,
+                    'progreso_json' => $miProgresoJson,
+                    'aceptada' => $miPivot !== null,
+                    'cumple_hitos' => $cumpleHitos,
+                    'objetivos_completos' => $objetivosCompletos,
+                    'puede_completar' => $miPivot !== null && $miPivot?->pivot->status !== 'completada' && $cumpleHitos && $objetivosCompletos,
                 ]);
             });
 
@@ -139,13 +156,15 @@ class MisionController extends Controller
                 $base = $this->formatMision($m);
 
                 $pivot = $m->users()->where('user_id', $user->id)->first()?->pivot;
+                $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
 
                 return array_merge($base, [
+                    'objetivos' => $this->buildObjetivosConProgreso($m, $progresoJson),
                     'status' => $pivot?->status ?? 'pendiente',
                     'progreso' => $pivot?->progreso ?? 0,
-                    'progreso_json' => $pivot?->progreso_json
-                        ? json_decode($pivot->progreso_json, true)
-                        : null,
+                    'progreso_json' => $progresoJson,
+                    'aceptada' => $pivot !== null,
+                    'puede_completar' => $pivot?->status !== 'completada' && $this->puedeCompletarCon($user, $m, $progresoJson),
                     'npc' => $m->npc ? [
                         'id' => $m->npc->id,
                         'nombre' => $m->npc->nombre,
@@ -784,5 +803,20 @@ class MisionController extends Controller
             'objetivos_completos' => $objetivosCompletos,
             'puede_completar' => $aceptada && ! $completada && $cumpleHitos && $objetivosCompletos,
         ]);
+    }
+
+    private function buildObjetivosConProgreso(Mision $mision, array $progresoJson): \Illuminate\Support\Collection
+    {
+        return $mision->objetivos->map(fn ($o) => [
+            'id' => $o->id,
+            'nombre' => $o->nombre,
+            'descripcion' => $o->descripcion,
+            'tipo' => $o->tipo,
+            'meta' => $o->meta,
+            'unidad' => $o->unidad,
+            'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+            'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
+            'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
+        ])->values();
     }
 }
