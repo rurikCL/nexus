@@ -9,6 +9,7 @@ import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 import { RaidCombatCardModal } from './CombatCard.jsx';
+import StatusBurstEffect from './StatusBurstEffect.jsx';
 
 /* ============================================================
    NÉXUS — Combate RAID (varios jugadores vs 1 NPC jefe, cupos configurables)
@@ -358,6 +359,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [floatTexts, setFloatTexts] = useState([]);
   const [emojiPicker, setEmojiPicker] = useState(false);
   const [emojiBurst, setEmojiBurst] = useState(null);
+  const [statusFx, setStatusFx] = useState(null);
   const pollRef = useRef(null);
   const logRef = useRef(null);
   const stageRef = useRef(null);
@@ -400,6 +402,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setFloatTexts(prev => [...prev, { id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y, ...result }]);
   };
 
+  const playStatusFx = (targetId, variant) => new Promise((resolve) => {
+    const el = elFor(targetId);
+    if (!stageRef.current || !el) {
+      resolve();
+      return;
+    }
+    setStatusFx({
+      key: `${Date.now()}-${Math.random()}`,
+      variant,
+      targetId,
+      onResolve: resolve,
+    });
+  });
+
   const triggerStrike = ({ attackerId, targetId, hit, crit, text }) => {
     const attackerEl = elFor(attackerId);
     const targetEl = elFor(targetId);
@@ -436,6 +452,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
     const text = (entry.messages || []).join(' ');
     const dice = extractDice(text);
+    const statusEffects = Array.isArray(entry.effects) ? entry.effects.filter((e) => e?.type === 'buff' || e?.type === 'heal') : [];
     const isPlayerActor = entry.actor === 'jugador';
     const actorId = isPlayerActor ? entry.actor_id : 'npc';
     const targetId = isPlayerActor ? 'npc' : (entry.target_user_id ?? null);
@@ -466,14 +483,26 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     const lastMsg = (entry.messages || [])[entry.messages.length - 1] || '';
     if (entry.hit === true) {
       await triggerStrike({ attackerId: actorId, targetId: targetId ?? 'npc', hit: true, crit: !!entry.crit, text: lastMsg });
+      for (const eff of statusEffects) {
+        const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
+        await playStatusFx(fxTarget, eff.type);
+      }
       return;
     }
     if (entry.hit === false) {
       await triggerStrike({ attackerId: actorId, targetId: targetId ?? 'npc', hit: false, crit: false, text: lastMsg });
+      for (const eff of statusEffects) {
+        const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
+        await playStatusFx(fxTarget, eff.type);
+      }
       return;
     }
 
     /* Sin tirada de combate (buff/cambio de forma/huida) — solo una curación posible que mostrar */
+    for (const eff of statusEffects) {
+      const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
+      await playStatusFx(fxTarget, eff.type);
+    }
     if (text.includes('Curación') || text.includes('restaurado')) {
       const healTarget = entry.target_user_id ?? (isPlayerActor && text.includes(raid.npc.nombre) ? 'npc' : (isPlayerActor ? entry.actor_id : null));
       if (healTarget != null) showFloatText(healTarget, { variant: 'heal', text: lastMsg });
@@ -928,6 +957,18 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
               setFloatTexts(prev => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
               strike.onResolve?.();
               setStrike(null);
+            }}
+          />
+        )}
+
+        {statusFx && (
+          <StatusBurstEffect key={statusFx.key}
+            variant={statusFx.variant}
+            stageRef={stageRef}
+            targetRef={statusFx.targetId === 'npc' ? npcHudRef : { current: playerRefsMap.current.get(statusFx.targetId) }}
+            onDone={() => {
+              statusFx.onResolve?.();
+              setStatusFx(null);
             }}
           />
         )}

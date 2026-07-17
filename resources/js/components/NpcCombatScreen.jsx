@@ -9,6 +9,7 @@ import FloatingCombatText from './FloatingCombatText.jsx';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { NpcCombatCardModal } from './CombatCard.jsx';
+import StatusBurstEffect from './StatusBurstEffect.jsx';
 import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -167,6 +168,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     setFloatTexts((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y, ...result }]);
   };
 
+  const playStatusFx = (targetRef, variant) => new Promise((resolve) => {
+    if (!stageRef.current || !targetRef?.current) {
+      resolve();
+      return;
+    }
+    setStatusFx({
+      key: `${Date.now()}-${Math.random()}`,
+      variant,
+      targetRef,
+      onResolve: resolve,
+    });
+  });
+
   /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
   const triggerStrike = ({ playerIsAttacker, ranged, hit, crit = false, dmg = 0 }) => {
     if (!stageRef.current) return Promise.resolve();
@@ -195,6 +209,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [cooldowns,    setCooldowns]    = useState(initialState?.cooldowns     ?? {});
   const [playerBuffs,  setPlayerBuffs]  = useState(initialState?.playerBuffs  ?? []);
   const [npcDebuffs,   setNpcDebuffs]   = useState(initialState?.npcDebuffs   ?? []);
+  const [statusFx, setStatusFx]        = useState(null);
 
   /* Forma actual y cambio de estancia */
   const habPool    = player.all_habilidades_data ?? {};
@@ -453,10 +468,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       setCooldowns(prev => ({ ...prev, [habId]: hab.cooldown }));
     }
 
-    /* Aplicar buff al jugador */
-    if (habBuff.length > 0) {
-      setPlayerBuffs(prev => [...prev, ...habBuff.map(stat => ({ stat, turns: habRondas }))]);
-    }
+    const pendingBuffs = habBuff.length > 0 ? habBuff.map(stat => ({ stat, turns: habRondas })) : [];
 
     const entries = [];
 
@@ -468,19 +480,29 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const selfDmg = hab.damage ?? 0;
       const selfDmgEscudo = hab.damage_escudo ?? 0;
       let healedHp = { ...playerHp };
+      let heal = 0;
+      let healEsc = 0;
       if (selfDmg < 0) {
-        const heal = -selfDmg;
+        heal = -selfDmg;
         healedHp.vida = Math.min(maxPlayer.vida, healedHp.vida + heal);
         entries.push({ text: `¡Curación! +${heal} vida`, type: 'success' });
-        showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       }
       if (selfDmgEscudo < 0) {
-        const healEsc = -selfDmgEscudo;
+        healEsc = -selfDmgEscudo;
         healedHp.escudo = Math.min(maxPlayer.escudo, healedHp.escudo + healEsc);
         entries.push({ text: `¡Curación! +${healEsc} escudo`, type: 'success' });
-        showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${healEsc}` });
       }
-      if (selfDmg < 0 || selfDmgEscudo < 0) setPlayerHp(healedHp);
+
+      if (pendingBuffs.length > 0) {
+        await playStatusFx(playerHudRef, 'buff');
+        setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
+      }
+      if (selfDmg < 0 || selfDmgEscudo < 0) {
+        await playStatusFx(playerHudRef, 'heal');
+        if (selfDmg < 0) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${heal}` });
+        if (selfDmgEscudo < 0) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${healEsc}` });
+        setPlayerHp(healedHp);
+      }
 
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       endTurnAfter('player');
@@ -496,6 +518,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
         type: 'info',
       });
+      if (pendingBuffs.length > 0) {
+        await playStatusFx(playerHudRef, 'buff');
+        setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
+      }
+      await playStatusFx(npcHudRef, 'heal');
       showFloatText(npcHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       setNpcHp(newNpcHp);
@@ -549,6 +576,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     await triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit, dmg: dmgAplicado });
 
+    if (pendingBuffs.length > 0) {
+      await playStatusFx(playerHudRef, 'buff');
+      setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
+    }
     if (hit && habDebuff.length > 0) {
       setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);
     }
@@ -1280,6 +1311,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             }}
           />
         ))}
+
+        {statusFx && (
+          <StatusBurstEffect key={statusFx.key}
+            variant={statusFx.variant}
+            stageRef={stageRef} targetRef={statusFx.targetRef}
+            onDone={() => {
+              statusFx.onResolve?.();
+              setStatusFx(null);
+            }}
+          />
+        )}
 
         {/* Resultado del ataque — texto flotante sobre el personaje afectado; cada uno vive su propio segundo */}
         {floatTexts.map((ft) => (

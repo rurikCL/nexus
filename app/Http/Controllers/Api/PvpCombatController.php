@@ -403,7 +403,7 @@ class PvpCombatController extends Controller
         $opponentStats = self::getEffectiveStats($opponentBaseStats, $oppBuffs, $oppDebuffs);
 
         $log = $combat->log ?? [];
-        $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => []];
+        $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
         $skill = $data['skill'];
 
         /* ─── Huir (requiere ganar tirada de iniciativa contra el rival) ── */
@@ -476,6 +476,7 @@ class PvpCombatController extends Controller
             foreach (['defensa', 'movimiento', 'iniciativa'] as $stat) {
                 $myBuffs[] = ['stat' => $stat, 'turns' => 3];
             }
+            $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $user->id];
             $entry['messages'][] = "{$actorChar->name} evade: +1 Maniobra y +1 Iniciativa (3 rondas)";
 
             /* ─── Habilidad ───────────────────────────────────────────────── */
@@ -547,6 +548,9 @@ class PvpCombatController extends Controller
             if ($hab->objetivo === 'self') {
                 $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}{$buffDesc}";
+                if (! empty($habBuff)) {
+                    $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $user->id];
+                }
 
                 if ($dmg < 0) {
                     $heal = -$dmg;
@@ -556,6 +560,7 @@ class PvpCombatController extends Controller
                     } else {
                         $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
                     }
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $user->id];
                     $entry['messages'][] = "¡Curación! +{$heal} vida";
                 }
 
@@ -567,6 +572,7 @@ class PvpCombatController extends Controller
                     } else {
                         $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
                     }
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $user->id];
                     $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo";
                 }
 
@@ -579,6 +585,7 @@ class PvpCombatController extends Controller
                 } else {
                     $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
                 }
+                $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $opponentUser->id];
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$opponentChar->name}";
 
                 if ($dmgEscudo < 0) {
@@ -589,6 +596,7 @@ class PvpCombatController extends Controller
                     } else {
                         $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
                     }
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $opponentUser->id];
                     $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo a {$opponentChar->name}";
                 }
 
