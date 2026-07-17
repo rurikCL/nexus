@@ -4,7 +4,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
 
@@ -189,6 +189,7 @@ export async function drawHabilidadCard(habilidad) {
   const artY = pad + 118;
   const artH = 340;
   await paintArt(ctx, habilidad.icono_url ?? habilidad.icono, TIPO_HAB_ICON[habilidad.tipo] ?? 'zap', badgeColor, innerX, artY, innerW, artH, frame.line);
+  await paintCardLogo(ctx, innerX + innerW, artY + artH);
 
   const typeY = artY + artH + 36;
   paintTypeLine(ctx, classInfo ? `${classInfo.num} · ${classInfo.name}` : 'Habilidad Universal', typeY, innerX, innerRight);
@@ -287,6 +288,7 @@ export async function drawObjetoCard(objeto) {
   const artY = pad + 118;
   const artH = 340;
   await paintArt(ctx, objeto.imagen, TIPO_OBJ_ICON[objeto.tipo] ?? 'box', frame.line, innerX, artY, innerW, artH, frame.line);
+  await paintCardLogo(ctx, innerX + innerW, artY + artH);
 
   const typeY = artY + artH + 36;
   paintTypeLine(ctx, RAREZA_LABEL[objeto.rareza] ?? objeto.rareza ?? 'Objeto', typeY, innerX, innerRight);
@@ -360,6 +362,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const artY = pad + 118;
   const artH = 396;
   await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line);
+  await paintCardLogo(ctx, innerX + innerW, artY + artH);
 
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'

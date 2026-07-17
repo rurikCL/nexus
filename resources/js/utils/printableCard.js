@@ -118,6 +118,24 @@ export function wrapText(ctx, text, cx, y, maxWidth, lineHeight, maxLines = Infi
   return cy;
 }
 
+const CARD_LOGO_URL = '/assets/esgrimaGemini.png';
+let cardLogoPromise = null;
+
+/** Sello del logo de esgrima en la esquina inferior derecha de una caja (p.ej. el recuadro de arte de la carta) — carga la imagen una sola vez y la cachea entre llamadas. */
+export async function paintCardLogo(ctx, boxRight, boxBottom, size = 40, margin = 8) {
+  if (!cardLogoPromise) cardLogoPromise = loadImage(CARD_LOGO_URL);
+  const img = await cardLogoPromise;
+  if (!img) return;
+  const x = boxRight - size - margin;
+  const y = boxBottom - size - margin;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 6;
+  ctx.drawImage(img, x, y, size, size);
+  ctx.restore();
+}
+
 /* Metadatos de los 7 atributos de combate compartidos por personajes, NPCs,
    jefes y enemigos — mismos íconos/colores que BONUS_FIELDS en ArmadoSable.jsx,
    para mantener el lenguaje visual del resto de la app (ATQ naranja, DEF cian,
