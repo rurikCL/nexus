@@ -261,9 +261,15 @@ export function ImageCropModal({
   return createPortal(
     <div
       onMouseDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         e.stopPropagation();
         onCancel?.();
+      }}
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return;
+        e.preventDefault();
+        e.stopPropagation();
       }}
       style={{
         position: 'fixed',
@@ -278,6 +284,8 @@ export function ImageCropModal({
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         className="nx-panel solid nx-panel-glow"
         style={{
           width: 'min(920px, 100%)',
@@ -354,6 +362,7 @@ export function CropImageField({
   const [previewUrl, setPreviewUrl] = useState(null);
   const inputRef = useRef(null);
   const isFile = value instanceof File;
+  const blocked = !!pending;
 
   useEffect(() => {
     if (previewUrl && previewUrl.startsWith('blob:')) {
@@ -380,10 +389,14 @@ export function CropImageField({
     <div style={{ display: 'grid', gap: 6 }}>
       {label && <label className="nx-label">{label}</label>}
       <div
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (!blocked) inputRef.current?.click();
+        }}
         role="button"
-        tabIndex={0}
+        tabIndex={blocked ? -1 : 0}
+        aria-disabled={blocked ? 'true' : 'false'}
         onKeyDown={(e) => {
+          if (blocked) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             inputRef.current?.click();
@@ -399,12 +412,13 @@ export function CropImageField({
           background: 'rgba(255,255,255,0.03)',
           display: 'block',
           overflow: 'hidden',
-          cursor: 'pointer',
+          cursor: blocked ? 'wait' : 'pointer',
           position: 'relative',
           boxSizing: 'border-box',
           lineHeight: 0,
           flex: '0 0 auto',
           contain: 'layout paint size',
+          pointerEvents: blocked ? 'none' : 'auto',
         }}
       >
         {previewUrl ? (
