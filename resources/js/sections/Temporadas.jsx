@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
+import { MissionCompleteBanner } from '../components/MissionCompleteBanner.jsx';
 
 function mediaUrl(path) {
   if (!path) return null;
@@ -531,8 +532,15 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
     : [];
 
   return (
-    <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Detalle de misión'} title={mision.nombre} zIndex={1100}>
-      <div style={{ display: 'grid', gap: 16 }}>
+    <>
+      <MissionCompleteBanner
+        open={mision.puede_completar && !done}
+        mision={mision}
+        busy={busy}
+        onComplete={onCompletar}
+      />
+      <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Detalle de misión'} title={mision.nombre} zIndex={1100}>
+        <div style={{ display: 'grid', gap: 16 }}>
         {mision.foto_mision && (
           <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
             <img src={mediaUrl(mision.foto_mision)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -622,8 +630,9 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
             </Btn>
           </div>
         )}
-      </div>
-    </Modal>
+        </div>
+      </Modal>
+    </>
   );
 }
 
