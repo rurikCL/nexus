@@ -61,6 +61,14 @@ const SIDES = {
   oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.png',   desc: 'Pasión, ambición y poder' },
 };
 
+const TIER_RANGO_IMG = {
+  iniciado:    '/assets/INITIATE_sm.png',
+  padawan:     '/assets/PADAWAN_sm.png',
+  caballero:   '/assets/KNIGHT_sm.png',
+  maestro:     '/assets/MASTER_sm.png',
+  granmaestro: '/assets/GRANDMASTER_sm.png',
+};
+
 function mediaUrl(path) {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -330,6 +338,15 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
   const [showCardModal, setShowCardModal]     = useState(false);
   const hitos = user?.character?.hitos ?? [];
   const saveTimer = useRef(null);
+
+  const cardStorageKey = `nx-character-card-${user?.id ?? ch.handle ?? 'me'}`;
+  const [savedCardUrl, setSavedCardUrl] = useState(() => {
+    try { return localStorage.getItem(cardStorageKey); } catch { return null; }
+  });
+  const handleCardGenerated = (dataUrl) => {
+    setSavedCardUrl(dataUrl);
+    try { localStorage.setItem(cardStorageKey, dataUrl); } catch { /* cuota excedida — se mantiene solo en memoria */ }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -723,14 +740,32 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                     width: 100, height: 140, borderRadius: 10, flexShrink: 0,
                     border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,.03)',
                     display: 'grid', placeItems: 'center', color: 'var(--holo)',
+                    position: 'relative', overflow: 'hidden',
                   }}>
-                    <Icon name="user" size={34} />
+                    {savedCardUrl
+                      ? <img src={savedCardUrl} alt="Carta de personaje generada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Icon name="user" size={34} />}
+                    <img
+                      src="/assets/esgrimaGemini.png" alt="" aria-hidden="true"
+                      style={{
+                        position: 'absolute', right: 3, bottom: 3, width: 20, height: 20,
+                        objectFit: 'contain', pointerEvents: 'none',
+                        filter: 'drop-shadow(0 0 2px rgba(0,0,0,.8))',
+                      }}
+                    />
                   </div>
+                  {TIER_RANGO_IMG[myTier] && (
+                    <img
+                      src={TIER_RANGO_IMG[myTier]} alt={NX.TIERS[myTier]?.label ?? myTier}
+                      title={NX.TIERS[myTier]?.label ?? myTier}
+                      style={{ width: 36, height: 36, objectFit: 'contain' }}
+                    />
+                  )}
                   <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', textAlign: 'center', maxWidth: 220 }}>
                     Genera una carta con tus datos y atributos de combate, lista para imprimir a 63×88mm.
                   </div>
                   <Btn kind="accent" icon="download" onClick={() => setShowCardModal(true)}>
-                    Generar Carta
+                    {savedCardUrl ? 'Regenerar Carta' : 'Generar Carta'}
                   </Btn>
                 </div>
               </Panel>
@@ -774,7 +809,7 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
       </Modal>
 
       {showCardModal && (
-        <CharacterCardModal character={ch} user={user} onClose={() => setShowCardModal(false)} />
+        <CharacterCardModal character={ch} user={user} onClose={() => setShowCardModal(false)} onGenerated={handleCardGenerated} />
       )}
     </div>
   );
