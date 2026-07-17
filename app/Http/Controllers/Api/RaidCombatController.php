@@ -941,14 +941,18 @@ class RaidCombatController extends Controller
 
     private static function getNpcStats(MapNpc $npc): array
     {
+        // +1 a todos los atributos por nivel de dificultad (además del bono de daño/crítico
+        // que nivelDificultad() ya aporta en el resto del combate).
+        $nivel = $npc->nivelDificultad();
+
         return [
-            'vida' => $npc->vida ?: 30,
-            'escudo' => $npc->escudo ?: 0,
-            'ataque' => $npc->ataque ?: 10,
-            'defensa' => $npc->defensa ?: 10,
-            'movimiento' => $npc->movimiento ?: 10,
-            'iniciativa' => $npc->iniciativa ?: 10,
-            'punteria' => $npc->punteria ?: 10,
+            'vida' => ($npc->vida ?: 30) + $nivel,
+            'escudo' => ($npc->escudo ?: 0) + $nivel,
+            'ataque' => ($npc->ataque ?: 10) + $nivel,
+            'defensa' => ($npc->defensa ?: 10) + $nivel,
+            'movimiento' => ($npc->movimiento ?: 10) + $nivel,
+            'iniciativa' => ($npc->iniciativa ?: 10) + $nivel,
+            'punteria' => ($npc->punteria ?: 10) + $nivel,
         ];
     }
 

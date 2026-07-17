@@ -202,7 +202,7 @@ const ENTITY_CONFIG = {
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'nivel',         label: 'Nivel (★)',        type: 'number', min: 0, hint: 'Nivel de dificultad, representado con estrellas. Afecta combates contra este NPC y (si es jefe) contra RAID: +nivel de daño/curación, +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel (ej. nivel 4 → crítico con 17-20).' },
+      { key: 'nivel',         label: 'Nivel (★)',        type: 'number', min: 0, hint: 'Nivel de dificultad, representado con estrellas. Afecta combates contra este NPC y (si es jefe) contra RAID: +1 a todos sus atributos por nivel, +nivel de daño/curación adicional, +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel (ej. nivel 4 → crítico con 17-20).' },
       { key: 'fecha_inicio',  label: 'Disponible desde', type: 'date', hint: 'Opcional. El NPC solo aparece a partir de esta fecha.' },
       { key: 'fecha_fin',     label: 'Disponible hasta', type: 'date', hint: 'Opcional. El NPC deja de aparecer después de esta fecha.' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
@@ -244,7 +244,7 @@ const ENTITY_CONFIG = {
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, hint: 'Nivel de dificultad por defecto. Al asignar este enemigo a un Lugar puedes sobrescribirlo con un nivel específico para ese lugar.' },
+      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, hint: 'Nivel de dificultad por defecto: +1 a todos sus atributos por nivel, +nivel de daño/curación adicional, +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel. Al asignar este enemigo a un Lugar puedes sobrescribirlo con un nivel específico para ese lugar.' },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
       { key: 'escudo',        label: 'Escudo',           type: 'number', min: 0 },
       { key: 'defensa',       label: 'Defensa',          type: 'number', min: 0 },
@@ -1028,14 +1028,14 @@ function EnemigoSpawnPicker({ label, catalog, selected, onChange }) {
                       value={cfg.tasa_aparicion}
                       onChange={e => setCfg(item.id, 'tasa_aparicion', e.target.value === '' ? 1 : Number(e.target.value))}
                     />
-                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>peso</span>
+                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>prioridad</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <input type="number" className="nx-input" min={0} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
                       value={cfg.nivel}
                       onChange={e => setCfg(item.id, 'nivel', e.target.value === '' ? 0 : Number(e.target.value))}
                     />
-                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>★ aquí</span>
+                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>nivel</span>
                   </div>
                 </div>
               )}

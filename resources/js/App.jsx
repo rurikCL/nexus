@@ -156,6 +156,7 @@ import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
 import SesionesView from './sections/Sesiones.jsx';
 import InstagramView from './sections/Instagram.jsx';
 import { ArmadoSableView } from './sections/ArmadoSable.jsx';
+import { CatalogoView } from './sections/Catalogo.jsx';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 const NAV = [
@@ -172,6 +173,7 @@ const NAV = [
   { id: 'combatientes', label: 'Usuarios', icon: 'roster' },
   { id: 'competitivo', label: 'Competitivo', icon: 'medal' },
   { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
+  { id: 'catalogo', label: 'Catálogo', icon: 'box' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
   { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
 ];
@@ -200,6 +202,7 @@ const TITLES = {
   combatientes: ['Directorio de usuarios de la fuerza', 'Directorio y perfiles públicos'],
   competitivo: ['Competitivo', 'Torneos y combates por puntos'],
   temporadas:    ['Temporadas', 'Historial de campeones y recompensas'],
+  catalogo: ['Catálogo', 'Habilidades, objetos, NPCs, jefes y enemigos'],
   mapa: ['Mapa Galáctico', 'Navegación estelar'],
   instagram: ['Instagram', 'Publicaciones y feed de tu cuenta'],
   configuracion: ['Configuración', 'Gestión de tablas del sistema'],
@@ -671,6 +674,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     combatientes: <CombatientesView S={S} />,
     competitivo:  <CompetitivoView S={S} user={user} />,
     temporadas:   <TemporadasView S={S} user={user} onUserUpdate={onUserUpdate} />,
+    catalogo: <CatalogoView />,
     misiones:     <MisionesView S={S} user={user} onUserUpdate={onUserUpdate} />,
     mapa: <MapaView S={S} setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} onUserUpdate={onUserUpdate} />,
     instagram: <InstagramView />,

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BetController;
+use App\Http\Controllers\Api\CatalogoController;
 use App\Http\Controllers\Api\ChallengeController;
 use App\Http\Controllers\Api\CharacterController;
 use App\Http\Controllers\Api\CharacterPhotoController;
@@ -71,6 +72,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character/equipar-arma', [CharacterController::class, 'equiparArma']);
     Route::post('/character/aprender-habilidad', [CharacterController::class, 'aprenderHabilidad']);
     Route::get('/rol-habilidades', [RolHabilidadController::class, 'index']);
+
+    // Catálogo (jugador) — habilidades ya expuestas arriba
+    Route::get('/catalogo/objetos', [CatalogoController::class, 'objetos']);
+    Route::get('/catalogo/npcs', [CatalogoController::class, 'npcs']);
+    Route::get('/catalogo/enemigos', [CatalogoController::class, 'enemigos']);
 
     // Armado de sable de luz
     Route::get('/sable/sables', [SableController::class, 'index']);

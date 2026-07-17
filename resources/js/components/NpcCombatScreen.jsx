@@ -107,19 +107,23 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
      `vida_max`/`escudo_max`. Fuera de combate naval no se pasan (el personaje siempre
      empieza cada combate a full), así que caen de vuelta a player.vida/escudo. */
   const maxPlayer = { vida: player.vida_max ?? player.vida, escudo: player.escudo_max ?? player.escudo };
-  const maxNpc    = { vida: Math.max(npc.vida, 1), escudo: npc.escudo ?? 0 };
 
-  const npcAtk = Math.max(npc.ataque,     1);
-  const npcDef = Math.max(npc.defensa,    1);
-  const npcMov = Math.max(npc.movimiento, 1);
-  const npcIni = Math.max(npc.iniciativa, 1);
-  const npcPnt = npc.punteria ?? 0;
-
-  /* Nivel de dificultad (estrellas): +nivel de daño/curación, +floor(nivel/2) extra en
-     críticos, y redefine el umbral de crítico (dado ≥ 21-nivel). No aplica a naves. */
+  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel, +nivel de daño/curación
+     adicional, +floor(nivel/2) extra en críticos, y redefine el umbral de crítico (dado ≥ 21-nivel).
+     No aplica a naves. */
   const npcNivel = naveMode ? 0 : (npc.nivel ?? 1);
   const npcCritThreshold = 21 - npcNivel;
   const npcCritBonus = Math.floor(npcNivel / 2);
+
+  const maxNpc    = { vida: Math.max(npc.vida, 1) + npcNivel, escudo: (npc.escudo ?? 0) + npcNivel };
+
+  const npcAtk = Math.max(npc.ataque,     1) + npcNivel;
+  const npcDef = Math.max(npc.defensa,    1) + npcNivel;
+  const npcMov = Math.max(npc.movimiento, 1) + npcNivel;
+  const npcIni = Math.max(npc.iniciativa, 1) + npcNivel;
+  // punteria=0 es un flag de "sin ataque a distancia" (ver effNpcPnt > 0 más abajo) — el
+  // bono de nivel no debe convertir a un NPC melee-only en uno con capacidad a distancia.
+  const npcPnt = (npc.punteria ?? 0) > 0 ? (npc.punteria + npcNivel) : 0;
 
   const maxFuerza      = player.maxFuerza      ?? 10;
   const fuerzaPorTurno = player.fuerzaPorTurno ?? 2;
