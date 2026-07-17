@@ -327,6 +327,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   useEffect(() => {
     const ch = user?.character;
     if (!ch) return;
+    const combat = ch.combat_stats ?? {};
     S.setCharacter({
       name:        ch.name        ?? '',
       handle:      ch.handle      ?? '',
@@ -339,13 +340,13 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       sponsor:     ch.sponsor     ?? '',
       joined_year: ch.joined_year ?? '',
       stats:       ch.stats       ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
-      vida:           ch.vida           ?? 8,
-      escudo:         ch.escudo         ?? 4,
-      defensa:        ch.defensa        ?? 2,
-      ataque:         ch.ataque         ?? 2,
-      movimiento:     ch.movimiento     ?? 2,
-      iniciativa:     ch.iniciativa     ?? 2,
-      punteria:       ch.punteria       ?? 2,
+      vida:           combat.vida           ?? ch.vida           ?? 8,
+      escudo:         combat.escudo         ?? ch.escudo         ?? 4,
+      defensa:        combat.defensa        ?? ch.defensa        ?? 2,
+      ataque:         combat.ataque         ?? ch.ataque         ?? 2,
+      movimiento:     combat.movimiento     ?? ch.movimiento     ?? 2,
+      iniciativa:     combat.iniciativa     ?? ch.iniciativa     ?? 2,
+      punteria:       combat.punteria       ?? ch.punteria       ?? 2,
       puntos_libres:  ch.puntos_libres  ?? 5,
       gold:        ch.gold        ?? false,
       photo:       ch.photo_url   ?? null,

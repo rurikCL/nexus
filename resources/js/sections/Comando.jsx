@@ -20,6 +20,7 @@ function useWindowWidth() {
 
 function mapApiCharacterToStoreCharacter(character) {
   if (!character) return null;
+  const combat = character.combat_stats ?? {};
   return {
     ...character,
     saber: character.saber_color ?? character.saber ?? 'azul',
@@ -29,6 +30,13 @@ function mapApiCharacterToStoreCharacter(character) {
     arma_equipada: character.arma_equipada ?? null,
     nave_equipada: character.nave_equipada ?? null,
     sable_activo: character.sable_activo ?? null,
+    vida: combat.vida ?? character.vida ?? 8,
+    escudo: combat.escudo ?? character.escudo ?? 4,
+    defensa: combat.defensa ?? character.defensa ?? 2,
+    ataque: combat.ataque ?? character.ataque ?? 2,
+    movimiento: combat.movimiento ?? character.movimiento ?? 2,
+    iniciativa: combat.iniciativa ?? character.iniciativa ?? 2,
+    punteria: combat.punteria ?? character.punteria ?? 2,
   };
 }
 
