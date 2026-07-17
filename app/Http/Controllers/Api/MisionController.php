@@ -470,7 +470,35 @@ class MisionController extends Controller
             $user->id => ['status' => 'pendiente', 'progreso' => 0],
         ]);
 
-        return response()->json(['message' => 'Misión aceptada.']);
+        $mision->loadMissing('objetivos');
+
+        $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+        $automaticos = $mision->objetivos->where('tipo', 'automatico');
+
+        foreach ($automaticos as $objetivo) {
+            $progresoJson[(string) $objetivo->id] = $objetivo->meta;
+        }
+
+        if ($automaticos->isNotEmpty()) {
+            $porcentajes = $mision->objetivos->map(fn ($o) => $o->meta > 0
+                ? min(100, (($progresoJson[(string) $o->id] ?? 0) / $o->meta) * 100)
+                : 100);
+            $progresoGeneral = $porcentajes->isEmpty() ? 0 : (int) round($porcentajes->avg());
+
+            $mision->users()->updateExistingPivot($user->id, [
+                'status' => $progresoGeneral > 0 ? 'en-curso' : 'pendiente',
+                'progreso' => $progresoGeneral,
+                'progreso_json' => json_encode($progresoJson),
+            ]);
+        }
+
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+
+        return response()->json([
+            'message' => 'Misión aceptada.',
+            'mision' => $this->formatMisionConProgreso($mision, $user),
+        ]);
     }
 
     // ── DELETE /api/misiones/{mision}/users/{userId} ──────────────────────────
@@ -703,5 +731,46 @@ class MisionController extends Controller
         }
 
         return $base;
+    }
+
+    private function formatMisionConProgreso(Mision $mision, User $user): array
+    {
+        $character = $user->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
+
+        $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        $aceptada = $pivot !== null;
+        $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+
+        $requeridos = $mision->hito_requerimiento
+            ? array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)))
+            : [];
+        $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+
+        $objetivosConProgreso = $mision->objetivos->map(fn ($o) => [
+            'id' => $o->id,
+            'nombre' => $o->nombre,
+            'descripcion' => $o->descripcion,
+            'tipo' => $o->tipo,
+            'meta' => $o->meta,
+            'unidad' => $o->unidad,
+            'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+            'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
+            'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
+        ])->values();
+
+        $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
+        $completada = $pivot?->status === 'completada';
+
+        return array_merge($this->formatMision($mision), [
+            'objetivos' => $objetivosConProgreso,
+            'aceptada' => $aceptada,
+            'completada_por_mi' => $completada,
+            'status' => $pivot?->status ?? null,
+            'progreso' => $pivot?->progreso ?? 0,
+            'cumple_hitos' => $cumpleHitos,
+            'objetivos_completos' => $objetivosCompletos,
+            'puede_completar' => $aceptada && ! $completada && $cumpleHitos && $objetivosCompletos,
+        ]);
     }
 }

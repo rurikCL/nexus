@@ -29,6 +29,7 @@ const TIPO_OBJ = {
   viaje:         'Viaje',
   dialogo:       'Diálogo',
   menu:          'Menú',
+  automatico:    'Automático',
 };
 
 function apiCall(method, path, body) {
@@ -210,13 +211,11 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
   const handleAceptar = async () => {
     setBusy(true);
     try {
-      await apiCall('POST', `/api/misiones/${mision.id}/accept`);
+      const d = await apiCall('POST', `/api/misiones/${mision.id}/accept`);
       toast('Misión aceptada', { tone: 'success', icon: 'check' });
       onUpdate(mision.id, {
+        ...(d?.mision ?? {}),
         aceptada: true,
-        status: 'pendiente',
-        progreso: 0,
-        puede_completar: mision.cumple_hitos && mision.objetivos_completos,
       });
       onClose();
     } catch (e) {

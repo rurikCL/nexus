@@ -1817,7 +1817,7 @@ export default function AdminView() {
    MISIONES ADMIN — CRUD completo con objetivos y recompensas inline
 ───────────────────────────────────────────────────────────── */
 const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual', 'global'];
-const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu'];
+const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'automatico'];
 const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad'];
 
 const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
@@ -2360,6 +2360,11 @@ function MisionesAdmin() {
                       {o.tipo === 'menu' && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
                           Usa el slug exacto del menú, por ejemplo: <span className="nx-data">mapa</span>, <span className="nx-data">misiones</span> o <span className="nx-data">personaje</span>.
+                        </div>
+                      )}
+                      {o.tipo === 'automatico' && (
+                        <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
+                          Este objetivo se marca completo al aceptar la misión.
                         </div>
                       )}
                     </div>

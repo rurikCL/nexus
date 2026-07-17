@@ -2703,8 +2703,9 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
     if (opt.misionId) {
       try {
-        await apiPost(`/misiones/${opt.misionId}/accept`, {});
+        const d = await apiPost(`/misiones/${opt.misionId}/accept`, {});
         toast('¡Misión aceptada!', { tone: 'success', icon: 'star' });
+        if (d?.mision) setMisionInfo(d.mision);
       } catch {
         toast('Error al aceptar la misión', { tone: 'error', icon: 'x' });
       }
@@ -2732,9 +2733,13 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     if (!misionInfo) return;
     setMisionBusy(true);
     try {
-      await apiPost(`/misiones/${misionInfo.id}/accept`, {});
+      const d = await apiPost(`/misiones/${misionInfo.id}/accept`, {});
       toast('¡Misión aceptada!', { tone: 'success', icon: 'star' });
-      setMisionInfo(prev => ({ ...prev, estado: 'pendiente' }));
+      if (d?.mision) {
+        setMisionInfo(prev => ({ ...prev, ...d.mision }));
+      } else {
+        setMisionInfo(prev => ({ ...prev, estado: 'pendiente' }));
+      }
       setShowMisionPopup(false);
       onMisionChange?.();
     } catch {

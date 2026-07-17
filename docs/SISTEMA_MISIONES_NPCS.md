@@ -52,7 +52,7 @@ recompensa_id / objetivo_id (legacy, FK únicos — superados por las tablas hij
 
 Dos tablas hijas (1 misión → N filas), normalizadas en `2026_06_30_230001_extend_misiones_sistema.php`:
 
-- **`objetivos`**: `mision_id, nombre, descripcion, tipo (general|entrenamiento|combate|tarea|viaje|dialogo),
+- **`objetivos`**: `mision_id, nombre, descripcion, tipo (general|entrenamiento|combate|tarea|viaje|dialogo|menu|automatico),
   meta, unidad, progreso_tipo (conteo|porcentaje)`.
 - **`recompensas`**: `mision_id, nombre, descripcion, tipo (habilidad|objeto|creditos|titulo|insignia),
   valor, imagen, habilidad_id, objeto_id`.
@@ -143,11 +143,12 @@ Tipos de objetivo con tracking automático conectado hoy:
 | `entrenamiento` | `SesionEntrenamientoController::attend` / `attendScan` — cada asistente marcado (incluido el encargado) | +1 |
 | `tarea` | `TaskController::approve` — el tutor aprueba la tarea del pupilo | +1 |
 | `menu` | `POST /misiones/menu-visit` al visitar una vista del SPA | completa la meta del objetivo |
+| `automatico` | `POST /misiones/{id}/accept` al aceptar la misión | completa la meta del objetivo |
 
 **`general` sigue siendo manual** — es un tipo "cajón de sastre" (viajar, comprar, equipar, enviar
 un mensaje, etc.) sin un único evento de juego al que engancharse; su progreso todavía depende de
 `PATCH /misiones/{id}/progress`. Lo mismo aplica a `viaje`/`dialogo` si se usan — no tienen hook
-automático hoy.
+automático hoy. `automatico` no depende de eventos externos: se marca al aceptar la misión.
 
 ### 1.5.1 Objetivos tipo `menu`
 
@@ -195,6 +196,7 @@ Slugs actuales documentados para configuración manual:
 4. Progreso
    → automático para objetivos `combate`/`entrenamiento`/`tarea` — MisionProgresoService (§1.5)
    → automático para objetivos `menu` — POST /misiones/menu-visit (§1.5.1)
+   → automático para objetivos `automatico` — POST /misiones/{id}/accept
    → manual para el resto — PATCH /misiones/{id}/progress (progreso, status, progreso_json)
 
 5. Completar — POST /misiones/{id}/completar
@@ -420,6 +422,7 @@ MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca '
   (`MisionProgresoService`, §1.5) desde eventos reales del juego; `menu` se registra al visitar
   una vista del SPA (`POST /misiones/menu-visit`, §1.5.1); el resto de los `tipo`
   (`general`, `viaje`, `dialogo`...) sigue dependiendo de `PATCH /misiones/{id}/progress` manual.
+  `automatico` se completa al aceptar la misión.
 - `completar()` ahora es un gate doble — hitos **y** objetivos — reforzado en el servidor, no sólo
   en la UI (el botón deshabilitado en el cliente es una comodidad, no la protección real).
 - El diálogo con IA es una capa de presentación y de "world-building" (puede escribir eventos de
