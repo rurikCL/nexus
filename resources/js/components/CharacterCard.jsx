@@ -237,7 +237,7 @@ export async function drawCharacterCard(character, user) {
  * compartirla (Web Share API) o imprimirla al tamaño físico de una carta
  * Magic (63mm × 88mm) mediante una ventana con `@page` dedicada.
  */
-export default function CharacterCardModal({ character, user, onClose }) {
+export default function CharacterCardModal({ character, user, onClose, onGenerated }) {
   const [dataUrl, setDataUrl] = useState(null);
   const [error, setError] = useState(false);
   const cancelledRef = useRef(false);
@@ -245,7 +245,12 @@ export default function CharacterCardModal({ character, user, onClose }) {
   useEffect(() => {
     cancelledRef.current = false;
     drawCharacterCard(character, user)
-      .then((canvas) => { if (!cancelledRef.current) setDataUrl(canvas.toDataURL('image/png')); })
+      .then((canvas) => {
+        if (cancelledRef.current) return;
+        const url = canvas.toDataURL('image/png');
+        setDataUrl(url);
+        onGenerated?.(url);
+      })
       .catch(() => { if (!cancelledRef.current) setError(true); });
     return () => { cancelledRef.current = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
