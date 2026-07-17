@@ -1806,6 +1806,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const myTier = user?.tier ?? me.tier ?? 'iniciado';
   const ch = S.character;
   const puntos_libres = ch.puntos_libres ?? 5;
+  const [statCaps, setStatCaps] = useState({ asignacion: 10, items: 15 });
   const COMBAT_STATS = ['vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
   const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Agilidad', iniciativa: 'Iniciativa', punteria: 'Puntería' };
   const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
@@ -1827,6 +1828,26 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
     }
     return resolved;
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = localStorage.getItem('nx-token');
+    fetch('/api/admin/configuraciones?q=cap_stats_&per_page=10', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        if (cancelled) return;
+        const caps = { asignacion: 10, items: 15 };
+        for (const row of d?.data ?? []) {
+          if (row?.nombre === 'cap_stats_asignacion') caps.asignacion = Math.max(1, Number(row.valor_numerico ?? 10));
+          if (row?.nombre === 'cap_stats_items') caps.items = Math.max(1, Number(row.valor_numerico ?? 15));
+        }
+        setStatCaps(caps);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!user?.character) return;
@@ -1951,10 +1972,11 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
 
   const combatBump = (stat, d) => {
     const pts = ch.puntos_libres ?? 5;
-    if (d > 0 && pts <= 0) return;
     const cur = ch[stat] ?? COMBAT_DEFAULTS[stat];
+    const cap = statCaps.asignacion ?? 10;
+    if (d > 0 && (pts <= 0 || cur >= cap)) return;
     const nv = cur + d;
-    if (nv < 0) return;
+    if (nv < 1 || nv > cap) return;
     S.setCharacter({ ...ch, [stat]: nv, puntos_libres: pts - d });
   };
 
@@ -2256,12 +2278,12 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{COMBAT_LABEL[s]}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
-                      onClick={() => combatBump(s, -1)} disabled={val <= 0}>
+                      onClick={() => combatBump(s, -1)} disabled={val <= 1}>
                       <Icon name="x" size={11} />
                     </button>
                     <span className="nx-num" style={{ width: 28, textAlign: 'center', fontSize: 15 }}>{val}</span>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
-                      onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0}>
+                      onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0 || val >= statCaps.asignacion}>
                       <Icon name="plus" size={11} />
                     </button>
                   </div>

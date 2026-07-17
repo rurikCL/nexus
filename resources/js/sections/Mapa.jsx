@@ -1968,14 +1968,15 @@ function formaEspecializacion(character) {
 /* ─── STATS DE COMBATE DEL JUGADOR ─────────────────────── */
 function getPlayerCombatStats(character) {
   const bonos = character?.sable_bonos ?? { ataque: 0, defensa: 0, punteria: 0, movimiento: 0, iniciativa: 0, vida: 0, escudo: 0, fuerza: 0, generacion_fuerza: 0 };
+  const combat = character?.combat_stats ?? null;
   return {
-    vida:       (character?.vida       ?? 8) + (bonos.vida ?? 0),
-    escudo:     (character?.escudo     ?? 4) + (bonos.escudo ?? 0),
-    ataque:     (character?.ataque     ?? 2) + (bonos.ataque ?? 0),
-    defensa:    (character?.defensa    ?? 2) + (bonos.defensa ?? 0),
-    movimiento: (character?.movimiento ?? 2) + (bonos.movimiento ?? 0),
-    iniciativa: (character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0),
-    punteria:   (character?.punteria   ?? 2) + (bonos.punteria ?? 0),
+    vida:       combat?.vida       ?? ((character?.vida       ?? 8) + (bonos.vida ?? 0)),
+    escudo:     combat?.escudo     ?? ((character?.escudo     ?? 4) + (bonos.escudo ?? 0)),
+    ataque:     combat?.ataque     ?? ((character?.ataque     ?? 2) + (bonos.ataque ?? 0)),
+    defensa:    combat?.defensa    ?? ((character?.defensa    ?? 2) + (bonos.defensa ?? 0)),
+    movimiento: combat?.movimiento ?? ((character?.movimiento ?? 2) + (bonos.movimiento ?? 0)),
+    iniciativa: combat?.iniciativa ?? ((character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
+    punteria:   combat?.punteria   ?? ((character?.punteria   ?? 2) + (bonos.punteria ?? 0)),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
     maxFuerza:      10 + (bonos.fuerza ?? 0),
