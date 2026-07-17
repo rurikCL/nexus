@@ -1892,7 +1892,12 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
     }
     setFormaSlots(resolved);
     setSelectedForma(user.character.current_forma ?? 1);
-  }, [user?.character?.id]);
+  }, [
+    user?.character?.id,
+    user?.character?.current_forma,
+    user?.character?.habilidades_por_forma,
+    user?.character?.all_habilidades_data,
+  ]);
 
   const currentSlots = formaSlots[String(selectedForma)] ?? [null, null, null, null];
 
@@ -2312,6 +2317,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
               const base = baseCombat[s] ?? ch[s] ?? COMBAT_DEFAULTS[s];
               const bonus = itemBonuses[s] ?? 0;
               const total = base + bonus;
+              const atCap = base >= (statCaps.asignacion ?? 10);
               return (
                 <div key={s} style={{
                   display: 'grid', gridTemplateColumns: 'minmax(88px, 1fr) auto auto auto auto auto', alignItems: 'center', gap: 8,
@@ -2325,9 +2331,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
                       onClick={() => combatBump(s, -1)} disabled={base <= 1}>
-                      <Icon name="x" size={11} />
+                      <span style={{ fontSize: 12, lineHeight: 1 }}>-</span>
                     </button>
-                    <span className="nx-num" style={{ minWidth: 24, textAlign: 'center', fontSize: 15 }}>{base}</span>
+                    <span className="nx-num" style={{ minWidth: 24, textAlign: 'center', fontSize: 15, color: atCap ? 'var(--holocron-oro)' : 'var(--txt)' }}>{base}</span>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
                       onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0 || base >= statCaps.asignacion}>
                       <Icon name="plus" size={11} />
@@ -2337,7 +2343,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                     {bonus >= 0 ? '+' : ''}{bonus}
                   </span>
                   <span className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>=</span>
-                  <span className="nx-num" style={{ fontSize: 19, color: 'var(--txt)', minWidth: 28, textAlign: 'right' }}>
+                  <span className="nx-num" style={{ fontSize: 19, color: atCap ? 'var(--holocron-oro)' : 'var(--txt)', minWidth: 28, textAlign: 'right' }}>
                     {total}
                   </span>
                 </div>
