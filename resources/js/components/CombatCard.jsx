@@ -669,12 +669,9 @@ export async function drawRaidCombatCard(raid) {
 
       ctx.save();
       ctx.fillStyle = 'rgba(6,12,26,0.86)';
-      ctx.strokeStyle = 'rgba(56,205,240,0.22)';
-      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, panelW, panelH, 16);
       ctx.fill();
-      ctx.stroke();
       ctx.restore();
 
       if (col.rounded) {
