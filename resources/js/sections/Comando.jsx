@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
+import { playMenuClick } from '../utils/sounds.js';
 import { BONUS_FIELDS } from './ArmadoSable.jsx';
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
@@ -1915,6 +1916,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const handleAssignHabilidad = async (habilidad) => {
     const slot = slotPicker;
     setSlotPicker(null);
+    void playMenuClick();
     const newCurrent = [...currentSlots];
     newCurrent[slot - 1] = habilidad;
     const newFormaSlots = { ...formaSlots, [String(selectedForma)]: newCurrent };

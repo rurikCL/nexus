@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
+import { playMenuClick } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -694,6 +695,31 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     }
   };
 
+  const clickSkill = (hab) => {
+    void playMenuClick();
+    void doPlayerSkill(hab);
+  };
+
+  const clickBasicAttack = () => {
+    void playMenuClick();
+    void doPlayerBasicAttack();
+  };
+
+  const openStancePicker = () => {
+    void playMenuClick();
+    setStancePicker(true);
+  };
+
+  const clickEvade = () => {
+    void playMenuClick();
+    void doPlayerEvadir();
+  };
+
+  const clickFlee = () => {
+    void playMenuClick();
+    void doPlayerFlee();
+  };
+
   const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling;
   useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
@@ -1002,7 +1028,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                   const isSelf   = hab.objetivo === 'self';
 
                   return (
-                    <button key={hab.id} onClick={() => !disabled && doPlayerSkill(hab)}
+                    <button key={hab.id} onClick={() => !disabled && clickSkill(hab)}
                       disabled={disabled}
                       style={{
                         minWidth: 0, borderRadius: 8,
@@ -1086,7 +1112,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             {/* Otras opciones */}
             <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
               {!naveMode && (
-                <ActionBtn onClick={() => isPlayerTurn && doPlayerBasicAttack()}
+                <ActionBtn onClick={() => isPlayerTurn && clickBasicAttack()}
                   disabled={!isPlayerTurn}
                   bg="rgba(255,140,0,0.07)" border="rgba(255,140,0,0.22)"
                   hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)" minW={0}
@@ -1117,7 +1143,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
               )}
 
               {!naveMode && (
-                <ActionBtn onClick={() => isPlayerTurn && setStancePicker(true)}
+                <ActionBtn onClick={() => isPlayerTurn && openStancePicker()}
                   disabled={!isPlayerTurn}
                   bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)"
                   hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)" minW={0}
@@ -1135,7 +1161,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
               )}
 
               {naveMode && (
-                <ActionBtn onClick={() => isPlayerTurn && doPlayerEvadir()}
+                <ActionBtn onClick={() => isPlayerTurn && clickEvade()}
                   disabled={!isPlayerTurn}
                   bg="rgba(16,185,129,0.07)" border="rgba(16,185,129,0.22)"
                   hoverBg="rgba(16,185,129,0.18)" hoverBorder="rgba(16,185,129,0.5)" minW={0}
@@ -1145,7 +1171,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 </ActionBtn>
               )}
 
-              <ActionBtn onClick={() => isPlayerTurn && doPlayerFlee()}
+              <ActionBtn onClick={() => isPlayerTurn && clickFlee()}
                 disabled={!isPlayerTurn}
                 bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)"
                 hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)" minW={0}
@@ -1371,6 +1397,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                   const hasSlots = Array.isArray(porForma[String(f)]) && porForma[String(f)].some(Boolean);
                   return (
                     <button key={f} onClick={() => {
+                      void playMenuClick();
                       if (active) { setStancePicker(false); return; }
                       setCurrentForma(f);
                       setStancePicker(false);

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
+import { playMenuClick } from '../utils/sounds.js';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
@@ -410,6 +411,21 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     } catch { /* ignore */ }
   };
 
+  const clickAction = (skillId) => {
+    void playMenuClick();
+    void doAction(skillId);
+  };
+
+  const clickStance = (forma) => {
+    void playMenuClick();
+    void doStance(forma);
+  };
+
+  const openStancePicker = () => {
+    void playMenuClick();
+    if (!busy && combat.is_my_turn) setStancePicker(true);
+  };
+
   const isPending   = combat.status === 'pending';
   const isDeclined  = combat.status === 'declined';
   const isCancelled = combat.status === 'cancelled';
@@ -796,7 +812,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
                 return (
                   <button key={hab.id}
-                    onClick={() => !disabled && doAction(hab.id)}
+                    onClick={() => !disabled && clickAction(hab.id)}
                     disabled={disabled}
                     style={{
                       minWidth: 0, borderRadius: 8,
@@ -891,7 +907,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
             {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
             {!me.es_nave && (
-              <button onClick={() => doAction('unarmed')} disabled={busy} style={{
+              <button onClick={() => !busy && clickAction('unarmed')} disabled={busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -927,7 +943,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
             {/* Estancia (las naves no tienen estancias — solo combate normal) */}
             {!me.es_nave && (
-              <button onClick={() => !busy && combat.is_my_turn && setStancePicker(true)} disabled={busy} style={{
+              <button onClick={() => openStancePicker()} disabled={busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -950,7 +966,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
             {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
             {me.es_nave && (
-              <button onClick={() => doAction('evadir')} disabled={busy} style={{
+              <button onClick={() => !busy && clickAction('evadir')} disabled={busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -965,7 +981,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             )}
 
             {/* Huir */}
-            <button onClick={() => doAction('flee')} disabled={busy} style={{
+            <button onClick={() => !busy && clickAction('flee')} disabled={busy} style={{
               minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
               background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -1203,7 +1219,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                   const f = i + 1;
                   const active = f === myCurrentForma;
                   return (
-                    <button key={f} onClick={() => doStance(f)} style={{
+                    <button key={f} onClick={() => clickStance(f)} style={{
                       padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                       background: active ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.06)',
                       border: `1px solid ${active ? '#a78bfa' : 'rgba(139,92,246,0.3)'}`,
