@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
-import { playAtras } from '../utils/sounds.js';
+import { playAtras, playSound } from '../utils/sounds.js';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
 import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen.jsx';
@@ -3166,7 +3166,11 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                 </button>
               )}
               {npcOptions.map((opt, i) => (
-                <button key={i} onClick={() => handleOption(opt)} disabled={typing}
+                <button key={i} onClick={() => {
+                  if (typing) return;
+                  playSound('click_npc');
+                  handleOption(opt);
+                }} disabled={typing}
                   style={{
                     width: '100%', textAlign: 'left',
                     background: opt.misionId ? 'rgba(230,179,37,0.08)' : 'rgba(56,205,240,0.06)',
@@ -3179,6 +3183,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   }}
                   onMouseEnter={(e) => {
                     if (typing) return;
+                    playSound('click_minimo');
                     e.currentTarget.style.borderColor = opt.misionId ? '#E6B325' : 'var(--holo)';
                     e.currentTarget.style.background = opt.misionId ? 'rgba(230,179,37,0.18)' : 'rgba(56,205,240,0.14)';
                     e.currentTarget.style.boxShadow = opt.misionId ? '0 0 10px -3px rgba(230,179,37,0.4)' : '0 0 10px -3px rgba(56,205,240,0.3)';
