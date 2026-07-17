@@ -648,10 +648,9 @@ export async function drawRaidCombatCard(raid) {
 
   if (location) {
     const sideY = cy - 18;
-    const panelW = 205;
-    const panelH = 178;
-    const planetX = 110;
-    const placeX = W - 110;
+    const locGap = 250;
+    const planetX = W / 2 - locGap;
+    const placeX = W / 2 + locGap;
     const left = [
       { label: 'PLANETA', value: location.planeta, img: planetaImg, rounded: false, x: planetX },
       { label: 'LUGAR', value: location.lugar, img: lugarImg, rounded: true, x: placeX },
@@ -659,23 +658,9 @@ export async function drawRaidCombatCard(raid) {
 
     left.forEach((col) => {
       const isLeft = col.label === 'PLANETA';
-      const x = isLeft ? planetX : placeX;
-      const anchor = isLeft ? x : x;
-      const boxX = isLeft ? anchor : anchor - panelW;
-      const boxY = sideY - panelH / 2;
-      const imgSize = 92;
-      const imgCx = boxX + panelW / 2;
-      const imgCy = boxY + 64;
-
-      ctx.save();
-      ctx.fillStyle = 'rgba(6,12,26,0.86)';
-      ctx.strokeStyle = 'rgba(56,205,240,0.22)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(boxX, boxY, panelW, panelH, 16);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      const imgSize = 84;
+      const imgCx = isLeft ? planetX : placeX;
+      const imgCy = sideY - 2;
 
       if (col.rounded) {
         drawImageRounded(ctx, col.img, imgCx, imgCy, imgSize, imgSize, 14, 'rgba(56,205,240,0.5)');
@@ -685,12 +670,12 @@ export async function drawRaidCombatCard(raid) {
 
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(160,190,230,0.6)';
-      ctx.font = '600 13px "JetBrains Mono"';
-      ctx.fillText(col.label, imgCx, boxY + 142);
+      ctx.font = '600 12px "JetBrains Mono"';
+      ctx.fillText(col.label, imgCx, imgCy + 76);
       ctx.fillStyle = 'rgba(220,230,255,0.9)';
-      const size = fitText(ctx, col.value, panelW - 24, '22px Orbitron', 12);
+      const size = fitText(ctx, col.value, 170, '20px Orbitron', 11);
       ctx.font = `800 ${size}px Orbitron`;
-      ctx.fillText(col.value, imgCx, boxY + 166);
+      ctx.fillText(col.value, imgCx, imgCy + 100);
     });
   }
 
@@ -817,6 +802,8 @@ function ResultCardModal({ generate, fileName, onClose }) {
   };
 
   const canShareFiles = typeof navigator !== 'undefined' && !!navigator.share;
+  const showClose = !!dataUrl;
+  const showFallbackClose = error;
 
   return createPortal(
     <div style={{
@@ -843,7 +830,9 @@ function ResultCardModal({ generate, fileName, onClose }) {
           }} />
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button className="nx-btn nx-btn-ghost" onClick={onClose}>Cerrar</button>
+          {(showClose || showFallbackClose) && (
+            <button className="nx-btn nx-btn-ghost" onClick={onClose}>Cerrar</button>
+          )}
           {dataUrl && (
             <>
               <button className="nx-btn nx-btn-accent" onClick={download}>⬇ Descargar</button>

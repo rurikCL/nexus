@@ -301,7 +301,7 @@ class RaidCombatController extends Controller
         $npcEffective = self::getEffectiveStats(self::getNpcStats($raid->npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
 
         $log = $raid->log ?? [];
-        $entry = ['turn' => count($log) + 1, 'actor' => 'jugador', 'actor_id' => $user->id, 'messages' => []];
+        $entry = ['turn' => count($log) + 1, 'actor' => 'jugador', 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
 
         if ($skill === 'flee') {
             $roll = self::rollIniciativa($actorStats['iniciativa'], $npcEffective['iniciativa']);
@@ -398,6 +398,9 @@ class RaidCombatController extends Controller
                 $entry['messages'][] = $esUnoMismo
                     ? "{$actorChar->name} usa {$hab->nombre}{$buffDesc}"
                     : "{$actorChar->name} usa {$hab->nombre} en {$targetChar->name}{$buffDesc}";
+                if (! empty($habBuff)) {
+                    $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $targetUserId];
+                }
 
                 $targetBuffsArr = $esUnoMismo ? $myBuffs : ($targetPlayer->buffs ?? []);
                 foreach ($habBuff as $stat) {
@@ -416,6 +419,7 @@ class RaidCombatController extends Controller
                     } else {
                         $targetPlayer->hp = $newHp;
                     }
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $targetUserId];
                     $entry['messages'][] = "¡Curación! +{$heal} vida".($esUnoMismo ? '' : " a {$targetChar->name}");
                 }
                 if ($dmgEscudo < 0) {
@@ -426,6 +430,7 @@ class RaidCombatController extends Controller
                     } else {
                         $targetPlayer->escudo = $newEsc;
                     }
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $targetUserId];
                     $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esUnoMismo ? '' : " a {$targetChar->name}");
                 }
 

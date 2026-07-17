@@ -291,6 +291,97 @@
 }
 
 /* ---------------------------------------------------------
+   Efectos de estado — buff a objetivo (flechas) y curación (+)
+   Saltan alrededor del objetivo y luego se desvanecen.
+   --------------------------------------------------------- */
+.nx-status-burst-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 540;
+}
+.nx-status-core {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nx-status-core-anim 900ms ease-out forwards;
+}
+.nx-status-glyphs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.nx-status-glyph {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-top: -9px;
+  display: grid;
+  place-items: center;
+  color: var(--nx-status-color);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: nx-status-glyph-anim 900ms var(--ease-out) forwards;
+  animation-delay: var(--delay, 0ms);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--nx-status-color) 60%, transparent));
+}
+.nx-status-glyph-buff {
+  transform-origin: center;
+}
+.nx-status-glyph-heal {
+  transform-origin: center;
+}
+@keyframes nx-status-core-anim {
+  0%   { opacity: 0; transform: scale(0.55); }
+  20%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+@keyframes nx-status-glyph-anim {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(0, 10px) scale(0.45) rotate(0deg);
+  }
+  15% { opacity: 1; }
+  52% {
+    transform: translate(-50%, -50%) translate(calc(var(--dx) * 0.5), calc(var(--dy) * 0.5)) scale(1.12) rotate(var(--rot));
+  }
+  76% {
+    transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(calc(var(--scale, 1) * 0.96)) rotate(calc(var(--rot) * -0.35));
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(calc(var(--dx) * 1.08), calc(var(--dy) - 10px)) scale(0.72) rotate(calc(var(--rot) * 0.2));
+  }
+}
+
+.nx-combat-buff-bob {
+  animation: nx-combat-buff-bob-anim 900ms var(--ease-out);
+  will-change: transform;
+}
+@keyframes nx-combat-buff-bob-anim {
+  0%   { transform: translateY(0) scale(1); }
+  25%  { transform: translateY(-3px) scale(1.02); }
+  60%  { transform: translateY(-1px) scale(1.015); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.nx-combat-heal-bob {
+  animation: nx-combat-heal-bob-anim 900ms var(--ease-out);
+  will-change: transform;
+}
+@keyframes nx-combat-heal-bob-anim {
+  0%   { transform: translateY(0) scale(1); }
+  30%  { transform: translateY(-4px) scale(1.03); }
+  70%  { transform: translateY(-1px) scale(1.015); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* ---------------------------------------------------------
    prefers-reduced-motion — se colapsa el movimiento decorativo
    a casi-instantáneo; se retira el shake y se ocultan anillo y
    partículas (en vez de "teletransportarlas" sin animación).
@@ -305,7 +396,11 @@
   .nx-combat-hit-shake,
   .nx-combat-hit-overlay::after,
   .nx-combat-block-grow,
-  .nx-combat-dodge {
+  .nx-combat-dodge,
+  .nx-status-core,
+  .nx-status-glyph,
+  .nx-combat-buff-bob,
+  .nx-combat-heal-bob {
     animation-duration: 1ms !important;
     animation-delay: 0ms !important;
   }
