@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CharacterHito;
+use App\Models\Configuracion;
 use App\Models\MapNpc;
 use App\Models\RaidCombat;
 use App\Models\RaidCombatPlayer;
@@ -48,17 +49,16 @@ class RaidCombatController extends Controller
     private const MIN_JUGADORES = 2;
 
     /* Expresiones disponibles en combate RAID — whitelist autoritativa del servidor
-     * (el cliente solo envía el id; emoji/label/desc los define el backend). Set de
-     * coordinación grupal, distinto del whitelist de burla de duelo de PvpCombatController
-     * — debe calzar exactamente con EmojiExpressions.jsx::RAID_EMOTES (mismos ids). */
+     * (el cliente solo envía el id; emoji/label/desc los define el backend). Misma
+     * lista que PvpCombatController::EMOTES. */
     private const EMOTES = [
-        'tristeza' => ['emoji' => '😢',  'label' => 'Tristeza',     'desc' => 'está triste'],
-        'curar' => ['emoji' => '💚',  'label' => '¡Cúrenme!',    'desc' => 'pide curación'],
-        'atacar' => ['emoji' => '⚔️',  'label' => '¡Ataquen!',    'desc' => 'pide concentrar el ataque'],
-        'cuidado' => ['emoji' => '⚠️',  'label' => '¡Cuidado!',    'desc' => 'advierte peligro'],
-        'bien' => ['emoji' => '👍',  'label' => '¡Bien hecho!', 'desc' => 'felicita al grupo'],
-        'vamos' => ['emoji' => '🔥',  'label' => '¡Vamos!',      'desc' => 'anima al grupo'],
-        'asombro' => ['emoji' => '😲',  'label' => 'Asombro',      'desc' => 'se muestra asombrado'],
+        'saludar' => ['emoji' => '👋',  'label' => 'Saludar',     'desc' => 'saluda al grupo'],
+        'reir' => ['emoji' => '😂',  'label' => 'Reír',        'desc' => 'se ríe'],
+        'llorar' => ['emoji' => '😢',  'label' => 'Llorar',      'desc' => 'llora'],
+        'impresion' => ['emoji' => '😲',  'label' => 'Impresión',   'desc' => 'se muestra impresionado'],
+        'enojo' => ['emoji' => '😠',  'label' => 'Enojarse',    'desc' => 'se enoja'],
+        'dormir' => ['emoji' => '😴',  'label' => 'Dormir',      'desc' => 'finge dormirse de aburrimiento'],
+        'adios' => ['emoji' => '🖐️', 'label' => 'Decir adiós', 'desc' => 'se despide'],
     ];
 
     /** Cupos de la cola para un jefe: lo configurado en el NPC (raid_slots), con un piso de MIN_JUGADORES. */
@@ -210,6 +210,13 @@ class RaidCombatController extends Controller
 
         if (! $raid->jugadores->contains('user_id', $user->id)) {
             return response()->json(['error' => 'No participas en este combate.'], 403);
+        }
+
+        $log = $raid->log ?? [];
+        if ($this->checkTurnTimeout($raid, $log)) {
+            $raid->log = $log;
+            $raid->save();
+            $raid->refresh()->load(['npc', 'jugadores.user.character']);
         }
 
         return response()->json(['raid' => $this->formatRaid($raid, $user->id)]);
@@ -549,6 +556,7 @@ class RaidCombatController extends Controller
 
         $raid->turn_order = array_map(fn ($r) => ['type' => $r['type'], 'user_id' => $r['user_id']], $rolls);
         $raid->turn_index = 0;
+        $raid->turn_started_at = now();
     }
 
     /** Avanza el puntero de turno; al completar una ronda, tiquea efectos y arranca una nueva ronda. */
@@ -582,7 +590,43 @@ class RaidCombatController extends Controller
 
             $raid->ronda++;
             $this->beginRound($raid, $log);
+
+            return;
         }
+
+        $raid->turn_started_at = now();
+    }
+
+    /**
+     * Si el turno actual es de un jugador y superó `raid_max_wait` segundos sin actuar,
+     * registra la pérdida de turno y lo avanza (posiblemente resolviendo turnos del jefe
+     * a continuación). Se revisa en cada polling de show() ya que no hay cron/queue en
+     * este sistema sincrónico. Devuelve true si se aplicó un salto de turno.
+     */
+    private function checkTurnTimeout(RaidCombat $raid, array &$log): bool
+    {
+        if (! $raid->isActive() || ! $raid->turn_started_at) {
+            return false;
+        }
+
+        $current = $raid->turn_order[$raid->turn_index] ?? null;
+        if (! $current || $current['type'] !== 'player') {
+            return false;
+        }
+
+        $maxWait = (int) Configuracion::valor('raid_max_wait', 30);
+        if ($raid->turn_started_at->diffInSeconds(now()) < $maxWait) {
+            return false;
+        }
+
+        $rp = $raid->jugadores->firstWhere('user_id', $current['user_id']);
+        $nombre = $rp?->user?->character?->name ?? 'El jugador';
+        $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["{$nombre} no actuó a tiempo y pierde su turno."]];
+
+        $this->advanceIndex($raid, $log);
+        $this->settleFromCurrentPosition($raid, $log);
+
+        return true;
     }
 
     /** Desde la posición actual del puntero, resuelve automáticamente todos los turnos del jefe (y salta jugadores inactivos) hasta topar con un jugador activo o el fin del combate. */
@@ -815,6 +859,8 @@ class RaidCombatController extends Controller
             'ronda' => $raid->ronda,
             'turn_order' => $raid->turn_order ?? [],
             'turn_index' => $raid->turn_index,
+            'turn_started_at' => $raid->turn_started_at?->toIso8601String(),
+            'turn_max_wait' => (int) Configuracion::valor('raid_max_wait', 30),
             'es_turno_del_jefe' => (bool) ($current && $current['type'] === 'npc'),
             'log' => $raid->log ?? [],
             'npc' => [
