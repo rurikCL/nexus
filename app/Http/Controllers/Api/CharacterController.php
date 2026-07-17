@@ -10,8 +10,6 @@ use Illuminate\Http\Request;
 
 class CharacterController extends Controller
 {
-    private const TOTAL_COMBAT_POINTS = 27;
-
     private const COMBAT_DEFAULTS = [
         'vida' => 8,
         'escudo' => 4,
@@ -86,13 +84,6 @@ class CharacterController extends Controller
                     'message' => "El stat {$key} debe estar entre 1 y {$assignCap}.",
                 ], 422);
             }
-        }
-
-        $totalCombatPoints = array_sum($combatStats) + $pointsFree;
-        if ($totalCombatPoints !== self::TOTAL_COMBAT_POINTS) {
-            return response()->json([
-                'message' => 'La suma de stats y puntos libres debe ser 27.',
-            ], 422);
         }
 
         foreach (array_merge(array_keys(self::COMBAT_DEFAULTS), ['puntos_libres']) as $key) {
