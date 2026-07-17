@@ -41,7 +41,7 @@ const HABILIDAD_TIPO_OPTS  = ['melee', 'distancia'];
 const HABILIDAD_ROL_TIPO_OPTS = ['melee', 'distancia', { value: 'nave', label: 'Nave (combate espacial)' }];
 const HABILIDAD_OBJETIVO_OPTS = ['target', 'self'];
 const BUFF_STATS  = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
-const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI' };
 const BUFF_COLOR  = { ataque: '#ff7043', defensa: '#38cdf0', punteria: '#10b981', movimiento: '#a78bfa', iniciativa: '#E6B325' };
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
@@ -212,7 +212,7 @@ const ENTITY_CONFIG = {
       { key: 'escudo',        label: 'Escudo',           type: 'number', min: 0 },
       { key: 'defensa',       label: 'Defensa',          type: 'number', min: 0 },
       { key: 'ataque',        label: 'Ataque',           type: 'number', min: 0 },
-      { key: 'movimiento',    label: 'Movimiento',       type: 'number', min: 0 },
+      { key: 'movimiento',    label: 'Agilidad',       type: 'number', min: 0 },
       { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
       { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
       { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del NPC, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
@@ -291,7 +291,7 @@ const ENTITY_CONFIG = {
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
       { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
       { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario' },
-      { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + MOV×1 = -1 puntería y -1 movimiento al rival' },
+      { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + AGI×1 = -1 puntería y -1 agilidad al rival' },
       { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
     ],
     defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
@@ -326,7 +326,7 @@ const ENTITY_CONFIG = {
       { key: 'bono_ataque',     label: 'Bono Ataque',     type: 'number', min: -999, hint: 'Aplica si este objeto se usa como componente de sable equipado' },
       { key: 'bono_defensa',    label: 'Bono Defensa',    type: 'number', min: -999 },
       { key: 'bono_punteria',   label: 'Bono Puntería',   type: 'number', min: -999 },
-      { key: 'bono_movimiento', label: 'Bono Movimiento', type: 'number', min: -999 },
+      { key: 'bono_movimiento', label: 'Bono Agilidad', type: 'number', min: -999 },
       { key: 'bono_iniciativa', label: 'Bono Iniciativa', type: 'number', min: -999 },
       { key: 'bono_vida',       label: 'Bono Vida',       type: 'number', min: -999 },
       { key: 'bono_escudo',     label: 'Bono Escudo',     type: 'number', min: -999 },
@@ -421,7 +421,7 @@ const ENTITY_CONFIG = {
       { key: 'escudo',         label: 'Escudo',         type: 'number',  min: 0 },
       { key: 'defensa',        label: 'Defensa',        type: 'number',  min: 0 },
       { key: 'ataque',         label: 'Ataque',         type: 'number',  min: 0 },
-      { key: 'movimiento',     label: 'Movimiento',     type: 'number',  min: 0 },
+      { key: 'movimiento',     label: 'Agilidad',     type: 'number',  min: 0 },
       { key: 'iniciativa',     label: 'Iniciativa',     type: 'number',  min: 0 },
       { key: 'punteria',       label: 'Puntería',       type: 'number',  min: 0 },
       { key: 'puntos_libres',  label: 'Puntos libres',  type: 'number',  min: 0 },
