@@ -52,13 +52,18 @@ class RaidCombatController extends Controller
      * (el cliente solo envía el id; emoji/label/desc los define el backend). Misma
      * lista que PvpCombatController::EMOTES. */
     private const EMOTES = [
-        'saludar' => ['emoji' => '👋',  'label' => 'Saludar',     'desc' => 'saluda al grupo'],
-        'reir' => ['emoji' => '😂',  'label' => 'Reír',        'desc' => 'se ríe'],
-        'llorar' => ['emoji' => '😢',  'label' => 'Llorar',      'desc' => 'llora'],
-        'impresion' => ['emoji' => '😲',  'label' => 'Impresión',   'desc' => 'se muestra impresionado'],
-        'enojo' => ['emoji' => '😠',  'label' => 'Enojarse',    'desc' => 'se enoja'],
-        'dormir' => ['emoji' => '😴',  'label' => 'Dormir',      'desc' => 'finge dormirse de aburrimiento'],
-        'adios' => ['emoji' => '🖐️', 'label' => 'Decir adiós', 'desc' => 'se despide'],
+        'saludar' => ['emoji' => '👋', 'label' => 'Saludar', 'desc' => 'saluda al grupo'],
+        'curacion' => ['emoji' => '❤️‍🩹', 'label' => 'Solicitar curación', 'desc' => 'solicita curación'],
+        'escudo' => ['emoji' => '🛡️', 'label' => 'Curar escudo', 'desc' => 'solicita curar escudo'],
+        'buff' => ['emoji' => '✨', 'label' => 'Solicitar buff', 'desc' => 'solicita un buff'],
+        'foco' => ['emoji' => '🎯', 'label' => 'Ataque concentrado', 'desc' => 'solicita ataque concentrado al jefe'],
+        'debuff' => ['emoji' => '☠️', 'label' => 'Debuff al jefe', 'desc' => 'solicita debuff al jefe'],
+        'quitar_agro' => ['emoji' => '🙋', 'label' => 'Quiten mi agro', 'desc' => 'solicita que le quiten el agro'],
+        'si' => ['emoji' => '✅', 'label' => 'Sí', 'desc' => 'responde que sí'],
+        'no' => ['emoji' => '❌', 'label' => 'No', 'desc' => 'responde que no'],
+        'gracias' => ['emoji' => '🙏', 'label' => 'Gracias', 'desc' => 'agradece al equipo'],
+        'felicitar' => ['emoji' => '👏', 'label' => 'Felicitar', 'desc' => 'felicita al grupo'],
+        'sorprenderse' => ['emoji' => '😲', 'label' => 'Sorprenderse', 'desc' => 'se sorprende'],
     ];
 
     /** Cupos de la cola para un jefe: lo configurado en el NPC (raid_slots), con un piso de MIN_JUGADORES. */
