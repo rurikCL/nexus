@@ -390,17 +390,42 @@ export function CropImageField({
           }
         }}
         style={{
-        height,
-        borderRadius: 'var(--radius-md)',
-        border: '1px solid var(--holo-line)',
-        background: previewUrl ? `url(${previewUrl}) center/cover no-repeat` : 'rgba(255,255,255,0.03)',
-        display: previewUrl ? 'block' : 'grid',
-        placeItems: 'center',
-        overflow: 'hidden',
-        cursor: 'pointer',
-      }}
+          width: '100%',
+          height,
+          minHeight: height,
+          maxHeight: height,
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--holo-line)',
+          background: 'rgba(255,255,255,0.03)',
+          display: 'block',
+          overflow: 'hidden',
+          cursor: 'pointer',
+          position: 'relative',
+          boxSizing: 'border-box',
+          lineHeight: 0,
+          flex: '0 0 auto',
+          contain: 'layout paint size',
+        }}
       >
-        {!previewUrl && <Icon name="camera" size={22} style={{ color: 'var(--txt-faint)' }} />}
+        {previewUrl ? (
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            <img
+              src={previewUrl}
+              alt=""
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                pointerEvents: 'none',
+              }}
+            />
+          </div>
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+            <Icon name="camera" size={22} style={{ color: 'var(--txt-faint)' }} />
+          </div>
+        )}
       </div>
       <input
         ref={inputRef}
