@@ -139,12 +139,10 @@ class CharacterController extends Controller
             ], $data)
         );
 
-        if ($character->wasRecentlyCreated) {
-            CharacterHito::firstOrCreate([
-                'character_id' => $character->id,
-                'hito' => 'personaje_creado',
-            ]);
-        }
+        CharacterHito::firstOrCreate([
+            'character_id' => $character->id,
+            'hito' => 'personaje_creado',
+        ]);
 
         return response()->json([
             'character' => $character->append(['winrate']),
