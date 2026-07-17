@@ -18,6 +18,20 @@ function useWindowWidth() {
   return w;
 }
 
+function mapApiCharacterToStoreCharacter(character) {
+  if (!character) return null;
+  return {
+    ...character,
+    saber: character.saber_color ?? character.saber ?? 'azul',
+    photo: character.photo_url ?? character.photo ?? null,
+    pool: character.puntos_libres ?? character.pool ?? 0,
+    current_forma: character.current_forma ?? 1,
+    arma_equipada: character.arma_equipada ?? null,
+    nave_equipada: character.nave_equipada ?? null,
+    sable_activo: character.sable_activo ?? null,
+  };
+}
+
 const SIDES = {
   luminoso: { label: 'Lado Luminoso', color: '#3aa0ff', img: '/assets/lado-luminoso.png', desc: 'Disciplina, honor y protección' },
   oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.png',   desc: 'Pasión, ambición y poder' },
@@ -776,7 +790,10 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message ?? 'Error al crear el personaje.'); return; }
-      S.setCharacter({ name: form.name.trim(), handle: form.handle.trim().toUpperCase(), bio: form.bio.trim(), lore: form.lore.trim(), cls: form.cls, side: form.side, saber: form.saber, stats: form.stats, pool: 0 });
+      const savedCharacter = mapApiCharacterToStoreCharacter(data.character);
+      if (savedCharacter) {
+        S.setCharacter(savedCharacter);
+      }
       toast('Personaje creado', { tone: 'success', icon: 'check', desc: `¡Bienvenido a la Academia, ${form.name.trim()}!` });
       onCharacterCreated?.(data.character);
     } catch {
@@ -1998,6 +2015,11 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
       });
       const data = await res.json();
       if (!res.ok) { toast(data.message ?? 'Error al guardar', { tone: 'error', icon: 'x' }); return; }
+      const savedCharacter = mapApiCharacterToStoreCharacter(data.character);
+      if (savedCharacter) {
+        S.setCharacter(savedCharacter);
+        onCharacterCreated?.(data.character);
+      }
       toast('Personaje guardado', { tone: 'success', icon: 'check', desc: 'Tu ficha de combate está actualizada' });
     } catch {
       toast('Error de conexión', { tone: 'error', icon: 'x' });
