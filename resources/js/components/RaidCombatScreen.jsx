@@ -289,7 +289,7 @@ const extractDice = (text) => {
 
 /* Contador regresivo del turno activo — sincronizado contra `turn_started_at` (servidor),
    se resincroniza en cada polling. Si llega a 0, el próximo show() del backend salta el turno. */
-const TurnCountdownCard = ({ startedAt, maxWait }) => {
+const useCountdown = (startedAt, maxWait) => {
   const [secondsLeft, setSecondsLeft] = useState(maxWait);
 
   useEffect(() => {
@@ -301,17 +301,29 @@ const TurnCountdownCard = ({ startedAt, maxWait }) => {
     return () => clearInterval(iv);
   }, [startedAt, maxWait]);
 
+  return secondsLeft;
+};
+
+/* Card de turno: además del segundero, muestra quién está actuando (avatar del jefe o del
+   jugador activo) en vez de un texto de "esperando" aparte — así identifica el turno sin
+   depender de que se oculte el resto de la barra de acciones. */
+const TurnCountdownCard = ({ startedAt, maxWait, icon }) => {
+  const secondsLeft = useCountdown(startedAt, maxWait);
   const pct = maxWait > 0 ? Math.max(0, Math.min(100, (secondsLeft / maxWait) * 100)) : 0;
   const urgent = secondsLeft <= 10;
 
   return (
     <div style={{
-      flex: '0 0 68px', minWidth: 68, borderRadius: 8, padding: '4px 2px',
+      minWidth: 0, borderRadius: 8, padding: '4px 2px',
       background: urgent ? 'rgba(255,45,69,0.08)' : 'rgba(56,205,240,0.06)',
       border: `1px solid ${urgent ? 'rgba(255,45,69,0.32)' : 'rgba(56,205,240,0.22)'}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
     }}>
-      <span style={{ fontSize: 7, color: urgent ? '#ff6b6b' : '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>TURNO</span>
+      <div style={{
+        width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+        border: `1.5px solid ${urgent ? '#ff6b6b' : '#38cdf0'}`, background: 'rgba(0,0,0,0.28)',
+        display: 'grid', placeItems: 'center',
+      }}>{icon}</div>
       <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1, color: urgent ? '#ff6b6b' : 'var(--txt)', fontFamily: 'var(--font-data)' }}>{secondsLeft}</span>
       <div style={{ width: '80%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: urgent ? '#ff2d45' : '#38cdf0', transition: 'width 0.25s linear' }} />
@@ -353,13 +365,13 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const myAvatarRef = useRef(null);
   const playerRefsMap = useRef(new Map());
   const prevLogLenRef = useRef(null);
-  const animChainRef = useRef(Promise.resolve());
+  const revealRaidRef = useRef(null);
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
 
   const load = useCallback(async () => {
     try {
       const d = await apiGet(`/raid/${raidId}`);
-      setRaid(d.raid);
+      await revealRaidRef.current?.(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo cargar el combate.');
     }
@@ -477,21 +489,22 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setAnimBusy(false);
   };
 
-  /* Al crecer el log (mi propia acción o la de otro jugador detectada por polling),
-     reproduce en cadena la animación de cada entrada nueva. */
-  useEffect(() => {
-    if (!raid) return;
-    if (prevLogLenRef.current === null) {
-      prevLogLenRef.current = raid.log.length;
-      return;
+  /* Anima las entradas nuevas del log (dados + golpe + texto flotante) y solo entonces
+     revela el estado actualizado (HP/escudo/turno) — así los efectos se ven ANTES de que
+     cambien los números, no al revés. Se invoca explícitamente al recibir cada respuesta
+     (acción propia, emoji, polling), nunca via setRaid directo. */
+  const revealRaid = async (newRaid) => {
+    const newLog = newRaid.log ?? [];
+    const isFirstLoad = prevLogLenRef.current === null;
+    const newEntries = isFirstLoad ? [] : newLog.slice(prevLogLenRef.current);
+    prevLogLenRef.current = newLog.length;
+
+    if (newEntries.length) {
+      await playEntries(newEntries);
     }
-    if (raid.log.length > prevLogLenRef.current) {
-      const newEntries = raid.log.slice(prevLogLenRef.current);
-      prevLogLenRef.current = raid.log.length;
-      animChainRef.current = animChainRef.current.then(() => playEntries(newEntries));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [raid?.log?.length]);
+    setRaid(newRaid);
+  };
+  revealRaidRef.current = revealRaid;
 
   if (!raid) {
     return createPortal(
@@ -508,13 +521,23 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const finished = raid.status === 'ganado' || raid.status === 'perdido';
   const showEndScreen = finished && !animBusy;
 
+  /* Ícono de quien tiene el turno activo, para el TurnCountdownCard */
+  const turnPlayer = raid.jugadores.find(j => j.es_mi_turno);
+  const turnIcon = raid.es_turno_del_jefe
+    ? ((raid.npc.imagen_mini || raid.npc.imagen)
+      ? <img src={raid.npc.imagen_mini || raid.npc.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      : <Icon name="flame" size={12} style={{ color: '#ff2d45' }} />)
+    : (turnPlayer?.photo_url
+      ? <img src={turnPlayer.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      : <Icon name="user" size={12} style={{ color: 'var(--holo)' }} />);
+
   const doAction = async (payload) => {
     if (busy) return;
     setBusy(true);
     setError('');
     try {
       const d = await apiPost(`/raid/${raid.id}/action`, payload);
-      setRaid(d.raid);
+      await revealRaid(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo realizar la acción.');
     } finally {
@@ -531,7 +554,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: it.emoji });
     try {
       const d = await apiPost(`/raid/${raid.id}/emoji`, { emote_id: it.id });
-      setRaid(d.raid);
+      await revealRaid(d.raid);
     } catch { /* ignore */ }
   };
 
@@ -686,11 +709,22 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(2, raid.jugadores.length)}, 1fr)`, gap: 8, padding: '10px 14px', background: 'rgba(4,9,20,0.6)', borderTop: '1px solid rgba(56,205,240,0.16)' }}>
             {raid.jugadores.map(j => (
               <div key={j.user_id} ref={el => { if (el) { playerRefsMap.current.set(j.user_id, el); if (j.es_yo) myAvatarRef.current = el; } }} style={{
+                position: 'relative',
                 display: 'flex', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 8,
                 border: `1px solid ${j.es_mi_turno ? 'var(--holo)' : j.es_yo ? 'rgba(230,179,37,0.4)' : 'rgba(255,255,255,0.1)'}`,
                 background: j.es_mi_turno ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'rgba(255,255,255,0.02)',
                 opacity: j.status !== 'activo' ? 0.4 : 1,
               }}>
+                {j.es_bajo_agro && (
+                  <div title="Bajo agro del jefe" style={{
+                    position: 'absolute', top: -8, right: -8, zIndex: 2,
+                    width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                    background: 'rgba(6,12,26,0.96)', border: '1px solid rgba(230,179,37,0.65)',
+                    color: '#E6B325', boxShadow: '0 0 12px rgba(230,179,37,0.22)',
+                  }}>
+                    <Icon name="eye" size={12} />
+                  </div>
+                )}
                 <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center' }}>
                   {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="user" size={14} style={{ color: 'var(--holo)' }} />}
                 </div>
@@ -712,9 +746,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           {!finished && me && (
             <div style={{ padding: '10px 14px', background: 'rgba(4,9,20,0.7)', borderTop: '1px solid rgba(56,205,240,0.16)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               {error && <div style={{ color: '#ff6b6b', fontSize: 11 }}>{error}</div>}
-              {!isMyTurn ? (
+              {me.status !== 'activo' ? (
                 <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', padding: '10px 0' }}>
-                  {me.status !== 'activo' ? 'Ya no participas activamente en este combate.' : 'Esperando el turno de otro combatiente...'}
+                  Ya no participas activamente en este combate.
                 </div>
               ) : (
                 <>
@@ -729,10 +763,6 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                   </div>
 
                   <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', minHeight: 90 }}>
-                    {raid.turn_started_at && (
-                      <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} />
-                    )}
-
                     {/* Habilidades (grid 2x2) */}
                     <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
                       {(me.habilidades ?? []).length === 0 ? (
@@ -841,6 +871,10 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                         <span style={{ fontSize: 18, lineHeight: 1 }}>😊</span>
                         <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
                       </ActionBtn>
+
+                      {raid.turn_started_at && (
+                        <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} icon={turnIcon} />
+                      )}
                     </div>
                   </div>
                 </>
