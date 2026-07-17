@@ -27,6 +27,7 @@ const TIPO_OBJ = {
   tarea:         'Tarea',
   viaje:         'Viaje',
   dialogo:       'Diálogo',
+  menu:          'Menú',
 };
 
 function apiCall(method, path, body) {
@@ -313,7 +314,7 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
 
         {!mision.aceptada && !done && (mision.objetivos ?? []).length > 0 && (
           <div style={{ fontSize: 11.5, color: 'var(--txt-faint)', lineHeight: 1.5 }}>
-            Puedes revisar los objetivos antes de aceptarla. El progreso solo empezará a contarse cuando la misión esté aceptada.
+            Puedes revisar los objetivos antes de aceptarla. Los objetivos de tipo menú se marcan al visitar su vista; el resto empieza a contar cuando la misión esté aceptada.
           </div>
         )}
 

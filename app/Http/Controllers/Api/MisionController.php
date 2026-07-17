@@ -9,6 +9,7 @@ use App\Models\Objetivo;
 use App\Models\Recompensa;
 use App\Models\User;
 use App\Traits\ConvertsToWebp;
+use App\Services\MisionProgresoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -516,6 +517,18 @@ class MisionController extends Controller
         $mision->users()->updateExistingPivot($user->id, $pivotData);
 
         return response()->json(['message' => 'Progreso actualizado.']);
+    }
+
+    // ── POST /api/misiones/menu-visit ────────────────────────────────────────
+    public function menuVisit(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'slug' => 'required|string|max:100',
+        ]);
+
+        MisionProgresoService::registrarMenu($request->user(), $data['slug']);
+
+        return response()->json(['message' => 'Menú registrado.']);
     }
 
     // ── POST /api/misiones/{mision}/completar ─────────────────────────────────

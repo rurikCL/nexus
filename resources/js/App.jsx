@@ -174,6 +174,11 @@ const NAV = [
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
   { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
 ];
+const MENU_SLUGS = new Set([
+  ...NAV.map(n => n.id),
+  'configuracion',
+  'armado-sable',
+]);
 const TITLES = {
   comando: ['Centro de Comando', 'Estadisticas y misiones'],
   personaje: ['Mi Personaje', 'Ficha de combate e identidad'],
@@ -223,6 +228,21 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     window.addEventListener('popstate', h);
     return () => window.removeEventListener('popstate', h);
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || !MENU_SLUGS.has(view)) return;
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+    fetch('/api/misiones/menu-visit', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ slug: view }),
+    }).catch(() => {});
+  }, [user?.id, view]);
 
   useEffect(() => {
     applySaberTheme(S.character.saber);
