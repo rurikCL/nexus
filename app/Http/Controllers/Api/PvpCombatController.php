@@ -958,11 +958,16 @@ class PvpCombatController extends Controller
             ];
         }
 
+        if (method_exists($char, 'combatStats')) {
+            return $char->combatStats();
+        }
+
         $bonos = method_exists($char, 'sableBonos')
             ? $char->sableBonos()
             : ['ataque' => 0, 'defensa' => 0, 'punteria' => 0, 'movimiento' => 0, 'iniciativa' => 0, 'vida' => 0, 'escudo' => 0];
+        $cap = max(1, (int) Configuracion::valor('cap_stats_items', 15));
 
-        return [
+        $stats = [
             'vida' => ($char->vida ?? 8) + $bonos['vida'],
             'escudo' => ($char->escudo ?? 4) + $bonos['escudo'],
             'ataque' => ($char->ataque ?? 2) + $bonos['ataque'],
@@ -971,6 +976,12 @@ class PvpCombatController extends Controller
             'iniciativa' => ($char->iniciativa ?? 2) + $bonos['iniciativa'],
             'punteria' => ($char->punteria ?? 2) + $bonos['punteria'],
         ];
+
+        foreach ($stats as $key => $value) {
+            $stats[$key] = max(1, min($cap, (int) $value));
+        }
+
+        return $stats;
     }
 
     /** Fuerza máxima (10 + bono del sable) y generación por turno (2 + bono del sable) */
@@ -1016,6 +1027,10 @@ class PvpCombatController extends Controller
             if (isset($stats[$d['stat']])) {
                 $stats[$d['stat']] = max(0, $stats[$d['stat']] - 1);
             }
+        }
+        $cap = max(1, (int) Configuracion::valor('cap_stats_buff', 18));
+        foreach ($stats as $key => $value) {
+            $stats[$key] = max(0, min($cap, (int) $value));
         }
 
         return $stats;

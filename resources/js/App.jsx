@@ -3,6 +3,7 @@ import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
+import { playMensajeUsuario, playNotificacionDuelo } from './utils/sounds.js';
 
 const HUD_COLORS = ['#FF6B00', '#38cdf0', '#8b5cf6', '#10b981', '#ec4899', '#f97316', '#E6B325', '#3aa0ff'];
 function hashColor(str) {
@@ -17,6 +18,15 @@ function mergeApiCombatants(apiList, currentUserId) {
     const isMe     = api.id === currentUserId;
     const color    = hashColor(api.handle);
     const initials = api.name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+    const combatStats = api.combat_stats ?? {
+      vida: api.vida ?? 0,
+      escudo: api.escudo ?? 0,
+      defensa: api.defensa ?? 0,
+      ataque: api.ataque ?? 0,
+      movimiento: api.movimiento ?? 0,
+      iniciativa: api.iniciativa ?? 0,
+      punteria: api.punteria ?? 0,
+    };
 
     return {
       medals:    [],
@@ -35,6 +45,7 @@ function mergeApiCombatants(apiList, currentUserId) {
       total:    (api.wins ?? 0) + (api.losses ?? 0),
       credits:   api.credits    ?? 0,
       stats:     api.stats      ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
+      combat_stats: combatStats,
       gold:      api.gold       ?? false,
       tier:      api.tier       ?? 'iniciado',
       winrate:   api.winrate    ?? 0,
@@ -335,6 +346,9 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     window.Echo.private(`App.Models.User.${user.id}`)
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
+        if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
+          void playNotificacionDuelo();
+        }
         onTransmision?.({ ...notif, _notifId: notif.id });
       });
     return () => window.Echo.leave(`App.Models.User.${user.id}`);
@@ -358,6 +372,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
             // Detecta remitentes nuevos y dispara notificación
             data.senders.forEach(sender => {
               if (!prevUnreadIds.current.has(sender.user_id)) {
+                void playMensajeUsuario();
                 onTransmision?.({
                   tone: 'holo',
                   icon: 'message',

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
+import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
@@ -367,20 +368,30 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const myAvatarRef = useRef(null);
   const playerRefsMap = useRef(new Map());
   const prevLogLenRef = useRef(null);
+  const revealQueueRef = useRef(Promise.resolve());
+  const loadInFlightRef = useRef(false);
   const revealRaidRef = useRef(null);
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
 
   const load = useCallback(async () => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     try {
       const d = await apiGet(`/raid/${raidId}`);
       await revealRaidRef.current?.(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo cargar el combate.');
+    } finally {
+      loadInFlightRef.current = false;
     }
   }, [raidId]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { prevLogLenRef.current = null; }, [raidId]);
+  useEffect(() => {
+    prevLogLenRef.current = null;
+    revealQueueRef.current = Promise.resolve();
+    loadInFlightRef.current = false;
+  }, [raidId]);
 
   useEffect(() => {
     if (!raid || raid.status !== 'activo') { clearInterval(pollRef.current); return; }
@@ -512,10 +523,16 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
   const playEntries = async (entries) => {
     setAnimBusy(true);
-    for (const entry of entries) {
-      await playEntry(entry);
+    try {
+      for (let i = 0; i < entries.length; i++) {
+        await playEntry(entries[i]);
+        if (i < entries.length - 1) {
+          await sleep(120);
+        }
+      }
+    } finally {
+      setAnimBusy(false);
     }
-    setAnimBusy(false);
   };
 
   /* Anima las entradas nuevas del log (dados + golpe + texto flotante) y solo entonces
@@ -523,15 +540,25 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
      cambien los números, no al revés. Se invoca explícitamente al recibir cada respuesta
      (acción propia, emoji, polling), nunca via setRaid directo. */
   const revealRaid = async (newRaid) => {
-    const newLog = newRaid.log ?? [];
-    const isFirstLoad = prevLogLenRef.current === null;
-    const newEntries = isFirstLoad ? [] : newLog.slice(prevLogLenRef.current);
-    prevLogLenRef.current = newLog.length;
+    revealQueueRef.current = revealQueueRef.current.then(async () => {
+      const newLog = newRaid.log ?? [];
+      const currentLen = prevLogLenRef.current;
+      const isFirstLoad = currentLen === null;
 
-    if (newEntries.length) {
-      await playEntries(newEntries);
-    }
-    setRaid(newRaid);
+      if (!isFirstLoad && newLog.length < currentLen) {
+        return;
+      }
+
+      const newEntries = isFirstLoad ? [] : newLog.slice(currentLen);
+      prevLogLenRef.current = newLog.length;
+
+      if (newEntries.length) {
+        await playEntries(newEntries);
+      }
+      setRaid(newRaid);
+    }).catch(() => {});
+
+    return revealQueueRef.current;
   };
   revealRaidRef.current = revealRaid;
 
@@ -588,11 +615,27 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   };
 
   const clickHabilidad = (hab) => {
+    void playClickHabilidad();
     if (hab.objetivo === 'self') {
       setPendingSelfHab(hab);
     } else {
-      doAction({ skill: String(hab.id) });
+      void doAction({ skill: String(hab.id) });
     }
+  };
+
+  const clickAction = (payload) => {
+    void playClickOpcion();
+    void doAction(payload);
+  };
+
+  const openStancePicker = () => {
+    void playClickOpcion();
+    setStancePicker(true);
+  };
+
+  const clickStance = (forma) => {
+    void playClickOpcion();
+    void doAction({ skill: 'stance', forma });
   };
 
   /* Agrupa el log en tarjetas de ronda, usando el aviso "Ronda N — ..." como separador */
@@ -862,7 +905,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
                     {/* Ataque + Forma */}
                     <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
-                      <ActionBtn onClick={() => doAction({ skill: 'unarmed' })} disabled={!canAct}
+                      <ActionBtn onClick={() => clickAction({ skill: 'unarmed' })} disabled={!canAct}
                         bg="rgba(255,140,0,0.07)" border="rgba(255,140,0,0.22)" hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)">
                         {me.arma_equipada?.imagen ? (
                           <div style={{ width: 26, height: 26, borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
@@ -884,7 +927,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                         </span>
                       </ActionBtn>
 
-                      <ActionBtn onClick={() => setStancePicker(true)} disabled={!canAct}
+                      <ActionBtn onClick={() => openStancePicker()} disabled={!canAct}
                         bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)" hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)">
                         {NX.CLASSES[me.current_forma - 1]?.img ? (
                           <div style={{ width: 22, height: 22, borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
@@ -988,7 +1031,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           onMouseDown={() => setStancePicker(false)}>
           <div className="nx-panel solid nx-panel-glow" style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }} onMouseDown={e => e.stopPropagation()}>
             {NX.CLASSES.map((c, i) => (
-              <button key={c.id} onClick={() => doAction({ skill: 'stance', forma: i + 1 })} style={{
+              <button key={c.id} onClick={() => clickStance(i + 1)} style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8, cursor: 'pointer',
                 border: `1px solid ${me?.current_forma === i + 1 ? c.accent : 'var(--holo-line)'}`,
                 background: me?.current_forma === i + 1 ? `color-mix(in srgb, ${c.accent} 14%, transparent)` : 'rgba(255,255,255,0.02)',

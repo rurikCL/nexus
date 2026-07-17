@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { playAtras } from '../utils/sounds.js';
 import { Empty } from './Comando.jsx';
 
 /* NÉXUS — Competitivo (torneos con árbol de eliminación) */
@@ -190,7 +191,7 @@ function TorneoDetalle({ torneoId, user, onBack }) {
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button className="nx-btn" onClick={onBack} style={{ gap: 7, padding: '7px 12px' }}>
+        <button className="nx-btn" onClick={() => { void playAtras(); onBack(); }} style={{ gap: 7, padding: '7px 12px' }}>
           <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} />
           <span style={{ fontSize: 12 }}>Volver</span>
         </button>

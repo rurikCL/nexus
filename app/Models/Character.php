@@ -246,6 +246,28 @@ class Character extends Model
         ];
     }
 
+    public function combatStats(): array
+    {
+        $cap = max(1, (int) Configuracion::valor('cap_stats_items', 15));
+        $bonos = $this->sableBonos();
+
+        $stats = [
+            'vida' => (int) ($this->vida ?? 8) + (int) ($bonos['vida'] ?? 0),
+            'escudo' => (int) ($this->escudo ?? 4) + (int) ($bonos['escudo'] ?? 0),
+            'ataque' => (int) ($this->ataque ?? 2) + (int) ($bonos['ataque'] ?? 0),
+            'defensa' => (int) ($this->defensa ?? 2) + (int) ($bonos['defensa'] ?? 0),
+            'movimiento' => (int) ($this->movimiento ?? 2) + (int) ($bonos['movimiento'] ?? 0),
+            'iniciativa' => (int) ($this->iniciativa ?? 2) + (int) ($bonos['iniciativa'] ?? 0),
+            'punteria' => (int) ($this->punteria ?? 2) + (int) ($bonos['punteria'] ?? 0),
+        ];
+
+        foreach ($stats as $key => $value) {
+            $stats[$key] = max(1, min($cap, $value));
+        }
+
+        return $stats;
+    }
+
     public function statsTemporadas(): HasManyThrough
     {
         return $this->hasManyThrough(StatsTemporada::class, User::class, 'id', 'user_id', 'user_id', 'id');

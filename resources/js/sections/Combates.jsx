@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { playAtras } from '../utils/sounds.js';
 
 function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
@@ -207,7 +208,7 @@ export function ScoringScreen({ combat, onClose, S }) {
 
       {/* Topbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button className="nx-btn" onClick={onClose} style={{ gap: 7, padding: '7px 12px' }}>
+        <button className="nx-btn" onClick={() => { void playAtras(); onClose(); }} style={{ gap: 7, padding: '7px 12px' }}>
           <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} />
           <span style={{ fontSize: 12 }}>Volver</span>
         </button>
@@ -559,7 +560,7 @@ export function CombatViewScreen({ combat, onClose, S }) {
 
       {/* Topbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button className="nx-btn" onClick={onClose} style={{ gap: 7, padding: '7px 12px' }}>
+        <button className="nx-btn" onClick={() => { void playAtras(); onClose(); }} style={{ gap: 7, padding: '7px 12px' }}>
           <Icon name="chevron" size={14} style={{ transform: 'rotate(180deg)' }} />
           <span style={{ fontSize: 12 }}>Volver</span>
         </button>
@@ -1411,4 +1412,3 @@ function AcceptChallengeModal({ challenge, onClose, onAccepted, S }) {
     </Modal>
   );
 }
-

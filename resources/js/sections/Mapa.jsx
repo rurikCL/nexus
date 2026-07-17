@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { playAtras } from '../utils/sounds.js';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
 import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen.jsx';
@@ -778,7 +779,7 @@ function VolverHeader({ onVolver, crumbs }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
       <button
-        onClick={onVolver}
+        onClick={() => { void playAtras(); onVolver(); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
           background: 'rgba(56,205,240,0.07)',
@@ -1668,7 +1669,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
           </p>
         </div>
 
-        <Btn kind="ghost" onClick={goBack}>← Volver</Btn>
+        <Btn kind="ghost" onClick={() => { void playAtras(); goBack(); }}>← Volver</Btn>
       </div>
     </div>
   );
@@ -1967,14 +1968,15 @@ function formaEspecializacion(character) {
 /* ─── STATS DE COMBATE DEL JUGADOR ─────────────────────── */
 function getPlayerCombatStats(character) {
   const bonos = character?.sable_bonos ?? { ataque: 0, defensa: 0, punteria: 0, movimiento: 0, iniciativa: 0, vida: 0, escudo: 0, fuerza: 0, generacion_fuerza: 0 };
+  const combat = character?.combat_stats ?? null;
   return {
-    vida:       (character?.vida       ?? 8) + (bonos.vida ?? 0),
-    escudo:     (character?.escudo     ?? 4) + (bonos.escudo ?? 0),
-    ataque:     (character?.ataque     ?? 2) + (bonos.ataque ?? 0),
-    defensa:    (character?.defensa    ?? 2) + (bonos.defensa ?? 0),
-    movimiento: (character?.movimiento ?? 2) + (bonos.movimiento ?? 0),
-    iniciativa: (character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0),
-    punteria:   (character?.punteria   ?? 2) + (bonos.punteria ?? 0),
+    vida:       combat?.vida       ?? ((character?.vida       ?? 8) + (bonos.vida ?? 0)),
+    escudo:     combat?.escudo     ?? ((character?.escudo     ?? 4) + (bonos.escudo ?? 0)),
+    ataque:     combat?.ataque     ?? ((character?.ataque     ?? 2) + (bonos.ataque ?? 0)),
+    defensa:    combat?.defensa    ?? ((character?.defensa    ?? 2) + (bonos.defensa ?? 0)),
+    movimiento: combat?.movimiento ?? ((character?.movimiento ?? 2) + (bonos.movimiento ?? 0)),
+    iniciativa: combat?.iniciativa ?? ((character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
+    punteria:   combat?.punteria   ?? ((character?.punteria   ?? 2) + (bonos.punteria ?? 0)),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
     maxFuerza:      10 + (bonos.fuerza ?? 0),

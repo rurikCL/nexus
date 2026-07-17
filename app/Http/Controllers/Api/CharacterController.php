@@ -3,11 +3,41 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Configuracion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CharacterController extends Controller
 {
+    private const TOTAL_COMBAT_POINTS = 27;
+
+    private const COMBAT_DEFAULTS = [
+        'vida' => 8,
+        'escudo' => 4,
+        'defensa' => 2,
+        'ataque' => 2,
+        'movimiento' => 2,
+        'iniciativa' => 2,
+        'punteria' => 2,
+    ];
+
+    private function combatAssignCap(): int
+    {
+        return max(1, (int) Configuracion::valor('cap_stats_asignacion', 10));
+    }
+
+    private function sanitizeCombatStats(array $data): array
+    {
+        $stats = self::COMBAT_DEFAULTS;
+        foreach (array_keys(self::COMBAT_DEFAULTS) as $key) {
+            if (array_key_exists($key, $data) && $data[$key] !== null) {
+                $stats[$key] = (int) $data[$key];
+            }
+        }
+
+        return $stats;
+    }
+
     public function upsert(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -43,6 +73,30 @@ class CharacterController extends Controller
         ]);
 
         $user = $request->user();
+        $assignCap = $this->combatAssignCap();
+        $combatStats = $this->sanitizeCombatStats($data);
+        $pointsFree = array_key_exists('puntos_libres', $data) && $data['puntos_libres'] !== null
+            ? (int) $data['puntos_libres']
+            : 5;
+
+        foreach ($combatStats as $key => $value) {
+            if ($value < 1 || $value > $assignCap) {
+                return response()->json([
+                    'message' => "El stat {$key} debe estar entre 1 y {$assignCap}.",
+                ], 422);
+            }
+        }
+
+        $totalCombatPoints = array_sum($combatStats) + $pointsFree;
+        if ($totalCombatPoints !== self::TOTAL_COMBAT_POINTS) {
+            return response()->json([
+                'message' => 'La suma de stats y puntos libres debe ser 27.',
+            ], 422);
+        }
+
+        foreach (array_merge(array_keys(self::COMBAT_DEFAULTS), ['puntos_libres']) as $key) {
+            unset($data[$key]);
+        }
 
         $canEditRango = in_array($user->tier, ['caballero', 'maestro', 'granmaestro']);
 
@@ -82,14 +136,14 @@ class CharacterController extends Controller
                 'saber_color'   => 'azul',
                 'gold'          => false,
                 'stats'         => $defaultStats,
-                'vida'          => 8,
-                'escudo'        => 4,
-                'defensa'       => 2,
-                'ataque'        => 2,
-                'movimiento'    => 2,
-                'iniciativa'    => 2,
-                'punteria'      => 2,
-                'puntos_libres' => 5,
+                'vida'          => $combatStats['vida'],
+                'escudo'        => $combatStats['escudo'],
+                'defensa'       => $combatStats['defensa'],
+                'ataque'        => $combatStats['ataque'],
+                'movimiento'    => $combatStats['movimiento'],
+                'iniciativa'    => $combatStats['iniciativa'],
+                'punteria'      => $combatStats['punteria'],
+                'puntos_libres' => $pointsFree,
             ], $data)
         );
 
