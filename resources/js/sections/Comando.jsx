@@ -1201,7 +1201,7 @@ function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex 
   );
 }
 
-const STAT_SHORT = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI', escudo: 'ESC', vida: 'VID' };
+const STAT_SHORT = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI', escudo: 'ESC', vida: 'VID' };
 const statShort = (s) => STAT_SHORT[s] ?? s.toUpperCase().slice(0, 3);
 
 /* Agrupa array de stats y cuenta repetidos: ['ataque','ataque'] → [{stat:'ataque',n:2}] */
@@ -1806,7 +1806,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const ch = S.character;
   const puntos_libres = ch.puntos_libres ?? 5;
   const COMBAT_STATS = ['vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
-  const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Movimiento', iniciativa: 'Iniciativa', punteria: 'Puntería' };
+  const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Agilidad', iniciativa: 'Iniciativa', punteria: 'Puntería' };
   const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);

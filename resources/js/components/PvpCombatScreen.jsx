@@ -160,7 +160,7 @@ const isEffective = (atkForma, defForma) => {
 const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow', INI: 'zap' };
-const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI' };
 
 /* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */
 const mergeEffects = (buffs = [], debuffs = []) => Object.values(
@@ -411,14 +411,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     { l: 'ATQ', v: effMyStat('ataque'),    c: '#ff7043', bonus: countBuff(myBuffs, 'ataque')   > 0, dim: countBuff(myDebuffs, 'ataque')   > 0 },
     { l: 'DEF', v: effMyStat('defensa') + (myDefBonus || 0), c: '#38cdf0', bonus: countBuff(myBuffs, 'defensa') > 0 },
     { l: 'PNT', v: effMyStat('punteria'),  c: '#10b981', bonus: countBuff(myBuffs, 'punteria') > 0 },
-    { l: 'MOV', v: effMyStat('movimiento'), c: '#a78bfa', bonus: countBuff(myBuffs, 'movimiento') > 0, dim: countBuff(myDebuffs, 'movimiento') > 0 },
+    { l: 'AGI', v: effMyStat('movimiento'), c: '#a78bfa', bonus: countBuff(myBuffs, 'movimiento') > 0, dim: countBuff(myDebuffs, 'movimiento') > 0 },
   ];
   const myIni = me.stats?.iniciativa ?? 0;
   const oppBadges = [
     { l: 'ATQ', v: effOppStat('ataque'),   c: '#ff7043', dim: countBuff(oppDebuffs, 'ataque')   > 0 },
     { l: 'DEF', v: effOppStat('defensa') + (oppDefBonus || 0), c: '#38cdf0', dim: countBuff(oppDebuffs, 'defensa') > 0 },
     { l: 'PNT', v: effOppStat('punteria'), c: '#10b981', dim: countBuff(oppDebuffs, 'punteria') > 0 },
-    { l: 'MOV', v: effOppStat('movimiento'), c: '#a78bfa', dim: countBuff(oppDebuffs, 'movimiento') > 0 },
+    { l: 'AGI', v: effOppStat('movimiento'), c: '#a78bfa', dim: countBuff(oppDebuffs, 'movimiento') > 0 },
   ];
   const oppIni = opp.stats?.iniciativa ?? 0;
 

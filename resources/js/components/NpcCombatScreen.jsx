@@ -51,7 +51,7 @@ const mediaUrl = (path) => {
 
 const NPC_COMBAT_LS = 'nx-npc-combat';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
-const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'MOV', iniciativa: 'INI' };
+const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI' };
 
 /* Fondo espacial autocontenido (estrellas + planetas) para combates navales */
 function pseudoRandom(seed) {
@@ -671,20 +671,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const vcol = (p) => p > 50 ? '#10b981' : p > 25 ? '#E6B325' : '#ff2d45';
   const LOG_C = { info: 'rgba(200,225,255,0.78)', success: '#10b981', danger: '#ff6b6b', miss: 'rgba(150,180,220,0.5)', system: '#38cdf0' };
 
-  /* Badges para HUDs — en combate naval solo se muestran ATQ y MOV (maniobrabilidad) */
+  /* Badges para HUDs — en combate naval solo se muestran ATQ y AGI (maniobrabilidad) */
   const npcBadgesFull = [
     { l: 'ATQ', v: effNpcAtk, c: '#ff7043', dim: effNpcAtk < npcAtk },
     { l: 'DEF', v: effNpcDef, c: '#38cdf0', dim: effNpcDef < npcDef },
     ...(npcPnt > 0 ? [{ l: 'PNT', v: effNpcPnt, c: '#10b981', dim: effNpcPnt < npcPnt }] : []),
-    { l: 'MOV', v: effNpcMov, c: '#a78bfa', dim: effNpcMov < npcMov },
+    { l: 'AGI', v: effNpcMov, c: '#a78bfa', dim: effNpcMov < npcMov },
   ];
   const playerBadgesFull = [
     { l: 'ATQ', v: effPlayerAtk, c: '#ff7043', bonus: effPlayerAtk > player.ataque },
     { l: 'DEF', v: effPlayerDef, c: '#38cdf0', bonus: effPlayerDef > player.defensa },
     ...(player.punteria > 0 ? [{ l: 'PNT', v: effPlayerPnt, c: '#10b981', bonus: effPlayerPnt > player.punteria }] : []),
-    { l: 'MOV', v: effPlayerMov, c: '#a78bfa', bonus: effPlayerMov > player.movimiento },
+    { l: 'AGI', v: effPlayerMov, c: '#a78bfa', bonus: effPlayerMov > player.movimiento },
   ];
-  const naveBadgeFilter = (b) => b.l === 'ATQ' || b.l === 'MOV';
+  const naveBadgeFilter = (b) => b.l === 'ATQ' || b.l === 'AGI';
   const npcBadges    = naveMode ? npcBadgesFull.filter(naveBadgeFilter)    : npcBadgesFull;
   const playerBadges = naveMode ? playerBadgesFull.filter(naveBadgeFilter) : playerBadgesFull;
 

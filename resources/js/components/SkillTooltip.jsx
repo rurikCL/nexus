@@ -1,4 +1,4 @@
-const STAT_LABEL = { ataque: 'Ataque', defensa: 'Defensa', punteria: 'Puntería', movimiento: 'Movimiento', iniciativa: 'Iniciativa' };
+const STAT_LABEL = { ataque: 'Ataque', defensa: 'Defensa', punteria: 'Puntería', movimiento: 'Agilidad', iniciativa: 'Iniciativa' };
 const formaLabel = (f) => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
 
 const Chip = ({ color = 'rgba(200,225,255,0.7)', children }) => (

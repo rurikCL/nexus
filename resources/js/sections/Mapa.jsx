@@ -2777,7 +2777,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     { label: 'ESC', val: npc.escudo },
     { label: 'DEF', val: npc.defensa },
     { label: 'ATQ', val: npc.ataque },
-    { label: 'MOV', val: npc.movimiento },
+    { label: 'AGI', val: npc.movimiento },
     { label: 'INI', val: npc.iniciativa },
     { label: 'PNT', val: npc.punteria },
   ].filter(s => s.val > 0);

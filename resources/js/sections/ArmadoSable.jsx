@@ -41,7 +41,7 @@ export const BONUS_FIELDS = [
   { key: 'bono_ataque',     label: 'ATQ', color: '#ff7043', icon: 'sword'  },
   { key: 'bono_defensa',    label: 'DEF', color: '#38cdf0', icon: 'shield' },
   { key: 'bono_punteria',   label: 'PNT', color: '#10b981', icon: 'eye'    },
-  { key: 'bono_movimiento', label: 'MOV', color: '#a78bfa', icon: 'zap'    },
+  { key: 'bono_movimiento', label: 'AGI', color: '#a78bfa', icon: 'zap'    },
   { key: 'bono_iniciativa', label: 'INI', color: '#E6B325', icon: 'star'   },
   { key: 'bono_vida',       label: 'VID', color: '#ff2d45', icon: 'zap'    },
   { key: 'bono_escudo',     label: 'ESC', color: '#26e3e3', icon: 'shield' },

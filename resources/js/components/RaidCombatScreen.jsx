@@ -44,7 +44,7 @@ function AttrBadges({ entity, align = 'left' }) {
     { l: 'ATQ', v: entity.ataque, base: entity.ataque_base, c: '#ff7043' },
     { l: 'DEF', v: entity.defensa, base: entity.defensa_base, c: '#38cdf0' },
     ...((entity.punteria || entity.punteria_base) ? [{ l: 'PNT', v: entity.punteria, base: entity.punteria_base, c: '#10b981' }] : []),
-    { l: 'MOV', v: entity.movimiento, base: entity.movimiento_base, c: '#a78bfa' },
+    { l: 'AGI', v: entity.movimiento, base: entity.movimiento_base, c: '#a78bfa' },
   ];
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
