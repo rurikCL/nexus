@@ -289,7 +289,7 @@ const extractDice = (text) => {
 
 /* Contador regresivo del turno activo — sincronizado contra `turn_started_at` (servidor),
    se resincroniza en cada polling. Si llega a 0, el próximo show() del backend salta el turno. */
-const TurnCountdownCard = ({ startedAt, maxWait }) => {
+const useCountdown = (startedAt, maxWait) => {
   const [secondsLeft, setSecondsLeft] = useState(maxWait);
 
   useEffect(() => {
@@ -301,12 +301,17 @@ const TurnCountdownCard = ({ startedAt, maxWait }) => {
     return () => clearInterval(iv);
   }, [startedAt, maxWait]);
 
+  return secondsLeft;
+};
+
+const TurnCountdownCard = ({ startedAt, maxWait }) => {
+  const secondsLeft = useCountdown(startedAt, maxWait);
   const pct = maxWait > 0 ? Math.max(0, Math.min(100, (secondsLeft / maxWait) * 100)) : 0;
   const urgent = secondsLeft <= 10;
 
   return (
     <div style={{
-      flex: '0 0 68px', minWidth: 68, borderRadius: 8, padding: '4px 2px',
+      minWidth: 0, borderRadius: 8, padding: '4px 2px',
       background: urgent ? 'rgba(255,45,69,0.08)' : 'rgba(56,205,240,0.06)',
       border: `1px solid ${urgent ? 'rgba(255,45,69,0.32)' : 'rgba(56,205,240,0.22)'}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
@@ -318,6 +323,14 @@ const TurnCountdownCard = ({ startedAt, maxWait }) => {
       </div>
     </div>
   );
+};
+
+/* Texto de espera con el segundero del turno activo (de quien sea que le toque). */
+const WaitingTurnText = ({ raid }) => {
+  const secondsLeft = useCountdown(raid.turn_started_at, raid.turn_max_wait ?? 30);
+  return raid.turn_started_at
+    ? `Esperando el turno de otro combatiente... (${secondsLeft}s)`
+    : 'Esperando el turno de otro combatiente...';
 };
 
 const ActionBtn = ({ onClick, disabled, bg, border, hoverBg, hoverBorder, children }) => (
@@ -715,7 +728,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
               {error && <div style={{ color: '#ff6b6b', fontSize: 11 }}>{error}</div>}
               {!isMyTurn ? (
                 <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', padding: '10px 0' }}>
-                  {me.status !== 'activo' ? 'Ya no participas activamente en este combate.' : 'Esperando el turno de otro combatiente...'}
+                  {me.status !== 'activo' ? 'Ya no participas activamente en este combate.' : <WaitingTurnText raid={raid} />}
                 </div>
               ) : (
                 <>
@@ -730,10 +743,6 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                   </div>
 
                   <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', minHeight: 90 }}>
-                    {raid.turn_started_at && (
-                      <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} />
-                    )}
-
                     {/* Habilidades (grid 2x2) */}
                     <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
                       {(me.habilidades ?? []).length === 0 ? (
@@ -842,6 +851,10 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                         <span style={{ fontSize: 18, lineHeight: 1 }}>😊</span>
                         <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
                       </ActionBtn>
+
+                      {raid.turn_started_at && (
+                        <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} />
+                      )}
                     </div>
                   </div>
                 </>
