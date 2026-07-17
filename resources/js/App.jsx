@@ -355,11 +355,16 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     fetch('/api/misiones/global', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        const pendientes = (data?.misiones ?? []).filter(m => m.notificar && !m.aceptada && m.status !== 'completada');
+        const pendientes = (data?.misiones ?? []).filter(m =>
+          m.notificar &&
+          !m.aceptada &&
+          m.status !== 'completada' &&
+          m.cumple_hitos
+        );
         if (pendientes.length) setMisionNotifQueue(pendientes);
       })
       .catch(() => {});
-  }, [user?.id]);
+  }, [user?.id, user?.character?.hitos]);
 
   useEffect(() => {
     if (!user?.id || !window.Echo) return;

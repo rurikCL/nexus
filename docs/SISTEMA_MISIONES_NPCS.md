@@ -8,6 +8,7 @@ hoy en el código.
 > `app/Http/Controllers/Api/MapController.php` (`npcCumpleRequisitos`, `attachMisionInfo`),
 > `app/Http/Controllers/Api/CharacterController.php::npcVictory`,
 > `app/Services/MisionProgresoService.php` (tracking automático de objetivos),
+> `app/Http/Controllers/Api/MisionController.php::menuVisit`,
 > `app/Http/Controllers/Api/NpcChatController.php`, `app/Models/Mision.php`, `app/Models/MapNpc.php`,
 > `app/Models/CharacterHito.php`, `resources/js/sections/Misiones.jsx`, `resources/js/sections/Mapa.jsx`,
 > `resources/js/sections/Temporadas.jsx`, `resources/js/components/NpcCombatScreen.jsx`, `docs/NPC_IA.md`,
@@ -141,11 +142,41 @@ Tipos de objetivo con tracking automático conectado hoy:
 | `combate` | `CharacterController::npcVictory` / `npcEspacioVictory` | +1 |
 | `entrenamiento` | `SesionEntrenamientoController::attend` / `attendScan` — cada asistente marcado (incluido el encargado) | +1 |
 | `tarea` | `TaskController::approve` — el tutor aprueba la tarea del pupilo | +1 |
+| `menu` | `POST /misiones/menu-visit` al visitar una vista del SPA | completa la meta del objetivo |
 
 **`general` sigue siendo manual** — es un tipo "cajón de sastre" (viajar, comprar, equipar, enviar
 un mensaje, etc.) sin un único evento de juego al que engancharse; su progreso todavía depende de
 `PATCH /misiones/{id}/progress`. Lo mismo aplica a `viaje`/`dialogo` si se usan — no tienen hook
 automático hoy.
+
+### 1.5.1 Objetivos tipo `menu`
+
+Los objetivos con `tipo = menu` usan `unidad` como el slug exacto de la vista que el jugador debe
+visitar. El frontend dispara `POST /api/misiones/menu-visit` al cambiar de vista; el backend busca
+objetivos activos con `tipo = menu` y `unidad = <slug>` y los marca como completos en el pivot de
+misión.
+
+Slugs actuales documentados para configuración manual:
+
+| Slug | Vista |
+|---|---|
+| `comando` | Centro de Comando |
+| `personaje` | Mi Personaje |
+| `sesiones` | Entrenamiento |
+| `entrenamiento` | Bitácora |
+| `modulos-entrenamiento` | Módulos de Entrenamiento |
+| `tareas` | Tareas |
+| `misiones` | Misiones |
+| `eventos` | Eventos |
+| `ranking` | Ranking |
+| `combates` | Combates |
+| `combatientes` | Usuarios |
+| `competitivo` | Competitivo |
+| `temporadas` | Temporadas |
+| `mapa` | Mapa Galáctico |
+| `instagram` | Instagram |
+| `configuracion` | Configuración |
+| `armado-sable` | Armado de Sable |
 
 ### 1.6 Ciclo de vida completo
 
@@ -163,6 +194,7 @@ automático hoy.
 
 4. Progreso
    → automático para objetivos `combate`/`entrenamiento`/`tarea` — MisionProgresoService (§1.5)
+   → automático para objetivos `menu` — POST /misiones/menu-visit (§1.5.1)
    → manual para el resto — PATCH /misiones/{id}/progress (progreso, status, progreso_json)
 
 5. Completar — POST /misiones/{id}/completar
@@ -259,7 +291,7 @@ npc.mision_disponible = {
 
 `progreso_actual`/`completado` por objetivo salen de `progreso_json` del pivot del usuario —
 alimentado por `MisionProgresoService` (§1.5) para los tipos con tracking automático, o por
-`PATCH /progress` a mano para el resto. `porTemporada()` (usado por `Temporadas.jsx`) devuelve la
+`PATCH /misiones/{id}/progress` a mano para el resto. `porTemporada()` (usado por `Temporadas.jsx`) devuelve la
 misma forma de `objetivos[]` y el mismo `puede_completar`, calculado con la lógica idéntica.
 
 El frontend (`Mapa.jsx`) lee `npc.mision_disponible` directamente para:
@@ -343,8 +375,16 @@ Jugador visita el lugar del NPC ──▶ attachMisionInfo() adjunta mision_disp
                                         │
        ┌────────────────────────────────┴────────────────────────────────┐
        ▼                                                                 ▼
-Evento de juego (combate ganado,                            PATCH /progress
-asistencia, tarea aprobada)                                  (manual — resto de tipos)
+Evento de juego (combate ganado,                            POST /misiones/menu-visit
+asistencia, tarea aprobada)                                  (objetivos `menu`)
+       │
+       ▼
+MisionProgresoService::registrarMenu()
+                                        │
+                                        ├──────────────▶ progreso_json + progreso (sin marcar 'completada')
+                                        │
+Evento de juego (combate ganado,                           PATCH /misiones/{id}/progress
+asistencia, tarea aprobada)                                (manual — resto de tipos)
        │
        ▼
 MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca 'completada')
@@ -377,8 +417,9 @@ MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca '
   El combate contra NPC es el único generador automático de hitos hoy; el resto de los hitos
   se otorgan manualmente vía `entregar_hito` al completar una misión.
 - El progreso de objetivos `combate`/`entrenamiento`/`tarea` se registra automáticamente
-  (`MisionProgresoService`, §1.5) desde eventos reales del juego; el resto de los `tipo`
-  (`general`, `viaje`, `dialogo`...) sigue dependiendo de `PATCH /progress` manual.
+  (`MisionProgresoService`, §1.5) desde eventos reales del juego; `menu` se registra al visitar
+  una vista del SPA (`POST /misiones/menu-visit`, §1.5.1); el resto de los `tipo`
+  (`general`, `viaje`, `dialogo`...) sigue dependiendo de `PATCH /misiones/{id}/progress` manual.
 - `completar()` ahora es un gate doble — hitos **y** objetivos — reforzado en el servidor, no sólo
   en la UI (el botón deshabilitado en el cliente es una comodidad, no la protección real).
 - El diálogo con IA es una capa de presentación y de "world-building" (puede escribir eventos de
