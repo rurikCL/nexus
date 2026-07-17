@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
-import { MissionCompleteBanner } from '../components/MissionCompleteBanner.jsx';
+import { buildMissionCompletionTransmission } from '../utils/missionTransmission.js';
 
 function mediaUrl(path) {
   if (!path) return null;
@@ -533,12 +533,6 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
 
   return (
     <>
-      <MissionCompleteBanner
-        open={mision.puede_completar && !done}
-        mision={mision}
-        busy={busy}
-        onComplete={onCompletar}
-      />
       <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Detalle de misión'} title={mision.nombre} zIndex={1100}>
         <div style={{ display: 'grid', gap: 16 }}>
         {mision.foto_mision && (
@@ -637,7 +631,7 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
 }
 
 /* ── MisionesTemporadaModal — Battle pass popup ─────────── */
-function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserUpdate }) {
+function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserUpdate, onTransmision }) {
   const [misiones, setMisiones]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [selectedId, setSelectedId] = useState(null);
@@ -683,6 +677,9 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
       setMisiones(prev => prev.map(m => m.id === selectedMision.id
         ? { ...m, completada_por_mi: true, status: 'completada', puede_completar: false }
         : m));
+      onTransmision?.(buildMissionCompletionTransmission(data?.mision ?? selectedMision, {
+        hitosOtorgados: data?.hitos_otorgados ?? [],
+      }));
       setSelectedId(null);
 
       // Las recompensas (créditos, hitos, títulos) ya se otorgaron en el servidor —
@@ -819,7 +816,7 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
 }
 
 /* ── TemporadaCard ──────────────────────────────────────── */
-function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate }) {
+function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate, onTransmision }) {
   const [showRec, setShowRec]       = useState(false);
   const [openTier, setOpenTier]     = useState(null);
   const [showMisiones, setShowMisiones] = useState(false);
@@ -974,6 +971,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate }) {
           temporadaNombre={t.nombre}
           onClose={() => setShowMisiones(false)}
           onUserUpdate={onUserUpdate}
+          onTransmision={onTransmision}
         />
       )}
     </div>
@@ -981,7 +979,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate }) {
 }
 
 /* ── Vista principal ────────────────────────────────────── */
-export function TemporadasView({ S, user, onUserUpdate }) {
+export function TemporadasView({ S, user, onUserUpdate, onTransmision }) {
   const isMobile = useIsMobile();
   const [temporadas, setTemporadas] = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -1052,7 +1050,7 @@ export function TemporadasView({ S, user, onUserUpdate }) {
           gap: 18, alignItems: 'start',
         }}>
           {temporadas.map(t => (
-            <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} onUserUpdate={onUserUpdate} />
+            <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} onUserUpdate={onUserUpdate} onTransmision={onTransmision} />
           ))}
         </div>
       )}

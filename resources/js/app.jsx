@@ -115,7 +115,16 @@ function Root() {
     setUser(prev => {
       const next = { ...(prev ?? {}), ...updatedUser };
       if (updatedUser?.character) {
-        next.character = { ...(prev?.character ?? {}), ...updatedUser.character };
+        const prevCharacter = prev?.character ?? {};
+        const mergedCharacter = { ...prevCharacter, ...updatedUser.character };
+        const resolvedPhoto = updatedUser.character.photo_url
+          ?? updatedUser.character.photo
+          ?? prevCharacter.photo_url
+          ?? prevCharacter.photo
+          ?? null;
+        mergedCharacter.photo = resolvedPhoto;
+        mergedCharacter.photo_url = resolvedPhoto;
+        next.character = mergedCharacter;
       }
       localStorage.setItem('nx-user', JSON.stringify(next));
       return next;

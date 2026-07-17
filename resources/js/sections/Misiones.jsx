@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Icon, Panel, Btn, Chip, Avatar, Modal, toast } from '../components/ui.jsx';
-import { MissionCompleteBanner } from '../components/MissionCompleteBanner.jsx';
 import { Empty } from './Comando.jsx';
+import { buildMissionCompletionTransmission } from '../utils/missionTransmission.js';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 
@@ -69,7 +69,7 @@ function useIsMobile() {
 // ─────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────
-export function MisionesView({ S, user, onUserUpdate }) {
+export function MisionesView({ S, user, onUserUpdate, onTransmision }) {
   const [misiones, setMisiones] = useState({ comunidad: [], individual: [], global: [] });
   const [loading, setLoading]   = useState(true);
 
@@ -115,7 +115,7 @@ export function MisionesView({ S, user, onUserUpdate }) {
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 24 }}>
-      <GlobalSection misiones={misiones.global} onUpdate={updateGlobalMision} onUserUpdate={onUserUpdate} />
+      <GlobalSection misiones={misiones.global} onUpdate={updateGlobalMision} onUserUpdate={onUserUpdate} onTransmision={onTransmision} />
       <ComunidadSection misiones={misiones.comunidad} onReload={reload} user={user} />
       <IndividualSection misiones={misiones.individual} onReload={reload} />
     </div>
@@ -125,7 +125,7 @@ export function MisionesView({ S, user, onUserUpdate }) {
 // ─────────────────────────────────────────────────────────────
 // MISIONES GLOBALES (disponibles para todos, requieren aceptación)
 // ─────────────────────────────────────────────────────────────
-function GlobalSection({ misiones, onUpdate, onUserUpdate }) {
+function GlobalSection({ misiones, onUpdate, onUserUpdate, onTransmision }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
   const activas     = misiones.filter(m => m.status !== 'completada');
@@ -165,6 +165,7 @@ function GlobalSection({ misiones, onUpdate, onUserUpdate }) {
           onClose={() => setSelectedId(null)}
           onUpdate={onUpdate}
           onUserUpdate={onUserUpdate}
+          onTransmision={onTransmision}
         />
       )}
     </Panel>
@@ -207,7 +208,7 @@ function GlobalCard({ mision, completed, onOpen }) {
   );
 }
 
-export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
+export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onTransmision }) {
   const [busy, setBusy] = useState(false);
   const done = mision.status === 'completada';
   const hitosReq = mision.hito_requerimiento
@@ -250,6 +251,9 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
         toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
       });
       onUpdate(mision.id, { status: 'completada', progreso: 100, puede_completar: false });
+      onTransmision?.(buildMissionCompletionTransmission(data?.mision ?? mision, {
+        hitosOtorgados: data?.hitos_otorgados ?? [],
+      }));
 
       if (onUserUpdate) {
         fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
@@ -270,12 +274,6 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate }) {
 
   return (
     <>
-      <MissionCompleteBanner
-        open={mision.puede_completar && !done}
-        mision={mision}
-        busy={busy}
-        onComplete={handleCompletar}
-      />
       <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Misión Global'} title={mision.nombre} zIndex={1100}>
         <div style={{ display: 'grid', gap: 16 }}>
         {mision.foto_mision && (
