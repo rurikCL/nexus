@@ -709,11 +709,22 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(2, raid.jugadores.length)}, 1fr)`, gap: 8, padding: '10px 14px', background: 'rgba(4,9,20,0.6)', borderTop: '1px solid rgba(56,205,240,0.16)' }}>
             {raid.jugadores.map(j => (
               <div key={j.user_id} ref={el => { if (el) { playerRefsMap.current.set(j.user_id, el); if (j.es_yo) myAvatarRef.current = el; } }} style={{
+                position: 'relative',
                 display: 'flex', gap: 8, alignItems: 'center', padding: '6px 8px', borderRadius: 8,
                 border: `1px solid ${j.es_mi_turno ? 'var(--holo)' : j.es_yo ? 'rgba(230,179,37,0.4)' : 'rgba(255,255,255,0.1)'}`,
                 background: j.es_mi_turno ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'rgba(255,255,255,0.02)',
                 opacity: j.status !== 'activo' ? 0.4 : 1,
               }}>
+                {j.es_bajo_agro && (
+                  <div title="Bajo agro del jefe" style={{
+                    position: 'absolute', top: -8, right: -8, zIndex: 2,
+                    width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                    background: 'rgba(6,12,26,0.96)', border: '1px solid rgba(230,179,37,0.65)',
+                    color: '#E6B325', boxShadow: '0 0 12px rgba(230,179,37,0.22)',
+                  }}>
+                    <Icon name="eye" size={12} />
+                  </div>
+                )}
                 <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center' }}>
                   {j.photo_url ? <img src={j.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="user" size={14} style={{ color: 'var(--holo)' }} />}
                 </div>

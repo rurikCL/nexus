@@ -803,6 +803,11 @@ class RaidCombatController extends Controller
         $npcBase = self::getNpcStats($npc);
         $npcEffective = self::getEffectiveStats($npcBase, $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $current = $raid->turn_order[$raid->turn_index] ?? null;
+        $agroTargetUserId = $raid->jugadores
+            ->where('status', 'activo')
+            ->where('hp', '>', 0)
+            ->sortByDesc('dano_al_jefe')
+            ->first()?->user_id;
 
         $jugadores = $raid->jugadores->sortBy('slot')->map(function (RaidCombatPlayer $rp) use ($current) {
             $ch = $rp->user->character;
@@ -849,8 +854,9 @@ class RaidCombatController extends Controller
             ];
         })->values();
 
-        $jugadores = $jugadores->map(function ($j) use ($myUserId) {
+        $jugadores = $jugadores->map(function ($j) use ($myUserId, $agroTargetUserId) {
             $j['es_yo'] = $j['user_id'] === $myUserId;
+            $j['es_bajo_agro'] = $agroTargetUserId !== null && $j['user_id'] === $agroTargetUserId;
 
             return $j;
         });
@@ -866,6 +872,7 @@ class RaidCombatController extends Controller
             'turn_started_at' => $raid->turn_started_at?->toIso8601String(),
             'turn_max_wait' => (int) Configuracion::valor('raid_max_wait', 30),
             'es_turno_del_jefe' => (bool) ($current && $current['type'] === 'npc'),
+            'npc_agro_user_id' => $agroTargetUserId,
             'log' => $raid->log ?? [],
             'npc' => [
                 'id' => $npc->id,

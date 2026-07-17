@@ -120,6 +120,29 @@ async function ensureFonts() {
   } catch { /* si las fuentes no cargan a tiempo, se usa el fallback del sistema */ }
 }
 
+async function loadRaidLocation(lugarId) {
+  if (!lugarId) return null;
+  const token = localStorage.getItem('nx-token');
+  try {
+    const res = await fetch(`/api/map/lugares/${lugarId}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const lugar = data?.lugar ?? null;
+    const planeta = lugar?.zona?.planeta ?? null;
+    if (!lugar || !planeta) return null;
+    return {
+      planeta: planeta.nombre ?? null,
+      lugar: lugar.nombre ?? null,
+      planetaImg: mediaUrl(planeta.imagen),
+      lugarImg: mediaUrl(lugar.imagen),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Dibuja un ícono de resources/js/components/ui.jsx (viewBox 24x24) centrado en (cx, cy) con tamaño `size`. */
 function drawIcon(ctx, name, cx, cy, size, color, strokeWidth = 1.8) {
   const d = ICON_PATHS[name];
@@ -568,6 +591,13 @@ export async function drawRaidCombatCard(raid) {
     loadImage(mediaUrl(raid.npc.imagen_mini) || mediaUrl(raid.npc.imagen)),
     ...players.map(p => loadImage(mediaUrl(p.photo_url))),
   ]);
+  const location = await loadRaidLocation(raid.lugar_id);
+  const [planetaImg, lugarImg] = location
+    ? await Promise.all([
+        loadImage(location.planetaImg),
+        loadImage(location.lugarImg),
+      ])
+    : [null, null];
 
   /* ── fondo ── */
   const bg = ctx.createLinearGradient(0, 0, 0, H);
@@ -615,6 +645,54 @@ export async function drawRaidCombatCard(raid) {
   const r = 130;
   if (won) drawIcon(ctx, 'crown', W / 2, cy - r - 45, 56, headlineColor, 2.4);
   drawAvatar(ctx, npcImg, W / 2, cy, r, won ? 'rgba(150,170,210,0.45)' : '#ff2d45', false);
+
+  if (location) {
+    const sideY = cy - 18;
+    const panelW = 205;
+    const panelH = 178;
+    const planetX = 110;
+    const placeX = W - 110;
+    const left = [
+      { label: 'PLANETA', value: location.planeta, img: planetaImg, rounded: false, x: planetX },
+      { label: 'LUGAR', value: location.lugar, img: lugarImg, rounded: true, x: placeX },
+    ].filter((col) => col.value);
+
+    left.forEach((col) => {
+      const isLeft = col.label === 'PLANETA';
+      const x = isLeft ? planetX : placeX;
+      const anchor = isLeft ? x : x;
+      const boxX = isLeft ? anchor : anchor - panelW;
+      const boxY = sideY - panelH / 2;
+      const imgSize = 92;
+      const imgCx = boxX + panelW / 2;
+      const imgCy = boxY + 64;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(6,12,26,0.86)';
+      ctx.strokeStyle = 'rgba(56,205,240,0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, panelW, panelH, 16);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      if (col.rounded) {
+        drawImageRounded(ctx, col.img, imgCx, imgCy, imgSize, imgSize, 14, 'rgba(56,205,240,0.5)');
+      } else {
+        drawImagePlain(ctx, col.img, imgCx, imgCy, imgSize, imgSize);
+      }
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(160,190,230,0.6)';
+      ctx.font = '600 13px "JetBrains Mono"';
+      ctx.fillText(col.label, imgCx, boxY + 142);
+      ctx.fillStyle = 'rgba(220,230,255,0.9)';
+      const size = fitText(ctx, col.value, panelW - 24, '22px Orbitron', 12);
+      ctx.font = `800 ${size}px Orbitron`;
+      ctx.fillText(col.value, imgCx, boxY + 166);
+    });
+  }
 
   ctx.fillStyle = 'rgba(230,240,255,0.9)';
   const bossNameSize = fitText(ctx, raid.npc.nombre, 500, '32px Orbitron');
