@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
-import { buildMissionCompletionTransmission } from '../utils/missionTransmission.js';
 
 function mediaUrl(path) {
   if (!path) return null;
@@ -631,7 +630,7 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
 }
 
 /* ── MisionesTemporadaModal — Battle pass popup ─────────── */
-function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserUpdate, onTransmision }) {
+function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserUpdate }) {
   const [misiones, setMisiones]   = useState([]);
   const [loading, setLoading]     = useState(true);
   const [selectedId, setSelectedId] = useState(null);
@@ -677,9 +676,6 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
       setMisiones(prev => prev.map(m => m.id === selectedMision.id
         ? { ...m, completada_por_mi: true, status: 'completada', puede_completar: false }
         : m));
-      onTransmision?.(buildMissionCompletionTransmission(data?.mision ?? selectedMision, {
-        hitosOtorgados: data?.hitos_otorgados ?? [],
-      }));
       setSelectedId(null);
 
       // Las recompensas (créditos, hitos, títulos) ya se otorgaron en el servidor —
@@ -816,7 +812,7 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
 }
 
 /* ── TemporadaCard ──────────────────────────────────────── */
-function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate, onTransmision }) {
+function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate }) {
   const [showRec, setShowRec]       = useState(false);
   const [openTier, setOpenTier]     = useState(null);
   const [showMisiones, setShowMisiones] = useState(false);
@@ -971,7 +967,6 @@ function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate, onTransmis
           temporadaNombre={t.nombre}
           onClose={() => setShowMisiones(false)}
           onUserUpdate={onUserUpdate}
-          onTransmision={onTransmision}
         />
       )}
     </div>
@@ -979,7 +974,7 @@ function TemporadaCard({ temporada: t, canEdit, onEdit, onUserUpdate, onTransmis
 }
 
 /* ── Vista principal ────────────────────────────────────── */
-export function TemporadasView({ S, user, onUserUpdate, onTransmision }) {
+export function TemporadasView({ S, user, onUserUpdate }) {
   const isMobile = useIsMobile();
   const [temporadas, setTemporadas] = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -1050,7 +1045,7 @@ export function TemporadasView({ S, user, onUserUpdate, onTransmision }) {
           gap: 18, alignItems: 'start',
         }}>
           {temporadas.map(t => (
-            <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} onUserUpdate={onUserUpdate} onTransmision={onTransmision} />
+            <TemporadaCard key={t.id} temporada={t} canEdit={canEdit} onEdit={openEdit} onUserUpdate={onUserUpdate} />
           ))}
         </div>
       )}

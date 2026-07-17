@@ -68,8 +68,6 @@ export function TransmisionOverlay({ notification, onDismiss }) {
   if (!notification) return null;
 
   const isShown = phase === 'shown';
-  const rewardLines = Array.isArray(notification?.reward_lines) ? notification.reward_lines.filter(Boolean) : [];
-  const objectiveLines = Array.isArray(notification?.objectives_lines) ? notification.objectives_lines.filter(Boolean) : [];
 
   return createPortal(
     <div
@@ -158,19 +156,6 @@ export function TransmisionOverlay({ notification, onDismiss }) {
           {notification.title}
         </div>
 
-        {notification.kicker && (
-          <div style={{
-            marginBottom: 10,
-            fontFamily: 'var(--font-hud)',
-            fontSize: 10,
-            letterSpacing: '.24em',
-            color: tone.color,
-            textTransform: 'uppercase',
-          }}>
-            {notification.kicker}
-          </div>
-        )}
-
         {/* Body */}
         {notification.body && (
           <div style={{
@@ -178,89 +163,6 @@ export function TransmisionOverlay({ notification, onDismiss }) {
             lineHeight: 1.5, marginBottom: 22,
           }}>
             {notification.body}
-          </div>
-        )}
-
-        {(notification.reward_highlight || rewardLines.length > 0) && (
-          <div style={{
-            textAlign: 'left',
-            marginBottom: 14,
-            padding: '12px 14px',
-            borderRadius: 10,
-            border: '1px solid rgba(230,179,37,.48)',
-            background: 'linear-gradient(180deg, rgba(230,179,37,.10), rgba(230,179,37,.04))',
-            boxShadow: '0 0 0 1px rgba(230,179,37,.08) inset',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-hud)',
-              fontSize: 10,
-              letterSpacing: '.24em',
-              color: '#E6B325',
-              marginBottom: 8,
-              textTransform: 'uppercase',
-            }}>
-              {notification.reward_title || 'RECOMPENSA'}
-            </div>
-            <div style={{
-              fontSize: 15,
-              fontWeight: 800,
-              color: '#fff',
-              marginBottom: notification.reward_summary ? 8 : 0,
-            }}>
-              {notification.reward_highlight}
-            </div>
-            {notification.reward_summary && (
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,.72)', lineHeight: 1.45 }}>
-                {notification.reward_summary}
-              </div>
-            )}
-            {rewardLines.length > 1 && (
-              <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
-                {rewardLines.slice(1).map((line, idx) => (
-                  <div key={idx} style={{
-                    fontSize: 12,
-                    color: 'rgba(255,255,255,.82)',
-                    paddingLeft: 10,
-                    borderLeft: '2px solid rgba(230,179,37,.35)',
-                  }}>
-                    {line}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {objectiveLines.length > 0 && (
-          <div style={{
-            textAlign: 'left',
-            marginBottom: 14,
-            padding: '10px 12px',
-            borderRadius: 10,
-            border: '1px solid rgba(58,160,255,.28)',
-            background: 'rgba(58,160,255,.06)',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-hud)',
-              fontSize: 10,
-              letterSpacing: '.22em',
-              color: '#38cdf0',
-              marginBottom: 8,
-              textTransform: 'uppercase',
-            }}>
-              {notification.objectives_title || 'OBJETIVOS'}
-            </div>
-            <div style={{ display: 'grid', gap: 6 }}>
-              {objectiveLines.map((line, idx) => (
-                <div key={idx} style={{
-                  fontSize: 12,
-                  color: 'rgba(255,255,255,.84)',
-                  lineHeight: 1.45,
-                }}>
-                  {line}
-                </div>
-              ))}
-            </div>
           </div>
         )}
 

@@ -4,7 +4,6 @@ import { Icon, Avatar, Btn, Chip, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
 import { playMensajeUsuario, playNotificacionDuelo } from './utils/sounds.js';
-import { buildMissionCompletionTransmission, buildMissionReadyTransmission } from './utils/missionTransmission.js';
 
 const HUD_COLORS = ['#FF6B00', '#38cdf0', '#8b5cf6', '#10b981', '#ec4899', '#f97316', '#E6B325', '#3aa0ff'];
 function hashColor(str) {
@@ -279,9 +278,6 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .then(r => r.ok ? r.json() : null)
         .then(me => { if (me) onUserUpdate?.(me); })
         .catch(() => {});
-      onTransmision?.(buildMissionCompletionTransmission(data?.mision ?? missionLike, {
-        hitosOtorgados: data?.hitos_otorgados ?? [],
-      }));
       return true;
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
@@ -394,7 +390,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
         .forEach(n => {
           if (n.data?.type === 'mision_lista_para_completar') {
-            onTransmision?.(buildMissionReadyTransmission({ ...n.data, id: n.id }));
+            onTransmision?.({ ...n.data, _notifId: n.id });
             return;
           }
           onTransmision?.({ ...n.data, _notifId: n.id });
@@ -461,7 +457,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           m.cumple_hitos
         );
         pendientes.forEach((mision) => {
-          onTransmision?.(buildMissionReadyTransmission(mision));
+          onTransmision?.({ ...mision, _notifId: mision.id });
         });
       })
       .catch(() => {});
@@ -571,7 +567,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
         if (notif?.type === 'mision_lista_para_completar') {
-          onTransmision?.(buildMissionReadyTransmission({ ...notif, id: notif.id ?? Date.now() }));
+          onTransmision?.({ ...notif, _notifId: notif.id ?? Date.now() });
           return;
         }
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
