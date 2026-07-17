@@ -93,7 +93,7 @@ class MisionController extends Controller
             ->where('activa', true)
             ->orderBy('orden')
             ->get()
-            ->map(function ($m) use ($user) {
+            ->map(function ($m) use ($user, $characterHitos) {
                 $base = $this->formatMision($m);
 
                 $participantes = $m->users->map(fn ($u) => [

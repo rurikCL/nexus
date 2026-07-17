@@ -76,15 +76,15 @@ export function MisionesView({ S, user, onUserUpdate }) {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [comunidad, individual, global] = await Promise.all([
+      const [comunidad, individual, global] = await Promise.allSettled([
         apiCall('GET', '/api/misiones/comunidad'),
         apiCall('GET', '/api/misiones/individual'),
         apiCall('GET', '/api/misiones/global'),
       ]);
       setMisiones({
-        comunidad:  comunidad.misiones  ?? [],
-        individual: individual.misiones ?? [],
-        global:     global.misiones     ?? [],
+        comunidad:  comunidad.status === 'fulfilled' ? (comunidad.value?.misiones ?? []) : [],
+        individual: individual.status === 'fulfilled' ? (individual.value?.misiones ?? []) : [],
+        global:     global.status === 'fulfilled' ? (global.value?.misiones ?? []) : [],
       });
     } catch {}
     setLoading(false);
