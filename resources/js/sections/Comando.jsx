@@ -23,11 +23,18 @@ function mapApiCharacterToStoreCharacter(character, fallback = {}) {
   const combat = character.combat_stats ?? {};
   const baseCombat = character.combat_base_stats ?? {};
   const safeFallback = fallback ?? {};
+  const resolvedPhoto = mediaUrl(
+    character.photo_url
+      ?? character.photo
+      ?? safeFallback.photo_url
+      ?? safeFallback.photo
+      ?? null
+  );
   return {
     ...character,
     saber: character.saber_color ?? character.saber ?? 'azul',
-    photo: character.photo_url ?? character.photo ?? safeFallback.photo ?? safeFallback.photo_url ?? null,
-    photo_url: character.photo_url ?? character.photo ?? safeFallback.photo_url ?? safeFallback.photo ?? null,
+    photo: resolvedPhoto,
+    photo_url: resolvedPhoto,
     pool: character.puntos_libres ?? character.pool ?? safeFallback.pool ?? 0,
     current_forma: character.current_forma ?? safeFallback.current_forma ?? 1,
     arma_equipada: character.arma_equipada ?? safeFallback.arma_equipada ?? null,
@@ -2065,7 +2072,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           <div className="nx-panel-body" style={{ display: 'grid', placeItems: 'center', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ position: 'relative', width: 200, height: 220 }}>
-                <ImageSlot src={ch.photo} onUpload={(url) => S.setCharacter({ ...ch, photo: url })}
+                <ImageSlot src={ch.photo} onUpload={(url) => S.setCharacter({ ...ch, photo: url, photo_url: url })}
                   className="nx-hex" style={{ width: 200, height: 220, display: 'block' }}
                   shape="rect" placeholder="Sube tu retrato" />
                 <div className="nx-hex" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', border: `1.5px solid ${sab}`, boxShadow: `0 0 26px -8px ${sab} inset` }} />
