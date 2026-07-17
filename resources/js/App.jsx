@@ -223,6 +223,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [missionDrawerLoading, setMissionDrawerLoading] = useState(true);
   const [missionDrawerItems, setMissionDrawerItems] = useState([]);
   const [externalChatTarget, setExternalChatTarget] = useState(null);
+  const [completingMissionId, setCompletingMissionId] = useState(null);
   const prevUnreadIds = useRef(new Set());
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
@@ -259,12 +260,11 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     fetch(`/api/notifications/${notifId}/read`, { method: 'POST', headers: authHeaders() }).catch(() => {});
   };
 
-  const handleMissionAlertComplete = async () => {
-    if (!currentMissionAlert?.mission_id && !currentMissionAlert?.mision?.id) return;
-    const mission = currentMissionAlert.mision ?? currentMissionAlert;
-    const missionId = currentMissionAlert.mission_id ?? mission.id;
-    const notifId = currentMissionAlert.id;
-
+  const completeMission = async (missionLike, { notifId = null, refreshAlerts = false } = {}) => {
+    if (!missionLike?.id) return false;
+    const missionId = missionLike.id;
+    if (completingMissionId === missionId) return false;
+    setCompletingMissionId(missionId);
     try {
       const token = localStorage.getItem('nx-token');
       const res = await fetch(`/api/misiones/${missionId}/completar`, {
@@ -275,7 +275,9 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       if (!res.ok) throw new Error(data?.message || 'No se pudo completar la misión');
 
       toast('¡Misión completada!', { tone: 'success', icon: 'check' });
-      dismissMissionAlert(notifId);
+      if (notifId) {
+        dismissMissionAlert(notifId);
+      }
       window.dispatchEvent(new CustomEvent('nx-mision-updated', { detail: { missionId, status: 'completada' } }));
 
       if (data?.hitos_otorgados?.length) {
@@ -288,8 +290,15 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .then(r => r.ok ? r.json() : null)
         .then(me => { if (me) onUserUpdate?.(me); })
         .catch(() => {});
+      if (refreshAlerts) {
+        setMissionAlertQueue(prev => prev.filter(n => (n.mission_id ?? n.mision?.id) !== missionId));
+      }
+      return true;
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
+      return false;
+    } finally {
+      setCompletingMissionId(null);
     }
   };
   useEffect(() => {
@@ -310,7 +319,15 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ slug: view }),
-    }).catch(() => {});
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+          detail: { type: 'menu-visit', slug: view },
+        }));
+      })
+      .catch(() => {});
   }, [user?.id, view]);
 
   useEffect(() => {
@@ -963,6 +980,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         missions={missionDrawerItems}
         onClose={() => setMissionsOpen(false)}
         onGoToMisiones={() => { setMissionsOpen(false); go('misiones'); }}
+        onCompleteMission={(mission) => completeMission(mission, { refreshAlerts: true })}
+        busyMissionId={completingMissionId}
       />
 
       <ToastHost />
@@ -971,8 +990,11 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         <MissionCompleteBanner
           open
           mision={currentMissionAlert.mision ?? currentMissionAlert}
-          busy={false}
-          onComplete={handleMissionAlertComplete}
+          busy={completingMissionId === (currentMissionAlert.mission_id ?? currentMissionAlert.mision?.id ?? currentMissionAlert.id)}
+          onComplete={() => completeMission(
+            currentMissionAlert.mision ?? currentMissionAlert,
+            { notifId: currentMissionAlert.id, refreshAlerts: true }
+          )}
           onClose={() => dismissMissionAlert(currentMissionAlert.id)}
         />
       )}
@@ -1142,7 +1164,7 @@ function NotifDrawer({ open, notifications, unread, onMarkRead, onMarkAllRead, o
   );
 }
 
-function MissionDrawer({ open, loading, missions, onClose, onGoToMisiones }) {
+function MissionDrawer({ open, loading, missions, onClose, onGoToMisiones, onCompleteMission, busyMissionId }) {
   const groups = missions.reduce((acc, m) => {
     const key = m.tipo_panel ?? 'global';
     if (!acc[key]) acc[key] = [];
@@ -1197,7 +1219,13 @@ function MissionDrawer({ open, loading, missions, onClose, onGoToMisiones }) {
         ) : (
           <div style={{ display: 'grid', gap: 14, padding: 16 }}>
             {order.filter(key => (groups[key] ?? []).length > 0).map(key => (
-              <MissionGroup key={key} label={MISSION_TYPE_LABELS[key] ?? key} items={groups[key]} />
+              <MissionGroup
+                key={key}
+                label={MISSION_TYPE_LABELS[key] ?? key}
+                items={groups[key]}
+                onCompleteMission={onCompleteMission}
+                busyMissionId={busyMissionId}
+              />
             ))}
           </div>
         )}
@@ -1206,7 +1234,7 @@ function MissionDrawer({ open, loading, missions, onClose, onGoToMisiones }) {
   );
 }
 
-function MissionGroup({ label, items }) {
+function MissionGroup({ label, items, onCompleteMission, busyMissionId }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -1229,20 +1257,28 @@ function MissionGroup({ label, items }) {
 
       {!collapsed && (
         <div style={{ display: 'grid', gap: 10, padding: 12 }}>
-          {items.map(m => <MissionItem key={`${m.tipo_panel}-${m.id}`} mision={m} />)}
+          {items.map(m => (
+            <MissionItem
+              key={`${m.tipo_panel}-${m.id}`}
+              mision={m}
+              onCompleteMission={onCompleteMission}
+              busy={busyMissionId === m.id}
+            />
+          ))}
         </div>
       )}
     </section>
   );
 }
 
-function MissionItem({ mision }) {
+function MissionItem({ mision, onCompleteMission, busy }) {
   const objetivos = mision.objetivos ?? [];
   const progreso = typeof mision.progreso === 'number'
     ? mision.progreso
     : objetivos.length > 0
       ? Math.round(objetivos.reduce((sum, obj) => sum + (obj.porcentaje ?? 0), 0) / objetivos.length)
       : 0;
+  const canComplete = Boolean(mision.puede_completar) && !mision.completada;
 
   return (
     <article style={{
@@ -1353,6 +1389,20 @@ function MissionItem({ mision }) {
               {r.tipo !== 'habilidad' && r.valor > 0 ? ` x${r.valor}` : ''}
             </span>
           ))}
+        </div>
+      )}
+
+      {canComplete && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Btn
+            kind="accent"
+            icon="check"
+            sm
+            disabled={busy}
+            onClick={() => onCompleteMission?.(mision)}
+          >
+            {busy ? 'Completando...' : 'Completar'}
+          </Btn>
         </div>
       )}
     </article>
