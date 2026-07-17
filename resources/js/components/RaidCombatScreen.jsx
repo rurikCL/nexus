@@ -353,13 +353,13 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const myAvatarRef = useRef(null);
   const playerRefsMap = useRef(new Map());
   const prevLogLenRef = useRef(null);
-  const animChainRef = useRef(Promise.resolve());
+  const revealRaidRef = useRef(null);
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
 
   const load = useCallback(async () => {
     try {
       const d = await apiGet(`/raid/${raidId}`);
-      setRaid(d.raid);
+      await revealRaidRef.current?.(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo cargar el combate.');
     }
@@ -477,21 +477,22 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setAnimBusy(false);
   };
 
-  /* Al crecer el log (mi propia acción o la de otro jugador detectada por polling),
-     reproduce en cadena la animación de cada entrada nueva. */
-  useEffect(() => {
-    if (!raid) return;
-    if (prevLogLenRef.current === null) {
-      prevLogLenRef.current = raid.log.length;
-      return;
+  /* Anima las entradas nuevas del log (dados + golpe + texto flotante) y solo entonces
+     revela el estado actualizado (HP/escudo/turno) — así los efectos se ven ANTES de que
+     cambien los números, no al revés. Se invoca explícitamente al recibir cada respuesta
+     (acción propia, emoji, polling), nunca via setRaid directo. */
+  const revealRaid = async (newRaid) => {
+    const newLog = newRaid.log ?? [];
+    const isFirstLoad = prevLogLenRef.current === null;
+    const newEntries = isFirstLoad ? [] : newLog.slice(prevLogLenRef.current);
+    prevLogLenRef.current = newLog.length;
+
+    if (newEntries.length) {
+      await playEntries(newEntries);
     }
-    if (raid.log.length > prevLogLenRef.current) {
-      const newEntries = raid.log.slice(prevLogLenRef.current);
-      prevLogLenRef.current = raid.log.length;
-      animChainRef.current = animChainRef.current.then(() => playEntries(newEntries));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [raid?.log?.length]);
+    setRaid(newRaid);
+  };
+  revealRaidRef.current = revealRaid;
 
   if (!raid) {
     return createPortal(
@@ -514,7 +515,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setError('');
     try {
       const d = await apiPost(`/raid/${raid.id}/action`, payload);
-      setRaid(d.raid);
+      await revealRaid(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo realizar la acción.');
     } finally {
@@ -531,7 +532,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: it.emoji });
     try {
       const d = await apiPost(`/raid/${raid.id}/emoji`, { emote_id: it.id });
-      setRaid(d.raid);
+      await revealRaid(d.raid);
     } catch { /* ignore */ }
   };
 
