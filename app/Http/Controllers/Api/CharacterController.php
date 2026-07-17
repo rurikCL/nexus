@@ -283,4 +283,22 @@ class CharacterController extends Controller
 
         return response()->json(['hito' => $hito]);
     }
+
+    /** Victoria contra un enemigo de encuentro aleatorio (ver LugarEncuentroController). */
+    public function enemigoVictory(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'enemigo_id' => 'required|integer|exists:map_enemigos,id',
+        ]);
+
+        $character = $request->user()->character;
+        if (!$character) {
+            return response()->json(['error' => 'Sin personaje'], 404);
+        }
+
+        $enemigo = \App\Models\MapEnemigo::withTrashed()->findOrFail($data['enemigo_id']);
+        \App\Services\MisionProgresoService::registrar($request->user(), 'combate', 1);
+
+        return response()->json(['ok' => true, 'nombre' => $enemigo->nombre]);
+    }
 }

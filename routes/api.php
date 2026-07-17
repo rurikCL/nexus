@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\EmblemUploadController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\InstagramController;
+use App\Http\Controllers\Api\LugarEncuentroController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MessageController;
@@ -64,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
     Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
     Route::post('/character/npc-victory', [CharacterController::class, 'npcVictory']);
+    Route::post('/character/enemigo-victory', [CharacterController::class, 'enemigoVictory']);
     Route::post('/character/npc-espacio-victory', [CharacterController::class, 'npcEspacioVictory']);
     Route::post('/character/habilidades', [CharacterController::class, 'updateHabilidades']);
     Route::post('/character/equipar-arma', [CharacterController::class, 'equiparArma']);
@@ -189,6 +191,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/map/npcs-espacio/{id}', [MapController::class, 'naveEspacio']);
     Route::post('/map/planetas/{planetaId}/pirata-encuentro', [PirataEncuentroController::class, 'check']);
     Route::post('/pirata-encuentros/{encuentroId}/victoria', [PirataEncuentroController::class, 'victoria']);
+    Route::post('/map/lugares/{lugarId}/enemigo-encuentro', [LugarEncuentroController::class, 'check']);
     Route::post('/map/location', [MapController::class, 'updateLocation']);
 
     // Naves

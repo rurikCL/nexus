@@ -2028,6 +2028,16 @@ function postNpcVictory(npcId) {
     .catch(() => {});
 }
 
+/* Victoria contra un enemigo de encuentro aleatorio (ver checkLugarEncuentro). */
+function postEnemigoVictory(enemigoId) {
+  const token = localStorage.getItem('nx-token');
+  return fetch('/api/character/enemigo-victory', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    body: JSON.stringify({ enemigo_id: enemigoId }),
+  }).catch(() => {});
+}
+
 /* Persiste el HP/escudo restante de la nave equipada tras un encuentro naval contra
    NPC (emboscada pirata o encuentro espacial), sin importar el desenlace — de lo
    contrario el daño sufrido se pierde y la nave siempre vuelve a verse a full. */
@@ -4350,6 +4360,27 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     }
   }, []);
 
+  /* Al viajar a un lugar de una zona hostil, hay una chance de que un enemigo asignado a
+     ese lugar ataque (20% por nivel de hostilidad de la zona). El chequeo (probabilidad,
+     enemigo elegido) se resuelve en el servidor para que no pueda manipularse desde el
+     cliente — ver LugarEncuentroController. */
+  const checkLugarEncuentro = useCallback(async (lugarId, lugarNombre) => {
+    try {
+      const d = await apiPost(`/map/lugares/${lugarId}/enemigo-encuentro`, {});
+      if (!d?.ataque) return;
+      toast('¡Emboscada!', { tone: 'error', icon: 'swords', desc: `${d.enemigo.nombre} te ataca` });
+      const session = {
+        npc: d.enemigo, player: getPlayerCombatStats(userCharacter), lugarImagen,
+        npcTipo: 'hostil', esEnemigoAmbush: true,
+        planetaNombre: planeta?.nombre, lugarNombre, planetaImagen,
+      };
+      localStorage.setItem('nx-npc-combat', JSON.stringify(session));
+      setActiveNpcCombat(session);
+    } catch {
+      // silencioso: si el chequeo falla simplemente no hay ataque
+    }
+  }, [userCharacter, lugarImagen, planeta, planetaImagen]);
+
   const handleStartPvp = async () => {
     if (!pvpAttackTarget || pvpChallenging) return;
     setPvpChallenging(true);
@@ -4499,7 +4530,8 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
       zona_id:    zona?.id    ?? null, zona_nombre:    zona?.nombre    ?? null,
       lugar_id:   lugarId,             lugar_nombre:   lugarNombre,
     });
-  }, [sistema, planeta, zona, setMapLocation, updateLocation]);
+    checkLugarEncuentro(lugarId, lugarNombre);
+  }, [sistema, planeta, zona, setMapLocation, updateLocation, checkLugarEncuentro]);
 
   /* breadcrumbs — sólo etiquetas, sin onClick (los links se quitaron) */
   const crumbsZona = [
@@ -4650,7 +4682,11 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
             } else {
               postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' });
             }
-            if (activeNpcCombat.npc?.id) await postNpcVictory(activeNpcCombat.npc.id);
+            if (activeNpcCombat.esEnemigoAmbush) {
+              if (activeNpcCombat.npc?.id) await postEnemigoVictory(activeNpcCombat.npc.id);
+            } else if (activeNpcCombat.npc?.id) {
+              await postNpcVictory(activeNpcCombat.npc.id);
+            }
             // Refresca el lugar: un hito recién obtenido puede desbloquear NPCs/misiones sin recargar la página.
             setLugarRefreshKey((k) => k + 1);
             setActiveNpcCombat(null);

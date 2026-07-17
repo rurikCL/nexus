@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -63,6 +64,14 @@ class MapLugar extends Model
     public function npcs(): HasMany
     {
         return $this->hasMany(MapNpc::class, 'LugarID');
+    }
+
+    /** Enemigos que pueden aparecer en este lugar, con su tasa de aparición y nivel propios de este lugar. */
+    public function enemigos(): BelongsToMany
+    {
+        return $this->belongsToMany(MapEnemigo::class, 'map_lugar_enemigos', 'lugar_id', 'enemigo_id')
+            ->withPivot('tasa_aparicion', 'nivel')
+            ->withTimestamps();
     }
 
     public function presentesPersonajes(): HasMany
