@@ -626,6 +626,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   };
 
   const myHabilidades = me.habilidades ?? [];
+  const lockActions = combat.status !== 'active' || !combat.is_my_turn;
 
   /* Agrupa el log del servidor (una entrada por turno) en tarjetas de ronda → tarjetas de turno */
   const logRounds = useMemo(() => {
@@ -770,14 +771,15 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           </>
         )}
       </div>
-    ) : !combat.is_my_turn ? (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: 'rgba(150,200,255,0.4)', fontSize: 11, fontFamily: 'var(--font-data)', letterSpacing: '0.15em', animation: 'nx-pulse 1.5s infinite' }}>
-          ESPERANDO A {(opp.name ?? '').toUpperCase()}…
-        </span>
-      </div>
     ) : (
       <>
+        {lockActions && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px 0 4px' }}>
+            <span style={{ color: 'rgba(150,200,255,0.4)', fontSize: 11, fontFamily: 'var(--font-data)', letterSpacing: '0.15em', animation: 'nx-pulse 1.5s infinite' }}>
+              ESPERANDO A {(opp.name ?? '').toUpperCase()}…
+            </span>
+          </div>
+        )}
         {/* Barra de Fuerza */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', flexShrink: 0 }}>FUERZA</span>
@@ -807,7 +809,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 const cdLeft   = myCooldowns[habId] ?? 0;
                 const noFuerza = myFuerza < hab.costo_fuerza;
                 const effective = isEffective(hab.forma, oppLastForma);
-                const disabled = busy || cdLeft > 0 || noFuerza;
+                const disabled = lockActions || busy || cdLeft > 0 || noFuerza;
                 const isSelf   = hab.objetivo === 'self';
 
                 return (
@@ -907,7 +909,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
             {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
             {!me.es_nave && (
-              <button onClick={() => !busy && clickOption('unarmed')} disabled={busy} style={{
+              <button onClick={() => !lockActions && !busy && clickOption('unarmed')} disabled={lockActions || busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -943,7 +945,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
             {/* Estancia (las naves no tienen estancias — solo combate normal) */}
             {!me.es_nave && (
-              <button onClick={() => openStancePicker()} disabled={busy} style={{
+              <button onClick={() => openStancePicker()} disabled={lockActions || busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -966,7 +968,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
             {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
             {me.es_nave && (
-              <button onClick={() => !busy && clickOption('evadir')} disabled={busy} style={{
+              <button onClick={() => !lockActions && !busy && clickOption('evadir')} disabled={lockActions || busy} style={{
                 minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
                 background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -981,7 +983,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             )}
 
             {/* Huir */}
-            <button onClick={() => !busy && clickOption('flee')} disabled={busy} style={{
+            <button onClick={() => !lockActions && !busy && clickOption('flee')} disabled={lockActions || busy} style={{
               minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
               background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
