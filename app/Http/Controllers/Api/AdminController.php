@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Traits\ConvertsToWebp;
 use App\Models\Character;
 use App\Models\Configuracion;
+use App\Models\MapEnemigo;
 use App\Models\MapLugar;
 use App\Models\MapNave;
 use App\Models\MapNpc;
@@ -38,6 +39,7 @@ class AdminController extends Controller
             'zonas'       => MapZona::class,
             'lugares'     => MapLugar::class,
             'npcs'        => MapNpc::class,
+            'enemigos'    => MapEnemigo::class,
             'naves'       => MapNave::class,
             'usuarios'    => User::class,
             'personajes'  => Character::class,
@@ -71,7 +73,7 @@ class AdminController extends Controller
         return match ($entity) {
             'planetas'   => ['sistema:id,nombre'],
             'zonas'      => ['planeta:id,nombre'],
-            'lugares'    => ['zona:id,nombre'],
+            'lugares'    => ['zona:id,nombre', 'enemigos'],
             'npcs'       => ['lugar:id,nombre', 'naves', 'objetos'],
             'usuarios'   => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
@@ -106,6 +108,29 @@ class AdminController extends Controller
 
         return collect($items)->mapWithKeys(
             fn($item) => [(int) $item['id'] => ['interes' => (int) ($item['interes'] ?? 0)]]
+        )->all();
+    }
+
+    /**
+     * Extrae del payload un array tipo [{id, tasa_aparicion, nivel}, ...] (o su versión
+     * JSON-string) para sincronizar como pivot de enemigos que pueden aparecer en un lugar.
+     * Devuelve null si la clave no vino en el payload (no tocar el pivot existente).
+     */
+    private function extractSpawnPivot(array &$data, string $key): ?array
+    {
+        if (!array_key_exists($key, $data)) {
+            return null;
+        }
+
+        $raw   = $data[$key];
+        $items = is_string($raw) ? (json_decode($raw, true) ?? []) : ($raw ?? []);
+        unset($data[$key]);
+
+        return collect($items)->mapWithKeys(
+            fn($item) => [(int) $item['id'] => [
+                'tasa_aparicion' => max(1, (int) ($item['tasa_aparicion'] ?? 1)),
+                'nivel'          => max(0, (int) ($item['nivel'] ?? 1)),
+            ]]
         )->all();
     }
 
@@ -179,8 +204,9 @@ class AdminController extends Controller
             unset($data['roles']);
         }
 
-        $naves   = $entity === 'npcs' ? $this->extractVentaPivot($data, 'naves')   : null;
-        $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
+        $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
+        $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
+        $enemigos = $entity === 'lugares' ? $this->extractSpawnPivot($data, 'enemigos')   : null;
 
         $record = $model::create($data);
 
@@ -192,6 +218,9 @@ class AdminController extends Controller
         }
         if ($objetos !== null) {
             $record->objetos()->sync($objetos);
+        }
+        if ($enemigos !== null) {
+            $record->enemigos()->sync($enemigos);
         }
 
         $fresh = $record->fresh();
@@ -220,8 +249,9 @@ class AdminController extends Controller
             unset($data['roles']);
         }
 
-        $naves   = $entity === 'npcs' ? $this->extractVentaPivot($data, 'naves')   : null;
-        $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
+        $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
+        $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
+        $enemigos = $entity === 'lugares' ? $this->extractSpawnPivot($data, 'enemigos')   : null;
 
         $record->update($data);
 
@@ -233,6 +263,9 @@ class AdminController extends Controller
         }
         if ($objetos !== null) {
             $record->objetos()->sync($objetos);
+        }
+        if ($enemigos !== null) {
+            $record->enemigos()->sync($enemigos);
         }
 
         $fresh = $record->fresh();

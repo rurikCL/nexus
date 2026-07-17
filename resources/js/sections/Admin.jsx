@@ -162,10 +162,11 @@ const ENTITY_CONFIG = {
       { key: 'zona', label: 'Zona', resolve: r => r.zona?.nombre ?? '—', dim: true },
       { key: 'tipo', label: 'Tipo', dim: true },
       { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'enemigos', label: 'Enemigos', resolve: r => r.enemigos?.length ?? 0, dim: true, w: 72 },
       { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
     ],
     fields: [
-      { key: 'ZonaID',        label: 'Zona',             type: 'relatedSelect', related: 'zonas', required: true, span: 2 },
+      { key: 'ZonaID',        label: 'Zona',             type: 'relatedSelect', related: 'zonas', required: true, span: 2, hint: 'La hostilidad configurada en la zona determina la probabilidad de que un enemigo asignado ataque al llegar (20% por nivel: bajo 20%, medio 40%, alto 60%, extremo 80%).' },
       { key: 'nombre',        label: 'Nombre',           type: 'text', required: true, span: 2 },
       { key: 'tipo',          label: 'Tipo',             type: 'select', options: TIPO_LUGAR_OPTS },
       { key: 'rareza',        label: 'Rareza',           type: 'select', options: RAREZA_OPTS },
@@ -224,6 +225,36 @@ const ENTITY_CONFIG = {
       { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
     defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, nivel: 1, raid_slots: 4 },
+  },
+
+  enemigos: {
+    label: 'Enemigos', icon: 'swords', group: 'MAPA GALÁCTICO',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'tipo', label: 'Tipo', dim: true },
+      { key: 'nivel', label: 'Nivel', dim: true, w: 56 },
+      { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
+    ],
+    fields: [
+      { key: 'nombre',        label: 'Nombre',           type: 'text', required: true, span: 2, hint: 'Este catálogo alimenta el sistema de encuentros aleatorios: asigna estos enemigos a un Lugar (con su tasa de aparición y nivel) desde la ficha de esa entidad.' },
+      { key: 'tipo',          label: 'Tipo',             type: 'text' },
+      { key: 'profesion',     label: 'Profesión',        type: 'text' },
+      { key: 'faccion',       label: 'Facción',          type: 'text' },
+      { key: 'visible',       label: 'Visible',          type: 'toggle' },
+      { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
+      { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
+      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, hint: 'Nivel de dificultad por defecto. Al asignar este enemigo a un Lugar puedes sobrescribirlo con un nivel específico para ese lugar.' },
+      { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
+      { key: 'escudo',        label: 'Escudo',           type: 'number', min: 0 },
+      { key: 'defensa',       label: 'Defensa',          type: 'number', min: 0 },
+      { key: 'ataque',        label: 'Ataque',           type: 'number', min: 0 },
+      { key: 'movimiento',    label: 'Agilidad',         type: 'number', min: 0 },
+      { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
+      { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
+      { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del enemigo, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
+    ],
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, nivel: 1 },
   },
 
   naves: {
@@ -895,6 +926,186 @@ function VentaPicker({ label, catalog, selected, onChange }) {
         })}
       </div>
     </div>
+  );
+}
+
+/* ─── Lugar — picker de enemigos con tasa de aparición y nivel propios del lugar ── */
+function EnemigoSpawnPicker({ label, catalog, selected, onChange }) {
+  const selMap = new Map((selected ?? []).map(s => [s.id, s]));
+
+  const toggle = (id) => {
+    if (selMap.has(id)) onChange((selected ?? []).filter(s => s.id !== id));
+    else onChange([...(selected ?? []), { id, tasa_aparicion: 1, nivel: 1 }]);
+  };
+  const setCfg = (id, key, val) => {
+    onChange((selected ?? []).map(s => (s.id === id ? { ...s, [key]: val } : s)));
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <label className="nx-label">{label}</label>
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto',
+        border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-md)', padding: 8,
+      }}>
+        {catalog.length === 0 && (
+          <span style={{ fontSize: 11, color: 'var(--txt-faint)', padding: 8 }}>Cargando catálogo...</span>
+        )}
+        {catalog.map(item => {
+          const on  = selMap.has(item.id);
+          const cfg = selMap.get(item.id) ?? { tasa_aparicion: 1, nivel: 1 };
+          const img = item.imagen_mini ? (String(item.imagen_mini).startsWith('http') ? item.imagen_mini : `/storage/${item.imagen_mini}`) : null;
+          return (
+            <div key={item.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 'var(--radius-sm)',
+              background: on ? 'color-mix(in srgb, var(--holo) 8%, transparent)' : 'rgba(255,255,255,0.02)',
+              border: `1px solid ${on ? 'var(--holo)' : 'transparent'}`,
+            }}>
+              <button type="button" onClick={() => toggle(item.id)} title={on ? 'Quitar del lugar' : 'Agregar al lugar'}
+                style={{
+                  width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer', padding: 0,
+                  border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  background: on ? 'var(--holo)' : 'transparent', color: '#04070f',
+                  display: 'grid', placeItems: 'center', fontSize: 11, lineHeight: 1,
+                }}
+              >{on && '✓'}</button>
+
+              {img
+                ? <img src={img} style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                : <div style={{ width: 28, height: 28, borderRadius: 4, flexShrink: 0, background: 'rgba(255,255,255,0.05)' }} />}
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.nombre}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>Nivel base ★{item.nivel ?? 1}</div>
+              </div>
+
+              {on && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" className="nx-input" min={1} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
+                      value={cfg.tasa_aparicion}
+                      onChange={e => setCfg(item.id, 'tasa_aparicion', e.target.value === '' ? 1 : Number(e.target.value))}
+                    />
+                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>peso</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" className="nx-input" min={0} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
+                      value={cfg.nivel}
+                      onChange={e => setCfg(item.id, 'nivel', e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                    <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>★ aquí</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Lugar — modal con campos estándar + asignación de enemigos (tasa de aparición y nivel) ── */
+function LugarCrudModal({ config, record, relatedOptions, onSave, onClose }) {
+  const isEdit = !!record?.id;
+  const [form, setForm] = useState(() => {
+    const base = { ...(config.defaults ?? {}), ...(record ?? {}) };
+    base.enemigos = (record?.enemigos ?? []).map(e => ({
+      id: e.id,
+      tasa_aparicion: e.pivot?.tasa_aparicion ?? 1,
+      nivel: e.pivot?.nivel ?? 1,
+    }));
+    return base;
+  });
+  const [saving, setSaving] = useState(false);
+  const [enemigosCatalog, setEnemigosCatalog] = useState([]);
+
+  useEffect(() => {
+    api('GET', '/admin/enemigos?per_page=200').then(r => setEnemigosCatalog(r.data ?? [])).catch(() => {});
+  }, []);
+
+  const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const path = isEdit ? `/admin/lugares/${record.id}` : `/admin/lugares`;
+      const hasFiles = form.imagen instanceof File;
+
+      let payload;
+      if (hasFiles) {
+        payload = new FormData();
+        Object.entries(form).forEach(([key, val]) => {
+          if (val !== null && val !== undefined) {
+            if (typeof val === 'boolean') payload.append(key, val ? '1' : '0');
+            else if (Array.isArray(val)) payload.append(key, JSON.stringify(val));
+            else payload.append(key, val);
+          }
+        });
+        if (isEdit) payload.append('_method', 'PATCH');
+      } else {
+        payload = form;
+      }
+
+      const method = (isEdit && hasFiles) ? 'POST' : (isEdit ? 'PATCH' : 'POST');
+      await api(method, path, payload);
+      toast(isEdit ? 'Registro actualizado' : 'Registro creado', { tone: 'success', icon: 'check' });
+      onSave();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      kicker={isEdit ? 'EDITAR · LUGAR' : 'NUEVO · LUGAR'}
+      title={isEdit ? `Editando #${record.id}` : 'Crear Lugar'}
+      width={680}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', paddingTop: 4 }}>
+        {config.fields.map(field => (
+          <div key={field.key}
+            style={{ gridColumn: field.span === 2 ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}
+          >
+            <label className="nx-label">
+              {field.label}
+              {field.required && <span style={{ color: 'var(--holocron-naranja)', marginLeft: 2 }}>*</span>}
+            </label>
+            <FieldInput
+              field={field}
+              value={form[field.key]}
+              onChange={val => setField(field.key, val)}
+              relatedOptions={relatedOptions}
+            />
+            {field.hint && field.type !== 'textarea' && (
+              <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{field.hint}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+        <EnemigoSpawnPicker
+          label={`Enemigos que pueden aparecer aquí · ${(form.enemigos ?? []).length}`}
+          catalog={enemigosCatalog}
+          selected={form.enemigos}
+          onChange={v => setField('enemigos', v)}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+        <Btn kind="ghost" onClick={onClose} disabled={saving}>Cancelar</Btn>
+        <Btn kind="accent" icon="check" onClick={handleSave} disabled={saving}>
+          {saving ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear registro'}
+        </Btn>
+      </div>
+    </Modal>
   );
 }
 
@@ -1584,6 +1795,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
       {editRecord !== null && (
         entityKey === 'npcs' ? (
           <NpcCrudModal
+            config={config}
+            record={editRecord?.id ? editRecord : null}
+            relatedOptions={relatedOptions}
+            onSave={handleSaved}
+            onClose={() => setEditRecord(null)}
+          />
+        ) : entityKey === 'lugares' ? (
+          <LugarCrudModal
             config={config}
             record={editRecord?.id ? editRecord : null}
             relatedOptions={relatedOptions}
