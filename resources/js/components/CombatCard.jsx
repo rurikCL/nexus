@@ -543,6 +543,159 @@ export async function drawNpcCombatCard({ phase, player, npc, log, ronda, naveMo
   });
 }
 
+const RAID_STATUS_LABEL = { activo: 'SOBREVIVIÓ', huido: 'HUYÓ', derrotado: 'CAYÓ' };
+const RAID_STATUS_COLOR = { activo: '#10b981', huido: '#E6B325', derrotado: '#ff6b6b' };
+
+/** Dibuja la tarjeta de resolución de un combate RAID (grupo vs jefe) y devuelve el canvas listo para exportar. */
+export async function drawRaidCombatCard(raid) {
+  await ensureFonts();
+
+  const won = raid.status === 'ganado';
+  const players = [...raid.jugadores].sort((a, b) => b.dano_al_jefe - a.dano_al_jefe);
+
+  const W = 1080;
+  const rowH = 118;
+  const rosterTop = 900;
+  const H = rosterTop + 70 + players.length * rowH + 110;
+  const DPR = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  const [npcImg, ...playerImgs] = await Promise.all([
+    loadImage(mediaUrl(raid.npc.imagen_mini) || mediaUrl(raid.npc.imagen)),
+    ...players.map(p => loadImage(mediaUrl(p.photo_url))),
+  ]);
+
+  /* ── fondo ── */
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#070d1c');
+  bg.addColorStop(1, '#01030a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.filter = 'blur(70px)';
+  const glow = ctx.createRadialGradient(W / 2, 480, 40, W / 2, 480, 420);
+  glow.addColorStop(0, won ? 'rgba(56,205,240,0.16)' : 'rgba(255,45,69,0.14)');
+  glow.addColorStop(1, 'rgba(56,205,240,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(56,205,240,0.06)';
+  ctx.lineWidth = 1;
+  for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+
+  ctx.strokeStyle = 'rgba(56,205,240,0.35)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(16, 16, W - 32, H - 32);
+
+  /* ── encabezado ── */
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(150,200,255,0.6)';
+  ctx.font = '600 24px "JetBrains Mono"';
+  ctx.fillText('N É X U S   ·   R E G I S T R O   D E   A S A L T O', W / 2, 100);
+
+  const headlineColor = won ? '#E6B325' : '#ff6b6b';
+  const headline = won ? '🏆 ¡JEFE DERROTADO!' : '☠ ASALTO FALLIDO';
+  fitText(ctx, headline, W - 160, '62px Orbitron');
+  ctx.fillStyle = headlineColor;
+  ctx.fillText(headline, W / 2, 200);
+
+  ctx.fillStyle = 'rgba(220,230,255,0.75)';
+  ctx.font = '400 28px "JetBrains Mono"';
+  ctx.fillText(won ? `El grupo vence a ${raid.npc.nombre}` : `El grupo cae ante ${raid.npc.nombre}`, W / 2, 245);
+
+  /* ── jefe ── */
+  const cy = 460;
+  const r = 130;
+  if (won) drawIcon(ctx, 'crown', W / 2, cy - r - 45, 56, headlineColor, 2.4);
+  drawAvatar(ctx, npcImg, W / 2, cy, r, won ? 'rgba(150,170,210,0.45)' : '#ff2d45', false);
+
+  ctx.fillStyle = 'rgba(230,240,255,0.9)';
+  const bossNameSize = fitText(ctx, raid.npc.nombre, 500, '32px Orbitron');
+  ctx.font = `800 ${bossNameSize}px Orbitron`;
+  ctx.fillText(raid.npc.nombre, W / 2, cy + r + 55);
+
+  ctx.fillStyle = 'rgba(160,190,230,0.55)';
+  ctx.font = '400 22px "JetBrains Mono"';
+  ctx.fillText(`${Math.max(0, raid.npc.hp)}/${raid.npc.max_hp} VIDA`, W / 2, cy + r + 85);
+
+  /* ── rondas ── */
+  const roundsY = 720;
+  ctx.fillStyle = 'rgba(150,200,255,0.55)';
+  ctx.font = '600 22px "JetBrains Mono"';
+  ctx.fillText('RONDAS DISPUTADAS', W / 2, roundsY);
+  ctx.fillStyle = '#38cdf0';
+  ctx.font = '800 54px Orbitron';
+  ctx.fillText(String(raid.ronda ?? 1), W / 2, roundsY + 55);
+
+  /* ── roster de combatientes (ordenado por daño infligido al jefe) ── */
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(150,200,255,0.55)';
+  ctx.font = '600 22px "JetBrains Mono"';
+  ctx.fillText('COMBATIENTES', W / 2, rosterTop);
+
+  let rowY = rosterTop + 50;
+  players.forEach((p, i) => {
+    const rowCy = rowY + rowH / 2 - 20;
+    const topDamage = i === 0 && p.dano_al_jefe > 0;
+
+    drawAvatar(ctx, playerImgs[i], 130, rowCy, 46, topDamage ? headlineColor : 'rgba(150,170,210,0.4)', false);
+    if (topDamage) drawIcon(ctx, 'crown', 130, rowCy - 46 - 26, 26, headlineColor, 2);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(230,240,255,0.92)';
+    const nameSize = fitText(ctx, p.name, 320, '28px Orbitron');
+    ctx.font = `800 ${nameSize}px Orbitron`;
+    ctx.fillText(p.name, 200, rowCy - 8);
+
+    ctx.fillStyle = RAID_STATUS_COLOR[p.status] ?? 'rgba(160,190,230,0.6)';
+    ctx.font = '600 16px "JetBrains Mono"';
+    ctx.fillText(RAID_STATUS_LABEL[p.status] ?? p.status.toUpperCase(), 200, rowCy + 22);
+
+    ctx.textAlign = 'center';
+    drawIcon(ctx, 'sword', 700, rowCy - 16, 26, '#ff7043', 2.2);
+    ctx.fillStyle = '#ff7043';
+    ctx.font = '800 32px Orbitron';
+    ctx.fillText(String(p.dano_al_jefe), 700, rowCy + 20);
+    ctx.fillStyle = 'rgba(160,190,230,0.55)';
+    ctx.font = '600 14px "JetBrains Mono"';
+    ctx.fillText('DAÑO AL JEFE', 700, rowCy + 42);
+
+    const alive = p.hp > 0 && p.status !== 'derrotado';
+    drawIcon(ctx, 'plus', 900, rowCy - 16, 26, alive ? '#10b981' : '#ff6b6b', 2.2);
+    ctx.fillStyle = alive ? '#10b981' : '#ff6b6b';
+    ctx.font = '800 28px Orbitron';
+    ctx.fillText(`${Math.max(0, p.hp)}/${p.max_hp}`, 900, rowCy + 20);
+    ctx.fillStyle = 'rgba(160,190,230,0.55)';
+    ctx.font = '600 14px "JetBrains Mono"';
+    ctx.fillText('VIDA FINAL', 900, rowCy + 42);
+
+    ctx.strokeStyle = 'rgba(56,205,240,0.14)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(90, rowY + rowH - 8);
+    ctx.lineTo(W - 90, rowY + rowH - 8);
+    ctx.stroke();
+
+    rowY += rowH;
+  });
+
+  /* ── pie ── */
+  const dateStr = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(120,150,190,0.5)';
+  ctx.font = '400 20px "JetBrains Mono"';
+  ctx.fillText(`Generado en NÉXUS — ${dateStr}`, W / 2, H - 50);
+
+  return canvas;
+}
+
 /**
  * Panel compartido: genera y muestra la imagen resultante de `generate()` al
  * montarse, con opciones para descargarla o compartirla directamente (Web
@@ -665,6 +818,17 @@ export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, p
     <ResultCardModal
       generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, planetaImagen, lugarImagen })}
       fileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.png`}
+      onClose={onClose}
+    />
+  );
+}
+
+/** Tarjeta de resolución para un combate RAID (grupo vs jefe) — ver RaidCombatScreen.jsx. */
+export function RaidCombatCardModal({ raid, onClose }) {
+  return (
+    <ResultCardModal
+      generate={() => drawRaidCombatCard(raid)}
+      fileName={`nexus-raid-${(raid?.npc?.nombre ?? 'jefe').toLowerCase().replace(/\s+/g, '-')}.png`}
       onClose={onClose}
     />
   );

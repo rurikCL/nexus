@@ -8,6 +8,7 @@ import FloatingCombatText from './FloatingCombatText.jsx';
 import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
+import { RaidCombatCardModal } from './CombatCard.jsx';
 
 /* ============================================================
    NÉXUS — Combate RAID (varios jugadores vs 1 NPC jefe, cupos configurables)
@@ -338,6 +339,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [stancePicker, setStancePicker] = useState(false);
   const [pendingSelfHab, setPendingSelfHab] = useState(null); // {id} — a la espera de elegir objetivo
   const [logCollapsed, setLogCollapsed] = useState(false);
+  const [showCombatCard, setShowCombatCard] = useState(false);
   const [hoveredHabId, setHoveredHabId] = useState(null);
   const [animBusy, setAnimBusy] = useState(false);
   const [strike, setStrike] = useState(null);
@@ -839,7 +841,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           )}
 
           {/* ── Pantalla de fin ── */}
-          {showEndScreen && (
+          {showEndScreen && !showCombatCard && (
             <div style={{
               position: 'absolute', inset: 0, background: 'rgba(2,5,12,0.9)', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: 5,
@@ -847,7 +849,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
               <div style={{ fontSize: 26, fontWeight: 700, color: raid.status === 'ganado' ? '#10b981' : '#ff6b6b' }}>
                 {raid.status === 'ganado' ? '¡Victoria del grupo!' : 'El grupo ha sido derrotado'}
               </div>
-              <button onClick={onClose} style={{
+              <button onClick={() => setShowCombatCard(true)} style={{
                 padding: '10px 28px', borderRadius: 7, cursor: 'pointer',
                 background: raid.status === 'ganado' ? 'rgba(16,185,129,0.18)' : 'rgba(255,45,69,0.14)',
                 border: `1px solid ${raid.status === 'ganado' ? 'rgba(16,185,129,0.5)' : 'rgba(255,45,69,0.45)'}`,
@@ -855,6 +857,10 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                 fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.12em',
               }}>CONTINUAR →</button>
             </div>
+          )}
+
+          {showCombatCard && (
+            <RaidCombatCardModal raid={raid} onClose={onClose} />
           )}
         </div>
 
