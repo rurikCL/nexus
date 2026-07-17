@@ -648,8 +648,6 @@ export async function drawRaidCombatCard(raid) {
 
   if (location) {
     const sideY = cy - 18;
-    const panelW = 205;
-    const panelH = 178;
     const planetX = 110;
     const placeX = W - 110;
     const left = [
@@ -659,20 +657,9 @@ export async function drawRaidCombatCard(raid) {
 
     left.forEach((col) => {
       const isLeft = col.label === 'PLANETA';
-      const x = isLeft ? planetX : placeX;
-      const anchor = isLeft ? x : x;
-      const boxX = isLeft ? anchor : anchor - panelW;
-      const boxY = sideY - panelH / 2;
       const imgSize = 92;
-      const imgCx = boxX + panelW / 2;
-      const imgCy = boxY + 64;
-
-      ctx.save();
-      ctx.fillStyle = 'rgba(6,12,26,0.86)';
-      ctx.beginPath();
-      ctx.roundRect(boxX, boxY, panelW, panelH, 16);
-      ctx.fill();
-      ctx.restore();
+      const imgCx = isLeft ? planetX : placeX;
+      const imgCy = sideY - 4;
 
       if (col.rounded) {
         drawImageRounded(ctx, col.img, imgCx, imgCy, imgSize, imgSize, 14, 'rgba(56,205,240,0.5)');
@@ -683,11 +670,11 @@ export async function drawRaidCombatCard(raid) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(160,190,230,0.6)';
       ctx.font = '600 13px "JetBrains Mono"';
-      ctx.fillText(col.label, imgCx, boxY + 142);
+      ctx.fillText(col.label, imgCx, imgCy + 82);
       ctx.fillStyle = 'rgba(220,230,255,0.9)';
-      const size = fitText(ctx, col.value, panelW - 24, '22px Orbitron', 12);
+      const size = fitText(ctx, col.value, 220, '22px Orbitron', 12);
       ctx.font = `800 ${size}px Orbitron`;
-      ctx.fillText(col.value, imgCx, boxY + 166);
+      ctx.fillText(col.value, imgCx, imgCy + 108);
     });
   }
 

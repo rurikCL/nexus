@@ -191,6 +191,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [floatTexts, setFloatTexts]     = useState([]);
   const [emojiPicker, setEmojiPicker]   = useState(false);
   const [emojiBurst, setEmojiBurst]     = useState(null);
+  const pendingCombatRef = useRef(null);
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
   const effectMaxTurnsRef = useRef({});
@@ -233,6 +234,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);
   useEffect(() => { combatLogLenRef.current = (combat.log ?? []).length; }, [combat]);
+
+  const commitPendingCombat = () => {
+    if (!pendingCombatRef.current) return;
+    setCombat(pendingCombatRef.current);
+    pendingCombatRef.current = null;
+  };
 
   /* Anima con dados las tiradas de las entradas nuevas antes de revelar el estado actualizado */
   const revealWithDice = async (newCombat) => {
@@ -280,6 +287,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       const arma = actorSide?.arma_equipada;
       const color = (arma?.es_sable && NX.SABERS[arma.color_hoja]) || (lastAttack.actorIsMe ? '#38cdf0' : '#ff2d45');
 
+      pendingCombatRef.current = newCombat;
       setStrike({
         key: `${Date.now()}-${Math.random()}`,
         type: lastAttack.ranged ? 'ranged' : 'melee',
@@ -290,18 +298,23 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         from: getRelativeCenter(attackerRef.current, stageRef.current),
         to: getRelativeCenter(targetRef.current, stageRef.current),
         result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg),
+        onResolve: commitPendingCombat,
       });
+      return;
     }
 
     if (lastFlee && stageRef.current) {
       const actorRef = lastFlee.actorIsMe ? myHudRef : oppHudRef;
       if (actorRef.current) {
+        pendingCombatRef.current = newCombat;
         setFleeFx({
           key: `${Date.now()}-${Math.random()}`,
           outcome: lastFlee.success ? 'success' : 'fail',
           dir: lastFlee.actorIsMe ? -1 : 1,
           actorRef,
+          onResolve: commitPendingCombat,
         });
+        return;
       }
     }
 
@@ -1093,6 +1106,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => {
+              strike.onResolve?.();
               setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
               setStrike(null);
             }}
@@ -1102,6 +1116,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => {
+              strike.onResolve?.();
               setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
               setStrike(null);
             }}
@@ -1113,7 +1128,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           <FleeEffect key={fleeFx.key}
             outcome={fleeFx.outcome} dir={fleeFx.dir}
             stageRef={stageRef} actorRef={fleeFx.actorRef}
-            onDone={() => setFleeFx(null)}
+            onDone={() => {
+              fleeFx.onResolve?.();
+              setFleeFx(null);
+            }}
           />
         )}
 

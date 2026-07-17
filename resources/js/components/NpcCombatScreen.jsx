@@ -169,21 +169,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
   const triggerStrike = ({ playerIsAttacker, ranged, hit, crit = false, dmg = 0 }) => {
-    if (!stageRef.current) return;
+    if (!stageRef.current) return Promise.resolve();
     const attackerRef = playerIsAttacker ? playerHudRef : npcHudRef;
     const targetRef    = playerIsAttacker ? npcHudRef : playerHudRef;
     const arma = playerIsAttacker ? player.arma_equipada : null;
     const color = playerIsAttacker
       ? ((arma?.es_sable && NX.SABERS[arma.color_hoja]) || '#38cdf0')
       : '#ff2d45';
-    setStrike({
-      key: `${Date.now()}-${Math.random()}`,
-      type: ranged ? 'ranged' : 'melee',
-      outcome: hit ? 'hit' : (ranged ? 'dodge' : 'block'),
-      color, attackerRef, targetRef,
-      from: getRelativeCenter(attackerRef.current, stageRef.current),
-      to: getRelativeCenter(targetRef.current, stageRef.current),
-      result: resultTextFor(hit, ranged, crit, dmg),
+    return new Promise((resolve) => {
+      setStrike({
+        key: `${Date.now()}-${Math.random()}`,
+        type: ranged ? 'ranged' : 'melee',
+        outcome: hit ? 'hit' : (ranged ? 'dodge' : 'block'),
+        color, attackerRef, targetRef,
+        from: getRelativeCenter(attackerRef.current, stageRef.current),
+        to: getRelativeCenter(targetRef.current, stageRef.current),
+        result: resultTextFor(hit, ranged, crit, dmg),
+        onResolve: resolve,
+      });
     });
   };
 
@@ -385,7 +388,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       if (cancelled) return;
 
       const dmgBase = (useRanged ? effNpcPnt : effNpcAtk) + npcNivel + (esCritico ? npcCritBonus : 0);
-      triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, dmg: dmgBase });
+      await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, dmg: dmgBase });
 
       let entries;
       let newHp;
@@ -538,14 +541,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
 
       if (habDebuff.length > 0) {
-        setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);
         entries.push({ text: `${npc.nombre}: ${habDebuff.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
       }
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit, dmg: dmgAplicado });
+    await triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit, dmg: dmgAplicado });
+
+    if (hit && habDebuff.length > 0) {
+      setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);
+    }
 
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
@@ -644,7 +650,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit, crit: esCritico, dmg: dmgTotal });
+    await triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit, crit: esCritico, dmg: dmgTotal });
 
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
     setNpcHp(newNpcHp);
@@ -1258,6 +1264,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => {
+              strike.onResolve?.();
               setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
               setStrike(null);
             }}
@@ -1267,6 +1274,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             from={strike.from} to={strike.to} color={strike.color} outcome={strike.outcome}
             stageRef={stageRef} attackerRef={strike.attackerRef} targetRef={strike.targetRef}
             onDone={() => {
+              strike.onResolve?.();
               setFloatTexts((prev) => [...prev, { id: strike.key, x: strike.to.x, y: strike.to.y, ...strike.result }]);
               setStrike(null);
             }}
