@@ -304,7 +304,10 @@ const useCountdown = (startedAt, maxWait) => {
   return secondsLeft;
 };
 
-const TurnCountdownCard = ({ startedAt, maxWait }) => {
+/* Card de turno: además del segundero, muestra quién está actuando (avatar del jefe o del
+   jugador activo) en vez de un texto de "esperando" aparte — así identifica el turno sin
+   depender de que se oculte el resto de la barra de acciones. */
+const TurnCountdownCard = ({ startedAt, maxWait, icon }) => {
   const secondsLeft = useCountdown(startedAt, maxWait);
   const pct = maxWait > 0 ? Math.max(0, Math.min(100, (secondsLeft / maxWait) * 100)) : 0;
   const urgent = secondsLeft <= 10;
@@ -316,21 +319,17 @@ const TurnCountdownCard = ({ startedAt, maxWait }) => {
       border: `1px solid ${urgent ? 'rgba(255,45,69,0.32)' : 'rgba(56,205,240,0.22)'}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
     }}>
-      <span style={{ fontSize: 7, color: urgent ? '#ff6b6b' : '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>TURNO</span>
+      <div style={{
+        width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+        border: `1.5px solid ${urgent ? '#ff6b6b' : '#38cdf0'}`, background: 'rgba(0,0,0,0.28)',
+        display: 'grid', placeItems: 'center',
+      }}>{icon}</div>
       <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1, color: urgent ? '#ff6b6b' : 'var(--txt)', fontFamily: 'var(--font-data)' }}>{secondsLeft}</span>
       <div style={{ width: '80%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: urgent ? '#ff2d45' : '#38cdf0', transition: 'width 0.25s linear' }} />
       </div>
     </div>
   );
-};
-
-/* Texto de espera con el segundero del turno activo (de quien sea que le toque). */
-const WaitingTurnText = ({ raid }) => {
-  const secondsLeft = useCountdown(raid.turn_started_at, raid.turn_max_wait ?? 30);
-  return raid.turn_started_at
-    ? `Esperando el turno de otro combatiente... (${secondsLeft}s)`
-    : 'Esperando el turno de otro combatiente...';
 };
 
 const ActionBtn = ({ onClick, disabled, bg, border, hoverBg, hoverBorder, children }) => (
@@ -521,6 +520,16 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const canAct = isMyTurn && !busy && !rolling && !animBusy;
   const finished = raid.status === 'ganado' || raid.status === 'perdido';
   const showEndScreen = finished && !animBusy;
+
+  /* Ícono de quien tiene el turno activo, para el TurnCountdownCard */
+  const turnPlayer = raid.jugadores.find(j => j.es_mi_turno);
+  const turnIcon = raid.es_turno_del_jefe
+    ? ((raid.npc.imagen_mini || raid.npc.imagen)
+      ? <img src={raid.npc.imagen_mini || raid.npc.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      : <Icon name="flame" size={12} style={{ color: '#ff2d45' }} />)
+    : (turnPlayer?.photo_url
+      ? <img src={turnPlayer.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      : <Icon name="user" size={12} style={{ color: 'var(--holo)' }} />);
 
   const doAction = async (payload) => {
     if (busy) return;
@@ -726,9 +735,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
           {!finished && me && (
             <div style={{ padding: '10px 14px', background: 'rgba(4,9,20,0.7)', borderTop: '1px solid rgba(56,205,240,0.16)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               {error && <div style={{ color: '#ff6b6b', fontSize: 11 }}>{error}</div>}
-              {!isMyTurn ? (
+              {me.status !== 'activo' ? (
                 <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', padding: '10px 0' }}>
-                  {me.status !== 'activo' ? 'Ya no participas activamente en este combate.' : <WaitingTurnText raid={raid} />}
+                  Ya no participas activamente en este combate.
                 </div>
               ) : (
                 <>
@@ -853,7 +862,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                       </ActionBtn>
 
                       {raid.turn_started_at && (
-                        <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} />
+                        <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} icon={turnIcon} />
                       )}
                     </div>
                   </div>
