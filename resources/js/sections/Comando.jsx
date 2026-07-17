@@ -31,6 +31,7 @@ function mapApiCharacterToStoreCharacter(character) {
     arma_equipada: character.arma_equipada ?? null,
     nave_equipada: character.nave_equipada ?? null,
     sable_activo: character.sable_activo ?? null,
+    sable_bonos: character.sable_bonos ?? {},
     vida: baseCombat.vida ?? character.vida ?? 8,
     escudo: baseCombat.escudo ?? character.escudo ?? 4,
     defensa: baseCombat.defensa ?? character.defensa ?? 2,
@@ -1839,7 +1840,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Agilidad', iniciativa: 'Iniciativa', punteria: 'Puntería' };
   const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
   const baseCombat = ch.combat_base_stats ?? {};
-  const totalCombat = ch.combat_stats ?? {};
+  const itemBonuses = ch.sable_bonos ?? {};
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
 
@@ -2007,7 +2008,12 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
     if (d > 0 && (pts <= 0 || cur >= cap)) return;
     const nv = cur + d;
     if (nv < 1 || nv > cap) return;
-    S.setCharacter({ ...ch, [stat]: nv, puntos_libres: pts - d });
+    S.setCharacter({
+      ...ch,
+      [stat]: nv,
+      combat_base_stats: { ...(ch.combat_base_stats ?? {}), [stat]: nv },
+      puntos_libres: pts - d,
+    });
   };
 
   const handleSave = async () => {
@@ -2304,31 +2310,36 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {COMBAT_STATS.map((s) => {
               const base = baseCombat[s] ?? ch[s] ?? COMBAT_DEFAULTS[s];
-              const total = totalCombat[s] ?? base;
-              const bonus = total - base;
+              const bonus = itemBonuses[s] ?? 0;
+              const total = base + bonus;
               return (
                 <div key={s} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  display: 'grid', gridTemplateColumns: 'minmax(88px, 1fr) auto auto auto auto auto', alignItems: 'center', gap: 8,
                   padding: '10px 12px', borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.02)',
                 }}>
-                  <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{COMBAT_LABEL[s]}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 0 }}>
+                    {COMBAT_LABEL[s]}
+                  </span>
+                  <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>x</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
                       onClick={() => combatBump(s, -1)} disabled={base <= 1}>
                       <Icon name="x" size={11} />
                     </button>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
-                      <span className="nx-num" style={{ minWidth: 24, textAlign: 'center', fontSize: 15 }}>{base}</span>
-                      <span className="nx-data" style={{ fontSize: 10, color: bonus >= 0 ? '#10b981' : '#ff6b6b', whiteSpace: 'nowrap' }}>
-                        {bonus >= 0 ? '+' : ''}{bonus} = {total}
-                      </span>
-                    </div>
+                    <span className="nx-num" style={{ minWidth: 24, textAlign: 'center', fontSize: 15 }}>{base}</span>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
                       onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0 || base >= statCaps.asignacion}>
                       <Icon name="plus" size={11} />
                     </button>
                   </div>
+                  <span className="nx-data" style={{ fontSize: 11, color: bonus >= 0 ? '#10b981' : '#ff6b6b', whiteSpace: 'nowrap' }}>
+                    {bonus >= 0 ? '+' : ''}{bonus}
+                  </span>
+                  <span className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>=</span>
+                  <span className="nx-num" style={{ fontSize: 19, color: 'var(--txt)', minWidth: 28, textAlign: 'right' }}>
+                    {total}
+                  </span>
                 </div>
               );
             })}

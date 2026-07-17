@@ -353,6 +353,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       puntos_libres:  ch.puntos_libres  ?? 5,
       gold:        ch.gold        ?? false,
       photo:       ch.photo_url   ?? null,
+      sable_bonos: ch.sable_bonos ?? {},
       wins:        ch.wins        ?? 0,
       losses:      ch.losses      ?? 0,
       winrate:     ch.winrate     ?? 0,
