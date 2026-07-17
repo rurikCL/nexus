@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Configuracion;
+use App\Models\CharacterHito;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -146,6 +147,13 @@ class CharacterController extends Controller
                 'puntos_libres' => $pointsFree,
             ], $data)
         );
+
+        if ($character->wasRecentlyCreated) {
+            CharacterHito::firstOrCreate([
+                'character_id' => $character->id,
+                'hito' => 'personaje_creado',
+            ]);
+        }
 
         return response()->json([
             'character' => $character->append(['winrate']),
