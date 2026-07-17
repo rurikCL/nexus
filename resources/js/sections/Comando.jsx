@@ -26,7 +26,8 @@ function mapApiCharacterToStoreCharacter(character, fallback = {}) {
   return {
     ...character,
     saber: character.saber_color ?? character.saber ?? 'azul',
-    photo: character.photo_url ?? character.photo ?? null,
+    photo: character.photo_url ?? character.photo ?? safeFallback.photo ?? safeFallback.photo_url ?? null,
+    photo_url: character.photo_url ?? character.photo ?? safeFallback.photo_url ?? safeFallback.photo ?? null,
     pool: character.puntos_libres ?? character.pool ?? safeFallback.pool ?? 0,
     current_forma: character.current_forma ?? safeFallback.current_forma ?? 1,
     arma_equipada: character.arma_equipada ?? safeFallback.arma_equipada ?? null,

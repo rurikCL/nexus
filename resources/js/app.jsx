@@ -112,8 +112,14 @@ function Root() {
   };
 
   const handleUserUpdate = (updatedUser) => {
-    setUser(updatedUser);
-    localStorage.setItem('nx-user', JSON.stringify(updatedUser));
+    setUser(prev => {
+      const next = { ...(prev ?? {}), ...updatedUser };
+      if (updatedUser?.character) {
+        next.character = { ...(prev?.character ?? {}), ...updatedUser.character };
+      }
+      localStorage.setItem('nx-user', JSON.stringify(next));
+      return next;
+    });
   };
 
 
