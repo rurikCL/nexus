@@ -304,7 +304,7 @@ const ENTITY_CONFIG = {
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
       { key: 'descripcion', label: 'Descripción', dim: true },
-      { key: 'archivo', label: 'Archivo', dim: true, resolve: r => r.archivo ? r.archivo.split('/').pop() : '—' },
+      { key: 'archivo', label: 'Escuchar', type: 'audio', w: 120 },
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre identificador', type: 'text', required: true, span: 2, hint: 'Nombre único para identificar y reutilizar este sonido en la página' },
@@ -1120,6 +1120,24 @@ function CellValue({ col, record }) {
     return src
       ? <img src={src} alt="" style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }} />
       : <span style={{ color: 'var(--txt-faint)' }}>—</span>;
+  }
+
+  if (col.type === 'audio') {
+    if (!raw) return <span style={{ color: 'var(--txt-faint)' }}>—</span>;
+    const src = /^(https?:)?\/\//.test(raw) ? raw : `/storage/${String(raw).replace(/^\/+/, '')}`;
+
+    const handlePlay = () => {
+      const audio = new Audio(src);
+      audio.play().catch(() => {
+        toast('No se pudo reproducir el sonido', { tone: 'error', icon: 'x' });
+      });
+    };
+
+    return (
+      <button type="button" className="nx-btn nx-btn-sm" onClick={handlePlay}>
+        <Icon name="video" size={12} /> Escuchar
+      </button>
+    );
   }
 
   if (raw == null || raw === '') return <span style={{ color: 'var(--txt-faint)' }}>—</span>;
