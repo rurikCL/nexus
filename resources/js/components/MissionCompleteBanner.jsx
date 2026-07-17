@@ -10,6 +10,7 @@ function summarize(items, limit = 2) {
 
 export function MissionCompleteBanner({ open, mision, busy, onComplete, onClose }) {
   if (!open || !mision) return null;
+  const completed = mision.status === 'completada' || mision.completada_por_mi;
 
   const objetivos = summarize((mision.objetivos ?? []).map(o => o.nombre), 2);
   const recompensas = summarize((mision.recompensas ?? []).map(r => {
@@ -52,7 +53,9 @@ export function MissionCompleteBanner({ open, mision, busy, onComplete, onClose 
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="nx-kicker" style={{ marginBottom: 4 }}>MISION COMPLETADA</div>
+              <div className="nx-kicker" style={{ marginBottom: 4 }}>
+                {completed ? 'MISION COMPLETADA' : 'MISION LISTA PARA COMPLETAR'}
+              </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--txt)', marginBottom: 4 }}>
                 {mision.nombre}
               </div>
@@ -108,7 +111,7 @@ export function MissionCompleteBanner({ open, mision, busy, onComplete, onClose 
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Btn kind="accent" icon="check" onClick={onComplete} disabled={busy} sm>
-              {busy ? 'Completando...' : 'Completar'}
+              {busy ? 'Completando...' : 'Completar misión'}
             </Btn>
           </div>
         </div>

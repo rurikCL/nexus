@@ -645,13 +645,20 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
 
   useEffect(() => {
     if (!temporadaId) return;
-    const token = localStorage.getItem('nx-token');
-    fetch(`/api/misiones/temporada/${temporadaId}`, {
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-    }).then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.misiones) setMisiones(d.misiones); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const load = () => {
+      const token = localStorage.getItem('nx-token');
+      setLoading(true);
+      fetch(`/api/misiones/temporada/${temporadaId}`, {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      }).then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.misiones) setMisiones(d.misiones); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+    load();
+    const handler = () => load();
+    window.addEventListener('nx-mision-updated', handler);
+    return () => window.removeEventListener('nx-mision-updated', handler);
   }, [temporadaId]);
 
   const completadas = misiones.filter(m => m.completada_por_mi).length;

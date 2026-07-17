@@ -466,6 +466,8 @@ class MisionController extends Controller
     public function accept(Request $request, Mision $mision): JsonResponse
     {
         $user = $request->user();
+        $pivotAntes = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        $progresoAntes = $pivotAntes?->progreso_json ? json_decode($pivotAntes->progreso_json, true) : [];
         $mision->users()->syncWithoutDetaching([
             $user->id => ['status' => 'pendiente', 'progreso' => 0],
         ]);
@@ -494,6 +496,9 @@ class MisionController extends Controller
         }
 
         $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $pivotActual = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        $progresoDespues = $pivotActual?->progreso_json ? json_decode($pivotActual->progreso_json, true) : [];
+        MisionProgresoService::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoDespues);
 
         return response()->json([
             'message' => 'Misión aceptada.',
@@ -524,6 +529,9 @@ class MisionController extends Controller
             return response()->json(['message' => 'No estás asignado a esta misión.'], 403);
         }
 
+        $pivotAntes = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        $progresoAntes = $pivotAntes?->progreso_json ? json_decode($pivotAntes->progreso_json, true) : [];
+
         $data = $request->validate([
             'progreso' => 'required|integer|min:0|max:100',
             'status' => 'nullable|in:pendiente,en-curso,completada',
@@ -543,6 +551,10 @@ class MisionController extends Controller
         }
 
         $mision->users()->updateExistingPivot($user->id, $pivotData);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $pivotDespues = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        $progresoDespues = $pivotDespues?->progreso_json ? json_decode($pivotDespues->progreso_json, true) : [];
+        MisionProgresoService::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoDespues);
 
         return response()->json(['message' => 'Progreso actualizado.']);
     }

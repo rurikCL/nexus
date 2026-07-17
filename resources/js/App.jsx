@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, ToastHost, toast } from './components/ui.jsx';
+import { MissionCompleteBanner } from './components/MissionCompleteBanner.jsx';
 import { useStore } from './store/useStore.js';
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
 import { playMensajeUsuario, playNotificacionDuelo } from './utils/sounds.js';
@@ -211,17 +212,65 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [combatToView, setCombatToView] = useState(null);
   const [unreadMsgs, setUnreadMsgs] = useState([]);
   const [misionNotifQueue, setMisionNotifQueue] = useState([]);
+  const [missionAlertQueue, setMissionAlertQueue] = useState([]);
   const [externalChatTarget, setExternalChatTarget] = useState(null);
   const prevUnreadIds = useRef(new Set());
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
+  const currentMissionAlert = missionAlertQueue[0] ?? null;
 
   const go = (v) => {
     setView(v);
     history.pushState(null, '', '/' + v);
     window.scrollTo({ top: 0 });
     setSidebarOpen(false);
+  };
+
+  const enqueueMissionAlert = (notif) => {
+    if (!notif?.id) return;
+    setMissionAlertQueue(prev => prev.some(n => n.id === notif.id) ? prev : [...prev, notif]);
+  };
+
+  const dismissMissionAlert = (notifId) => {
+    if (!notifId) return;
+    setMissionAlertQueue(prev => prev.filter(n => n.id !== notifId));
+    setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n));
+    fetch(`/api/notifications/${notifId}/read`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  };
+
+  const handleMissionAlertComplete = async () => {
+    if (!currentMissionAlert?.mission_id && !currentMissionAlert?.mision?.id) return;
+    const mission = currentMissionAlert.mision ?? currentMissionAlert;
+    const missionId = currentMissionAlert.mission_id ?? mission.id;
+    const notifId = currentMissionAlert.id;
+
+    try {
+      const token = localStorage.getItem('nx-token');
+      const res = await fetch(`/api/misiones/${missionId}/completar`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || 'No se pudo completar la misión');
+
+      toast('¡Misión completada!', { tone: 'success', icon: 'check' });
+      dismissMissionAlert(notifId);
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', { detail: { missionId, status: 'completada' } }));
+
+      if (data?.hitos_otorgados?.length) {
+        data.hitos_otorgados.forEach((hito) => {
+          toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
+        });
+      }
+
+      fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(me => { if (me) onUserUpdate?.(me); })
+        .catch(() => {});
+    } catch (e) {
+      toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
+    }
   };
   useEffect(() => {
     const h = () => setView(location.pathname.replace(/^\//, '') || 'comando');
@@ -299,7 +348,13 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         const cutoff = Date.now() - 24 * 60 * 60 * 1000;
         data.data
           .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
-          .forEach(n => onTransmision?.({ ...n.data, _notifId: n.id }));
+          .forEach(n => {
+            if (n.data?.type === 'mision_lista_para_completar') {
+              enqueueMissionAlert({ ...n.data, id: n.id });
+              return;
+            }
+            onTransmision?.({ ...n.data, _notifId: n.id });
+          });
       })
       .catch(() => {});
   }, []);
@@ -371,6 +426,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     window.Echo.private(`App.Models.User.${user.id}`)
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
+        if (notif?.type === 'mision_lista_para_completar') {
+          enqueueMissionAlert({ ...notif, id: notif.id ?? Date.now() });
+          return;
+        }
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
           void playNotificacionDuelo();
         }
@@ -757,6 +816,16 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       />
 
       <ToastHost />
+
+      {currentMissionAlert && (
+        <MissionCompleteBanner
+          open
+          mision={currentMissionAlert.mision ?? currentMissionAlert}
+          busy={false}
+          onComplete={handleMissionAlertComplete}
+          onClose={() => dismissMissionAlert(currentMissionAlert.id)}
+        />
+      )}
 
       {/* Popup de misión global pendiente de notificar al ingresar a la sesión */}
       {misionNotifQueue[0] && (

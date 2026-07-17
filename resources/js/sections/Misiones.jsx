@@ -92,6 +92,12 @@ export function MisionesView({ S, user, onUserUpdate }) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  useEffect(() => {
+    const handler = () => reload();
+    window.addEventListener('nx-mision-updated', handler);
+    return () => window.removeEventListener('nx-mision-updated', handler);
+  }, [reload]);
+
   const updateGlobalMision = useCallback((id, patch) => {
     setMisiones(prev => ({
       ...prev,

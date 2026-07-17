@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Mision;
 use App\Models\User;
+use App\Notifications\MisionListaParaCompletar;
 
 /**
  * Registra avance automático de objetivos de misión (cualquier tipo_mision)
@@ -27,7 +28,8 @@ class MisionProgresoService
                 continue;
             }
 
-            $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $progresoAntes = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $progresoJson = $progresoAntes;
 
             foreach ($mision->objetivos->where('tipo', $tipo) as $objetivo) {
                 $actual = $progresoJson[(string) $objetivo->id] ?? 0;
@@ -46,6 +48,8 @@ class MisionProgresoService
                     'progreso_json' => json_encode($progresoJson),
                 ],
             ]);
+
+            self::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoJson);
         }
     }
 
@@ -68,7 +72,8 @@ class MisionProgresoService
                 continue;
             }
 
-            $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $progresoAntes = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $progresoJson = $progresoAntes;
 
             foreach ($mision->objetivos->where('tipo', 'menu')->where('unidad', $slug) as $objetivo) {
                 $progresoJson[(string) $objetivo->id] = $objetivo->meta;
@@ -86,6 +91,96 @@ class MisionProgresoService
                     'progreso_json' => json_encode($progresoJson),
                 ],
             ]);
+
+            self::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoJson);
         }
+    }
+
+    public static function notificarSiListaParaCompletar(User $user, Mision $mision, array $progresoAntes, array $progresoDespues): void
+    {
+        $mision->loadMissing(['objetivos', 'recompensas.habilidad', 'recompensas.objeto']);
+
+        if (! self::puedeCompletarCon($user, $mision, $progresoDespues)) {
+            return;
+        }
+
+        if (self::puedeCompletarCon($user, $mision, $progresoAntes)) {
+            return;
+        }
+
+        $user->notify(new MisionListaParaCompletar(self::buildMissionBannerPayload($user, $mision, $progresoDespues)));
+    }
+
+    public static function buildMissionBannerPayload(User $user, Mision $mision, array $progresoJson = []): array
+    {
+        $mision->loadMissing(['objetivos', 'recompensas.habilidad', 'recompensas.objeto']);
+        $character = $user->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
+
+        $objetivos = $mision->objetivos->map(fn ($o) => [
+            'id' => $o->id,
+            'nombre' => $o->nombre,
+            'descripcion' => $o->descripcion,
+            'tipo' => $o->tipo,
+            'meta' => $o->meta,
+            'unidad' => $o->unidad,
+            'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+            'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
+            'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
+        ])->values();
+
+        $recompensas = $mision->recompensas->map(fn ($r) => [
+            'id' => $r->id,
+            'nombre' => $r->nombre,
+            'descripcion' => $r->descripcion,
+            'tipo' => $r->tipo,
+            'valor' => $r->valor,
+            'habilidad' => $r->relationLoaded('habilidad') && $r->habilidad
+                ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre]
+                : null,
+            'objeto' => $r->relationLoaded('objeto') && $r->objeto
+                ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre]
+                : null,
+        ])->values();
+
+        $requeridos = $mision->hito_requerimiento
+            ? array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)))
+            : [];
+        $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+
+        return [
+            'id' => $mision->id,
+            'nombre' => $mision->nombre,
+            'mision' => $mision->mision,
+            'descripcion' => $mision->descripcion,
+            'objetivos' => $objetivos->toArray(),
+            'recompensas' => $recompensas->toArray(),
+            'cumple_hitos' => $cumpleHitos,
+            'puede_completar' => self::puedeCompletarCon($user, $mision, $progresoJson),
+        ];
+    }
+
+    public static function puedeCompletarCon(User $user, Mision $mision, array $progresoJson): bool
+    {
+        $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        if (! $pivot || $pivot->status === 'completada') {
+            return false;
+        }
+
+        $character = $user->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
+        $requeridos = $mision->hito_requerimiento
+            ? array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)))
+            : [];
+        $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+        if (! $cumpleHitos) {
+            return false;
+        }
+
+        if ($mision->objetivos->isEmpty()) {
+            return true;
+        }
+
+        return $mision->objetivos->every(fn ($o) => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta);
     }
 }

@@ -4223,6 +4223,12 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [pvpChallenging, setPvpChallenging]    = useState(false);
   const [pendingChallenge, setPendingChallenge] = useState(null);
   const pvpPollRef = useRef(null);
+
+  useEffect(() => {
+    const handler = () => setLugarRefreshKey((k) => k + 1);
+    window.addEventListener('nx-mision-updated', handler);
+    return () => window.removeEventListener('nx-mision-updated', handler);
+  }, []);
   const [tradeTarget, setTradeTarget] = useState(null);
   const [pendingTrade, setPendingTrade] = useState(null);
   const [outgoingTrade, setOutgoingTrade] = useState(null);
