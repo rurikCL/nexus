@@ -4,7 +4,6 @@ import { Icon, Avatar, Btn, Chip, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
 import { playMensajeUsuario, playNotificacionDuelo } from './utils/sounds.js';
-import { buildMissionCompletionTransmission, buildMissionReadyTransmission } from './utils/missionTransmission.js';
 
 const HUD_COLORS = ['#FF6B00', '#38cdf0', '#8b5cf6', '#10b981', '#ec4899', '#f97316', '#E6B325', '#3aa0ff'];
 function hashColor(str) {
@@ -150,7 +149,7 @@ import { CombatientesView } from './sections/Combatientes.jsx';
 import MapaView from './sections/Mapa.jsx';
 import AdminView from './sections/Admin.jsx';
 import { TemporadasView } from './sections/Temporadas.jsx';
-import { MisionesView } from './sections/Misiones.jsx';
+import { MisionesView, GlobalMisionPopup } from './sections/Misiones.jsx';
 import { CompetitivoView } from './sections/Competitivo.jsx';
 import { ModulosEntrenamientoView } from './sections/ModulosEntrenamiento.jsx';
 import SesionesView from './sections/Sesiones.jsx';
@@ -221,6 +220,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [mapLocation, setMapLocation] = useState(null);
   const [combatToView, setCombatToView] = useState(null);
   const [unreadMsgs, setUnreadMsgs] = useState([]);
+  const [misionNotifQueue, setMisionNotifQueue] = useState([]);
   const [missionDrawerLoading, setMissionDrawerLoading] = useState(true);
   const [missionDrawerItems, setMissionDrawerItems] = useState([]);
   const [externalChatTarget, setExternalChatTarget] = useState(null);
@@ -230,6 +230,17 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
   const activeMissionsCount = missionDrawerItems.length;
+
+  const enqueueMissionAlert = (mission) => {
+    const missionId = mission?.mission_id ?? mission?.mision_id ?? mission?.id;
+    if (!missionId) return;
+    const normalized = {
+      ...mission,
+      id: missionId,
+      notification_id: mission?.notification_id ?? mission?._notifId ?? null,
+    };
+    setMisionNotifQueue(prev => prev.some(m => m.id === normalized.id) ? prev : [...prev, normalized]);
+  };
 
   const go = (v) => {
     setView(v);
@@ -279,9 +290,12 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .then(r => r.ok ? r.json() : null)
         .then(me => { if (me) onUserUpdate?.(me); })
         .catch(() => {});
-      onTransmision?.(buildMissionCompletionTransmission(data?.mision ?? missionLike, {
-        hitosOtorgados: data?.hitos_otorgados ?? [],
-      }));
+      onTransmision?.({
+        tone: 'holo',
+        icon: 'check',
+        title: 'Misión completada',
+        body: data?.mision?.nombre ? `${data.mision.nombre} ha sido completada.` : 'La misión fue completada con éxito.',
+      });
       return true;
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
@@ -394,7 +408,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
         .forEach(n => {
           if (n.data?.type === 'mision_lista_para_completar') {
-            onTransmision?.(buildMissionReadyTransmission({ ...n.data, id: n.id }));
+            enqueueMissionAlert({ ...n.data, notification_id: n.id });
             return;
           }
           onTransmision?.({ ...n.data, _notifId: n.id });
@@ -461,7 +475,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           m.cumple_hitos
         );
         pendientes.forEach((mision) => {
-          onTransmision?.(buildMissionReadyTransmission(mision));
+          enqueueMissionAlert(mision);
         });
       })
       .catch(() => {});
@@ -571,7 +585,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
         if (notif?.type === 'mision_lista_para_completar') {
-          onTransmision?.(buildMissionReadyTransmission({ ...notif, id: notif.id ?? Date.now() }));
+          enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now() });
           return;
         }
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
@@ -979,6 +993,15 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       />
 
       <ToastHost />
+
+      {misionNotifQueue[0] && (
+        <GlobalMisionPopup
+          mision={misionNotifQueue[0]}
+          onClose={() => setMisionNotifQueue(q => q.slice(1))}
+          onUpdate={() => {}}
+          onUserUpdate={onUserUpdate}
+        />
+      )}
 
     </div>
   );

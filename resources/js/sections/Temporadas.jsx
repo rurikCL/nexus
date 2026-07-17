@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
-import { buildMissionCompletionTransmission } from '../utils/missionTransmission.js';
 
 function mediaUrl(path) {
   if (!path) return null;
@@ -677,9 +676,12 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
       setMisiones(prev => prev.map(m => m.id === selectedMision.id
         ? { ...m, completada_por_mi: true, status: 'completada', puede_completar: false }
         : m));
-      onTransmision?.(buildMissionCompletionTransmission(data?.mision ?? selectedMision, {
-        hitosOtorgados: data?.hitos_otorgados ?? [],
-      }));
+      onTransmision?.({
+        tone: 'holo',
+        icon: 'check',
+        title: 'Misión completada',
+        body: data?.mision?.nombre ? `${data.mision.nombre} ha sido completada.` : 'La misión fue completada con éxito.',
+      });
       setSelectedId(null);
 
       // Las recompensas (créditos, hitos, títulos) ya se otorgaron en el servidor —
