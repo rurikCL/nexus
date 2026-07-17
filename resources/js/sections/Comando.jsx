@@ -21,6 +21,7 @@ function useWindowWidth() {
 function mapApiCharacterToStoreCharacter(character) {
   if (!character) return null;
   const combat = character.combat_stats ?? {};
+  const baseCombat = character.combat_base_stats ?? {};
   return {
     ...character,
     saber: character.saber_color ?? character.saber ?? 'azul',
@@ -30,13 +31,15 @@ function mapApiCharacterToStoreCharacter(character) {
     arma_equipada: character.arma_equipada ?? null,
     nave_equipada: character.nave_equipada ?? null,
     sable_activo: character.sable_activo ?? null,
-    vida: combat.vida ?? character.vida ?? 8,
-    escudo: combat.escudo ?? character.escudo ?? 4,
-    defensa: combat.defensa ?? character.defensa ?? 2,
-    ataque: combat.ataque ?? character.ataque ?? 2,
-    movimiento: combat.movimiento ?? character.movimiento ?? 2,
-    iniciativa: combat.iniciativa ?? character.iniciativa ?? 2,
-    punteria: combat.punteria ?? character.punteria ?? 2,
+    vida: baseCombat.vida ?? character.vida ?? 8,
+    escudo: baseCombat.escudo ?? character.escudo ?? 4,
+    defensa: baseCombat.defensa ?? character.defensa ?? 2,
+    ataque: baseCombat.ataque ?? character.ataque ?? 2,
+    movimiento: baseCombat.movimiento ?? character.movimiento ?? 2,
+    iniciativa: baseCombat.iniciativa ?? character.iniciativa ?? 2,
+    punteria: baseCombat.punteria ?? character.punteria ?? 2,
+    combat_stats: combat,
+    combat_base_stats: baseCombat,
   };
 }
 
@@ -1835,6 +1838,8 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const COMBAT_STATS = ['vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
   const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Agilidad', iniciativa: 'Iniciativa', punteria: 'Puntería' };
   const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
+  const baseCombat = ch.combat_base_stats ?? {};
+  const totalCombat = ch.combat_stats ?? {};
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
 
@@ -2298,7 +2303,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           right={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip><Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>Asignar</Btn></div>}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {COMBAT_STATS.map((s) => {
-              const val = ch[s] ?? COMBAT_DEFAULTS[s];
+              const base = baseCombat[s] ?? ch[s] ?? COMBAT_DEFAULTS[s];
+              const total = totalCombat[s] ?? base;
+              const bonus = total - base;
               return (
                 <div key={s} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
@@ -2306,14 +2313,19 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.02)',
                 }}>
                   <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{COMBAT_LABEL[s]}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
-                      onClick={() => combatBump(s, -1)} disabled={val <= 1}>
+                      onClick={() => combatBump(s, -1)} disabled={base <= 1}>
                       <Icon name="x" size={11} />
                     </button>
-                    <span className="nx-num" style={{ width: 28, textAlign: 'center', fontSize: 15 }}>{val}</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
+                      <span className="nx-num" style={{ minWidth: 24, textAlign: 'center', fontSize: 15 }}>{base}</span>
+                      <span className="nx-data" style={{ fontSize: 10, color: bonus >= 0 ? '#10b981' : '#ff6b6b', whiteSpace: 'nowrap' }}>
+                        {bonus >= 0 ? '+' : ''}{bonus} = {total}
+                      </span>
+                    </div>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
-                      onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0 || val >= statCaps.asignacion}>
+                      onClick={() => combatBump(s, +1)} disabled={puntos_libres <= 0 || base >= statCaps.asignacion}>
                       <Icon name="plus" size={11} />
                     </button>
                   </div>
