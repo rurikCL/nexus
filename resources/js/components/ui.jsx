@@ -260,7 +260,11 @@ export function ImageCropModal({
 
   return createPortal(
     <div
-      onMouseDown={onCancel}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel?.();
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -348,6 +352,7 @@ export function CropImageField({
 }) {
   const [pending, setPending] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const inputRef = useRef(null);
   const isFile = value instanceof File;
 
   useEffect(() => {
@@ -374,7 +379,17 @@ export function CropImageField({
   return (
     <div style={{ display: 'grid', gap: 6 }}>
       {label && <label className="nx-label">{label}</label>}
-      <div style={{
+      <div
+        onClick={() => inputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        style={{
         height,
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--holo-line)',
@@ -382,14 +397,17 @@ export function CropImageField({
         display: previewUrl ? 'block' : 'grid',
         placeItems: 'center',
         overflow: 'hidden',
-      }}>
+        cursor: 'pointer',
+      }}
+      >
         {!previewUrl && <Icon name="camera" size={22} style={{ color: 'var(--txt-faint)' }} />}
       </div>
       <input
+        ref={inputRef}
         type="file"
         accept="image/*"
         onChange={e => handleFile(e.target.files[0])}
-        style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}
+        style={{ display: 'none' }}
       />
       <ImageCropModal
         open={!!pending}
