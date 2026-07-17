@@ -630,7 +630,15 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                   : <Icon name="flame" size={48} style={{ color: '#ff2d45', opacity: 0.6 }} />}
               </div>
               <div style={{ width: '100%', maxWidth: 320 }}>
-                <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, color: '#fff', marginBottom: 8 }}>{raid.npc.nombre}</div>
+                <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, color: '#fff', marginBottom: 2 }}>{raid.npc.nombre}</div>
+                {raid.npc.nivel > 0 && (
+                  <div title={`Nivel de dificultad ${raid.npc.nivel}`} style={{ display: 'flex', justifyContent: 'center', gap: 1, marginBottom: 6 }}>
+                    {Array.from({ length: Math.min(raid.npc.nivel, 5) }, (_, i) => (
+                      <Icon key={i} name="star" fill size={11} style={{ color: '#E6B325' }} />
+                    ))}
+                    {raid.npc.nivel > 5 && <span style={{ fontSize: 9, color: '#E6B325', fontFamily: 'var(--font-data)', marginLeft: 2 }}>×{raid.npc.nivel}</span>}
+                  </div>
+                )}
                 {raid.npc.max_escudo > 0 && <StatBar label="ESCUDO" value={raid.npc.escudo} max={raid.npc.max_escudo} color="#38cdf0" />}
                 <StatBar label="VIDA" value={raid.npc.hp} max={raid.npc.max_hp} color="#ff2d45" />
                 <div style={{ marginTop: 6, display: 'flex', justifyContent: 'center' }}>

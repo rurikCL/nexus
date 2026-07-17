@@ -189,6 +189,7 @@ const ENTITY_CONFIG = {
       { key: 'lugar', label: 'Lugar', resolve: r => r.lugar?.nombre ?? '—', dim: true },
       { key: 'tipo', label: 'Tipo', dim: true },
       { key: 'profesion', label: 'Profesión', dim: true },
+      { key: 'nivel', label: 'Nivel', dim: true, w: 56 },
       { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
     ],
     fields: [
@@ -200,7 +201,7 @@ const ENTITY_CONFIG = {
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'hito_requerimiento', label: 'Hito(s) requerido(s)', type: 'text', span: 2, hint: 'Nombres de hito separados por coma. El NPC solo aparece si el personaje posee todos.' },
+      { key: 'nivel',         label: 'Nivel (★)',        type: 'number', min: 0, hint: 'Nivel de dificultad, representado con estrellas. Afecta combates contra este NPC y (si es jefe) contra RAID: +nivel de daño/curación, +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel (ej. nivel 4 → crítico con 17-20).' },
       { key: 'fecha_inicio',  label: 'Disponible desde', type: 'date', hint: 'Opcional. El NPC solo aparece a partir de esta fecha.' },
       { key: 'fecha_fin',     label: 'Disponible hasta', type: 'date', hint: 'Opcional. El NPC deja de aparecer después de esta fecha.' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
@@ -222,7 +223,7 @@ const ENTITY_CONFIG = {
       { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
       { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, raid_slots: 4 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, nivel: 1, raid_slots: 4 },
   },
 
   naves: {
@@ -899,7 +900,7 @@ function VentaPicker({ label, catalog, selected, onChange }) {
 }
 
 /* ─── NPC — modal ancho con panel lateral (imágenes + atributos) y tiendas ── */
-const NPC_SIDEBAR_KEYS = ['imagen_mini', 'imagen', 'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
+const NPC_SIDEBAR_KEYS = ['imagen_mini', 'imagen', 'nivel', 'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
 
 function NpcCrudModal({ config, record, relatedOptions, onSave, onClose }) {
   const isEdit = !!record?.id;

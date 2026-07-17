@@ -683,6 +683,9 @@ class RaidCombatController extends Controller
         $formaAtaque = $hab ? (int) $hab->forma : (int) $raid->npc_forma;
         $accion = $hab ? "usa {$hab->nombre}" : 'ataca';
 
+        /* Bono por nivel de dificultad: +nivel de daño (o de curación si dmgBase es negativo) */
+        $dmgBase += $dmgBase >= 0 ? $npc->nivelDificultad() : -$npc->nivelDificultad();
+
         if ($hab && $hab->cooldown > 0) {
             $npcCooldowns[(string) $hab->id] = $hab->cooldown;
         }
@@ -695,7 +698,7 @@ class RaidCombatController extends Controller
         $defVal = $targetStats['defensa'];
         $atkRoll = $atkDado + $atkVal;
         $defRoll = $defDado + $defVal;
-        $esCritico = $atkDado >= 18; // Todos los jefes obtienen crítico con 18, 19 o 20 en el dado
+        $esCritico = $atkDado >= $npc->critThreshold(); // Umbral según nivel de dificultad (ej. nivel 4 → 21-4=17, crítico con 17-20)
 
         $log[] = [
             'turn' => count($log) + 1, 'actor' => 'npc',
@@ -716,12 +719,13 @@ class RaidCombatController extends Controller
         }
 
         if ($esCritico) {
+            $critBonus = $npc->nivelBonoCritico();
             $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su furia y golpea a todos los combatientes."];
             $targets = [];
             foreach ($activos as $rp) {
                 $rpChar = $rp->user->character;
                 $rpEffective = self::isEffective($formaAtaque, (int) $rp->current_forma);
-                $d = $rpEffective ? (int) round($dmgBase * 1.5) : $dmgBase;
+                $d = ($rpEffective ? (int) round($dmgBase * 1.5) : $dmgBase) + $critBonus;
                 $dE = $rpEffective ? (int) round($dmgEscudoBase * 1.5) : $dmgEscudoBase;
                 $dP = $rpEffective ? (int) round($dmgPerfBase * 1.5) : $dmgPerfBase;
                 $escudoAntes = $rp->escudo;
@@ -873,6 +877,7 @@ class RaidCombatController extends Controller
                 'escudo' => $raid->npc_escudo,
                 'max_escudo' => $npcBase['escudo'],
                 'forma' => $raid->npc_forma,
+                'nivel' => $npc->nivelDificultad(),
                 'ataque' => $npcEffective['ataque'],
                 'defensa' => $npcEffective['defensa'],
                 'punteria' => $npcEffective['punteria'],

@@ -2853,7 +2853,15 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
               fontSize: isMobile ? 14 : 16, color: 'var(--txt)', marginBottom: 2,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>{npc.nombre}</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {npc.ataque > 0 && npc.nivel > 0 && (
+                <div title={`Nivel de dificultad ${npc.nivel}`} style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {Array.from({ length: Math.min(npc.nivel, 5) }, (_, i) => (
+                    <Icon key={i} name="star" fill size={11} style={{ color: '#E6B325' }} />
+                  ))}
+                  {npc.nivel > 5 && <span style={{ fontSize: 9, color: '#E6B325', fontFamily: 'var(--font-data)', marginLeft: 2 }}>×{npc.nivel}</span>}
+                </div>
+              )}
               {npc.profesion && <span className="nx-kicker" style={{ fontSize: 9 }}>{npc.profesion}</span>}
               {npc.faccion   && <Chip tone="dim" icon="shield">{npc.faccion}</Chip>}
               {npc.tipo && (

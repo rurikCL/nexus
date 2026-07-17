@@ -37,6 +37,7 @@ class MapNpc extends Model
         'iniciativa',
         'punteria',
         'forma',
+        'nivel',
         'hito_requerimiento',
         'fecha_inicio',
         'fecha_fin',
@@ -57,6 +58,7 @@ class MapNpc extends Model
         'iniciativa' => 'integer',
         'punteria' => 'integer',
         'forma' => 'integer',
+        'nivel' => 'integer',
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
         'habilidad_1' => 'integer',
@@ -108,6 +110,26 @@ class MapNpc extends Model
     public function raidCupos(): int
     {
         return max(2, $this->raid_slots ?: 4);
+    }
+
+    /**
+     * Nivel de dificultad (representado con estrellas en la UI): otorga a este NPC
+     * un bono plano de +nivel en daño/curación, +floor(nivel/2) extra en críticos, y
+     * redefine el umbral de crítico (dado ≥ 21-nivel, ej. nivel 4 → crítico con 17-20).
+     */
+    public function nivelDificultad(): int
+    {
+        return max(0, $this->nivel ?? 1);
+    }
+
+    public function critThreshold(): int
+    {
+        return 21 - $this->nivelDificultad();
+    }
+
+    public function nivelBonoCritico(): int
+    {
+        return (int) floor($this->nivelDificultad() / 2);
     }
 
     /** Naves que este NPC (tipo "vendedor_naves") tiene a la venta. */

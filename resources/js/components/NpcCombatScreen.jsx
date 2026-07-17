@@ -113,6 +113,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const npcIni = Math.max(npc.iniciativa, 1);
   const npcPnt = npc.punteria ?? 0;
 
+  /* Nivel de dificultad (estrellas): +nivel de daño/curación, +floor(nivel/2) extra en
+     críticos, y redefine el umbral de crítico (dado ≥ 21-nivel). No aplica a naves. */
+  const npcNivel = naveMode ? 0 : (npc.nivel ?? 1);
+  const npcCritThreshold = 21 - npcNivel;
+  const npcCritBonus = Math.floor(npcNivel / 2);
+
   const maxFuerza      = player.maxFuerza      ?? 10;
   const fuerzaPorTurno = player.fuerzaPorTurno ?? 2;
 
@@ -369,6 +375,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const [aT, dT] = useRanged
         ? [aR + effNpcPnt, dR + effPlayerMov]
         : [aR + effNpcAtk, dR + effPlayerDef];
+      const esCritico = aR >= npcCritThreshold;
+      const hit = esCritico || aT > dT;
 
       await rollDice([
         { key: 'npc', color: '#ff6b6b', label: npcLabel, value: aR },
@@ -376,7 +384,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       ]);
       if (cancelled) return;
 
-      triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit: aT > dT, dmg: useRanged ? effNpcPnt : effNpcAtk });
+      const dmgBase = (useRanged ? effNpcPnt : effNpcAtk) + npcNivel + (esCritico ? npcCritBonus : 0);
+      triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, dmg: dmgBase });
 
       let entries;
       let newHp;
@@ -385,15 +394,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
           { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
-        newHp = aT > dT ? applyDmg(effNpcPnt, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Te impactan! −${effNpcPnt} daño`, type: 'danger' } : { text: '¡Esquivas!', type: 'success' });
+        newHp = hit ? applyDmg(dmgBase, playerHp) : { ...playerHp };
+        entries.push(hit
+          ? { text: esCritico ? `¡CRÍTICO! −${dmgBase} daño` : `¡Te impactan! −${dmgBase} daño`, type: 'danger' }
+          : { text: '¡Esquivas!', type: 'success' });
       } else {
         entries = [
           { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
           { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
-        newHp = aT > dT ? applyDmg(effNpcAtk, playerHp) : { ...playerHp };
-        entries.push(aT > dT ? { text: `¡Golpe! −${effNpcAtk} daño`, type: 'danger' } : { text: 'Bloqueas el ataque', type: 'success' });
+        newHp = hit ? applyDmg(dmgBase, playerHp) : { ...playerHp };
+        entries.push(hit
+          ? { text: esCritico ? `¡CRÍTICO! −${dmgBase} daño` : `¡Golpe! −${dmgBase} daño`, type: 'danger' }
+          : { text: 'Bloqueas el ataque', type: 'success' });
       }
       entries = entries.map(e => ({ ...e, ronda, actor: 'npc' }));
 
