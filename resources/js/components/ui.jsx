@@ -1,6 +1,7 @@
 /* NÉXUS — primitivas HUD compartidas + icon set */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import Cropper from 'react-easy-crop';
 import { NX } from '../data/seed.js';
 
 /* ---- Icon set (línea fina, estilo HUD) ---- */
@@ -164,6 +165,251 @@ export function MedalIcon({ id, size = 34 }) {
   );
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function createImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function cropToFile(imageSrc, pixelCrop, fileName = 'image.jpg') {
+  return createImage(imageSrc).then((image) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('No se pudo preparar el recorte.');
+    }
+
+    canvas.width = Math.max(1, Math.round(pixelCrop.width));
+    canvas.height = Math.max(1, Math.round(pixelCrop.height));
+    ctx.drawImage(
+      image,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
+      0,
+      0,
+      pixelCrop.width,
+      pixelCrop.height
+    );
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('No se pudo generar la imagen recortada.'));
+          return;
+        }
+        const name = fileName.replace(/\.[^.]+$/, '') || 'image';
+        resolve(new File([blob], `${name}.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.92);
+    });
+  });
+}
+
+export function ImageCropModal({
+  open,
+  src,
+  fileName = 'image.jpg',
+  aspect = 1,
+  title = 'Ajustar imagen',
+  onCancel,
+  onConfirm,
+}) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setBusy(false);
+  }, [open, src, aspect]);
+
+  const onCropComplete = useCallback((_, croppedPixels) => {
+    setCroppedAreaPixels(croppedPixels);
+  }, []);
+
+  const handleConfirm = async () => {
+    if (!src || !croppedAreaPixels || busy) return;
+    setBusy(true);
+    try {
+      const file = await cropToFile(src, croppedAreaPixels, fileName);
+      await onConfirm?.(file);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open || !src) return null;
+
+  return createPortal(
+    <div
+      onMouseDown={onCancel}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1800,
+        background: 'rgba(2,5,12,0.78)',
+        backdropFilter: 'blur(6px)',
+        display: 'grid',
+        placeItems: 'center',
+        padding: 16,
+      }}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        className="nx-panel solid nx-panel-glow"
+        style={{
+          width: 'min(920px, 100%)',
+          maxHeight: '92vh',
+          overflow: 'hidden',
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr auto',
+        }}
+      >
+        <header className="nx-panel-head">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="nx-kicker" style={{ marginBottom: 2 }}>EDICIÓN DE IMAGEN</div>
+            <div className="nx-display" style={{ fontSize: 14 }}>{title}</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost nx-btn-sm" onClick={onCancel} style={{ padding: 5 }} disabled={busy}>
+            <Icon name="x" size={13} />
+          </button>
+        </header>
+
+        <div style={{ position: 'relative', minHeight: 420, background: '#000' }}>
+          <Cropper
+            image={src}
+            crop={crop}
+            zoom={zoom}
+            aspect={aspect}
+            onCropChange={setCrop}
+            onCropComplete={onCropComplete}
+            onZoomChange={setZoom}
+            showGrid
+            objectFit="contain"
+          />
+        </div>
+
+        <div className="nx-panel-body" style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>ZOOM</span>
+              <span className="nx-num" style={{ fontSize: 11, color: 'var(--holo)' }}>{Math.round(zoom * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={4}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              style={{ width: '100%' }}
+              disabled={busy}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+            <Btn kind="ghost" sm onClick={onCancel} disabled={busy}>Cancelar</Btn>
+            <Btn kind="accent" icon="check" sm onClick={handleConfirm} disabled={busy}>
+              {busy ? 'Procesando...' : 'Aplicar recorte'}
+            </Btn>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export function CropImageField({
+  value,
+  onChange,
+  label = 'Imagen',
+  height = 110,
+  aspect = 1,
+  placeholder = 'Seleccionar imagen',
+}) {
+  const [pending, setPending] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const isFile = value instanceof File;
+
+  useEffect(() => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    if (isFile) {
+      const nextUrl = URL.createObjectURL(value);
+      setPreviewUrl(nextUrl);
+      return () => URL.revokeObjectURL(nextUrl);
+    }
+
+    setPreviewUrl(value ? (String(value).startsWith('http') ? value : `/storage/${value}`) : null);
+    return undefined;
+  }, [value, isFile]);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    const src = await fileToDataUrl(file);
+    setPending({ src, fileName: file.name || 'image.jpg' });
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {label && <label className="nx-label">{label}</label>}
+      <div style={{
+        height,
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--holo-line)',
+        background: previewUrl ? `url(${previewUrl}) center/cover no-repeat` : 'rgba(255,255,255,0.03)',
+        display: previewUrl ? 'block' : 'grid',
+        placeItems: 'center',
+        overflow: 'hidden',
+      }}>
+        {!previewUrl && <Icon name="camera" size={22} style={{ color: 'var(--txt-faint)' }} />}
+      </div>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={e => handleFile(e.target.files[0])}
+        style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}
+      />
+      <ImageCropModal
+        open={!!pending}
+        src={pending?.src}
+        fileName={pending?.fileName}
+        aspect={aspect}
+        title={label}
+        onCancel={() => setPending(null)}
+        onConfirm={async (file) => {
+          setPending(null);
+          onChange?.(file);
+        }}
+      />
+      {!previewUrl && placeholder && (
+        <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{placeholder}</div>
+      )}
+    </div>
+  );
+}
+
 /* ---- Modal ---- */
 export function Modal({ open, onClose, title, kicker, children, width = 540, zIndex = 1000 }) {
   useEffect(() => {
@@ -237,17 +483,28 @@ export function ToastHost() {
 export function ImageSlot({ src, onUpload, className = '', style, shape = 'rounded', radius = 12, placeholder = 'Sube tu retrato' }) {
   const [url, setUrl]         = useState(src || '');
   const [uploading, setUploading] = useState(false);
+  const [pending, setPending] = useState(null);
   const inputRef = useRef(null);
   const br = shape === 'circle' ? '50%' : shape === 'rect' ? '0' : radius + 'px';
+  const aspect = shape === 'rect' ? 200 / 220 : 1;
 
   useEffect(() => { setUrl(src || ''); }, [src]);
 
   const onFile = async (f) => {
     if (!f) return;
+    try {
+      const src = await fileToDataUrl(f);
+      setPending({ src, fileName: f.name || 'image.jpg' });
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    }
+  };
+
+  const upload = async (file) => {
     setUploading(true);
     try {
       const fd = new FormData();
-      fd.append('photo', f);
+      fd.append('photo', file);
       const token = localStorage.getItem('nx-token');
       const res = await fetch('/api/character/photo', {
         method: 'POST',
@@ -258,8 +515,6 @@ export function ImageSlot({ src, onUpload, className = '', style, shape = 'round
       if (!res.ok) throw new Error(data.message ?? 'Error al subir');
       setUrl(data.photo_url);
       onUpload?.(data.photo_url);
-    } catch (err) {
-      toast(err.message, { tone: 'error', icon: 'x' });
     } finally {
       setUploading(false);
     }
@@ -283,6 +538,18 @@ export function ImageSlot({ src, onUpload, className = '', style, shape = 'round
               <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>{placeholder}</div>
             </div>}
       <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => onFile(e.target.files[0])} />
+      <ImageCropModal
+        open={!!pending}
+        src={pending?.src}
+        fileName={pending?.fileName}
+        aspect={aspect}
+        title={placeholder}
+        onCancel={() => setPending(null)}
+        onConfirm={async (file) => {
+          setPending(null);
+          await upload(file);
+        }}
+      />
     </div>
   );
 }

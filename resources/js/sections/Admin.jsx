@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Modal, toast, CropImageField } from '../components/ui.jsx';
 
 function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
@@ -642,28 +642,7 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
   }
 
   if (field.type === 'file') {
-    const isFile = value instanceof File;
-    const previewUrl = isFile ? URL.createObjectURL(value) : (value ? (value.startsWith('http') ? value : `/storage/${value}`) : null);
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <input type="file" accept="image/*" onChange={e => onChange(e.target.files[0])}
-          style={{
-            fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
-            padding: '6px 10px', border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-sm)',
-            width: '100%',
-          }}
-        />
-        {previewUrl && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src={previewUrl}
-              style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }}
-            />
-            <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{isFile ? 'Nuevo archivo' : 'Archivo actual'}</span>
-          </div>
-        )}
-      </div>
-    );
+    return <CropImageField value={value} onChange={onChange} label={null} height={field.previewHeight ?? 110} aspect={field.aspect ?? 1} placeholder={field.hint ?? 'Seleccionar imagen'} />;
   }
 
   if (field.type === 'audio') {
@@ -871,26 +850,7 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
 
 /* ─── NPC — imagen compacta para el panel lateral ────────── */
 function NpcImageField({ label, value, onChange, height = 110 }) {
-  const isFile = value instanceof File;
-  const previewUrl = isFile
-    ? URL.createObjectURL(value)
-    : (value ? (String(value).startsWith('http') ? value : `/storage/${value}`) : null);
-
-  return (
-    <div style={{ display: 'grid', gap: 6 }}>
-      <label className="nx-label">{label}</label>
-      <div style={{
-        height, borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)',
-        background: previewUrl ? `url(${previewUrl}) center/cover no-repeat` : 'rgba(255,255,255,0.03)',
-        display: previewUrl ? 'block' : 'grid', placeItems: 'center', overflow: 'hidden',
-      }}>
-        {!previewUrl && <Icon name="camera" size={22} style={{ color: 'var(--txt-faint)' }} />}
-      </div>
-      <input type="file" accept="image/*" onChange={e => onChange(e.target.files[0])}
-        style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}
-      />
-    </div>
-  );
+  return <CropImageField label={label} value={value} onChange={onChange} height={height} aspect={height >= 140 ? 4 / 3 : 1} />;
 }
 
 /* ─── NPC vendedor — picker de naves/objetos con interés por ítem ── */
@@ -2490,17 +2450,9 @@ function MisionesAdmin() {
 
           <div>
             <label className="nx-label">Imagen de portada</label>
-            <input type="file" accept="image/*" className="nx-input"
-              onChange={e => e.target.files[0] && set('foto_mision', e.target.files[0])}
-            />
+            <CropImageField value={form.foto_mision} onChange={v => set('foto_mision', v)} label={null} height={160} aspect={16 / 9} placeholder="Seleccionar imagen de portada" />
             {form.foto_mision && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <img
-                  src={form.foto_mision instanceof File
-                    ? URL.createObjectURL(form.foto_mision)
-                    : (form.foto_mision.startsWith('http') ? form.foto_mision : `/storage/${form.foto_mision}`)}
-                  style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }}
-                />
                 <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
                   {form.foto_mision instanceof File ? 'Nuevo archivo seleccionado' : 'Imagen actual'}
                 </span>
@@ -2934,17 +2886,9 @@ function TorneosAdmin() {
 
           <div>
             <label className="nx-label">Imagen de portada</label>
-            <input type="file" accept="image/*" className="nx-input"
-              onChange={e => e.target.files[0] && set('imagen', e.target.files[0])}
-            />
+            <CropImageField value={form.imagen} onChange={v => set('imagen', v)} label={null} height={160} aspect={16 / 9} placeholder="Seleccionar imagen de portada" />
             {form.imagen && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                <img
-                  src={form.imagen instanceof File
-                    ? URL.createObjectURL(form.imagen)
-                    : (form.imagen.startsWith('http') ? form.imagen : `/storage/${form.imagen}`)}
-                  style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--holo-line)' }}
-                />
                 <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
                   {form.imagen instanceof File ? 'Nuevo archivo seleccionado' : 'Imagen actual'}
                 </span>
