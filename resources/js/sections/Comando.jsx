@@ -18,29 +18,32 @@ function useWindowWidth() {
   return w;
 }
 
-function mapApiCharacterToStoreCharacter(character) {
+function mapApiCharacterToStoreCharacter(character, fallback = {}) {
   if (!character) return null;
   const combat = character.combat_stats ?? {};
   const baseCombat = character.combat_base_stats ?? {};
+  const safeFallback = fallback ?? {};
   return {
     ...character,
     saber: character.saber_color ?? character.saber ?? 'azul',
     photo: character.photo_url ?? character.photo ?? null,
-    pool: character.puntos_libres ?? character.pool ?? 0,
-    current_forma: character.current_forma ?? 1,
-    arma_equipada: character.arma_equipada ?? null,
-    nave_equipada: character.nave_equipada ?? null,
-    sable_activo: character.sable_activo ?? null,
-    sable_bonos: character.sable_bonos ?? {},
-    vida: baseCombat.vida ?? character.vida ?? 8,
-    escudo: baseCombat.escudo ?? character.escudo ?? 4,
-    defensa: baseCombat.defensa ?? character.defensa ?? 2,
-    ataque: baseCombat.ataque ?? character.ataque ?? 2,
-    movimiento: baseCombat.movimiento ?? character.movimiento ?? 2,
-    iniciativa: baseCombat.iniciativa ?? character.iniciativa ?? 2,
-    punteria: baseCombat.punteria ?? character.punteria ?? 2,
-    combat_stats: combat,
-    combat_base_stats: baseCombat,
+    pool: character.puntos_libres ?? character.pool ?? safeFallback.pool ?? 0,
+    current_forma: character.current_forma ?? safeFallback.current_forma ?? 1,
+    arma_equipada: character.arma_equipada ?? safeFallback.arma_equipada ?? null,
+    nave_equipada: character.nave_equipada ?? safeFallback.nave_equipada ?? null,
+    sable_activo: character.sable_activo ?? safeFallback.sable_activo ?? null,
+    sable_bonos: character.sable_bonos ?? safeFallback.sable_bonos ?? {},
+    vida: baseCombat.vida ?? safeFallback.vida ?? character.vida ?? 8,
+    escudo: baseCombat.escudo ?? safeFallback.escudo ?? character.escudo ?? 4,
+    defensa: baseCombat.defensa ?? safeFallback.defensa ?? character.defensa ?? 2,
+    ataque: baseCombat.ataque ?? safeFallback.ataque ?? character.ataque ?? 2,
+    movimiento: baseCombat.movimiento ?? safeFallback.movimiento ?? character.movimiento ?? 2,
+    iniciativa: baseCombat.iniciativa ?? safeFallback.iniciativa ?? character.iniciativa ?? 2,
+    punteria: baseCombat.punteria ?? safeFallback.punteria ?? character.punteria ?? 2,
+    habilidades_por_forma: character.habilidades_por_forma ?? safeFallback.habilidades_por_forma ?? {},
+    all_habilidades_data: character.all_habilidades_data ?? safeFallback.all_habilidades_data ?? {},
+    combat_stats: Object.keys(combat).length ? combat : (safeFallback.combat_stats ?? combat),
+    combat_base_stats: Object.keys(baseCombat).length ? baseCombat : (safeFallback.combat_base_stats ?? baseCombat),
   };
 }
 
@@ -802,12 +805,12 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message ?? 'Error al crear el personaje.'); return; }
-      const savedCharacter = mapApiCharacterToStoreCharacter(data.character);
+      const savedCharacter = mapApiCharacterToStoreCharacter(data.character, user.character);
       if (savedCharacter) {
         S.setCharacter(savedCharacter);
       }
       toast('Personaje creado', { tone: 'success', icon: 'check', desc: `¡Bienvenido a la Academia, ${form.name.trim()}!` });
-      onCharacterCreated?.(data.character);
+      onCharacterCreated?.(savedCharacter ?? data.character);
     } catch {
       setError('No se pudo conectar con el servidor.');
     } finally {
@@ -2039,10 +2042,10 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
       });
       const data = await res.json();
       if (!res.ok) { toast(data.message ?? 'Error al guardar', { tone: 'error', icon: 'x' }); return; }
-      const savedCharacter = mapApiCharacterToStoreCharacter(data.character);
+      const savedCharacter = mapApiCharacterToStoreCharacter(data.character, ch);
       if (savedCharacter) {
         S.setCharacter(savedCharacter);
-        onCharacterCreated?.(data.character);
+        onCharacterCreated?.(savedCharacter);
       }
       toast('Personaje guardado', { tone: 'success', icon: 'check', desc: 'Tu ficha de combate está actualizada' });
     } catch {
