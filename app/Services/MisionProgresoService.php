@@ -23,7 +23,7 @@ class MisionProgresoService
 
         foreach ($misiones as $mision) {
             $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
-            if ($pivot && $pivot->status === 'completada') {
+            if (! $pivot || $pivot->status === 'completada') {
                 continue;
             }
 
@@ -64,7 +64,7 @@ class MisionProgresoService
 
         foreach ($misiones as $mision) {
             $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
-            if ($pivot && $pivot->status === 'completada') {
+            if (! $pivot || $pivot->status === 'completada') {
                 continue;
             }
 
