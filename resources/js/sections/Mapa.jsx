@@ -1966,21 +1966,15 @@ function formaEspecializacion(character) {
 
 /* ─── STATS DE COMBATE DEL JUGADOR ─────────────────────── */
 function getPlayerCombatStats(character) {
-  const s = character?.stats ?? {};
-  const f = s.fuerza    ?? 50;
-  const v = s.velocidad ?? 50;
-  const t = s.tecnica   ?? 50;
-  const d = s.defensa   ?? 50;
-  const k = s.foco      ?? 50;
   const bonos = character?.sable_bonos ?? { ataque: 0, defensa: 0, punteria: 0, movimiento: 0, iniciativa: 0, vida: 0, escudo: 0, fuerza: 0, generacion_fuerza: 0 };
   return {
-    vida:       (character?.vida       ?? (30 + Math.round(f * 1.5))) + (bonos.vida ?? 0),
-    escudo:     (character?.escudo     ?? (10 + Math.round(t * 0.4))) + (bonos.escudo ?? 0),
-    ataque:     (character?.ataque     ?? Math.round(f * 0.8)) + (bonos.ataque ?? 0),
-    defensa:    (character?.defensa    ?? Math.round(d * 0.8)) + (bonos.defensa ?? 0),
-    movimiento: (character?.movimiento ?? Math.round(v * 0.8)) + (bonos.movimiento ?? 0),
-    iniciativa: (character?.iniciativa ?? Math.round((v + k) / 2 * 0.5)) + (bonos.iniciativa ?? 0),
-    punteria:   (character?.punteria   ?? Math.round((t + k) / 2 * 0.5)) + (bonos.punteria ?? 0),
+    vida:       (character?.vida       ?? 8) + (bonos.vida ?? 0),
+    escudo:     (character?.escudo     ?? 4) + (bonos.escudo ?? 0),
+    ataque:     (character?.ataque     ?? 2) + (bonos.ataque ?? 0),
+    defensa:    (character?.defensa    ?? 2) + (bonos.defensa ?? 0),
+    movimiento: (character?.movimiento ?? 2) + (bonos.movimiento ?? 0),
+    iniciativa: (character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0),
+    punteria:   (character?.punteria   ?? 2) + (bonos.punteria ?? 0),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.photo_url ?? null,
     maxFuerza:      10 + (bonos.fuerza ?? 0),

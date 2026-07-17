@@ -949,24 +949,18 @@ class RaidCombatController extends Controller
                 'iniciativa' => 10, 'punteria' => 10, 'movimiento' => 20];
         }
 
-        $s = is_array($char->stats) ? $char->stats : [];
-        $f = $s['fuerza'] ?? 50;
-        $v = $s['velocidad'] ?? 50;
-        $t = $s['tecnica'] ?? 50;
-        $d = $s['defensa'] ?? 50;
-        $k = $s['foco'] ?? 50;
         $bonos = method_exists($char, 'sableBonos')
             ? $char->sableBonos()
             : ['ataque' => 0, 'defensa' => 0, 'punteria' => 0, 'movimiento' => 0, 'iniciativa' => 0, 'vida' => 0, 'escudo' => 0];
 
         return [
-            'vida' => ($char->vida ?? (30 + (int) round($f * 1.5))) + $bonos['vida'],
-            'escudo' => ($char->escudo ?? (10 + (int) round($t * 0.4))) + $bonos['escudo'],
-            'ataque' => ($char->ataque ?? (int) round($f * 0.8)) + $bonos['ataque'],
-            'defensa' => ($char->defensa ?? (int) round($d * 0.8)) + $bonos['defensa'],
-            'movimiento' => ($char->movimiento ?? (int) round($v * 0.8)) + $bonos['movimiento'],
-            'iniciativa' => ($char->iniciativa ?? (int) round(($v + $k) / 2 * 0.5)) + $bonos['iniciativa'],
-            'punteria' => ($char->punteria ?? (int) round(($t + $k) / 2 * 0.5)) + $bonos['punteria'],
+            'vida' => ($char->vida ?? 8) + $bonos['vida'],
+            'escudo' => ($char->escudo ?? 4) + $bonos['escudo'],
+            'ataque' => ($char->ataque ?? 2) + $bonos['ataque'],
+            'defensa' => ($char->defensa ?? 2) + $bonos['defensa'],
+            'movimiento' => ($char->movimiento ?? 2) + $bonos['movimiento'],
+            'iniciativa' => ($char->iniciativa ?? 2) + $bonos['iniciativa'],
+            'punteria' => ($char->punteria ?? 2) + $bonos['punteria'],
         ];
     }
 

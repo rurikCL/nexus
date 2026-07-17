@@ -223,6 +223,15 @@ function DesarmarModal({ sable, recuperarId, onSelect, saving, onConfirm, onClos
 export function ArmadoSableView({ user, onUserUpdate }) {
   const inventario = user?.character?.rol_objetos ?? [];
 
+  useEffect(() => {
+    if (!onUserUpdate) return;
+    apiFetch('/me')
+      .then((me) => {
+        if (me) onUserUpdate(me);
+      })
+      .catch(() => {});
+  }, [onUserUpdate]);
+
   const porTipo = useMemo(() => {
     const m = {};
     SLOTS.forEach((s) => { m[s.tipo] = inventario.filter((o) => o.tipo === s.tipo); });
