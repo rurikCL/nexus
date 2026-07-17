@@ -18,10 +18,13 @@ use App\Models\Role;
 use App\Models\RolCharacterObjeto;
 use App\Models\RolHabilidad;
 use App\Models\RolObjeto;
+use App\Models\RolSonido;
 use App\Models\Sede;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
@@ -45,6 +48,7 @@ class AdminController extends Controller
             // Alias interno: mismo modelo que 'rol_habilidades', pre-filtrado a tipo=nave.
             // Usado solo por options() para los selectores de habilidad de las naves.
             'rol_habilidades_nave' => RolHabilidad::class,
+            'rol_sonidos'        => RolSonido::class,
             'configuraciones'    => Configuracion::class,
             'sedes'       => Sede::class,
             default            => abort(404, "Entidad no reconocida: {$entity}"),
@@ -105,6 +109,18 @@ class AdminController extends Controller
         )->all();
     }
 
+    /** Guarda un archivo subido: las imágenes se convierten a WebP; el resto (ej. audio) se guarda tal cual. */
+    private function saveUpload(UploadedFile $file, string $directory): string
+    {
+        if (str_starts_with((string) $file->getMimeType(), 'image/')) {
+            return $this->saveAsWebp($file, $directory);
+        }
+
+        Storage::disk('public')->makeDirectory($directory);
+
+        return $file->store($directory, 'public');
+    }
+
     /** Query base de la entidad, con el scope por defecto de los alias internos (p.ej. rol_habilidades_nave). */
     private function baseQuery(string $entity)
     {
@@ -150,7 +166,7 @@ class AdminController extends Controller
         $data  = $request->all();
 
         foreach ($request->allFiles() as $key => $file) {
-            $data[$key] = $this->saveAsWebp($file, "admin/{$entity}");
+            $data[$key] = $this->saveUpload($file, "admin/{$entity}");
         }
 
         if ($entity === 'usuarios' && empty($data['password'])) {
@@ -193,9 +209,9 @@ class AdminController extends Controller
 
         foreach ($request->allFiles() as $key => $file) {
             if ($record->{$key}) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($record->{$key});
+                Storage::disk('public')->delete($record->{$key});
             }
-            $data[$key] = $this->saveAsWebp($file, "admin/{$entity}");
+            $data[$key] = $this->saveUpload($file, "admin/{$entity}");
         }
 
         $roles = null;

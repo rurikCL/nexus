@@ -298,6 +298,22 @@ const ENTITY_CONFIG = {
     defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
   },
 
+  rol_sonidos: {
+    label: 'Sonidos', icon: 'bell', group: 'ROL',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'descripcion', label: 'Descripción', dim: true },
+      { key: 'archivo', label: 'Archivo', dim: true, resolve: r => r.archivo ? r.archivo.split('/').pop() : '—' },
+    ],
+    fields: [
+      { key: 'nombre',      label: 'Nombre identificador', type: 'text', required: true, span: 2, hint: 'Nombre único para identificar y reutilizar este sonido en la página' },
+      { key: 'descripcion', label: 'Descripción',          type: 'textarea', span: 2, hint: 'Para qué se usa este sonido (ej: "Notificación de reto PvP recibido")' },
+      { key: 'archivo',     label: 'Archivo de sonido (mp3)', type: 'audio', required: true, span: 2 },
+    ],
+    defaults: {},
+  },
+
   rol_objetos: {
     label: 'Objetos de Rol', icon: 'box', group: 'ROL',
     filters: [
@@ -619,6 +635,29 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     );
   }
 
+  if (field.type === 'audio') {
+    const isFile = value instanceof File;
+    const previewUrl = isFile ? URL.createObjectURL(value) : (value ? (value.startsWith('http') ? value : `/storage/${value}`) : null);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <input type="file" accept="audio/*,.mp3" onChange={e => onChange(e.target.files[0])}
+          style={{
+            fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)',
+            padding: '6px 10px', border: '1px solid var(--holo-line)', borderRadius: 'var(--radius-sm)',
+            width: '100%',
+          }}
+        />
+        {previewUrl && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{isFile ? 'Nuevo archivo' : 'Archivo actual'}</span>
+            <audio controls src={previewUrl} style={{ width: '100%', height: 32 }} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (field.type === 'multiCheckbox') {
     const opts = relatedOptions?.[field.related] ?? [];
     const vals = Array.isArray(value) ? value : [];
@@ -728,7 +767,7 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
       const path   = isEdit ? `/admin/${entityKey}/${record.id}` : `/admin/${entityKey}`;
 
       let payload;
-      const hasFiles = config.fields.some(f => f.type === 'file' && form[f.key] instanceof File);
+      const hasFiles = config.fields.some(f => (f.type === 'file' || f.type === 'audio') && form[f.key] instanceof File);
 
       if (hasFiles) {
         payload = new FormData();

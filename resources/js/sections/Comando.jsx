@@ -1996,7 +1996,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   shape="rect" placeholder="Sube tu retrato" />
                 <div className="nx-hex" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', border: `1.5px solid ${sab}`, boxShadow: `0 0 26px -8px ${sab} inset` }} />
               </div>
-              <SaberBlade color={sab} />
+              <SaberBlade color={sab} onClick={() => go?.('armado-sable')} />
             </div>
             <div style={{ textAlign: 'center' }}>
               <div className="nx-display" style={{ fontSize: 20 }}>{ch.name}</div>
@@ -2449,9 +2449,22 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   );
 }
 
-export function SaberBlade({ color }) {
+export function SaberBlade({ color, onClick }) {
+  const [hover, setHover] = useState(false);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 220, justifyContent: 'flex-end' }}>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => onClick && setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={onClick ? 'Ir a Armado de Sable' : undefined}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', height: 220, justifyContent: 'flex-end',
+        cursor: onClick ? 'pointer' : 'default',
+        transform: hover ? 'scale(1.05)' : 'scale(1)',
+        filter: hover ? 'brightness(1.25)' : 'none',
+        transition: 'transform 0.15s ease, filter 0.15s ease',
+      }}
+    >
       <div style={{ width: 11, flex: 1, marginBottom: 2, borderRadius: 6, position: 'relative',
         background: color, boxShadow: `0 0 16px 1px ${color}, 0 0 38px 6px ${color}55` }}>
         <div style={{ position: 'absolute', top: 3, bottom: 3, left: '50%', transform: 'translateX(-50%)', width: 4, borderRadius: 3, background: 'rgba(255,255,255,0.92)' }} />

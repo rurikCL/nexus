@@ -34,7 +34,7 @@ const SLOTS = [
   { key: 'estabilizador', tipo: 'estabilizador',      label: 'Estabilizador',        hint: 'Control y resistencia',     icon: 'shield' },
   { key: 'modulo',        tipo: 'modulo_activacion',  label: 'Módulo de Activación', hint: 'Funciones especiales',      icon: 'tasks' },
   { key: 'empunadura',    tipo: 'empunadura',         label: 'Empuñadura',           hint: 'Ergonomía',                 icon: 'anvil' },
-  { key: 'accesorio',     tipo: 'accesorio',          label: 'Accesorio',            hint: 'Mejora adicional',          icon: 'crown' },
+  { key: 'accesorio',     tipo: 'accesorio',          label: 'Accesorio',            hint: 'Mejora adicional (opcional)', icon: 'crown', opcional: true },
 ];
 
 export const BONUS_FIELDS = [
@@ -229,8 +229,6 @@ export function ArmadoSableView({ user, onUserUpdate }) {
     return m;
   }, [inventario]);
 
-  const objetoPorId = useCallback((id) => inventario.find((o) => o.id === id) ?? null, [inventario]);
-
   const [sables, setSables]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [form, setForm]         = useState(emptyForm());
@@ -240,6 +238,24 @@ export function ArmadoSableView({ user, onUserUpdate }) {
   const [desarmarSable, setDesarmarSable] = useState(null);
   const [recuperarId, setRecuperarId] = useState(null);
   const [desarmando, setDesarmando] = useState(false);
+
+  /* Sable actualmente cargado en el taller (si se está editando uno ya guardado) —
+     sus componentes ya fueron consumidos del inventario, así que solo se pueden
+     resolver a partir de las relaciones que trae el propio sable. */
+  const sableEnEdicion = useMemo(() => sables.find((s) => s.id === form.id) ?? null, [sables, form.id]);
+
+  /* Busca primero en el inventario libre (piezas aún no instaladas); si no aparece
+     ahí es porque ya está consumida en el sable que se está editando — en ese caso
+     se resuelve desde la relación ya cargada del propio sable (`sable[slotKey]`). */
+  const objetoPorId = useCallback((id, slotKey) => {
+    if (!id) return null;
+    const enInventario = inventario.find((o) => o.id === id);
+    if (enInventario) return enInventario;
+    if (slotKey && sableEnEdicion?.[`${slotKey}_id`] === id) {
+      return sableEnEdicion[slotKey] ?? null;
+    }
+    return null;
+  }, [inventario, sableEnEdicion]);
 
   const actualizarInventario = (nuevoInventario) => {
     if (!nuevoInventario || !onUserUpdate) return;
@@ -256,17 +272,17 @@ export function ArmadoSableView({ user, onUserUpdate }) {
   useEffect(() => { reload(); }, [reload]);
 
   const totalBonos = useMemo(
-    () => sumaBonos(form, (f, s) => objetoPorId(f[`${s.key}_id`])),
+    () => sumaBonos(form, (f, s) => objetoPorId(f[`${s.key}_id`], s.key)),
     [form, objetoPorId]
   );
 
-  const cristalSeleccionado = objetoPorId(form.cristal_id);
+  const cristalSeleccionado = objetoPorId(form.cristal_id, 'cristal');
   const hexHoja = cristalSeleccionado?.color_hoja ? NX.SABERS[cristalSeleccionado.color_hoja] : null;
 
-  const nucleoSeleccionado = objetoPorId(form.nucleo_id);
+  const nucleoSeleccionado = objetoPorId(form.nucleo_id, 'nucleo');
   const energiaMaxima = nucleoSeleccionado?.energia_maxima ?? 0;
   const consumoEnergia = useMemo(
-    () => SLOTS.reduce((acc, s) => acc + (objetoPorId(form[`${s.key}_id`])?.consumo_energia ?? 0), 0),
+    () => SLOTS.reduce((acc, s) => acc + (objetoPorId(form[`${s.key}_id`], s.key)?.consumo_energia ?? 0), 0),
     [form, objetoPorId]
   );
   /* Sin núcleo instalado no hay una capacidad real que mostrar — sin este chequeo la
@@ -276,6 +292,10 @@ export function ArmadoSableView({ user, onUserUpdate }) {
   const sinNucleo = energiaMaxima <= 0;
   const pctEnergia = sinNucleo ? 0 : Math.min(100, (consumoEnergia / energiaMaxima) * 100);
   const sobreConsumo = consumoEnergia > energiaMaxima;
+
+  /* Todos los componentes son obligatorios salvo el Accesorio */
+  const faltantes = useMemo(() => SLOTS.filter((s) => !s.opcional && !form[`${s.key}_id`]), [form]);
+  const incompleto = faltantes.length > 0;
 
   const setSlot = (key, value) => setForm((f) => ({ ...f, [`${key}_id`]: value ? Number(value) : null }));
 
@@ -381,6 +401,14 @@ export function ArmadoSableView({ user, onUserUpdate }) {
                 {consumoEnergia}/{sinNucleo ? '—' : energiaMaxima} EN
               </span>
             </div>
+            {incompleto && (
+              <div style={{
+                fontSize: 11, color: '#ff6b6b', background: 'rgba(255,45,69,0.1)',
+                border: '1px solid rgba(255,45,69,0.35)', borderRadius: 6, padding: '6px 10px', marginBottom: 4,
+              }}>
+                ⚠ Faltan componentes obligatorios: {faltantes.map((s) => s.label).join(', ')}. Solo el Accesorio es opcional.
+              </div>
+            )}
             {sinNucleo && consumoEnergia > 0 ? (
               <div style={{
                 fontSize: 11, color: '#ff6b6b', background: 'rgba(255,45,69,0.1)',
@@ -458,17 +486,19 @@ export function ArmadoSableView({ user, onUserUpdate }) {
               {/* Slots como grid compacto debajo del canvas */}
               <div className="nx-saber-slot-grid">
                 {SLOTS.map((slot) => {
-                  const pieza = objetoPorId(form[`${slot.key}_id`]);
+                  const pieza = objetoPorId(form[`${slot.key}_id`], slot.key);
+                  const faltaObligatorio = !pieza && !slot.opcional;
                   return (
                     <button
                       key={slot.key}
                       className={`nx-saber-slot-compact ${pieza ? 'is-filled' : ''}`}
                       onClick={() => setPickerSlot(slot)}
-                      title={slot.hint}
+                      title={faltaObligatorio ? `${slot.hint} — obligatorio` : slot.hint}
+                      style={faltaObligatorio ? { borderColor: 'rgba(255,45,69,0.45)', background: 'rgba(255,45,69,0.06)' } : undefined}
                     >
-                      <Icon name={slot.icon} size={12} />
+                      <Icon name={slot.icon} size={12} style={faltaObligatorio ? { color: '#ff6b6b' } : undefined} />
                       <span className="nx-saber-slot-compact-label">
-                        {pieza ? pieza.nombre : slot.label}
+                        {pieza ? pieza.nombre : (slot.opcional ? `${slot.label} (opcional)` : slot.label)}
                       </span>
                     </button>
                   );
@@ -479,8 +509,12 @@ export function ArmadoSableView({ user, onUserUpdate }) {
           <div className="nx-saber-actions-row">
             <Btn kind="accent" icon={form.id ? 'check' : 'plus'}
               onClick={() => (form.id ? guardar() : setConfirmCrear(true))}
-              disabled={saving || sobreConsumo}
-              title={sobreConsumo ? 'El consumo de energía supera la energía máxima del núcleo' : undefined}>
+              disabled={saving || sobreConsumo || incompleto}
+              title={
+                incompleto ? `Faltan componentes obligatorios: ${faltantes.map((s) => s.label).join(', ')}`
+                  : sobreConsumo ? 'El consumo de energía supera la energía máxima del núcleo'
+                  : undefined
+              }>
               {saving ? 'Guardando…' : form.id ? 'Actualizar sable' : 'Guardar como nuevo'}
             </Btn>
             {form.id && <Btn onClick={nuevo}>Nuevo sable en blanco</Btn>}
@@ -546,7 +580,7 @@ export function ArmadoSableView({ user, onUserUpdate }) {
           nombre={form.nombre}
           componentes={SLOTS
             .filter((s) => form[`${s.key}_id`])
-            .map((s) => ({ slot: s, objeto: objetoPorId(form[`${s.key}_id`]) }))
+            .map((s) => ({ slot: s, objeto: objetoPorId(form[`${s.key}_id`], s.key) }))
             .filter((c) => c.objeto)}
           saving={saving}
           onConfirm={async () => { await guardar(); setConfirmCrear(false); }}

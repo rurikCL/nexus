@@ -13,6 +13,21 @@ use Illuminate\Support\Facades\DB;
 
 class SableController extends Controller
 {
+    /** Etiquetas legibles de cada slot, para el mensaje de componentes faltantes. */
+    private const SLOT_LABELS = [
+        'nucleo' => 'Núcleo de Energía',
+        'cristal' => 'Cristal',
+        'lente' => 'Lente de Enfoque',
+        'emisor' => 'Emisor',
+        'estabilizador' => 'Estabilizador',
+        'empunadura' => 'Empuñadura',
+        'modulo' => 'Módulo de Activación',
+        'accesorio' => 'Accesorio',
+    ];
+
+    /** Único slot opcional: todos los demás son obligatorios para poder ensamblar un sable. */
+    private const SLOT_OPCIONAL = 'accesorio';
+
     private function character(Request $request): Character
     {
         $character = $request->user()->character;
@@ -38,14 +53,19 @@ class SableController extends Controller
      */
     private function validarSlots(Character $character, array $data): array
     {
-        $slots         = [];
-        $consumoTotal  = 0;
+        $slots = [];
+        $consumoTotal = 0;
         $energiaMaxima = 0;
+        $faltantes = [];
 
         foreach (CharacterSable::SLOTS as $slot => $tipoEsperado) {
             $objetoId = $data["{$slot}_id"] ?? null;
             if (! $objetoId) {
+                if ($slot !== self::SLOT_OPCIONAL) {
+                    $faltantes[] = self::SLOT_LABELS[$slot] ?? $slot;
+                }
                 $slots["{$slot}_id"] = null;
+
                 continue;
             }
 
@@ -59,6 +79,12 @@ class SableController extends Controller
                 $energiaMaxima = $objeto->energia_maxima ?? 0;
             }
         }
+
+        abort_if(
+            ! empty($faltantes),
+            422,
+            'Faltan componentes obligatorios: '.implode(', ', $faltantes).'. Solo el Accesorio es opcional.'
+        );
 
         abort_if(
             $consumoTotal > $energiaMaxima,
@@ -93,8 +119,8 @@ class SableController extends Controller
     public function store(Request $request): JsonResponse
     {
         $character = $this->character($request);
-        $data      = $request->validate($this->slotRules());
-        $slots     = $this->validarSlots($character, $data);
+        $data = $request->validate($this->slotRules());
+        $slots = $this->validarSlots($character, $data);
 
         $sable = DB::transaction(function () use ($character, $slots, $data) {
             $sable = $character->sables()->create(array_merge($slots, [
@@ -113,7 +139,7 @@ class SableController extends Controller
         $sable->load(array_keys(CharacterSable::SLOTS));
 
         return response()->json([
-            'sable'       => $sable,
+            'sable' => $sable,
             'rol_objetos' => $character->rolObjetos()->get(),
         ], 201);
     }
@@ -123,7 +149,7 @@ class SableController extends Controller
         $character = $this->character($request);
         $this->autorizar($character, $sable);
 
-        $data  = $request->validate($this->slotRules());
+        $data = $request->validate($this->slotRules());
         $slots = $this->validarSlots($character, $data);
 
         $sable->update(array_merge($slots, [
@@ -175,7 +201,7 @@ class SableController extends Controller
         });
 
         return response()->json([
-            'ok'          => true,
+            'ok' => true,
             'rol_objetos' => $character->rolObjetos()->get(),
         ]);
     }
@@ -198,7 +224,7 @@ class SableController extends Controller
         $sable->load(array_keys(CharacterSable::SLOTS));
 
         return response()->json([
-            'sable'       => $sable,
+            'sable' => $sable,
             'saber_color' => $character->fresh()->saber_color,
         ]);
     }
