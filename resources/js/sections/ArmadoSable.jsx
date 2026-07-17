@@ -247,6 +247,8 @@ export function ArmadoSableView({ user, onUserUpdate }) {
   const [desarmarSable, setDesarmarSable] = useState(null);
   const [recuperarId, setRecuperarId] = useState(null);
   const [desarmando, setDesarmando] = useState(false);
+  const [desglosado, setDesglosado] = useState({});
+  const toggleDesglose = (id) => setDesglosado((d) => ({ ...d, [id]: !d[id] }));
 
   /* Sable actualmente cargado en el taller (si se está editando uno ya guardado) —
      sus componentes ya fueron consumidos del inventario, así que solo se pueden
@@ -507,7 +509,12 @@ export function ArmadoSableView({ user, onUserUpdate }) {
                     >
                       <Icon name={slot.icon} size={12} style={faltaObligatorio ? { color: '#ff6b6b' } : undefined} />
                       <span className="nx-saber-slot-compact-label">
-                        {pieza ? pieza.nombre : (slot.opcional ? `${slot.label} (opcional)` : slot.label)}
+                        <span className="nx-saber-slot-compact-name">
+                          {pieza ? pieza.nombre : (slot.opcional ? `${slot.label} (opcional)` : slot.label)}
+                        </span>
+                        {pieza && bonusPreview(pieza) && (
+                          <span className="nx-saber-slot-compact-bonus">{bonusPreview(pieza)}</span>
+                        )}
                       </span>
                     </button>
                   );
@@ -562,11 +569,29 @@ export function ArmadoSableView({ user, onUserUpdate }) {
                       )
                     ))}
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: desglosado[s.id] ? 10 : 0 }}>
                     {!s.activo && <Btn sm icon="zap" onClick={() => activar(s.id)}>Activar</Btn>}
                     <Btn sm icon="edit" onClick={() => cargarParaEditar(s)}>Editar</Btn>
                     <Btn sm icon="x" onClick={() => { setDesarmarSable(s); setRecuperarId(null); }}>Desarmar</Btn>
+                    <Btn sm icon="chevdown" onClick={() => toggleDesglose(s.id)}>
+                      {desglosado[s.id] ? 'Ocultar desglose' : 'Ver desglose'}
+                    </Btn>
                   </div>
+                  {desglosado[s.id] && (
+                    <div className="nx-saber-desglose">
+                      {SLOTS.filter((slot) => s[slot.key]).map((slot) => {
+                        const objeto = s[slot.key];
+                        return (
+                          <div key={slot.key} className="nx-saber-desglose-item">
+                            <Icon name={slot.icon} size={11} style={{ color: 'var(--holo)', flexShrink: 0 }} />
+                            <span className="nx-saber-desglose-slot">{slot.label}</span>
+                            <span className="nx-saber-desglose-name">{objeto.nombre}</span>
+                            <span className="nx-saber-desglose-bonus">{bonusPreview(objeto) || '—'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
