@@ -330,6 +330,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       return null;
     }
 
+    if (merged?.cumple_hitos === false) {
+      return null;
+    }
+
     return merged;
   };
 
