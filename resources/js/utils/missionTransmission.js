@@ -47,10 +47,6 @@ function rewardLinesFromResponse(data) {
     if ((data?.objetos_otorgados ?? []).length > 0) {
       lines.push('Objeto recibido');
     }
-
-    (data?.hitos_otorgados ?? []).forEach((h) => {
-      if (h) lines.push(String(h));
-    });
   }
 
   return lines.filter(Boolean);

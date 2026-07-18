@@ -2120,6 +2120,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
         S.setCharacter(savedCharacter);
         onCharacterCreated?.(savedCharacter);
       }
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+        detail: { type: 'hitos-sync', source: 'character-save' },
+      }));
       toast('Personaje guardado', { tone: 'success', icon: 'check', desc: 'Tu ficha de combate está actualizada' });
     } catch {
       toast('Error de conexión', { tone: 'error', icon: 'x' });
