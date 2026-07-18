@@ -2535,7 +2535,7 @@ function MisionesAdmin() {
                       )}
                       {o.tipo === 'hito' && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
-                          Usa el hito exacto que recibirá el jugador, por ejemplo: <span className="nx-data">tuto_03_sable</span>.
+                          Usa el hito exacto que debe existir en el personaje para marcarlo completo, por ejemplo: <span className="nx-data">tuto_03_sable</span>.
                         </div>
                       )}
                       {o.tipo === 'automatico' && (
