@@ -2329,7 +2329,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
         </Panel>
 
         <Panel kicker="Especialización" title="Forma de Combate" icon="sword">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 6, width: '100%', minWidth: 0 }}>
             {NX.CLASSES.map((c) => {
               const active = ch.cls === c.id;
               return (
@@ -2374,7 +2374,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', marginBottom: 10, letterSpacing: '0.06em' }}>
             {FORMA_LABELS[selectedForma - 1]} — 4 slots
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 10, width: '100%', minWidth: 0 }}>
             {[1, 2, 3, 4].map(slot => (
               <HabilidadSlot key={slot} slot={slot} habilidad={currentSlots[slot - 1] ?? null} onClick={() => { void playClickOpcion(); handleOpenPicker(slot); }} />
             ))}
@@ -2391,7 +2391,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
 
         <Panel kicker="Atributos" title="Distribución de Stats" icon="trending"
           right={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Chip tone={puntos_libres > 0 ? 'green' : 'dim'} icon="zap">{puntos_libres} pts libres</Chip><Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>Asignar</Btn></div>}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: 10, width: '100%', minWidth: 0 }}>
             {COMBAT_STATS.map((s) => {
               const base = baseCombat[s] ?? ch[s] ?? COMBAT_DEFAULTS[s];
               const bonus = itemBonuses[s] ?? 0;
@@ -2399,15 +2399,16 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
               const atCap = base >= (statCaps.asignacion ?? 10);
               return (
                 <div key={s} style={{
-                  display: 'grid', gridTemplateColumns: 'minmax(88px, 1fr) auto auto auto auto auto', alignItems: 'center', gap: 8,
+                  display: 'grid', gridTemplateColumns: 'minmax(72px, 1fr) auto auto auto auto auto', alignItems: 'center', gap: 8,
                   padding: '10px 12px', borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.02)',
+                  minWidth: 0, maxWidth: '100%',
                 }}>
                   <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 0 }}>
                     {COMBAT_LABEL[s]}
                   </span>
                   <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>x</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                     <button className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '4px 8px' }}
                       onClick={() => combatBump(s, -1)} disabled={base <= 1}>
                       <span style={{ fontSize: 12, lineHeight: 1 }}>-</span>
@@ -2418,11 +2419,11 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                       <Icon name="plus" size={11} />
                     </button>
                   </div>
-                  <span className="nx-data" style={{ fontSize: 11, color: bonus >= 0 ? '#10b981' : '#ff6b6b', whiteSpace: 'nowrap' }}>
+                  <span className="nx-data" style={{ fontSize: 11, color: bonus >= 0 ? '#10b981' : '#ff6b6b', whiteSpace: 'nowrap', minWidth: 0 }}>
                     {bonus >= 0 ? '+' : ''}{bonus}
                   </span>
                   <span className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>=</span>
-                  <span className="nx-num" style={{ fontSize: 19, color: atCap ? 'var(--holocron-oro)' : 'var(--txt)', minWidth: 28, textAlign: 'right' }}>
+                  <span className="nx-num" style={{ fontSize: 19, color: atCap ? 'var(--holocron-oro)' : 'var(--txt)', minWidth: 28, textAlign: 'right', justifySelf: 'end' }}>
                     {total}
                   </span>
                 </div>
