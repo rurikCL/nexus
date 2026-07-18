@@ -371,7 +371,8 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     : (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? '');
   paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight);
 
-  const rows = Object.keys(COMBAT_STAT_META).map((key) => ({
+  const STAT_ORDER = ['vida', 'escudo', 'ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
+  const rows = STAT_ORDER.map((key) => ({
     icon: COMBAT_STAT_META[key].icon,
     label: COMBAT_STAT_META[key].label,
     color: COMBAT_STAT_META[key].color,

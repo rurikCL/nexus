@@ -311,21 +311,35 @@ export async function drawCharacterCard(character, user) {
   ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(innerX, typeY + 12); ctx.lineTo(innerRight, typeY + 12); ctx.stroke();
 
-  /* ── vida (corazones) y escudo (energía) — solo íconos, un pip por punto ── */
+  /* ── vida (corazones) y escudo (energía) — etiqueta como los demás atributos, valor en íconos ── */
   const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
   const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
 
-  let y = typeY + 30;
+  let y = typeY + 26;
+
+  drawIcon(ctx, STAT_META.vida.icon, innerX + 13, y - 6, 22, STAT_META.vida.color, 2);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(220,230,255,0.8)';
+  ctx.font = '600 16px "JetBrains Mono"';
+  ctx.fillText(STAT_META.vida.label.toUpperCase(), innerX + 34, y);
+  y += 14;
   y = drawPipRow(ctx, {
-    count: vidaVal, x: innerX, maxWidth: innerW, y, size: 22, gap: 6,
+    count: vidaVal, x: innerX, maxWidth: innerW, y, size: 20, gap: 6,
     draw: (px, py, s) => drawHeartPip(ctx, px, py, s, STAT_META.vida.color),
   });
-  y += 16;
+  y += 10;
+
+  drawIcon(ctx, STAT_META.escudo.icon, innerX + 13, y - 6, 22, STAT_META.escudo.color, 2);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(220,230,255,0.8)';
+  ctx.font = '600 16px "JetBrains Mono"';
+  ctx.fillText(STAT_META.escudo.label.toUpperCase(), innerX + 34, y);
+  y += 14;
   y = drawPipRow(ctx, {
-    count: escudoVal, x: innerX, maxWidth: innerW, y, size: 22, gap: 6,
+    count: escudoVal, x: innerX, maxWidth: innerW, y, size: 20, gap: 6,
     draw: (px, py, s) => drawShieldPip(ctx, px, py, s, STAT_META.escudo.color),
   });
-  y += 18;
+  y += 14;
 
   /* ── separador entre escudo y el primer atributo (Ataque) ── */
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
@@ -334,7 +348,7 @@ export async function drawCharacterCard(character, user) {
   ctx.moveTo(innerX, y);
   ctx.lineTo(innerRight, y);
   ctx.stroke();
-  y += 22;
+  y += 18;
 
   /* ── atributos de combate: Ataque, Defensa, Puntería, Agilidad, Iniciativa ── */
   const statsTop = y;
