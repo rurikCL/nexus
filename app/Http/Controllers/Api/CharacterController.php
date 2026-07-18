@@ -144,6 +144,10 @@ class CharacterController extends Controller
             'hito' => 'personaje_creado',
         ]);
 
+        $character->load([
+            'hitos' => fn ($q) => $q->latest(),
+        ]);
+
         return response()->json([
             'character' => $character->append(['winrate']),
         ], $character->wasRecentlyCreated ? 201 : 200);
