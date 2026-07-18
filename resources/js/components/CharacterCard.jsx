@@ -5,7 +5,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
 } from '../utils/printableCard.js';
 
@@ -19,8 +19,6 @@ const TIER_COLOR = {
   iniciado: '#8aa0c0', padawan: '#38cdf0', caballero: '#10b981',
   maestro: '#FF6B00', granmaestro: '#E6B325',
 };
-const MEDAL_TONE_COLOR = { gold: '#E6B325', orange: '#FF6B00', holo: '#38cdf0', red: '#ff2d45' };
-
 /* Mismos assets que RANGOS_JEDI en Comando.jsx (apartado "Rango" de Mi Personaje). */
 const TIER_RANGO_IMG = {
   iniciado:    '/assets/INITIATE.png',
@@ -87,6 +85,23 @@ function drawSaberBlade(ctx, x, y, w, h, color) {
   ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.66, hiltW - 4, hiltH * 0.12);
 }
 
+/** Degradé oscuro sobre los bordes de la foto — mantiene el centro limpio y oscurece hacia las esquinas. */
+function paintPhotoVignette(ctx, x, y, w, h, radius) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const r = Math.max(w, h) * 0.75;
+  const g = ctx.createRadialGradient(cx, cy, r * 0.35, cx, cy, r);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.78)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+}
+
 /** Dibuja la carta imprimible del personaje y devuelve el canvas listo para exportar. */
 export async function drawCharacterCard(character, user) {
   await ensureFonts();
@@ -94,13 +109,16 @@ export async function drawCharacterCard(character, user) {
   const side = SIDE_FRAME[character.side] ?? SIDE_FRAME.luminoso;
   const saberColor = NX.SABERS[character.saber] ?? NX.SABERS.azul;
   const classInfo = NX.CLASSES.find(c => c.id === character.cls) ?? NX.CLASSES[0];
+  const equippedSaberColor = character.sable_activo?.color_hoja || saberColor;
   const tierKey = user?.tier ?? character.tier ?? 'iniciado';
   const tierLabel = NX.TIERS[tierKey]?.label ?? 'Iniciado';
   const tierColor = TIER_COLOR[tierKey] ?? TIER_COLOR.iniciado;
-  const medalIds = (user?.character?.medals ?? character.medals ?? []).slice(0, 5);
   const handle = character.handle ?? '';
   const publicUrl = `${window.location.origin}/c/${encodeURIComponent(handle)}`;
   const baseCombat = character.combat_base_stats ?? {};
+  const saberBonos = character.sable_bonos ?? {};
+  const sableDano = character.sable_activo?.dano ?? 0;
+  const sableDanoPerforante = character.sable_activo?.dano_perforante ?? 0;
 
   const [photoImg, qrDataUrl, rankImg] = await Promise.all([
     loadImage(mediaUrl(character.photo ?? character.photo_url)),
@@ -148,225 +166,209 @@ export async function drawCharacterCard(character, user) {
   ctx.stroke();
   ctx.restore();
 
-  /* ── encabezado: nombre + tier ── */
-  ctx.textAlign = 'left';
-  const displayName = (character.name ?? '???').toUpperCase();
-  fitText(ctx, displayName, innerW - 66, '32px Orbitron');
-  ctx.fillStyle = '#eaf2ff';
-  ctx.fillText(displayName, innerX, pad + 54);
+  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 4 ── */
+  const headerPad = 4;
+  const logoR = 30;
+  const headerTop = pad;
+  const headerH = Math.max(logoR * 2 + headerPad * 2, 64);
+  const headerBottom = headerTop + headerH;
+  paintBoxBg(ctx, innerX, headerTop, innerW, headerH, 10, 2);
 
-  const badgeR = 23;
-  const badgeCx = innerRight - 24;
-  const badgeCy = pad + 40;
+  const logoCx = innerX + innerW - headerPad - logoR;
+  const logoCy = headerTop + headerH / 2;
+  const nameMaxW = logoCx - logoR - 14 - (innerX + headerPad);
+
+  ctx.textAlign = 'left';
+  const nameText = `${tierLabel} ${character.name ?? '???'}`;
+  fitText(ctx, nameText, nameMaxW, '26px Orbitron');
+  ctx.fillStyle = '#eaf2ff';
+  const nameY = headerTop + headerPad + 26;
+  ctx.fillText(nameText, innerX + headerPad, nameY);
+
+  const bio = character.bio ?? '';
+  if (bio) {
+    const cryText = `“${bio}”`;
+    const cryY = nameY + 20;
+    const crySize = fitText(ctx, cryText, nameMaxW, '13px "JetBrains Mono"', 10);
+    ctx.fillStyle = 'rgba(220,230,255,0.6)';
+    ctx.font = `${crySize}px "JetBrains Mono"`;
+    ctx.fillText(cryText, innerX + headerPad, cryY);
+  }
+
   if (rankImg) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
     ctx.clip();
     ctx.fillStyle = '#04070f';
-    ctx.fillRect(badgeCx - badgeR, badgeCy - badgeR, badgeR * 2, badgeR * 2);
-    const scale = Math.max((badgeR * 2) / rankImg.width, (badgeR * 2) / rankImg.height);
+    ctx.fillRect(logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2);
+    const scale = Math.max((logoR * 2) / rankImg.width, (logoR * 2) / rankImg.height);
     const dw = rankImg.width * scale;
     const dh = rankImg.height * scale;
-    ctx.drawImage(rankImg, badgeCx - dw / 2, badgeCy - dh / 2, dw, dh);
+    ctx.drawImage(rankImg, logoCx - dw / 2, logoCy - dh / 2, dw, dh);
     ctx.restore();
     ctx.beginPath();
-    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
     ctx.save();
     ctx.shadowColor = tierColor;
-    ctx.shadowBlur = 6;
-    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 3;
     ctx.strokeStyle = tierColor;
     ctx.stroke();
     ctx.restore();
   } else {
     ctx.beginPath();
-    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
     ctx.fillStyle = tierColor;
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#04070f';
-    ctx.font = '800 20px Orbitron';
-    ctx.fillText(tierLabel.charAt(0), badgeCx, badgeCy + 8);
+    ctx.font = '800 26px Orbitron';
+    ctx.fillText(tierLabel.charAt(0), logoCx, logoCy + 9);
   }
 
-  /* ── subencabezado: forma de combate + color de sable ── */
-  const subY = pad + 96;
-  ctx.textAlign = 'left';
-  drawIcon(ctx, classInfo.icon, innerX + 11, subY - 6, 22, classInfo.accent, 2.1);
-  ctx.fillStyle = classInfo.accent;
-  ctx.font = '700 16px "JetBrains Mono"';
-  ctx.fillText(`${classInfo.num} · ${classInfo.name}`, innerX + 30, subY);
-
-  ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(220,230,255,0.7)';
-  ctx.font = '600 14px "JetBrains Mono"';
-  ctx.fillText(`Sable ${character.saber ?? ''}`, innerRight - 16, subY);
-  ctx.beginPath();
-  ctx.arc(innerRight - 4, subY - 5, 7, 0, Math.PI * 2);
-  ctx.save();
-  ctx.shadowColor = saberColor;
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = saberColor;
-  ctx.fill();
-  ctx.restore();
-
-  /* ── arte: foto de personaje + sable de luz a la derecha (como en Mi Personaje) ── */
-  const artY = pad + 118;
-  const artH = 396;
-  const saberColW = 52;
-  const saberGap = 12;
-  const artW = innerW - saberColW - saberGap;
+  /* ── foto de personaje, con degradé oscuro en los bordes ── */
+  const photoTop = headerBottom + 14;
+  const photoH = 400;
   if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, artY, artW, artH, 16, `${side.line}66`);
+    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}66`);
   } else {
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(innerX, artY, artW, artH, 16);
+    ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
     ctx.clip();
     const artBg = ctx.createRadialGradient(
-      innerX + artW / 2, artY + artH / 2, 20,
-      innerX + artW / 2, artY + artH / 2, artW / 1.3,
+      innerX + innerW / 2, photoTop + photoH / 2, 20,
+      innerX + innerW / 2, photoTop + photoH / 2, innerW / 1.3,
     );
     artBg.addColorStop(0, `${classInfo.accent}22`);
     artBg.addColorStop(1, '#04070f');
     ctx.fillStyle = artBg;
-    ctx.fillRect(innerX, artY, artW, artH);
+    ctx.fillRect(innerX, photoTop, innerW, photoH);
     ctx.globalAlpha = 0.4;
-    drawIcon(ctx, classInfo.icon, innerX + artW / 2, artY + artH / 2, 130, classInfo.accent, 1.6);
+    drawIcon(ctx, classInfo.icon, innerX + innerW / 2, photoTop + photoH / 2, 150, classInfo.accent, 1.6);
     ctx.globalAlpha = 1;
     ctx.restore();
     ctx.beginPath();
-    ctx.roundRect(innerX, artY, artW, artH, 16);
+    ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
     ctx.lineWidth = 3;
     ctx.strokeStyle = `${side.line}66`;
     ctx.stroke();
   }
-  drawSaberBlade(ctx, innerX + artW + saberGap, artY, saberColW, artH, saberColor);
+  paintPhotoVignette(ctx, innerX, photoTop, innerW, photoH, 16);
 
-  /* ── línea de tipo: lado de la Fuerza ── */
-  const typeY = artY + artH + 36;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(150,200,255,0.55)';
-  ctx.font = '600 15px "JetBrains Mono"';
-  const sideLabel = character.side === 'oscuro' ? 'Lado Oscuro' : 'Lado Luminoso';
-  ctx.fillText(sideLabel.toUpperCase(), CARD_W / 2, typeY);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(innerX, typeY + 12); ctx.lineTo(innerRight, typeY + 12); ctx.stroke();
-
-  /* ── vida (corazones) y escudo (energía) — etiqueta como los demás atributos, valor en íconos ── */
+  /* ── vida (corazones) y escudo (energía) ── */
   const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
   const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
 
-  let y = typeY + 14;
+  let y = photoTop + photoH + 14;
   y = paintVidaEscudoBox(ctx, {
     x: innerX, y, w: innerW, vidaVal, escudoVal,
     vidaMeta: STAT_META.vida, escudoMeta: STAT_META.escudo,
     drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
   });
-  y += 18;
+  y += 14;
 
-  /* ── dos columnas: lore (izquierda) + atributos de combate (derecha) ── */
-  const statsTop = y;
-  const rowH = 44;
+  /* ── cuadro grande: sable equipado (izquierda) + bonos del sable (derecha) ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
-  const sectionH = ATTR_ORDER.length * rowH;
-  const colGap = 22;
-  const loreColW = innerW * 0.42;
-  const attrColX = innerX + loreColW + colGap;
-  const attrColW = innerW - loreColW - colGap;
+  const EXTRA_ORDER = [
+    { label: 'Daño', color: '#ff5f2e', icon: 'flame', value: sableDano },
+    { label: 'Daño Perforante', color: '#8aa0c0', icon: 'fire', value: sableDanoPerforante },
+    { label: 'Bono Fuerza', color: '#22c55e', icon: 'dumbbell', value: saberBonos.fuerza ?? 0 },
+    { label: 'Regen. Fuerza', color: '#84cc16', icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
+  ];
+  const bonusRowH = 30;
+  const boxPad2 = 14;
+  const headerLabelH = 22;
+  const totalRows = ATTR_ORDER.length + EXTRA_ORDER.length;
+  const rightColContentH = headerLabelH + totalRows * bonusRowH;
+  const saberBoxTop = y;
+  const saberBoxH = boxPad2 * 2 + rightColContentH;
+  const saberBoxBottom = saberBoxTop + saberBoxH;
+  paintBoxBg(ctx, innerX, saberBoxTop, innerW, saberBoxH, 10);
 
-  const attrBoxTop = statsTop - 16;
-  const attrBoxBottom = statsTop + sectionH + 10;
-  paintBoxBg(ctx, innerX, attrBoxTop, innerW, attrBoxBottom - attrBoxTop, 10);
+  const colGap2 = 20;
+  const saberColW = innerW * 0.28;
+  const bonosColX = innerX + saberColW + colGap2;
+  const bonosColW = innerW - saberColW - colGap2;
+
+  drawSaberBlade(
+    ctx,
+    innerX + boxPad2, saberBoxTop + boxPad2,
+    saberColW - boxPad2 * 2, rightColContentH,
+    equippedSaberColor,
+  );
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#38cdf0';
   ctx.font = '700 11px "JetBrains Mono"';
-  ctx.fillText('LORE', innerX, statsTop);
-  ctx.fillStyle = 'rgba(220,230,255,0.78)';
-  ctx.font = '400 15px "JetBrains Mono"';
-  const loreLineH = 20;
-  const loreMaxLines = Math.max(1, Math.floor((sectionH - 20) / loreLineH));
-  const loreText = character.lore || character.bio || 'Sin historia registrada.';
-  wrapText(ctx, loreText, innerX, statsTop + 20, loreColW, loreLineH, loreMaxLines);
+  ctx.fillText('BONOS DEL SABLE', bonosColX, saberBoxTop + boxPad2 + 8);
+
+  const rowsStartY = saberBoxTop + boxPad2 + headerLabelH + 10;
+  const drawBonusRow = (i, icon, color, label, value) => {
+    const rowY = rowsStartY + i * bonusRowH;
+    drawIcon(ctx, icon, bonosColX + 9, rowY - 5, 16, color, 2);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(220,230,255,0.8)';
+    ctx.font = '600 13px "JetBrains Mono"';
+    ctx.fillText(label.toUpperCase(), bonosColX + 22, rowY);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = color;
+    ctx.font = '800 16px Orbitron';
+    const sign = value > 0 ? '+' : '';
+    ctx.fillText(`${sign}${value}`, bonosColX + bonosColW - 4, rowY + 2);
+  };
 
   ATTR_ORDER.forEach((key, i) => {
     const meta = STAT_META[key];
-    const value = baseCombat[key] ?? character[key] ?? COMBAT_DEFAULTS[key];
-    const rowY = statsTop + i * rowH;
-
-    drawIcon(ctx, meta.icon, attrColX + 11, rowY - 6, 20, meta.color, 2);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(220,230,255,0.8)';
-    ctx.font = '600 14px "JetBrains Mono"';
-    ctx.fillText(meta.label.toUpperCase(), attrColX + 26, rowY);
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = meta.color;
-    ctx.font = '800 22px Orbitron';
-    ctx.fillText(String(value), attrColX + attrColW - 4, rowY + 3);
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(attrColX, rowY + 16);
-    ctx.lineTo(attrColX + attrColW, rowY + 16);
-    ctx.stroke();
+    drawBonusRow(i, meta.icon, meta.color, meta.label, saberBonos[key] ?? 0);
   });
+  EXTRA_ORDER.forEach((row, j) => {
+    drawBonusRow(ATTR_ORDER.length + j, row.icon, row.color, row.label, row.value);
+  });
+
+  const dividerY = rowsStartY + ATTR_ORDER.length * bonusRowH - bonusRowH / 2 - 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(bonosColX, dividerY);
+  ctx.lineTo(bonosColX + bonosColW, dividerY);
+  ctx.stroke();
 
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(innerX + loreColW + colGap / 2, attrBoxTop + 6);
-  ctx.lineTo(innerX + loreColW + colGap / 2, attrBoxBottom - 6);
+  ctx.moveTo(innerX + saberColW + colGap2 / 2, saberBoxTop + 8);
+  ctx.lineTo(innerX + saberColW + colGap2 / 2, saberBoxBottom - 8);
   ctx.stroke();
 
-  /* ── pie: QR de perfil, handle y medallas ── */
-  const footY = statsTop + sectionH + 14;
+  /* ── pie: 3 columnas — QR + alias | logo de esgrima | ID de personaje ── */
+  const footY = saberBoxBottom + 16;
+  const footH = 60;
+  const qrSize = 48;
   if (qrImg) {
-    drawImageRounded(ctx, qrImg, innerX, footY, 56, 56, 8, null);
+    drawImageRounded(ctx, qrImg, innerX, footY + (footH - qrSize) / 2, qrSize, qrSize, 8, null);
   }
   ctx.textAlign = 'left';
-  const handleX = qrImg ? innerX + 66 : innerX;
-  ctx.fillStyle = '#eaf2ff';
-  ctx.font = '700 18px Orbitron';
-  ctx.fillText(`@${handle.toUpperCase()}`, handleX, footY + 24);
   ctx.fillStyle = 'rgba(150,200,255,0.5)';
-  ctx.font = '400 12px "JetBrains Mono"';
-  ctx.fillText('Perfil público', handleX, footY + 42);
+  ctx.font = '400 10px "JetBrains Mono"';
+  const aliasX = innerX + (qrImg ? qrSize + 12 : 0);
+  ctx.fillText('ALIAS', aliasX, footY + footH / 2 - 10);
+  ctx.fillStyle = '#eaf2ff';
+  ctx.font = '700 17px Orbitron';
+  ctx.fillText(`@${handle.toUpperCase()}`, aliasX, footY + footH / 2 + 10);
 
-  const LOGO_SIZE = 62;
-  if (medalIds.length) {
-    const medalR = 15;
-    const LOGO_RESERVE = LOGO_SIZE + 8 + 16; // deja libre la esquina inferior derecha para el logo de esgrima
-    let medalX = innerRight - medalR - LOGO_RESERVE;
-    for (const id of [...medalIds].reverse()) {
-      const medal = NX.MEDALS[id];
-      if (!medal) continue;
-      const color = MEDAL_TONE_COLOR[medal.tone] ?? '#38cdf0';
-      ctx.beginPath();
-      ctx.arc(medalX, footY + 24, medalR, 0, Math.PI * 2);
-      ctx.fillStyle = `${color}22`;
-      ctx.fill();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = color;
-      ctx.stroke();
-      drawIcon(ctx, medal.icon, medalX, footY + 24, 16, color, 1.8);
-      medalX -= medalR * 2 + 8;
-    }
-  }
+  await paintLogoAt(ctx, innerX + innerW / 2, footY + footH / 2, 44);
 
-  /* ── colofón ── */
-  const dateStr = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(120,150,190,0.55)';
-  ctx.font = '400 12px "JetBrains Mono"';
-  ctx.fillText(`NÉXUS ACADEMIA — ${dateStr}`, CARD_W / 2, CARD_H - pad - 8);
-
-  await paintCardLogo(ctx, innerRight, CARD_H - pad, LOGO_SIZE);
+  const idStr = `EJC-${String(character.id ?? 0).padStart(3, '0')}`;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(150,200,255,0.5)';
+  ctx.font = '400 10px "JetBrains Mono"';
+  ctx.fillText('ID PERSONAJE', innerRight, footY + footH / 2 - 10);
+  ctx.fillStyle = '#eaf2ff';
+  ctx.font = '700 17px Orbitron';
+  ctx.fillText(idStr, innerRight, footY + footH / 2 + 10);
 
   return canvas;
 }

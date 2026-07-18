@@ -136,6 +136,19 @@ export async function paintCardLogo(ctx, boxRight, boxBottom, size = 34, margin 
   ctx.restore();
 }
 
+/** Igual que `paintCardLogo` pero centrado en (cx, cy) — para colocarlo en cualquier punto de la carta (p.ej. una columna central del pie). */
+export async function paintLogoAt(ctx, cx, cy, size = 40) {
+  if (!cardLogoPromise) cardLogoPromise = loadImage(CARD_LOGO_URL);
+  const img = await cardLogoPromise;
+  if (!img) return;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 6;
+  ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
+  ctx.restore();
+}
+
 /** Fondo cuadriculado con degradé — mismo criterio visual que las tarjetas de zona/planeta
     del Mapa Estelar (Mapa.jsx): resplandor radial cian de fondo + rejilla de líneas finas
     de 48px encima, recortado al rectángulo (x, y, w, h). */
@@ -238,7 +251,7 @@ function pipRowHeight(count, maxWidth, size, gap, maxPips = 30) {
 }
 
 /** Fondo negro con degradé semitransparente + borde sutil, recortado a un rectángulo redondeado. */
-export function paintBoxBg(ctx, x, y, w, h, radius = 10) {
+export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
@@ -253,7 +266,7 @@ export function paintBoxBg(ctx, x, y, w, h, radius = 10) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
-  ctx.lineWidth = 1;
+  ctx.lineWidth = borderWidth;
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.stroke();
   ctx.restore();
