@@ -151,6 +151,16 @@ function applySaberTheme(saberName) {
   root.style.setProperty('--holo-faint', `color-mix(in srgb, ${t.holo} 18%, transparent)`);
   root.style.setProperty('--holo-line', `color-mix(in srgb, ${t.holo} 32%, transparent)`);
 }
+
+function serializeHitos(hitos) {
+  return (Array.isArray(hitos) ? hitos : [])
+    .map((h) => (typeof h === 'string' ? h : h?.hito))
+    .filter(Boolean)
+    .slice()
+    .sort()
+    .join('|');
+}
+
 import { ComandoView, PersonajeView } from './sections/Comando.jsx';
 import { TrainingView } from './sections/Entrenamiento.jsx';
 import { TareasView } from './sections/Tareas.jsx';
@@ -237,6 +247,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [externalChatTarget, setExternalChatTarget] = useState(null);
   const [completingMissionId, setCompletingMissionId] = useState(null);
   const prevUnreadIds = useRef(new Set());
+  const lastHitosSignature = useRef('');
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
@@ -696,6 +707,43 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       });
     return () => window.Echo.leave(`App.Models.User.${user.id}`);
   }, [user?.id]);
+
+  useEffect(() => {
+    lastHitosSignature.current = serializeHitos(user?.character?.hitos);
+  }, [user?.character?.hitos, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+
+    let cancelled = false;
+    const syncHitos = () => {
+      fetch('/api/me', {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(me => {
+          if (cancelled || !me?.character) return;
+          const nextSignature = serializeHitos(me.character.hitos);
+          if (nextSignature !== lastHitosSignature.current) {
+            lastHitosSignature.current = nextSignature;
+            onUserUpdate?.(me);
+            window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+              detail: { type: 'hitos-sync', hitos: me.character.hitos ?? [] },
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncHitos();
+    const interval = setInterval(syncHitos, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user?.id, onUserUpdate]);
 
   // Polling de mensajes no leídos
   useEffect(() => {
