@@ -121,8 +121,8 @@ export function wrapText(ctx, text, cx, y, maxWidth, lineHeight, maxLines = Infi
 const CARD_LOGO_URL = '/assets/esgrimaGemini.png';
 let cardLogoPromise = null;
 
-/** Sello del logo de esgrima en la esquina inferior derecha de una caja (p.ej. el recuadro de arte de la carta) — carga la imagen una sola vez y la cachea entre llamadas. */
-export async function paintCardLogo(ctx, boxRight, boxBottom, size = 40, margin = 8) {
+/** Sello del logo de esgrima en la esquina inferior derecha de la carta completa — carga la imagen una sola vez y la cachea entre llamadas. */
+export async function paintCardLogo(ctx, boxRight, boxBottom, size = 34, margin = 8) {
   if (!cardLogoPromise) cardLogoPromise = loadImage(CARD_LOGO_URL);
   const img = await cardLogoPromise;
   if (!img) return;

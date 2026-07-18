@@ -5,7 +5,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintCardLogo,
   COMBAT_STAT_META as STAT_META, COMBAT_STATS, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
 } from '../utils/printableCard.js';
 
@@ -205,7 +205,8 @@ export async function drawCharacterCard(character, user) {
 
   if (medalIds.length) {
     const medalR = 15;
-    let medalX = innerRight - medalR;
+    const LOGO_RESERVE = 50; // deja libre la esquina inferior derecha para el logo de esgrima
+    let medalX = innerRight - medalR - LOGO_RESERVE;
     for (const id of [...medalIds].reverse()) {
       const medal = NX.MEDALS[id];
       if (!medal) continue;
@@ -228,6 +229,8 @@ export async function drawCharacterCard(character, user) {
   ctx.fillStyle = 'rgba(120,150,190,0.55)';
   ctx.font = '400 12px "JetBrains Mono"';
   ctx.fillText(`NÉXUS ACADEMIA — ${dateStr}`, CARD_W / 2, CARD_H - pad - 8);
+
+  await paintCardLogo(ctx, innerRight, CARD_H - pad);
 
   return canvas;
 }

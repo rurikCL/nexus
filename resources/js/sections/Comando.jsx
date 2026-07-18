@@ -744,15 +744,19 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                   }}>
                     {savedCardUrl
                       ? <img src={savedCardUrl} alt="Carta de personaje generada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <Icon name="user" size={34} />}
-                    <img
-                      src="/assets/esgrimaGemini.png" alt="" aria-hidden="true"
-                      style={{
-                        position: 'absolute', right: 3, bottom: 3, width: 20, height: 20,
-                        objectFit: 'contain', pointerEvents: 'none',
-                        filter: 'drop-shadow(0 0 2px rgba(0,0,0,.8))',
-                      }}
-                    />
+                      : (
+                        <>
+                          <Icon name="user" size={34} />
+                          <img
+                            src="/assets/esgrimaGemini.png" alt="" aria-hidden="true"
+                            style={{
+                              position: 'absolute', right: 3, bottom: 3, width: 20, height: 20,
+                              objectFit: 'contain', pointerEvents: 'none',
+                              filter: 'drop-shadow(0 0 2px rgba(0,0,0,.8))',
+                            }}
+                          />
+                        </>
+                      )}
                   </div>
                   {TIER_RANGO_IMG[myTier] && (
                     <img
