@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, Chip, Modal, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
@@ -241,6 +241,17 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
   const activeMissionsCount = missionDrawerItems.length;
+  const menuObjectiveSlugs = useMemo(() => {
+    const slugs = new Set();
+    missionDrawerItems.forEach((mission) => {
+      (mission?.objetivos ?? []).forEach((obj) => {
+        if (obj?.tipo === 'menu' && !obj?.completado && obj?.unidad) {
+          slugs.add(String(obj.unidad));
+        }
+      });
+    });
+    return slugs;
+  }, [missionDrawerItems]);
 
   const isMissionReadyAlert = (notif) => (
     notif?.type === 'mision_lista_para_completar'
@@ -803,6 +814,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         <nav style={{ flex: 1, padding: 8, display: 'grid', gap: 2, alignContent: 'start' }}>
           {NAV.filter(n => !n.guard || n.guard(user)).map((n) => {
             const active = view === n.id;
+            const hasMenuObjective = menuObjectiveSlugs.has(n.id);
             return (
               <button
                 key={n.id}
@@ -829,6 +841,33 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
                 <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, maxWidth: sidebarCollapsed ? 0 : 200, transition: 'opacity .15s, max-width .22s' }}>
                   {n.label}
                 </span>
+                {hasMenuObjective && (
+                  <span
+                    title="Objetivo de misión activo"
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: 'rgba(230,179,37,0.16)',
+                      border: '1px solid rgba(230,179,37,0.7)',
+                      color: '#E6B325',
+                      boxShadow: '0 0 10px -4px rgba(230,179,37,0.9)',
+                      fontSize: 11,
+                      fontFamily: 'var(--font-data)',
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    !
+                  </span>
+                )}
               </button>
             );
           })}
