@@ -189,7 +189,6 @@ export async function drawHabilidadCard(habilidad) {
   const artY = pad + 118;
   const artH = 340;
   await paintArt(ctx, habilidad.icono_url ?? habilidad.icono, TIPO_HAB_ICON[habilidad.tipo] ?? 'zap', badgeColor, innerX, artY, innerW, artH, frame.line);
-  await paintCardLogo(ctx, innerX + innerW, artY + artH);
 
   const typeY = artY + artH + 36;
   paintTypeLine(ctx, classInfo ? `${classInfo.num} · ${classInfo.name}` : 'Habilidad Universal', typeY, innerX, innerRight);
@@ -227,6 +226,7 @@ export async function drawHabilidadCard(habilidad) {
   }
 
   paintColofon(ctx, `Habilidades · Catálogo NÉXUS`);
+  await paintCardLogo(ctx, innerRight, CARD_H - pad);
   return canvas;
 }
 
@@ -288,7 +288,6 @@ export async function drawObjetoCard(objeto) {
   const artY = pad + 118;
   const artH = 340;
   await paintArt(ctx, objeto.imagen, TIPO_OBJ_ICON[objeto.tipo] ?? 'box', frame.line, innerX, artY, innerW, artH, frame.line);
-  await paintCardLogo(ctx, innerX + innerW, artY + artH);
 
   const typeY = artY + artH + 36;
   paintTypeLine(ctx, RAREZA_LABEL[objeto.rareza] ?? objeto.rareza ?? 'Objeto', typeY, innerX, innerRight);
@@ -315,12 +314,13 @@ export async function drawObjetoCard(objeto) {
 
   if (objeto.color_hoja) {
     ctx.beginPath();
-    ctx.arc(innerRight - 16, CARD_H - pad - 46, 8, 0, Math.PI * 2);
+    ctx.arc(innerX + 16, CARD_H - pad - 46, 8, 0, Math.PI * 2);
     ctx.fillStyle = NX.SABERS[objeto.color_hoja] ?? '#38cdf0';
     ctx.fill();
   }
 
   paintColofon(ctx, objeto.activo === false ? 'Descontinuado · Catálogo NÉXUS' : 'Objetos · Catálogo NÉXUS');
+  await paintCardLogo(ctx, innerRight, CARD_H - pad);
   return canvas;
 }
 
@@ -362,7 +362,6 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const artY = pad + 118;
   const artH = 396;
   await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line);
-  await paintCardLogo(ctx, innerX + innerW, artY + artH);
 
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'
@@ -401,6 +400,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     ctx.fillText(`“${entity.saludo}”`, CARD_W / 2, footY + 10);
   }
 
+  await paintCardLogo(ctx, innerRight, CARD_H - pad);
   return canvas;
 }
 
