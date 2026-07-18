@@ -76,6 +76,17 @@ const R_COLOR = {
   epico: '#8b5cf6', legendario: '#E6B325',
 };
 
+const CROP_ASPECTS_PERSONAJE = [
+  { ratio: 1, label: 'Cuadrada 1:1' },
+  { ratio: 4 / 5, label: 'Retrato 4:5' },
+  { ratio: 3 / 4, label: 'Retrato 3:4' },
+];
+const CROP_ASPECTS_BANNER = [
+  { ratio: 16 / 9, label: 'Banner 16:9' },
+  { ratio: 21 / 9, label: 'Panorámica 21:9' },
+  { ratio: 4 / 3, label: 'Clásica 4:3' },
+];
+
 /* ─── CONFIG DE ENTIDADES ───────────────────────────────── */
 const ENTITY_CONFIG = {
   /* ── MAP ── */
@@ -462,7 +473,7 @@ const ENTITY_CONFIG = {
       { key: 'reputation',     label: 'Reputación',     type: 'number' },
       { key: 'wins',           label: 'Victorias',      type: 'number',  min: 0 },
       { key: 'losses',         label: 'Derrotas',       type: 'number',  min: 0 },
-      { key: 'photo',          label: 'Foto',           type: 'file',    span: 2 },
+      { key: 'photo',          label: 'Foto',           type: 'file',    span: 2, aspectOptions: CROP_ASPECTS_PERSONAJE },
       { key: 'bio',            label: 'Bio',            type: 'textarea', span: 2 },
       { key: 'lore',           label: 'Lore',           type: 'textarea', span: 2 },
       { key: 'vida',           label: 'Vida',           type: 'number',  min: 0 },
@@ -642,7 +653,7 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
   }
 
   if (field.type === 'file') {
-    return <CropImageField value={value} onChange={onChange} label={null} height={field.previewHeight ?? 110} aspect={field.aspect ?? 1} placeholder={field.hint ?? 'Seleccionar imagen'} />;
+    return <CropImageField value={value} onChange={onChange} label={null} height={field.previewHeight ?? 110} aspect={field.aspect ?? 1} aspectOptions={field.aspectOptions} placeholder={field.hint ?? 'Seleccionar imagen'} />;
   }
 
   if (field.type === 'audio') {
@@ -849,8 +860,8 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
 }
 
 /* ─── NPC — imagen compacta para el panel lateral ────────── */
-function NpcImageField({ label, value, onChange, height = 110 }) {
-  return <CropImageField label={label} value={value} onChange={onChange} height={height} aspect={height >= 140 ? 4 / 3 : 1} />;
+function NpcImageField({ label, value, onChange, height = 110, aspectOptions = null }) {
+  return <CropImageField label={label} value={value} onChange={onChange} height={height} aspect={height >= 140 ? 4 / 3 : 1} aspectOptions={aspectOptions} />;
 }
 
 /* ─── NPC vendedor — picker de naves/objetos con interés por ítem ── */
@@ -2450,7 +2461,7 @@ function MisionesAdmin() {
 
           <div>
             <label className="nx-label">Imagen de portada</label>
-            <CropImageField value={form.foto_mision} onChange={v => set('foto_mision', v)} label={null} height={160} aspect={16 / 9} placeholder="Seleccionar imagen de portada" />
+            <CropImageField value={form.foto_mision} onChange={v => set('foto_mision', v)} label={null} height={160} aspect={16 / 9} aspectOptions={CROP_ASPECTS_BANNER} placeholder="Seleccionar imagen de portada" />
             {form.foto_mision && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                 <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
@@ -2891,7 +2902,7 @@ function TorneosAdmin() {
 
           <div>
             <label className="nx-label">Imagen de portada</label>
-            <CropImageField value={form.imagen} onChange={v => set('imagen', v)} label={null} height={160} aspect={16 / 9} placeholder="Seleccionar imagen de portada" />
+            <CropImageField value={form.imagen} onChange={v => set('imagen', v)} label={null} height={160} aspect={16 / 9} aspectOptions={CROP_ASPECTS_BANNER} placeholder="Seleccionar imagen de portada" />
             {form.imagen && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                 <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
