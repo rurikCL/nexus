@@ -1,15 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from './data/seed.js';
-import { Icon, Avatar, Btn, Chip, ToastHost, toast } from './components/ui.jsx';
+import { Icon, Avatar, Btn, Chip, Modal, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
 import { isPushSupported, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from './push.js';
 import { playMensajeUsuario, playNotificacionDuelo } from './utils/sounds.js';
+import { buildMissionCompletionTransmision } from './utils/missionTransmission.js';
 
 const HUD_COLORS = ['#FF6B00', '#38cdf0', '#8b5cf6', '#10b981', '#ec4899', '#f97316', '#E6B325', '#3aa0ff'];
 function hashColor(str) {
   let h = 5381;
   for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
   return HUD_COLORS[Math.abs(h) % HUD_COLORS.length];
+}
+
+function mediaUrl(path) {
+  if (!path) return null;
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/storage/')) return cleanPath;
+  if (cleanPath.startsWith('/admin/')) return `/storage${cleanPath}`;
+  if (cleanPath.startsWith('/public/')) return cleanPath.replace('/public/', '/storage/');
+  return `/storage${cleanPath}`;
 }
 
 // Construye la lista de combatientes exclusivamente desde la API.
@@ -231,14 +242,40 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
   const activeMissionsCount = missionDrawerItems.length;
 
-  const enqueueMissionAlert = (mission) => {
-    const missionId = mission?.mission_id ?? mission?.mision_id ?? mission?.id;
-    if (!missionId) return;
-    const normalized = {
-      ...mission,
+  const isMissionReadyAlert = (notif) => (
+    notif?.type === 'mision_lista_para_completar'
+    || notif?.title === 'Misión lista para completar'
+    || notif?.title === 'Mision lista para completar'
+  );
+
+  const normalizeMissionAlert = (mission) => {
+    const base = (mission?.mision && typeof mission.mision === 'object')
+      ? mission.mision
+      : mission;
+    const missionId = base?.mission_id ?? base?.mision_id ?? base?.id;
+    if (!missionId) return null;
+    const {
+      mision: _ignoredMissionObject,
+      objetivos: _ignoredObjetivos,
+      recompensas: _ignoredRecompensas,
+      ...missionRest
+    } = (mission && typeof mission === 'object') ? mission : {};
+    return {
+      ...base,
+      ...missionRest,
       id: missionId,
-      notification_id: mission?.notification_id ?? mission?._notifId ?? null,
+      notification_id: mission?.notification_id ?? mission?._notifId ?? base?.notification_id ?? base?._notifId ?? null,
+      aceptada: base?.aceptada ?? mission?.aceptada ?? false,
+      status: base?.status ?? mission?.status ?? ((base?.aceptada ?? mission?.aceptada) ? 'en-curso' : 'pendiente'),
+      completada_por_mi: base?.completada_por_mi ?? mission?.completada_por_mi ?? false,
+      puede_completar: base?.puede_completar ?? mission?.puede_completar ?? Boolean(base?.aceptada ?? mission?.aceptada),
+      mision: typeof base?.mision === 'string' ? base.mision : mission?.body ?? mission?.title ?? '',
     };
+  };
+
+  const enqueueMissionAlert = (mission) => {
+    const normalized = normalizeMissionAlert(mission);
+    if (!normalized) return;
     setMisionNotifQueue(prev => prev.some(m => m.id === normalized.id) ? prev : [...prev, normalized]);
   };
 
@@ -290,12 +327,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .then(r => r.ok ? r.json() : null)
         .then(me => { if (me) onUserUpdate?.(me); })
         .catch(() => {});
-      onTransmision?.({
-        tone: 'holo',
-        icon: 'check',
-        title: 'Misión completada',
-        body: data?.mision?.nombre ? `${data.mision.nombre} ha sido completada.` : 'La misión fue completada con éxito.',
-      });
+      const transmision = buildMissionCompletionTransmision(data);
+      if (transmision) {
+        onTransmision?.(transmision);
+      }
       return true;
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
@@ -407,8 +442,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         data.data
         .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
         .forEach(n => {
-          if (n.data?.type === 'mision_lista_para_completar') {
-            enqueueMissionAlert({ ...n.data, notification_id: n.id });
+          if (isMissionReadyAlert(n.data)) {
+            enqueueMissionAlert({ ...n.data, notification_id: n.id, aceptada: true, status: 'en-curso', puede_completar: n.data?.puede_completar ?? true });
             return;
           }
           onTransmision?.({ ...n.data, _notifId: n.id });
@@ -584,8 +619,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     window.Echo.private(`App.Models.User.${user.id}`)
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
-        if (notif?.type === 'mision_lista_para_completar') {
-          enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now() });
+        if (isMissionReadyAlert(notif)) {
+          enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now(), aceptada: true, status: 'en-curso', puede_completar: notif?.puede_completar ?? true });
           return;
         }
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
@@ -998,8 +1033,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         <GlobalMisionPopup
           mision={misionNotifQueue[0]}
           onClose={() => setMisionNotifQueue(q => q.slice(1))}
-          onUpdate={() => {}}
+          onUpdate={(id, patch) => setMisionNotifQueue(q => q.map(m => m.id === id ? { ...m, ...patch } : m))}
           onUserUpdate={onUserUpdate}
+          onTransmision={onTransmision}
+          onComplete={(mission) => completeMission(mission, { notifId: mission.notification_id, refreshAlerts: true })}
         />
       )}
 

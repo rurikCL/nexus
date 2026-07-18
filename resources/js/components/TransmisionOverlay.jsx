@@ -26,6 +26,13 @@ function SignalBars({ color }) {
 }
 
 export function TransmisionOverlay({ notification, onDismiss }) {
+  if (
+    notification?.type === 'mision_lista_para_completar'
+    || notification?.title === 'Misión lista para completar'
+    || notification?.title === 'Mision lista para completar'
+  ) {
+    return null;
+  }
   const [phase, setPhase] = useState('enter'); // enter → shown → exit
   const [progress, setProgress] = useState(100);
   const timerRef = useRef(null);

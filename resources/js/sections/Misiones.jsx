@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Icon, Panel, Btn, Chip, Avatar, Modal, toast } from '../components/ui.jsx';
 import { Empty } from './Comando.jsx';
+import { buildMissionCompletionTransmision } from '../utils/missionTransmission.js';
 
 const ADMIN_TIERS = ['caballero', 'maestro', 'granmaestro'];
 
@@ -250,12 +251,10 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
         toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
       });
       onUpdate(mision.id, { status: 'completada', progreso: 100, puede_completar: false });
-      onTransmision?.({
-        tone: 'holo',
-        icon: 'check',
-        title: 'Misión completada',
-        body: data?.mision?.nombre ? `${data.mision.nombre} ha sido completada.` : 'La misión fue completada con éxito.',
-      });
+      const transmision = buildMissionCompletionTransmision(data);
+      if (transmision) {
+        onTransmision?.(transmision);
+      }
 
       if (onUserUpdate) {
         fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
