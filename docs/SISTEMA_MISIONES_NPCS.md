@@ -7,12 +7,16 @@ hoy en el código.
 > Fuentes principales: `app/Http/Controllers/Api/MisionController.php`,
 > `app/Http/Controllers/Api/MapController.php` (`npcCumpleRequisitos`, `attachMisionInfo`),
 > `app/Http/Controllers/Api/CharacterController.php::npcVictory`,
-> `app/Services/MisionProgresoService.php` (tracking automático de objetivos),
+> `app/Services/MisionProgresoService.php` (tracking automático de objetivos y notificación de
+> "misión lista para completar"), `app/Notifications/MisionListaParaCompletar.php`,
+> `app/Http/Controllers/Api/TituloController.php`, `app/Models/CharacterTitulo.php`,
 > `app/Http/Controllers/Api/MisionController.php::menuVisit`,
 > `app/Http/Controllers/Api/NpcChatController.php`, `app/Models/Mision.php`, `app/Models/MapNpc.php`,
 > `app/Models/CharacterHito.php`, `resources/js/sections/Misiones.jsx`, `resources/js/sections/Mapa.jsx`,
-> `resources/js/sections/Temporadas.jsx`, `resources/js/components/NpcCombatScreen.jsx`, `docs/NPC_IA.md`,
-> migraciones en `database/migrations/`.
+> `resources/js/sections/Temporadas.jsx`, `resources/js/App.jsx` (cola de misiones, sync de hitos,
+> popup de misiones globales), `resources/js/utils/missionTransmission.js`,
+> `resources/js/components/NpcCombatScreen.jsx`, `docs/NPC_IA.md`, migraciones en
+> `database/migrations/`.
 
 ---
 
@@ -24,7 +28,7 @@ Las misiones y los NPCs son dos tablas separadas que se conectan por **una sola 
 completar. No hay un motor de quests con nodos ni máquina de estados — es deliberadamente simple:
 
 ```
-NPC (quest-giver)  ──da──▶  Misión  ──recompensa──▶  objeto / habilidad / créditos / hito
+NPC (quest-giver)  ──da──▶  Misión  ──recompensa──▶  objeto / habilidad / créditos / título / hito
      ▲                                                        │
      └──────── hito_requerimiento (string match) ◀────────────┘
      │
@@ -41,9 +45,10 @@ Tabla `misiones` (columnas efectivas tras todas las migraciones):
 
 ```
 id, nombre, mision, descripcion, foto_mision,
-tipo_mision (individual|comunidad|temporada, default individual),
+tipo_mision (individual|comunidad|temporada|global, default individual),
 temporada_id (FK opcional), npc_id (FK opcional → map_npcs),
-puntos_requeridos (default 100), activa (bool, default true), orden,
+puntos_requeridos (default 100), activa (bool, default true),
+notificar (bool, default false — sólo tiene efecto en misiones `global`, ver §1.2), orden,
 fecha_inicio, fecha_termino,
 hito_requerimiento (texto, hitos separados por coma),
 entregar_hito (texto, hitos separados por coma),
@@ -52,10 +57,10 @@ recompensa_id / objetivo_id (legacy, FK únicos — superados por las tablas hij
 
 Dos tablas hijas (1 misión → N filas), normalizadas en `2026_06_30_230001_extend_misiones_sistema.php`:
 
-- **`objetivos`**: `mision_id, nombre, descripcion, tipo (general|entrenamiento|combate|tarea|viaje|dialogo|menu|automatico),
+- **`objetivos`**: `mision_id, nombre, descripcion, tipo (general|entrenamiento|combate|tarea|viaje|dialogo|menu|hito|automatico),
   meta, unidad, progreso_tipo (conteo|porcentaje)`.
-- **`recompensas`**: `mision_id, nombre, descripcion, tipo (habilidad|objeto|creditos|titulo|insignia),
-  valor, imagen, habilidad_id, objeto_id`.
+- **`recompensas`**: `mision_id, nombre, descripcion, tipo (habilidad|objeto|creditos|titulo|insignia|hito),
+  valor, imagen, habilidad_id, objeto_id, hito`.
 
 Pivot de asignación **por usuario, no por personaje** — `mision_user`:
 ```
@@ -63,25 +68,55 @@ mision_id, user_id, status (pendiente|en-curso|completada), progreso (0-100),
 progreso_json (mapa de progreso por objetivo)
 ```
 
-### 1.2 Tres tipos de misión
+### 1.2 Cuatro tipos de misión
 
 | `tipo_mision` | Quién la asigna | Cómo se sigue el progreso |
 |---|---|---|
 | **individual** | Un NPC específico (`npc_id`) — sólo aparece al jugador si ya la aceptó desde el diálogo de ese NPC | `progreso_json` por objetivo |
 | **comunidad** | Global, compartida por todos los que se unen | Suma de `progreso` de todos los participantes vs `puntos_requeridos` |
 | **temporada** | Ligada a una `Temporada` | Igual que individual/comunidad, filtrada por `temporada_id` |
+| **global** | Nadie en particular — visible para todos vía `GET /misiones/global`, el jugador la acepta explícitamente | `progreso_json` por objetivo, igual que individual |
+
+**`global` es la única sin NPC ni temporada** — es la forma de dar una misión "de mundo" sin
+atarla a un quest-giver. Tiene un campo propio, `notificar` (bool): si está en `true`, el cliente
+(`App.jsx`) muestra un popup de misión (`enqueueMissionAlert`) apenas el jugador entra a una
+sesión, siempre que aún no la haya aceptado (`!aceptada`), no esté `completada` y cumpla sus
+`hito_requerimiento` (`cumple_hitos`). Es la única forma de "empujar" una misión al jugador sin que
+tenga que visitar a un NPC o abrir el pase de temporada. El toggle vive en `Admin.jsx` como "¿Mostrar
+popup al ingresar?".
 
 ### 1.3 Recompensas — lo que realmente otorga el backend
 
-`MisionController::completar()` sólo concede automáticamente 3 de los 5 tipos declarados en el
-esquema:
+`MisionController::completar()` concede automáticamente los tipos con efecto real:
 
 | `recompensa.tipo` | Efecto real |
 |---|---|
 | `habilidad` | `user->habilidadesAprendidas()->syncWithoutDetaching([habilidad_id])` |
-| `objeto` | `character->rolObjetos()->syncWithoutDetaching([objeto_id])` (entra al inventario) |
+| `objeto` | `character->rolObjetos()->syncWithoutDetaching([objeto_id])`, si hay espacio en el inventario (si no, queda en `objetos_sin_espacio` y no se entrega) |
 | `creditos` | `character->increment('credits', valor)` |
-| `titulo` / `insignia` | **Sólo cosmético** — se muestra en la UI, no se persiste como efecto |
+| `titulo` / `insignia` | `character->titulos()->firstOrCreate(['nombre' => recompensa.nombre], ['tipo', 'mision_id'])` — se persiste en `character_titulos` (ver §1.3.1), ya no es sólo cosmético |
+| `hito` | `CharacterHito::firstOrCreate(['character_id' => ..., 'hito' => recompensa.hito|nombre])`, y además dispara `MisionProgresoService::registrarHito()` (encadena objetivos `hito` de otras misiones, ver §1.5) |
+
+### 1.3.1 Títulos e insignias — se ganan, se guardan y se equipan
+
+Desde `2026_07_15_180000_create_character_titulos_table.php` existe `character_titulos`
+(`character_id, nombre, tipo (titulo|insignia), mision_id (FK opcional a la misión que lo otorgó),
+activo`, único por `(character_id, nombre)`). Cuando `completar()` otorga una recompensa
+`titulo`/`insignia`, crea (o reutiliza si ya existía) una fila ahí — el personaje **acumula**
+títulos e insignias como una colección, no como un solo valor.
+
+De esa colección, a lo sumo **uno** puede estar `activo` a la vez — el que se muestra como badge
+bajo el nombre del personaje (`Comando.jsx`, `Combatientes.jsx`, `PublicProfilePage.jsx`, la cabecera
+de `App.jsx`). `TituloController` expone la gestión:
+
+| Endpoint | Efecto |
+|---|---|
+| `GET /titulos` | Lista los títulos/insignias que el personaje ha ganado |
+| `POST /titulos/{id}/activar` | Desactiva todos los demás y activa este — sólo puede haber uno visible |
+| `POST /titulos/desactivar` | No mostrar ningún título |
+
+`GET /api/me` incluye `character.titulos` (la colección completa) y `character.titulo_activo` (el
+que está marcado, o `null`).
 
 ### 1.4 Gating de finalización — hitos **y** objetivos
 
@@ -143,12 +178,14 @@ Tipos de objetivo con tracking automático conectado hoy:
 | `entrenamiento` | `SesionEntrenamientoController::attend` / `attendScan` — cada asistente marcado (incluido el encargado) | +1 |
 | `tarea` | `TaskController::approve` — el tutor aprueba la tarea del pupilo | +1 |
 | `menu` | `POST /misiones/menu-visit` al visitar una vista del SPA | completa la meta del objetivo |
+| `hito` | `MisionProgresoService::registrarHito()` al obtener el hito desde cualquier fuente | completa la meta del objetivo |
 | `automatico` | `POST /misiones/{id}/accept` al aceptar la misión | completa la meta del objetivo |
 
 **`general` sigue siendo manual** — es un tipo "cajón de sastre" (viajar, comprar, equipar, enviar
 un mensaje, etc.) sin un único evento de juego al que engancharse; su progreso todavía depende de
 `PATCH /misiones/{id}/progress`. Lo mismo aplica a `viaje`/`dialogo` si se usan — no tienen hook
-automático hoy. `automatico` no depende de eventos externos: se marca al aceptar la misión.
+automático hoy. `hito` depende de que el personaje adquiera un `character_hitos.hito` exacto.
+`automatico` no depende de eventos externos: se marca al aceptar la misión.
 
 ### 1.5.1 Objetivos tipo `menu`
 
@@ -156,6 +193,36 @@ Los objetivos con `tipo = menu` usan `unidad` como el slug exacto de la vista qu
 visitar. El frontend dispara `POST /api/misiones/menu-visit` al cambiar de vista; el backend busca
 objetivos activos con `tipo = menu` y `unidad = <slug>` y los marca como completos en el pivot de
 misión.
+
+Los objetivos con `tipo = hito` usan `unidad` como el nombre exacto del hito que debe existir en
+`character_hitos`. No entregan un hito nuevo: son un requisito que se completa cuando ese hito ya
+existe en el personaje. Cuando ese hito entra al personaje desde cualquier fuente, el sistema vuelve
+a consultar `/api/me`, refresca la cola de misiones y marca ese objetivo como completado en vivo.
+
+### 1.5.2 Notificación "misión lista para completar"
+
+Cada punto donde `MisionProgresoService` escribe `progreso_json` (`registrar`, `registrarMenu`,
+`registrarHito`) y también `MisionController::accept()` / `updateProgress()` terminan llamando a
+`MisionProgresoService::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoDespues)`.
+Es una notificación **de flanco**, no de nivel:
+
+```php
+if (! puedeCompletarCon($user, $mision, $progresoDespues)) return;   // sigue sin poder completarse: nada
+if (puedeCompletarCon($user, $mision, $progresoAntes)) return;      // ya podía completarse antes: nada (evita spam)
+$user->notify(new MisionListaParaCompletar($payload));              // pasó de "no completable" a "completable": notifica
+```
+
+`puedeCompletarCon()` (mismo servicio) es la lógica canónica y única de "¿puede completarse esta
+misión?" — hitos requeridos cumplidos **y** todos los objetivos al 100%; es la misma condición que
+alimenta `puede_completar` en todos los endpoints de lectura (§1.4).
+
+`MisionListaParaCompletar` (`app/Notifications/`) se envía por `database`, `broadcast` (Pusher,
+canal privado del usuario) y `WebPushChannel` — igual que el resto de notificaciones del sistema.
+Su payload incluye nombre de la misión, hasta 2 objetivos y hasta 2 recompensas resumidas, y
+`action_url: '/misiones'`. El cliente la reconoce por `type === 'mision_lista_para_completar'` y la
+enruta al mismo `enqueueMissionAlert()` que usa el popup de misiones `global` (§1.2) — ambos casos
+terminan mostrando la `TransmisionOverlay` con los datos de la misión ya resueltos contra
+`GET /misiones/{global|individual|comunidad|temporada}` (`resolveMissionAlert` en `App.jsx`).
 
 Slugs actuales documentados para configuración manual:
 
@@ -184,25 +251,33 @@ Slugs actuales documentados para configuración manual:
 ```
 1. Admin (tier caballero|maestro|granmaestro) crea la misión — POST /misiones
    → opcionalmente le asigna un npc_id, objetivos[], recompensas[], hito_requerimiento/entregar_hito
+   → si tipo_mision = global, puede marcar notificar=true para que aparezca como popup al ingresar
 
-2. El jugador visita el lugar del NPC en el mapa (o abre el pase de batalla en Temporadas)
-   → GET /map/lugar/{id} adjunta `mision_disponible` a cada NPC (ver §3)
-   → GET /misiones/temporada/{id} lista las misiones de temporada con su progreso
+2. El jugador se entera de que la misión existe
+   → visita el lugar del NPC en el mapa: GET /map/lugar/{id} adjunta `mision_disponible` (ver §3)
+   → o abre el pase de batalla en Temporadas: GET /misiones/temporada/{id}
+   → o, si es `global` y `notificar=true`, recibe un popup automático al iniciar sesión
+     (ver §1.2) sin visitar nada
 
-3. El jugador acepta desde el diálogo — POST /misiones/{id}/accept
+3. El jugador acepta — POST /misiones/{id}/accept
    → upsert mision_user: status=pendiente, progreso=0
-   (las misiones de temporada no requieren este paso: `completar` hace upsert igual si no existía)
+   (las misiones de temporada no requieren este paso: `completar` hace upsert igual si no existía;
+   las de comunidad se aceptan uniéndose desde `Misiones.jsx`)
 
 4. Progreso
    → automático para objetivos `combate`/`entrenamiento`/`tarea` — MisionProgresoService (§1.5)
    → automático para objetivos `menu` — POST /misiones/menu-visit (§1.5.1)
+   → automático para objetivos `hito` — MisionProgresoService::registrarHito() (§1.5.1)
    → automático para objetivos `automatico` — POST /misiones/{id}/accept
    → manual para el resto — PATCH /misiones/{id}/progress (progreso, status, progreso_json)
+   → cada actualización de progreso puede disparar la notificación "misión lista para
+     completar" si recién se cumplieron todas las condiciones (§1.5.2)
 
 5. Completar — POST /misiones/{id}/completar
    → valida hito_requerimiento Y que todos los objetivos estén al 100% (ver §1.4)
    → marca status=completada, progreso=100
-   → otorga recompensas (habilidad/objeto/creditos)
+   → otorga recompensas (habilidad/objeto/creditos/titulo/insignia/hito) — titulo/insignia y hito
+     ahora se persisten (§1.3, §1.3.1)
    → escribe entregar_hito en character_hitos
 ```
 
@@ -214,19 +289,29 @@ ubicación mostrada al jugador ("dada por {npc} en {lugar}") llega indirectament
 
 ### 1.8 UI — `Misiones.jsx`, `Temporadas.jsx` y `Admin.jsx`
 
-- `Misiones.jsx` (vista de jugador): dos pestañas, **Comunidad** (barra de progreso global +
-  participantes) e **Individual** (sólo misiones con NPC asignado, separadas en activas/
-  completadas). No hay CRUD de misiones aquí.
+- `Misiones.jsx` (vista de jugador): tres secciones apiladas, no pestañas — **Global**
+  (`GlobalSection`, sólo misiones donde `cumple_hitos || aceptada || completada_por_mi`, con botón
+  para aceptarlas ahí mismo), **Comunidad** (barra de progreso global + participantes) e
+  **Individual** (sólo misiones con NPC asignado que el jugador ya aceptó desde el diálogo),
+  cada una separada en activas/completadas. No hay CRUD de misiones aquí.
 - `Temporadas.jsx` → `MisionesTemporadaModal` (pase de batalla de la temporada activa): cada
   misión de la lista es clickeable y abre `MisionDetallePopup` (modal apilado) con foto,
   descripción, cada objetivo con su propia barra de progreso (`progreso_actual`/`meta`), hitos
   requeridos (resaltados en verde si ya se cumplen) y recompensas. Incluye el botón **"Completar
   misión"**, habilitado sólo cuando `puede_completar` es `true`, que llama al mismo
-  `POST /misiones/{id}/completar` que usa el diálogo de NPC — es el mismo endpoint, dos puntos de
-  entrada de UI distintos.
-- `Admin.jsx` → `MisionesAdmin`: formulario completo — selector de `tipo_mision`, campos
-  condicionales (`temporada_id` / `puntos_requeridos` / selector de NPC), carga de
-  `foto_mision`, tag-inputs para hitos, listas dinámicas de objetivos y recompensas.
+  `POST /misiones/{id}/completar` que usa el diálogo de NPC — es el mismo endpoint, tres puntos de
+  entrada de UI distintos (diálogo de NPC, `Misiones.jsx`, pase de temporada).
+- `Admin.jsx` → `MisionesAdmin`: formulario completo — selector de `tipo_mision` (incluye
+  `global`), campos condicionales (`temporada_id` / `puntos_requeridos` / selector de NPC /
+  toggle `notificar` para `global`), carga de `foto_mision`, tag-inputs para hitos, listas
+  dinámicas de objetivos y recompensas.
+- La cola lateral de misiones y los popups de disponibilidad se recalculan cuando cambian los
+  hitos del personaje: además de refrescar `/api/me` tras cada acción del propio jugador, `App.jsx`
+  hace **polling cada 15 segundos** a `/api/me` comparando una firma serializada de
+  `character.hitos` — si cambió (p. ej. otro flujo del juego otorgó un hito, o un admin lo hizo a
+  mano), llama a `onUserUpdate` y dispara `nx-mision-updated`, así no hace falta recargar la
+  página ni que el propio jugador dispare la acción para ver objetivos `hito` o nuevas misiones
+  desbloqueadas.
 
 ---
 
@@ -391,13 +476,19 @@ asistencia, tarea aprobada)                                (manual — resto de 
        ▼
 MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca 'completada')
                                         │
+                    cada escritura de progreso ──▶ notificarSiListaParaCompletar()
+                    (§1.5.2 — sólo notifica en el flanco "pasó a ser completable")
+                                        │
                               POST /completar
               (revalida hito_requerimiento Y que los objetivos estén al 100%)
                                         │
-                    ┌───────────────────┼────────────────────┐
-                    ▼                   ▼                    ▼
-             habilidad/objeto      character_hitos      créditos
-             (recompensa)          (entregar_hito)       (recompensa)
+        ┌───────────────┬──────────────┼──────────────────┬──────────────────┐
+        ▼               ▼              ▼                  ▼                  ▼
+  habilidad/objeto   créditos   character_hitos    character_titulos   registrarHito()
+  (recompensa)       (recompensa) (entregar_hito +  (recompensa         (encadena objetivos
+                                  recompensa hito)   titulo/insignia,    `hito` de otras
+                                                      equipable vía      misiones — §1.5.1)
+                                                      TituloController)
                                         │
                                         ▼
                     gatilla nuevas misiones / revela nuevos NPCs
@@ -407,6 +498,8 @@ MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca '
         Derrotar un NPC (NpcCombatScreen, cliente) ──POST /npc-victory──▶ hito "{npc} derrotado"
                                                                         ──▶ MisionProgresoService('combate')
         Atacar NPC hostil/neutral ──▶ ±reputación (independiente del sistema de misiones)
+
+Misión `global` con notificar=true ──▶ popup al iniciar sesión (App.jsx), sin pasar por NPC ni mapa
 ```
 
 **Conclusiones clave:**
@@ -420,11 +513,22 @@ MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca '
   se otorgan manualmente vía `entregar_hito` al completar una misión.
 - El progreso de objetivos `combate`/`entrenamiento`/`tarea` se registra automáticamente
   (`MisionProgresoService`, §1.5) desde eventos reales del juego; `menu` se registra al visitar
-  una vista del SPA (`POST /misiones/menu-visit`, §1.5.1); el resto de los `tipo`
-  (`general`, `viaje`, `dialogo`...) sigue dependiendo de `PATCH /misiones/{id}/progress` manual.
-  `automatico` se completa al aceptar la misión.
+  una vista del SPA (`POST /misiones/menu-visit`, §1.5.1); `hito` se registra al obtener el hito
+  desde cualquier fuente (`registrarHito()`, §1.5.1); el resto de los `tipo` (`general`, `viaje`,
+  `dialogo`...) sigue dependiendo de `PATCH /misiones/{id}/progress` manual. `automatico` se
+  completa al aceptar la misión.
 - `completar()` ahora es un gate doble — hitos **y** objetivos — reforzado en el servidor, no sólo
   en la UI (el botón deshabilitado en el cliente es una comodidad, no la protección real).
+- Las recompensas `titulo`/`insignia` y `hito` dejaron de ser cosméticas: `titulo`/`insignia` se
+  acumulan en `character_titulos` con un mecanismo de "equipar" (§1.3.1) y `hito` escribe en
+  `character_hitos` igual que `entregar_hito`, encadenando objetivos `hito` de otras misiones.
+- El sistema notifica proactivamente cuando una misión pasa a ser completable
+  (`MisionListaParaCompletar`, §1.5.2), y separadamente puede empujar misiones `global` como popup
+  al iniciar sesión (`notificar`, §1.2) — dos mecanismos de notificación distintos, uno reactivo a
+  progreso y otro basado en una bandera de configuración.
+- El cliente sincroniza `character_hitos` con polling cada 15s a `GET /api/me` (además de tras cada
+  acción propia) para detectar cambios en el mapa de hitos y refrescar la cola de misiones/paneles
+  sin recargar la página.
 - El diálogo con IA es una capa de presentación y de "world-building" (puede escribir eventos de
   lore) totalmente separada del pipeline de misiones — comparten el mismo NPC pero no se
   comunican entre sí en el backend.
