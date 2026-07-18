@@ -9,7 +9,7 @@ import CharacterCardModal from '../components/CharacterCard.jsx';
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
 
-function useWindowWidth() {
+export function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
   useEffect(() => {
     const fn = () => setW(window.innerWidth);
@@ -19,7 +19,7 @@ function useWindowWidth() {
   return w;
 }
 
-function mapApiCharacterToStoreCharacter(character, fallback = {}) {
+export function mapApiCharacterToStoreCharacter(character, fallback = {}) {
   if (!character) return null;
   const combat = character.combat_stats ?? {};
   const baseCombat = character.combat_base_stats ?? {};
@@ -56,12 +56,12 @@ function mapApiCharacterToStoreCharacter(character, fallback = {}) {
   };
 }
 
-const SIDES = {
+export const SIDES = {
   luminoso: { label: 'Lado Luminoso', color: '#3aa0ff', img: '/assets/lado-luminoso.png', desc: 'Disciplina, honor y protección' },
   oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.png',   desc: 'Pasión, ambición y poder' },
 };
 
-const TIER_RANGO_IMG = {
+export const TIER_RANGO_IMG = {
   iniciado:    '/assets/INITIATE_sm.png',
   padawan:     '/assets/PADAWAN_sm.png',
   caballero:   '/assets/KNIGHT_sm.png',
@@ -69,7 +69,7 @@ const TIER_RANGO_IMG = {
   granmaestro: '/assets/GRANDMASTER_sm.png',
 };
 
-function mediaUrl(path) {
+export function mediaUrl(path) {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -829,7 +829,7 @@ export function Empty({ label }) {
 }
 
 /* ===================== CREAR PERSONAJE ===================== */
-function CharacterCreation({ user, S, onCharacterCreated }) {
+export function CharacterCreation({ user, S, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
   const DEFAULT_STATS = { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 };
   const [form, setForm] = useState({
@@ -1007,13 +1007,13 @@ function CharacterCreation({ user, S, onCharacterCreated }) {
 }
 
 /* ===================== MI PERSONAJE ===================== */
-const CLASES_JEDI = [
+export const CLASES_JEDI = [
   { id: 'Sentinela', label: 'Centinela', desc: 'Equilibrio entre combate y sabiduría', color: '#E6B325', img: '/assets/CENTINELA.png' },
   { id: 'Guardian',  label: 'Guardián',  desc: 'Maestros del combate con sable de luz', color: '#38cdf0', img: '/assets/GUARDIAN.png'  },
   { id: 'Consul',    label: 'Cónsul',    desc: 'Fuerza y diplomacia sobre la acción',   color: '#10b981', img: '/assets/CONSUL.png'    },
 ];
 
-const RANGOS_JEDI = [
+export const RANGOS_JEDI = [
   { id: 'iniciado',  label: 'Iniciado',  img: '/assets/INITIATE.png'  },
   { id: 'padawan',   label: 'Padawan',   img: '/assets/PADAWAN.png'   },
   { id: 'caballero', label: 'Caballero', img: '/assets/KNIGHT.png'    },
@@ -1022,8 +1022,8 @@ const RANGOS_JEDI = [
 
 
 /* ===================== HABILIDADES ===================== */
-const FORMA_LABELS = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
-const FORMA_IMGS   = ['/assets/Forma1.png', '/assets/Forma2.png', '/assets/Forma3.png', '/assets/Forma4.png', '/assets/Forma5.png', '/assets/Forma6.png', '/assets/Forma7.png'];
+export const FORMA_LABELS = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
+export const FORMA_IMGS   = ['/assets/Forma1.png', '/assets/Forma2.png', '/assets/Forma3.png', '/assets/Forma4.png', '/assets/Forma5.png', '/assets/Forma6.png', '/assets/Forma7.png'];
 
 function WeaponCard({ objeto, selected, onClick }) {
   const isUnarmed = !objeto;
@@ -1165,7 +1165,7 @@ function InventoryItemCard({ objeto, icon = 'star' }) {
   );
 }
 
-function HabilidadSlot({ slot, habilidad, onClick }) {
+export function HabilidadSlot({ slot, habilidad, onClick }) {
   const isEmpty = !habilidad;
   return (
     <button
@@ -1223,7 +1223,7 @@ function HabilidadSlot({ slot, habilidad, onClick }) {
   );
 }
 
-function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex }) {
+export function HabilidadPickerModal({ open, onClose, habilidades, onAssign, slotIndex }) {
   const [loading, setLoading] = useState(false);
 
   /* Bloquea el scroll de la página mientras el modal está abierto */
@@ -1850,7 +1850,7 @@ function NaveEquipadaPanel() {
   );
 }
 
-function TitulosPanel({ user, onCharacterCreated }) {
+export function TitulosPanel({ user, onCharacterCreated }) {
   const [busy, setBusy] = useState(null);
   const titulos = user?.character?.titulos ?? [];
   const activo = user?.character?.titulo_activo ?? null;

@@ -161,7 +161,8 @@ function serializeHitos(hitos) {
     .join('|');
 }
 
-import { ComandoView, PersonajeView } from './sections/Comando.jsx';
+import { ComandoView } from './sections/Comando.jsx';
+import { PersonajeView } from './sections/Personaje.jsx';
 import { TrainingView } from './sections/Entrenamiento.jsx';
 import { TareasView } from './sections/Tareas.jsx';
 import { RankingView, CombatesView } from './sections/Combates.jsx';
