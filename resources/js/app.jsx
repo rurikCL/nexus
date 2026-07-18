@@ -17,6 +17,12 @@ import { registerServiceWorker } from './push.js';
 
 const PUBLIC_PROFILE_MATCH = location.pathname.match(/^\/c\/([^/]+)\/?$/);
 
+function isMissionReadyAlert(notif) {
+  return notif?.type === 'mision_lista_para_completar'
+    || notif?.title === 'Misión lista para completar'
+    || notif?.title === 'Mision lista para completar';
+}
+
 function Root() {
   // Registra el service worker (PWA + push) y navega cuando se hace click en una notificación push
   useEffect(() => {
@@ -44,6 +50,9 @@ function Root() {
   const transmisionActive               = useRef(null);
 
   const pushTransmision = (notif) => {
+    if (isMissionReadyAlert(notif)) {
+      return;
+    }
     if (transmisionActive.current) {
       transmisionQueue.current.push(notif);
     } else {
