@@ -21,6 +21,15 @@ const TIER_COLOR = {
 };
 const MEDAL_TONE_COLOR = { gold: '#E6B325', orange: '#FF6B00', holo: '#38cdf0', red: '#ff2d45' };
 
+/* Mismos assets que RANGOS_JEDI en Comando.jsx (apartado "Rango" de Mi Personaje). */
+const TIER_RANGO_IMG = {
+  iniciado:    '/assets/INITIATE.png',
+  padawan:     '/assets/PADAWAN.png',
+  caballero:   '/assets/KNIGHT.png',
+  maestro:     '/assets/MASTER.png',
+  granmaestro: '/assets/GRANDMASTER.png',
+};
+
 const SIDE_FRAME = {
   luminoso: { bg1: '#0a1a3a', bg2: '#040c1e', line: '#3aa0ff' },
   oscuro:   { bg1: '#2a0a0f', bg2: '#0f0304', line: '#ff2d45' },
@@ -148,11 +157,12 @@ export async function drawCharacterCard(character, user) {
   const publicUrl = `${window.location.origin}/c/${encodeURIComponent(handle)}`;
   const baseCombat = character.combat_base_stats ?? {};
 
-  const [photoImg, qrDataUrl] = await Promise.all([
+  const [photoImg, qrDataUrl, rankImg] = await Promise.all([
     loadImage(mediaUrl(character.photo ?? character.photo_url)),
     handle
       ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#eaf9ffcc', light: '#00000000' } }).catch(() => null)
       : Promise.resolve(null),
+    loadImage(TIER_RANGO_IMG[tierKey] ?? TIER_RANGO_IMG.iniciado),
   ]);
   const qrImg = qrDataUrl ? await loadImage(qrDataUrl) : null;
 
@@ -198,14 +208,40 @@ export async function drawCharacterCard(character, user) {
   ctx.fillStyle = '#eaf2ff';
   ctx.fillText(displayName, innerX, pad + 54);
 
-  ctx.beginPath();
-  ctx.arc(innerRight - 24, pad + 40, 23, 0, Math.PI * 2);
-  ctx.fillStyle = tierColor;
-  ctx.fill();
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#04070f';
-  ctx.font = '800 20px Orbitron';
-  ctx.fillText(tierLabel.charAt(0), innerRight - 24, pad + 48);
+  const badgeR = 23;
+  const badgeCx = innerRight - 24;
+  const badgeCy = pad + 40;
+  if (rankImg) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#04070f';
+    ctx.fillRect(badgeCx - badgeR, badgeCy - badgeR, badgeR * 2, badgeR * 2);
+    const scale = Math.max((badgeR * 2) / rankImg.width, (badgeR * 2) / rankImg.height);
+    const dw = rankImg.width * scale;
+    const dh = rankImg.height * scale;
+    ctx.drawImage(rankImg, badgeCx - dw / 2, badgeCy - dh / 2, dw, dh);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.save();
+    ctx.shadowColor = tierColor;
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = tierColor;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.beginPath();
+    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.fillStyle = tierColor;
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#04070f';
+    ctx.font = '800 20px Orbitron';
+    ctx.fillText(tierLabel.charAt(0), badgeCx, badgeCy + 8);
+  }
 
   /* ── subencabezado: forma de combate + color de sable ── */
   const subY = pad + 96;
@@ -273,40 +309,30 @@ export async function drawCharacterCard(character, user) {
   ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(innerX, typeY + 12); ctx.lineTo(innerRight, typeY + 12); ctx.stroke();
 
-  /* ── vida (corazones) y escudo (energía) — un ícono por punto, como concepto aparte de los atributos ── */
+  /* ── vida (corazones) y escudo (energía) — solo íconos, un pip por punto ── */
   const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
   const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
 
-  let y = typeY + 34;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(220,230,255,0.8)';
-  ctx.font = '600 15px "JetBrains Mono"';
-  ctx.fillText('VIDA', innerX, y);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = STAT_META.vida.color;
-  ctx.font = '800 18px Orbitron';
-  ctx.fillText(String(vidaVal), innerRight, y);
-  y += 12;
+  let y = typeY + 30;
   y = drawPipRow(ctx, {
-    count: vidaVal, x: innerX, maxWidth: innerW, y, size: 20, gap: 6,
+    count: vidaVal, x: innerX, maxWidth: innerW, y, size: 22, gap: 6,
     draw: (px, py, s) => drawHeartPip(ctx, px, py, s, STAT_META.vida.color),
   });
-  y += 26;
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(220,230,255,0.8)';
-  ctx.font = '600 15px "JetBrains Mono"';
-  ctx.fillText('ESCUDO', innerX, y);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = STAT_META.escudo.color;
-  ctx.font = '800 18px Orbitron';
-  ctx.fillText(String(escudoVal), innerRight, y);
-  y += 12;
+  y += 16;
   y = drawPipRow(ctx, {
-    count: escudoVal, x: innerX, maxWidth: innerW, y, size: 20, gap: 6,
+    count: escudoVal, x: innerX, maxWidth: innerW, y, size: 22, gap: 6,
     draw: (px, py, s) => drawShieldPip(ctx, px, py, s, STAT_META.escudo.color),
   });
-  y += 28;
+  y += 18;
+
+  /* ── separador entre escudo y el primer atributo (Ataque) ── */
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerX, y);
+  ctx.lineTo(innerRight, y);
+  ctx.stroke();
+  y += 22;
 
   /* ── atributos de combate: Ataque, Defensa, Puntería, Agilidad, Iniciativa ── */
   const statsTop = y;
@@ -350,9 +376,10 @@ export async function drawCharacterCard(character, user) {
   ctx.font = '400 12px "JetBrains Mono"';
   ctx.fillText('Perfil público', handleX, footY + 42);
 
+  const LOGO_SIZE = 62;
   if (medalIds.length) {
     const medalR = 15;
-    const LOGO_RESERVE = 50; // deja libre la esquina inferior derecha para el logo de esgrima
+    const LOGO_RESERVE = LOGO_SIZE + 8 + 16; // deja libre la esquina inferior derecha para el logo de esgrima
     let medalX = innerRight - medalR - LOGO_RESERVE;
     for (const id of [...medalIds].reverse()) {
       const medal = NX.MEDALS[id];
@@ -377,7 +404,7 @@ export async function drawCharacterCard(character, user) {
   ctx.font = '400 12px "JetBrains Mono"';
   ctx.fillText(`NÉXUS ACADEMIA — ${dateStr}`, CARD_W / 2, CARD_H - pad - 8);
 
-  await paintCardLogo(ctx, innerRight, CARD_H - pad);
+  await paintCardLogo(ctx, innerRight, CARD_H - pad, LOGO_SIZE);
 
   return canvas;
 }
