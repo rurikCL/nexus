@@ -117,8 +117,10 @@ export async function drawCharacterCard(character, user) {
   const publicUrl = `${window.location.origin}/c/${encodeURIComponent(handle)}`;
   const baseCombat = character.combat_base_stats ?? {};
   const saberBonos = character.sable_bonos ?? {};
+  const combatStats = character.combat_stats ?? {};
   const sableDano = character.sable_activo?.dano ?? 0;
   const sableDanoPerforante = character.sable_activo?.dano_perforante ?? 0;
+  const sableNombre = (character.sable_activo?.nombre ?? '').toUpperCase() || 'BONOS DEL SABLE';
 
   const [photoImg, qrDataUrl, rankImg] = await Promise.all([
     loadImage(mediaUrl(character.photo ?? character.photo_url)),
@@ -166,8 +168,8 @@ export async function drawCharacterCard(character, user) {
   ctx.stroke();
   ctx.restore();
 
-  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 4 ── */
-  const headerPad = 4;
+  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 14 ── */
+  const headerPad = 14;
   const logoR = 30;
   const headerTop = pad;
   const headerH = Math.max(logoR * 2 + headerPad * 2, 64);
@@ -269,7 +271,7 @@ export async function drawCharacterCard(character, user) {
   });
   y += 14;
 
-  /* ── cuadro grande: sable equipado (izquierda) + bonos del sable (derecha) ── */
+  /* ── cuadro grande: sable equipado | bonos del sable | valores finales (base + bonos) ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
   const EXTRA_ORDER = [
     { label: 'Daño', color: '#ff5f2e', icon: 'flame', value: sableDano },
@@ -287,10 +289,12 @@ export async function drawCharacterCard(character, user) {
   const saberBoxBottom = saberBoxTop + saberBoxH;
   paintBoxBg(ctx, innerX, saberBoxTop, innerW, saberBoxH, 10);
 
-  const colGap2 = 20;
-  const saberColW = innerW * 0.28;
+  const colGap2 = 14;
+  const saberColW = innerW * 0.22;
+  const finalColW = innerW * 0.19;
   const bonosColX = innerX + saberColW + colGap2;
-  const bonosColW = innerW - saberColW - colGap2;
+  const bonosColW = innerW - saberColW - finalColW - colGap2 * 2;
+  const finalColX = bonosColX + bonosColW + colGap2;
 
   drawSaberBlade(
     ctx,
@@ -301,8 +305,18 @@ export async function drawCharacterCard(character, user) {
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#38cdf0';
+  let saberNameSize = 11;
+  ctx.font = `700 ${saberNameSize}px "JetBrains Mono"`;
+  while (saberNameSize > 8 && ctx.measureText(sableNombre).width > bonosColW - 8) {
+    saberNameSize -= 1;
+    ctx.font = `700 ${saberNameSize}px "JetBrains Mono"`;
+  }
+  ctx.fillText(sableNombre, bonosColX, saberBoxTop + boxPad2 + 8);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#38cdf0';
   ctx.font = '700 11px "JetBrains Mono"';
-  ctx.fillText('BONOS DEL SABLE', bonosColX, saberBoxTop + boxPad2 + 8);
+  ctx.fillText('FINAL', finalColX + finalColW - 4, saberBoxTop + boxPad2 + 8);
 
   const rowsStartY = saberBoxTop + boxPad2 + headerLabelH + 10;
   const drawBonusRow = (i, icon, color, label, value) => {
@@ -320,9 +334,20 @@ export async function drawCharacterCard(character, user) {
     ctx.fillText(`${sign}${value}`, bonosColX + bonosColW - 4, rowY + 2);
   };
 
+  const drawFinalValue = (i, color, value) => {
+    const rowY = rowsStartY + i * bonusRowH;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = color;
+    ctx.font = '800 16px Orbitron';
+    ctx.fillText(`${value}`, finalColX + finalColW - 4, rowY + 2);
+  };
+
   ATTR_ORDER.forEach((key, i) => {
     const meta = STAT_META[key];
-    drawBonusRow(i, meta.icon, meta.color, meta.label, saberBonos[key] ?? 0);
+    const bono = saberBonos[key] ?? 0;
+    drawBonusRow(i, meta.icon, meta.color, meta.label, bono);
+    const finalValue = combatStats[key] ?? ((baseCombat[key] ?? COMBAT_DEFAULTS[key] ?? 0) + bono);
+    drawFinalValue(i, meta.color, finalValue);
   });
   EXTRA_ORDER.forEach((row, j) => {
     drawBonusRow(ATTR_ORDER.length + j, row.icon, row.color, row.label, row.value);
@@ -333,7 +358,7 @@ export async function drawCharacterCard(character, user) {
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(bonosColX, dividerY);
-  ctx.lineTo(bonosColX + bonosColW, dividerY);
+  ctx.lineTo(finalColX + finalColW, dividerY);
   ctx.stroke();
 
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
@@ -341,6 +366,11 @@ export async function drawCharacterCard(character, user) {
   ctx.beginPath();
   ctx.moveTo(innerX + saberColW + colGap2 / 2, saberBoxTop + 8);
   ctx.lineTo(innerX + saberColW + colGap2 / 2, saberBoxBottom - 8);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(bonosColX + bonosColW + colGap2 / 2, saberBoxTop + 8);
+  ctx.lineTo(bonosColX + bonosColW + colGap2 / 2, saberBoxBottom - 8);
   ctx.stroke();
 
   /* ── pie: 3 columnas — QR + alias | logo de esgrima | ID de personaje ── */
@@ -361,7 +391,7 @@ export async function drawCharacterCard(character, user) {
 
   await paintLogoAt(ctx, innerX + innerW / 2, footY + footH / 2, 44);
 
-  const idStr = `EJC-${String(character.id ?? 0).padStart(3, '0')}`;
+  const idStr = `EJC-${String(user?.id ?? character.id ?? 0).padStart(3, '0')}`;
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(150,200,255,0.5)';
   ctx.font = '400 10px "JetBrains Mono"';
