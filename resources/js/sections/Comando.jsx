@@ -751,7 +751,17 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {savedCardUrl
-                      ? <img src={savedCardUrl} alt="Carta de personaje generada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ? (
+                        <a
+                          href={savedCardUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Abrir carta de personaje en una pestaña nueva"
+                          style={{ display: 'block', width: '100%', height: '100%' }}
+                        >
+                          <img src={savedCardUrl} alt="Carta de personaje generada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </a>
+                      )
                       : (
                         <>
                           <Icon name="user" size={34} />
