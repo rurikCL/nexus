@@ -170,6 +170,149 @@ export function paintGridBackground(ctx, x, y, w, h, radius = 0, spacing = 48) {
   ctx.restore();
 }
 
+const SHIELD_PATH = 'M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z';
+
+/** Dibuja un corazón relleno (pip de Vida) con esquina superior-izquierda en (x, y). */
+function drawHeartPip(ctx, x, y, size, color) {
+  const topCurveHeight = size * 0.3;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(x + size / 2, y + topCurveHeight);
+  ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + topCurveHeight);
+  ctx.bezierCurveTo(x, y + (size + topCurveHeight) / 2, x + size / 2, y + (size + topCurveHeight) / 2, x + size / 2, y + size);
+  ctx.bezierCurveTo(x + size / 2, y + (size + topCurveHeight) / 2, x + size, y + (size + topCurveHeight) / 2, x + size, y + topCurveHeight);
+  ctx.bezierCurveTo(x + size, y, x + size / 2, y, x + size / 2, y + topCurveHeight);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Dibuja un escudo de energía (pip de Escudo) con esquina superior-izquierda en (x, y). */
+function drawShieldPip(ctx, x, y, size, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(size / 24, size / 24);
+  const path = new Path2D(SHIELD_PATH);
+  ctx.fillStyle = `${color}33`;
+  ctx.fill(path);
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 3;
+  ctx.stroke(path);
+  ctx.restore();
+}
+
+/** Dibuja una fila de pips (corazones/escudos) que se envuelve si no caben en `maxWidth`; devuelve el Y final. */
+function drawPipRow(ctx, { count, draw, x, maxWidth, y, size = 20, gap = 6, maxPips = 30 }) {
+  const shown = Math.min(count, maxPips);
+  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
+  const rows = Math.max(1, Math.ceil(shown / perRow));
+  for (let i = 0; i < shown; i++) {
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+    draw(x + col * (size + gap), y + row * (size + gap), size);
+  }
+  let bottomY = y + rows * (size + gap) - gap;
+  if (count > maxPips) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(220,230,255,0.75)';
+    ctx.font = '700 13px "JetBrains Mono"';
+    ctx.fillText(`+${count - maxPips}`, x, bottomY + 13);
+    bottomY += 16;
+  }
+  return bottomY;
+}
+
+/** Misma cuenta de `drawPipRow` pero sin dibujar — permite reservar el alto de la caja de fondo antes de pintar el contenido encima. */
+function pipRowHeight(count, maxWidth, size, gap, maxPips = 30) {
+  const shown = Math.min(count, maxPips);
+  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
+  const rows = Math.max(1, Math.ceil(shown / perRow));
+  let h = rows * (size + gap) - gap;
+  if (count > maxPips) h += 16;
+  return h;
+}
+
+/** Fondo negro con degradé semitransparente + borde sutil, recortado a un rectángulo redondeado. */
+export function paintBoxBg(ctx, x, y, w, h, radius = 10) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, 'rgba(0,0,0,0.55)');
+  g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Cuadro de Vida/Escudo en dos columnas divididas por una línea vertical — etiqueta+ícono
+    arriba de cada columna y una fila de pips (corazones/escudos) debajo. `drawIcon` recibe
+    (name, cx, cy, size, color, strokeWidth) — ya resuelto por el llamador (necesita ICON_PATHS
+    de ui.jsx, que este módulo no importa). Devuelve el Y inferior del cuadro. */
+export function paintVidaEscudoBox(ctx, {
+  x, y, w, vidaVal, escudoVal, vidaMeta, escudoMeta, drawIcon,
+  pipSize = 18, pipGap = 5, boxPad = 14, colGap = 16,
+}) {
+  const halfW = w / 2;
+  const leftX = x + boxPad;
+  const leftW = halfW - boxPad - colGap / 2;
+  const rightX = x + halfW + colGap / 2;
+  const rightW = halfW - boxPad - colGap / 2;
+
+  const boxTop = y;
+  const cy = boxTop + boxPad + 12;
+  const pipY = cy + 12;
+
+  const vidaH = pipRowHeight(vidaVal, leftW, pipSize, pipGap);
+  const escudoH = pipRowHeight(escudoVal, rightW, pipSize, pipGap);
+  const boxBottom = pipY + Math.max(vidaH, escudoH) + boxPad;
+
+  paintBoxBg(ctx, x, boxTop, w, boxBottom - boxTop, 10);
+
+  ctx.textAlign = 'left';
+  drawIcon(vidaMeta.icon, leftX + 11, cy - 6, 20, vidaMeta.color, 2);
+  ctx.fillStyle = 'rgba(220,230,255,0.8)';
+  ctx.font = '600 16px "JetBrains Mono"';
+  ctx.fillText(vidaMeta.label.toUpperCase(), leftX + 26, cy);
+
+  drawIcon(escudoMeta.icon, rightX + 11, cy - 6, 20, escudoMeta.color, 2);
+  ctx.fillStyle = 'rgba(220,230,255,0.8)';
+  ctx.font = '600 16px "JetBrains Mono"';
+  ctx.fillText(escudoMeta.label.toUpperCase(), rightX + 26, cy);
+
+  drawPipRow(ctx, {
+    count: vidaVal, x: leftX, maxWidth: leftW, y: pipY, size: pipSize, gap: pipGap,
+    draw: (px, py, s) => drawHeartPip(ctx, px, py, s, vidaMeta.color),
+  });
+  drawPipRow(ctx, {
+    count: escudoVal, x: rightX, maxWidth: rightW, y: pipY, size: pipSize, gap: pipGap,
+    draw: (px, py, s) => drawShieldPip(ctx, px, py, s, escudoMeta.color),
+  });
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + halfW, boxTop + 6);
+  ctx.lineTo(x + halfW, boxBottom - 6);
+  ctx.stroke();
+
+  return boxBottom;
+}
+
 /* Metadatos de los 7 atributos de combate compartidos por personajes, NPCs,
    jefes y enemigos — mismos íconos/colores que BONUS_FIELDS en ArmadoSable.jsx,
    para mantener el lenguaje visual del resto de la app (ATQ naranja, DEF cian,
