@@ -273,10 +273,59 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     };
   };
 
-  const enqueueMissionAlert = (mission) => {
+  const fetchMissionCollections = async () => {
+    const token = localStorage.getItem('nx-token');
+    if (!token) return null;
+
+    const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+    const fetchJson = (path) => fetch(path, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+    const [global, individual, comunidad, temporadas] = await Promise.all([
+      fetchJson('/api/misiones/global'),
+      fetchJson('/api/misiones/individual'),
+      fetchJson('/api/misiones/comunidad'),
+      fetchJson('/api/temporadas'),
+    ]);
+
+    const activeTemporadas = (temporadas?.temporadas ?? []).filter(t => t.activa);
+    const temporadaData = await Promise.all(activeTemporadas.map(async (t) => {
+      const data = await fetchJson(`/api/misiones/temporada/${t.id}`);
+      return { temporada: t, misiones: data?.misiones ?? [] };
+    }));
+
+    return {
+      global: global?.misiones ?? [],
+      individual: individual?.misiones ?? [],
+      comunidad: comunidad?.misiones ?? [],
+      temporadas: temporadaData.flatMap(({ temporada, misiones }) => (
+        misiones.map(m => ({ ...m, temporada_nombre: temporada.nombre }))
+      )),
+    };
+  };
+
+  const resolveMissionAlert = async (mission) => {
     const normalized = normalizeMissionAlert(mission);
-    if (!normalized) return;
-    setMisionNotifQueue(prev => prev.some(m => m.id === normalized.id) ? prev : [...prev, normalized]);
+    if (!normalized) return null;
+
+    const collections = await fetchMissionCollections();
+    const allMissions = collections
+      ? [...collections.global, ...collections.individual, ...collections.comunidad, ...collections.temporadas]
+      : [];
+
+    const resolved = allMissions.find(m => String(m.id) === String(normalized.id));
+    const merged = resolved ? { ...normalized, ...resolved } : normalized;
+
+    if (merged?.status === 'completada' || merged?.completada_por_mi) {
+      return null;
+    }
+
+    return merged;
+  };
+
+  const enqueueMissionAlert = async (mission) => {
+    const resolved = await resolveMissionAlert(mission);
+    if (!resolved) return;
+    setMisionNotifQueue(prev => prev.some(m => m.id === resolved.id) ? prev : [...prev, resolved]);
   };
 
   const go = (v) => {
@@ -443,7 +492,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         .filter(n => !n.read && new Date(n.created_at).getTime() > cutoff)
         .forEach(n => {
           if (isMissionReadyAlert(n.data)) {
-            enqueueMissionAlert({ ...n.data, notification_id: n.id, aceptada: true, status: 'en-curso', puede_completar: n.data?.puede_completar ?? true });
+            void enqueueMissionAlert({ ...n.data, notification_id: n.id });
             return;
           }
           onTransmision?.({ ...n.data, _notifId: n.id });
@@ -510,7 +559,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
           m.cumple_hitos
         );
         pendientes.forEach((mision) => {
-          enqueueMissionAlert(mision);
+          void enqueueMissionAlert(mision);
         });
       })
       .catch(() => {});
@@ -620,7 +669,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       .notification((notif) => {
         setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
         if (isMissionReadyAlert(notif)) {
-          enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now(), aceptada: true, status: 'en-curso', puede_completar: notif?.puede_completar ?? true });
+          void enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now() });
           return;
         }
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
