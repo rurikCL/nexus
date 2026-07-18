@@ -2133,9 +2133,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
 
   return (
     <>
-    <div className="nx-fade nx-personaje-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '340px 1fr', gap: 18, alignItems: 'start' }}>
+    <div className="nx-fade nx-personaje-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '340px 1fr', gap: 18, alignItems: 'start', width: '100%', maxWidth: '100%', overflowX: 'clip' }}>
       {/* Retrato */}
-      <div style={{ display: 'grid', gap: 18 }}>
+      <div style={{ display: 'grid', gap: 18, minWidth: 0, maxWidth: '100%' }}>
         <Panel kicker="Retrato de combate" title="Identidad" icon="user" noBody>
           <div className="nx-panel-body" style={{ display: 'grid', placeItems: 'center', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -2285,7 +2285,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
       </div>
 
       {/* Editor */}
-      <div style={{ display: 'grid', gap: 18 }}>
+      <div style={{ display: 'grid', gap: 18, minWidth: 0, maxWidth: '100%' }}>
         <Panel kicker="Ficha" title="Datos del Personaje" icon="edit"
           right={<Btn kind="accent" icon="check" sm disabled={saving} onClick={handleSave}>{saving ? 'Guardando...' : 'Guardar'}</Btn>}>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>

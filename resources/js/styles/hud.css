@@ -940,6 +940,8 @@ a { color: var(--holo); }
 
   /* Personaje: columna fija → apilado */
   .nx-personaje-grid { grid-template-columns: 1fr !important; }
+  .nx-personaje-grid { width: 100% !important; max-width: 100% !important; overflow-x: clip !important; }
+  .nx-personaje-grid > * { min-width: 0 !important; max-width: 100% !important; }
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
@@ -948,4 +950,6 @@ a { color: var(--holo); }
   .nx-main { padding: 20px 18px 60px !important; }
   .nx-grid-2 { grid-template-columns: 1fr 1fr !important; }
   .nx-personaje-grid { grid-template-columns: 300px 1fr !important; }
+  .nx-personaje-grid { width: 100% !important; max-width: 100% !important; overflow-x: clip !important; }
+  .nx-personaje-grid > * { min-width: 0 !important; max-width: 100% !important; }
 }
