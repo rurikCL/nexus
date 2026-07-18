@@ -11,12 +11,442 @@ import {
   CLASES_JEDI,
   RANGOS_JEDI,
   FORMA_LABELS,
+  mediaUrl,
   CharacterCreation,
   HabilidadSlot,
   HabilidadPickerModal,
   TitulosPanel,
   SaberBlade,
 } from './Comando.jsx';
+
+const EQUIP_TABS = [
+  { value: 'inventario', label: 'Inventario', icon: 'roster' },
+  { value: 'sable', label: 'Sable', icon: 'sword' },
+  { value: 'nave', label: 'Nave', icon: 'ship' },
+];
+
+const ITEM_TYPES = [
+  { value: 'arma', label: 'Armas', icon: 'sword' },
+  { value: 'consumible', label: 'Consumibles', icon: 'box' },
+  { value: 'mision', label: 'Misiones', icon: 'calendar' },
+  { value: 'otro', label: 'Otros', icon: 'box' },
+];
+
+const fmtCr = (n) => `${Math.round(n ?? 0).toLocaleString('es-CL')} cr`;
+
+function NaveMiniStatBar({ label, value, max, color }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ fontSize: 9, fontFamily: 'var(--font-data)', color: 'var(--txt-faint)', width: 66, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+      <div style={{ flex: 1, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', color: 'var(--txt-dim)', width: 44, textAlign: 'right', flexShrink: 0 }}>{value}/{max}</span>
+    </div>
+  );
+}
+
+function NaveCombatStat({ label, icon, color, base, efectivo }) {
+  const baseVal = base ?? 0;
+  const efectivoVal = efectivo ?? baseVal;
+  const bono = efectivoVal - baseVal;
+  return (
+    <span className="nx-data" style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10,
+      padding: '4px 9px', borderRadius: 4, background: `${color}14`, border: `1px solid ${color}40`, color,
+    }}>
+      <Icon name={icon} size={11} />
+      {label} {efectivoVal}
+      {bono > 0 && <span style={{ color: '#4ade80' }}>(+{bono})</span>}
+    </span>
+  );
+}
+
+const NAVE_BONUS_FIELDS = [
+  { key: 'bono_ataque', label: 'ATQ', color: '#ff7043', icon: 'sword' },
+  { key: 'bono_defensa', label: 'DEF', color: '#38cdf0', icon: 'shield' },
+  { key: 'bono_punteria', label: 'PNT', color: '#22c55e', icon: 'target' },
+  { key: 'bono_movimiento', label: 'MOV', color: '#E6B325', icon: 'arrow' },
+  { key: 'bono_iniciativa', label: 'INI', color: '#a78bfa', icon: 'zap' },
+  { key: 'bono_vida', label: 'VIDA', color: '#4ade80', icon: 'heart' },
+  { key: 'bono_escudo', label: 'ESC', color: '#38cdf0', icon: 'shield' },
+  { key: 'bono_capacidad_carga', label: 'CARGA', color: '#f59e0b', icon: 'box' },
+  { key: 'bono_capacidad_salto', label: 'SALTO', color: '#a78bfa', icon: 'zap' },
+  { key: 'bono_costo_reparacion', label: 'REPARO', color: '#22c55e', icon: 'shield' },
+];
+
+function MejoraSlot({ slot, mejora, onClick, disabled }) {
+  const isEmpty = !mejora;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={isEmpty ? `Asignar mejora ${slot}` : mejora.nombre}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        padding: 14, borderRadius: 'var(--radius-md)', cursor: disabled ? 'wait' : 'pointer',
+        background: isEmpty ? 'rgba(255,255,255,.025)' : 'color-mix(in srgb, var(--holo) 8%, rgba(255,255,255,.03))',
+        border: `1px solid ${isEmpty ? 'var(--holo-line)' : 'var(--holo)'}`,
+        boxShadow: isEmpty ? 'none' : '0 0 14px -6px var(--holo)',
+        opacity: disabled ? 0.6 : 1, transition: 'all .18s', flex: 1, minWidth: 0,
+      }}
+    >
+      {isEmpty ? (
+        <>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', border: '1px dashed var(--holo-line)', display: 'grid', placeItems: 'center', opacity: 0.5 }}>
+            <Icon name="plus" size={16} />
+          </div>
+          <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Slot {slot}
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%',
+            display: 'grid', placeItems: 'center',
+            background: 'color-mix(in srgb, var(--holo) 15%, rgba(4,9,18,.8))',
+            border: '1px solid var(--holo)',
+            boxShadow: '0 0 12px -4px var(--holo)',
+            overflow: 'hidden',
+          }}>
+            {mejora.imagen
+              ? <img src={mediaUrl(mejora.imagen)} alt={mejora.nombre} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+              : <Icon name="box" size={18} style={{ color: 'var(--holo)' }} />
+            }
+          </div>
+          <div style={{ textAlign: 'center', minWidth: 0 }}>
+            <div className="nx-display" style={{ fontSize: 9, color: 'var(--holo)', lineHeight: 1.2, overflowWrap: 'break-word' }}>
+              {mejora.nombre}
+            </div>
+          </div>
+        </>
+      )}
+    </button>
+  );
+}
+
+function MejoraBadges({ mejora }) {
+  const badges = NAVE_BONUS_FIELDS.filter(b => mejora[b.key]);
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      {badges.map(b => (
+        <span key={b.key} style={{
+          fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+          padding: '2px 6px', borderRadius: 3,
+          background: `${b.color}18`, border: `1px solid ${b.color}40`,
+          color: b.color, whiteSpace: 'nowrap', lineHeight: 1.4,
+        }}>
+          {mejora[b.key] > 0 ? '+' : ''}{mejora[b.key]} {b.label}
+        </span>
+      ))}
+      {mejora.bono_cooldown ? (
+        <span style={{
+          fontSize: 8, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+          padding: '2px 6px', borderRadius: 3,
+          background: '#f59e0b18', border: '1px solid #f59e0b40',
+          color: '#f59e0b', whiteSpace: 'nowrap', lineHeight: 1.4,
+        }}>
+          {mejora.bono_cooldown} CD{mejora.mejora_habilidad ? `: ${mejora.mejora_habilidad.nombre}` : ''}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function MejoraPickerRow({ mejora, selected, onAssign }) {
+  return (
+    <div onClick={onAssign} style={{
+      display: 'flex', alignItems: 'flex-start', gap: 11,
+      padding: '10px 12px', borderRadius: 'var(--radius-md)',
+      border: `1px solid ${selected ? 'var(--holo)' : 'var(--holo-line)'}`,
+      background: selected ? 'color-mix(in srgb, var(--holo) 10%, rgba(255,255,255,.03))' : 'rgba(255,255,255,.02)',
+      cursor: 'pointer', transition: 'all .15s',
+    }}
+      onMouseEnter={e => { if (!selected) { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--holo) 8%, transparent)'; } }}
+      onMouseLeave={e => { if (!selected) { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.background = 'rgba(255,255,255,.02)'; } }}
+    >
+      <div style={{
+        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+        display: 'grid', placeItems: 'center',
+        background: 'rgba(56,205,240,0.12)', border: '1px solid rgba(56,205,240,0.28)',
+        overflow: 'hidden',
+      }}>
+        {mejora.imagen
+          ? <img src={mediaUrl(mejora.imagen)} alt={mejora.nombre} style={{ width: 28, height: 28, objectFit: 'contain' }} />
+          : <Icon name="box" size={20} style={{ color: 'var(--holo)' }} />
+        }
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--txt)', lineHeight: 1.2 }}>{mejora.nombre}</div>
+          {selected && <Chip tone="green" icon="check">Instalada</Chip>}
+        </div>
+        {mejora.efecto && (
+          <div style={{ fontSize: 11, color: 'var(--txt-dim)', marginBottom: 6 }}>{mejora.efecto}</div>
+        )}
+        <MejoraBadges mejora={mejora} />
+      </div>
+    </div>
+  );
+}
+
+function MejoraPickerModal({ open, onClose, mejoras, onAssign, onUnassign, slotIndex, currentId }) {
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(4,7,15,0.85)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'rgba(5,10,22,0.98)', border: '1px solid var(--holo-line)',
+        borderRadius: 'var(--radius-lg)', boxShadow: '0 24px 80px rgba(0,0,0,.7)',
+        width: '100%', maxWidth: 520, maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid var(--holo-line)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: 'var(--holo)' }}><Icon name="box" size={16} /></span>
+          <div style={{ flex: 1 }}>
+            <div className="nx-display" style={{ fontSize: 14 }}>Seleccionar Mejora</div>
+            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 2 }}>SLOT {slotIndex} — Elige una mejora para tu nave</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost" style={{ padding: 7 }} onClick={onClose}>
+            <Icon name="x" size={15} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {currentId && (
+            <button onClick={onUnassign} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 12px', marginBottom: 10, borderRadius: 'var(--radius-md)',
+              border: '1px dashed var(--holo-line)', background: 'rgba(255,255,255,.02)',
+              color: 'var(--txt-dim)', cursor: 'pointer', fontSize: 12,
+            }}>
+              <Icon name="x" size={13} /> Quitar mejora de este slot
+            </button>
+          )}
+          {mejoras.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--txt-faint)' }}>
+              <div className="nx-data" style={{ fontSize: 11, letterSpacing: '0.1em' }}>NO POSEES MEJORAS DE NAVE</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {mejoras.map(m => (
+                <MejoraPickerRow key={m.id} mejora={m} selected={m.id === currentId} onAssign={() => onAssign(m)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function NaveMejorasSlots({ owned, onChanged }) {
+  const [mejoras, setMejoras] = useState([]);
+  const [busySlot, setBusySlot] = useState(null);
+  const [pickerSlot, setPickerSlot] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  useEffect(() => {
+    fetch(`/api/naves/${owned.id}/mejoras-options`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { mejoras: [] })
+      .then(d => setMejoras(d.mejoras ?? []))
+      .catch(() => {});
+  }, [owned.id]);
+
+  const setSlot = async (slot, objetoId) => {
+    setBusySlot(slot);
+    try {
+      const res = await fetch(`/api/naves/${owned.id}/mejoras/${slot}`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ objeto_id: objetoId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? data.error ?? 'No se pudo actualizar la mejora.');
+      setPickerSlot(null);
+      onChanged?.();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo actualizar la mejora', { tone: 'error' });
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--holo-line)' }}>
+      <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 8 }}>Mejoras instaladas (4 slots)</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        {[1, 2, 3, 4].map(slot => (
+          <MejoraSlot
+            key={slot} slot={slot} mejora={owned[`mejora${slot}`]}
+            disabled={busySlot === slot}
+            onClick={() => setPickerSlot(slot)}
+          />
+        ))}
+      </div>
+      {mejoras.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 8 }}>
+          No posees mejoras de nave en tu inventario. Consíguelas con un vendedor.
+        </div>
+      )}
+
+      <MejoraPickerModal
+        open={pickerSlot != null}
+        onClose={() => setPickerSlot(null)}
+        mejoras={mejoras}
+        slotIndex={pickerSlot}
+        currentId={pickerSlot ? (owned[`mejora${pickerSlot}`]?.id ?? null) : null}
+        onAssign={(m) => setSlot(pickerSlot, m.id)}
+        onUnassign={() => setSlot(pickerSlot, null)}
+      />
+    </div>
+  );
+}
+
+function NaveEquipadaPanel() {
+  const [naves, setNaves] = useState([]);
+  const [naveEquipadaId, setNaveEquipadaId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/naves/mias', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setNaves(d.naves ?? []); setNaveEquipadaId(d.nave_equipada_id ?? null); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const runAction = async (id, path, successMsg) => {
+    setBusy(id);
+    try {
+      const res = await fetch(`/api${path}`, { method: 'POST', headers: authHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? 'No se pudo completar la acción.');
+      if (successMsg) toast(successMsg, { tone: 'success', icon: 'check' });
+      load();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo completar la acción', { tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const equipar     = (owned) => runAction(owned.id, `/naves/${owned.id}/equipar`, `${owned.nave?.nombre ?? 'Nave'} equipada`);
+  const desequipar  = ()      => runAction('unequip', '/naves/desequipar');
+  const reabastecer = (owned) => runAction(`fuel-${owned.id}`, `/naves/${owned.id}/reabastecer`, 'Combustible reabastecido');
+  const reparar     = (owned) => runAction(`fix-${owned.id}`,  `/naves/${owned.id}/reparar`,     'Nave reparada');
+
+  const equipada = naves.find(n => n.id === naveEquipadaId);
+  const otras    = naves.filter(n => n.id !== naveEquipadaId);
+
+  return (
+    <Panel kicker="Equipo" title="Nave Equipada" icon="ship">
+      {loading ? (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>Cargando naves...</div>
+      ) : naves.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+          No posees ninguna nave. Consigue una hablando con un vendedor de naves en el Mapa Galáctico.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {equipada ? (
+            <div className="nx-panel solid" style={{ padding: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                  background: 'color-mix(in srgb, var(--holo) 18%, rgba(4,9,18,0.9))',
+                  border: '1px solid var(--holo-line)', overflow: 'hidden',
+                }}>
+                  {equipada.nave?.imagen
+                    ? <img src={mediaUrl(equipada.nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Icon name="ship" size={22} style={{ color: 'var(--holo)' }} />}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{equipada.nave?.nombre}</div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    <Chip tone="green" icon="check">Equipada</Chip>
+                    <Chip tone="dim">+{equipada.capacidad_carga_max ?? 0} carga</Chip>
+                  </div>
+                </div>
+              </div>
+              <Btn kind="ghost" sm onClick={desequipar} disabled={busy === 'unequip'} style={{ marginTop: 12 }}>
+                Desequipar
+              </Btn>
+              <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+                <NaveMiniStatBar label="Vida"        value={equipada.vida_actual}        max={equipada.vida_max ?? 0}            color="#4ade80" />
+                <NaveMiniStatBar label="Escudo"      value={equipada.escudo_actual}      max={equipada.escudo_max ?? 0}          color="#38cdf0" />
+                <NaveMiniStatBar label="Combustible" value={equipada.combustible_actual} max={equipada.capacidad_salto_max ?? 0} color="var(--holocron-oro)" />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <NaveCombatStat label="Atq" icon="sword"  color="#ff7043" base={equipada.nave?.ataque}         efectivo={equipada.ataque_efectivo} />
+                <NaveCombatStat label="Vel" icon="zap"    color="#E6B325" base={equipada.nave?.velocidad}      efectivo={equipada.velocidad_efectiva} />
+                <NaveCombatStat label="Man" icon="target" color="#a78bfa" base={equipada.nave?.maniobrabilidad} efectivo={equipada.maniobrabilidad_efectiva} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                <Btn kind="ghost" sm icon="fuel" onClick={() => reabastecer(equipada)}
+                  disabled={busy === `fuel-${equipada.id}` || equipada.combustible_actual >= (equipada.capacidad_salto_max ?? 0)}>
+                  Reabastecer ({fmtCr(equipada.nave?.costo_combustible)})
+                </Btn>
+                <Btn kind="ghost" sm icon="shield" onClick={() => reparar(equipada)}
+                  disabled={busy === `fix-${equipada.id}` || (equipada.vida_actual >= (equipada.vida_max ?? 0) && equipada.escudo_actual >= (equipada.escudo_max ?? 0))}>
+                  Reparar ({fmtCr(equipada.costo_reparacion_final)})
+                </Btn>
+              </div>
+              <NaveMejorasSlots owned={equipada} onChanged={load} />
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+              No tienes ninguna nave equipada. Elige una de tus naves abajo.
+            </div>
+          )}
+
+          {otras.length > 0 && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div className="nx-kicker" style={{ fontSize: 9 }}>Otras naves propias</div>
+              {otras.map(owned => (
+                <div key={owned.id} className="nx-panel" style={{ padding: 11, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                    display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+                  }}>
+                    {owned.nave?.imagen
+                      ? <img src={mediaUrl(owned.nave.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Icon name="ship" size={16} style={{ color: 'var(--holo)' }} />}
+                  </div>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{owned.nave?.nombre}</span>
+                  <Btn kind="accent" sm onClick={() => equipar(owned)} disabled={busy === owned.id}>
+                    {busy === owned.id ? '...' : 'Equipar'}
+                  </Btn>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
@@ -131,6 +561,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
       setEquipandoArma(false);
     }
   };
+
+  const sableActivo = user?.character?.sable_activo ?? null;
+  const sableColorHex = NX.SABERS[sableActivo?.color_hoja] || NX.SABERS.azul;
 
   const loadHabilidades = () => {
     if (habilidades.length > 0) return;
@@ -427,7 +860,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
 
           <Panel kicker="Especialización" title="Forma de Combate" icon="sword">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 6, width: '100%', minWidth: 0 }}>
-              {CLASES_JEDI.map((c) => {
+              {NX.CLASSES.map((c) => {
                 const active = ch.cls === c.id;
                 return (
                   <button key={c.id} onClick={() => S.setCharacter({ ...ch, cls: c.id })}
@@ -534,7 +967,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
         <button
           onClick={() => setEquipOpen(o => !o)}
           style={{
-            position: 'fixed', top: '50%', right: equipOpen ? 400 : 0, transform: 'translateY(-50%)',
+            position: 'fixed', top: '50%', right: equipOpen ? 390 : 0, transform: 'translateY(-50%)',
             zIndex: 41, cursor: 'pointer',
             background: 'rgba(5,10,22,0.92)', backdropFilter: 'blur(6px)',
             border: '1px solid var(--holo-line)', borderRight: equipOpen ? '1px solid var(--holo-line)' : 'none',
@@ -546,6 +979,180 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
           <Icon name="chevron" size={13} style={{ transform: equipOpen ? 'rotate(0deg)' : 'rotate(180deg)' }} />
           <span style={{ writingMode: 'vertical-rl', fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.14em' }}>EQUIPO</span>
         </button>
+
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 'min(390px, 100vw)',
+          zIndex: 40,
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'rgba(5,10,22,0.96)',
+          backdropFilter: 'blur(10px)',
+          borderLeft: '1px solid var(--holo-line)',
+          transform: equipOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.28s var(--ease-standard)',
+          boxShadow: equipOpen ? '-20px 0 60px -10px rgba(0,0,0,0.7)' : 'none',
+          pointerEvents: equipOpen ? 'auto' : 'none',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 14px 10px', borderBottom: '1px solid var(--holo-line)', flexShrink: 0 }}>
+            <div>
+              <div className="nx-kicker" style={{ marginBottom: 2 }}>Equipo</div>
+              <div className="nx-display" style={{ fontSize: 14 }}>Barra lateral</div>
+            </div>
+            <button onClick={() => setEquipOpen(false)} className="nx-btn nx-btn-ghost nx-btn-sm" style={{ padding: '6px 8px' }}>
+              <Icon name="x" size={13} />
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, padding: '12px 14px 0', flexShrink: 0 }}>
+            {EQUIP_TABS.map(t => {
+              const active = equipTab === t.value;
+              return (
+                <button key={t.value} onClick={() => setEquipTab(t.value)} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center',
+                  padding: '7px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
+                  fontFamily: 'var(--font-data)', letterSpacing: '0.05em',
+                  background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+                  border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                  color: active ? 'var(--holo)' : 'var(--txt-faint)',
+                  boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
+                  transition: 'all .14s',
+                }}>
+                  <Icon name={t.icon} size={12} />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'grid', gap: 14 }}>
+            {equipTab === 'sable' && (
+              <Panel kicker="Equipo" title="Sable de Luz" icon="sword"
+                right={<Btn kind="ghost" icon="sword" sm onClick={() => { setEquipOpen(false); go?.('armado-sable'); }}>Gestionar sable</Btn>}>
+                {sableActivo ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                      background: `color-mix(in srgb, ${sableColorHex} 18%, rgba(4,9,18,0.9))`,
+                      border: `1px solid color-mix(in srgb, ${sableColorHex} 55%, transparent)`,
+                    }}>
+                      <Icon name="sword" size={22} style={{ color: sableColorHex, filter: `drop-shadow(0 0 6px ${sableColorHex})` }} />
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{sableActivo.nombre}</div>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+                        <Chip tone="green" icon="check">Armado</Chip>
+                        <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+                          <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {sableActivo.dano} DMG melee
+                        </span>
+                        {sableActivo.dano_perforante > 0 && (
+                          <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+                            <Icon name="fire" size={12} style={{ color: '#8aa0c0' }} /> +{sableActivo.dano_perforante}P
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--txt-faint)', flexBasis: '100%' }}>
+                      Tu sable armado ataca cuerpo a cuerpo en combate y tiene prioridad sobre cualquier arma equipada.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                    No tienes ningún sable de luz armado. Ensambla y activa uno en «Armado de Sable» para usarlo en combate.
+                  </div>
+                )}
+              </Panel>
+            )}
+
+            {equipTab === 'nave' && <NaveEquipadaPanel />}
+
+            {equipTab === 'inventario' && (
+              <Panel kicker="Equipo" title="Inventario" icon="roster"
+                right={invTab === 'arma' ? (
+                  <Btn kind="accent" icon="check" sm disabled={equipandoArma || (armaEquipadaId ?? '') === (user?.character?.arma_equipada?.id ?? '')} onClick={handleEquiparArma}>
+                    {equipandoArma ? 'Equipando...' : 'Equipar'}
+                  </Btn>
+                ) : null}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {ITEM_TYPES.map(t => {
+                    const count = inventario.filter(o => o.tipo === t.value).length;
+                    const active = invTab === t.value;
+                    return (
+                      <button key={t.value} onClick={() => setInvTab(t.value)} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10,
+                        fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+                        background: active ? 'color-mix(in srgb, var(--holo) 18%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+                        border: `1px solid ${active ? 'var(--holo)' : 'var(--holo-line)'}`,
+                        color: active ? 'var(--holo)' : 'var(--txt-faint)',
+                        boxShadow: active ? '0 0 10px -4px var(--holo)' : 'none',
+                        transition: 'all .14s',
+                      }}>
+                        <Icon name={t.icon} size={12} />
+                        {t.label}
+                        <span style={{ opacity: 0.7 }}>({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {invTab === 'arma' ? (
+                  <>
+                    {sableActivo && (
+                      <div style={{ fontSize: 11, color: 'var(--txt-faint)', padding: '0 0 10px' }}>
+                        Tienes un sable de luz armado - se usará en combate en lugar de esta arma mientras esté activo.
+                      </div>
+                    )}
+                    {armasDisponibles.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                        No posees armas en tu inventario. Sin arma equipada, tus ataques básicos hacen 3 de daño.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                        <button
+                          onClick={() => setArmaEquipadaId('')}
+                          className="nx-panel solid"
+                          style={{
+                            minHeight: 92, padding: 12, borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                            textAlign: 'left', borderColor: !armaEquipadaId ? 'var(--holo)' : 'var(--holo-line)',
+                            boxShadow: !armaEquipadaId ? '0 0 14px -6px var(--holo)' : 'none',
+                          }}
+                        >
+                          <div className="nx-display" style={{ fontSize: 12 }}>Desarmado</div>
+                          <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Sin arma equipada</div>
+                        </button>
+                        {armasDisponibles.map(o => (
+                          <button
+                            key={o.id}
+                            onClick={() => setArmaEquipadaId(o.id)}
+                            className="nx-panel solid"
+                            style={{
+                              minHeight: 92, padding: 12, borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                              textAlign: 'left', borderColor: armaEquipadaId === o.id ? 'var(--holo)' : 'var(--holo-line)',
+                              boxShadow: armaEquipadaId === o.id ? '0 0 14px -6px var(--holo)' : 'none',
+                            }}
+                          >
+                            <div className="nx-display" style={{ fontSize: 12 }}>{o.nombre}</div>
+                            <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
+                              {o.tipo_ataque === 'distancia' ? 'Ataque a distancia' : 'Ataque melee'}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+                    No hay otros tipos de inventario visibles en esta vista.
+                  </div>
+                )}
+              </Panel>
+            )}
+          </div>
+        </div>
       </>, document.body)}
     </>
   );

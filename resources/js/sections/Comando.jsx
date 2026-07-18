@@ -416,18 +416,26 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
       {/* Hero — fijo, sin drag */}
       <section className="nx-panel" style={{ overflow: 'hidden', position: 'relative' }}>
         {ch.photo && (
-          <img
-            src={ch.photo}
-            alt=""
-            aria-hidden="true"
-            style={{
-              position: 'absolute', right: 0, top: 0, height: '100%', width: 'auto',
-              objectFit: 'cover', objectPosition: 'top center',
-              pointerEvents: 'none', userSelect: 'none',
-              WebkitMaskImage: 'linear-gradient(to left, black 40%, transparent 85%)',
-              maskImage:       'linear-gradient(to left, black 40%, transparent 85%)',
-            }}
-          />
+          <a
+            href={ch.photo}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Abrir foto del personaje en una pestaña nueva"
+            style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 'auto' }}
+          >
+            <img
+              src={ch.photo}
+              alt=""
+              aria-hidden="true"
+              style={{
+                height: '100%', width: 'auto',
+                objectFit: 'cover', objectPosition: 'top center',
+                pointerEvents: 'none', userSelect: 'none',
+                WebkitMaskImage: 'linear-gradient(to left, black 40%, transparent 85%)',
+                maskImage:       'linear-gradient(to left, black 40%, transparent 85%)',
+              }}
+            />
+          </a>
         )}
         <div style={{ display: 'flex', gap: isMobile ? 14 : 22, padding: isMobile ? 16 : 22, flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 1 }}>
           <Avatar c={me} size={isMobile ? 64 : 86} ring />
@@ -743,7 +751,17 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {savedCardUrl
-                      ? <img src={savedCardUrl} alt="Carta de personaje generada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ? (
+                        <a
+                          href={savedCardUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Abrir carta de personaje en una pestaña nueva"
+                          style={{ display: 'block', width: '100%', height: '100%' }}
+                        >
+                          <img src={savedCardUrl} alt="Carta de personaje generada" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </a>
+                      )
                       : (
                         <>
                           <Icon name="user" size={34} />
@@ -757,16 +775,6 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                           />
                         </>
                       )}
-                  </div>
-                  {TIER_RANGO_IMG[myTier] && (
-                    <img
-                      src={TIER_RANGO_IMG[myTier]} alt={NX.TIERS[myTier]?.label ?? myTier}
-                      title={NX.TIERS[myTier]?.label ?? myTier}
-                      style={{ width: 36, height: 36, objectFit: 'contain' }}
-                    />
-                  )}
-                  <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', textAlign: 'center', maxWidth: 220 }}>
-                    Genera una carta con tus datos y atributos de combate, lista para imprimir a 63×88mm.
                   </div>
                   <Btn kind="accent" icon="download" onClick={() => setShowCardModal(true)}>
                     {savedCardUrl ? 'Regenerar Carta' : 'Generar Carta'}

@@ -219,15 +219,76 @@ function cropToFile(imageSrc, pixelCrop, fileName = 'image.jpg') {
   });
 }
 
+const ASPECT_PRESET_LABELS = [
+  { ratio: 1, label: '1:1' },
+  { ratio: 4 / 5, label: '4:5' },
+  { ratio: 3 / 4, label: '3:4' },
+  { ratio: 4 / 3, label: '4:3' },
+  { ratio: 16 / 9, label: '16:9' },
+  { ratio: 21 / 9, label: '21:9' },
+  { ratio: 9 / 16, label: '9:16' },
+  { ratio: 2, label: '2:1' },
+];
+
+function defaultAspectOptions(fallbackAspect) {
+  const seen = new Set();
+  const out = [];
+  const push = (ratio, label) => {
+    const key = Number(ratio).toFixed(4);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ ratio, label });
+  };
+
+  push(fallbackAspect, aspectLabelFor(fallbackAspect));
+  for (const opt of ASPECT_PRESET_LABELS) push(opt.ratio, opt.label);
+  return out;
+}
+
+function aspectLabelFor(ratio) {
+  const found = ASPECT_PRESET_LABELS.find(p => Math.abs(p.ratio - ratio) < 0.01);
+  if (found) return found.label;
+  return Number.isFinite(ratio) ? ratio.toFixed(2).replace(/\.00$/, '') : '1:1';
+}
+
+function normalizeAspectOptions(aspectOptions, fallbackAspect) {
+  const source = Array.isArray(aspectOptions) && aspectOptions.length > 0
+    ? aspectOptions
+    : defaultAspectOptions(fallbackAspect);
+
+  return source.map((opt, idx) => {
+    if (typeof opt === 'number') {
+      return { key: `ratio-${idx}-${opt}`, ratio: opt, label: aspectLabelFor(opt) };
+    }
+    if (typeof opt === 'string') {
+      const ratio = Number(opt);
+      return {
+        key: `ratio-${idx}-${opt}`,
+        ratio: Number.isFinite(ratio) ? ratio : fallbackAspect,
+        label: Number.isFinite(ratio) ? aspectLabelFor(ratio) : opt,
+      };
+    }
+    const ratio = Number(opt?.ratio ?? opt?.aspect ?? fallbackAspect);
+    return {
+      key: String(opt?.key ?? opt?.value ?? `ratio-${idx}-${ratio}`),
+      ratio: Number.isFinite(ratio) ? ratio : fallbackAspect,
+      label: opt?.label ?? aspectLabelFor(Number.isFinite(ratio) ? ratio : fallbackAspect),
+    };
+  });
+}
+
 export function ImageCropModal({
   open,
   src,
   fileName = 'image.jpg',
   aspect = 1,
+  aspectOptions = null,
   title = 'Ajustar imagen',
   onCancel,
   onConfirm,
 }) {
+  const aspectChoices = normalizeAspectOptions(aspectOptions, aspect);
+  const [selectedAspect, setSelectedAspect] = useState(aspectChoices[0]?.ratio ?? aspect);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -235,15 +296,24 @@ export function ImageCropModal({
 
   useEffect(() => {
     if (!open) return;
+    const nextChoices = normalizeAspectOptions(aspectOptions, aspect);
+    setSelectedAspect(nextChoices[0]?.ratio ?? aspect);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
     setBusy(false);
-  }, [open, src, aspect]);
+  }, [open, src, aspect, aspectOptions]);
 
   const onCropComplete = useCallback((_, croppedPixels) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+  }, [open, selectedAspect]);
 
   const handleConfirm = async () => {
     if (!src || !croppedAreaPixels || busy) return;
@@ -306,11 +376,53 @@ export function ImageCropModal({
         </header>
 
         <div style={{ position: 'relative', minHeight: 420, background: '#000' }}>
+          {aspectChoices.length > 1 && (
+            <div style={{
+              position: 'absolute',
+              top: 12,
+              left: 12,
+              zIndex: 2,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              padding: 6,
+              borderRadius: 10,
+              background: 'rgba(2,5,12,0.72)',
+              border: '1px solid var(--holo-line)',
+              backdropFilter: 'blur(4px)',
+            }}>
+              {aspectChoices.map((opt) => {
+                const on = Math.abs(opt.ratio - selectedAspect) < 0.001;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setSelectedAspect(opt.ratio)}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 999,
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 10,
+                      letterSpacing: '0.05em',
+                      background: on ? 'color-mix(in srgb, var(--holo) 22%, rgba(255,255,255,.04))' : 'rgba(255,255,255,.04)',
+                      border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                      color: on ? 'var(--holo)' : 'var(--txt-faint)',
+                      boxShadow: on ? '0 0 10px -4px var(--holo)' : 'none',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <Cropper
+            key={selectedAspect}
             image={src}
             crop={crop}
             zoom={zoom}
-            aspect={aspect}
+            aspect={selectedAspect}
             onCropChange={setCrop}
             onCropComplete={onCropComplete}
             onZoomChange={setZoom}
@@ -356,6 +468,7 @@ export function CropImageField({
   label = 'Imagen',
   height = 110,
   aspect = 1,
+  aspectOptions = null,
   placeholder = 'Seleccionar imagen',
 }) {
   const [pending, setPending] = useState(null);
@@ -453,6 +566,7 @@ export function CropImageField({
         src={pending?.src}
         fileName={pending?.fileName}
         aspect={aspect}
+        aspectOptions={aspectOptions}
         title={label}
         onCancel={() => setPending(null)}
         onConfirm={async (file) => {
