@@ -360,21 +360,22 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     if (!token) return;
 
     try {
-      const response = await fetch('/api/misiones/global', {
-        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-      });
-      const data = response.ok ? await response.json().catch(() => null) : null;
-      const pendientes = (data?.misiones ?? []).filter(m =>
-        m.notificar &&
-        !m.aceptada &&
-        m.status !== 'completada' &&
-        m.cumple_hitos
-      );
-      pendientes.forEach((mision) => {
-        void enqueueMissionAlert(mision);
-      });
+      const collections = await fetchMissionCollections();
+      const allMissions = collections
+        ? [...collections.global, ...collections.individual, ...collections.comunidad, ...collections.temporadas]
+        : [];
+      allMissions
+        .filter(m =>
+          m.notificar &&
+          !m.aceptada &&
+          m.status !== 'completada' &&
+          m.cumple_hitos
+        )
+        .forEach((mision) => {
+          void enqueueMissionAlert(mision);
+        });
     } catch {}
-  }, [user?.id, enqueueMissionAlert]);
+  }, [user?.id, enqueueMissionAlert, fetchMissionCollections]);
 
   const go = (v) => {
     setView(v);
@@ -422,7 +423,13 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
       fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : null)
-        .then(me => { if (me) onUserUpdate?.(me); })
+        .then(me => {
+          if (!me) return;
+          onUserUpdate?.(me);
+          window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+            detail: { type: 'hitos-sync', source: 'mission-complete', hitos: me.character?.hitos ?? [] },
+          }));
+        })
         .catch(() => {});
       const transmision = buildMissionCompletionTransmision(data);
       if (transmision) {

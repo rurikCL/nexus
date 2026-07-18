@@ -468,7 +468,7 @@ export function CropImageField({
 }
 
 /* ---- Modal ---- */
-export function Modal({ open, onClose, title, kicker, children, width = 540, zIndex = 1000 }) {
+export function Modal({ open, onClose, title, kicker, children, width = 540, zIndex = 1000, lockScroll = true }) {
   useEffect(() => {
     if (!open) return;
     const h = (e) => e.key === 'Escape' && onClose();
@@ -477,6 +477,7 @@ export function Modal({ open, onClose, title, kicker, children, width = 540, zIn
   }, [open, onClose]);
   /* Bloquea el scroll de la página mientras el modal está abierto */
   useEffect(() => {
+    if (!lockScroll) return;
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
     const prevScrollbarGutter = document.body.style.scrollbarGutter;
@@ -486,7 +487,7 @@ export function Modal({ open, onClose, title, kicker, children, width = 540, zIn
       document.body.style.overflow = prevOverflow;
       document.body.style.scrollbarGutter = prevScrollbarGutter;
     };
-  }, [open]);
+  }, [open, lockScroll]);
   if (!open) return null;
   return createPortal(
     <div onMouseDown={onClose} style={{

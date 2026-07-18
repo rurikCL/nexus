@@ -277,7 +277,7 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
 
   return (
     <>
-      <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Misión Global'} title={mision.nombre} zIndex={1100}>
+      <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Misión Global'} title={mision.nombre} zIndex={1100} lockScroll={false}>
         <div style={{ display: 'grid', gap: 16 }}>
         {mision.foto_mision && (
           <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -476,7 +476,7 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
   const completada  = progresoPct >= 100;
 
   return (
-    <Modal open onClose={onClose} kicker="Misión de Comunidad" title={mision.nombre} zIndex={1100}>
+    <Modal open onClose={onClose} kicker="Misión de Comunidad" title={mision.nombre} zIndex={1100} lockScroll={false}>
       <div style={{ display: 'grid', gap: 16 }}>
         {mision.foto_mision && (
           <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -690,7 +690,7 @@ function IndividualMisionPopup({ mision, onClose }) {
   const done = mision.status === 'completada';
 
   return (
-    <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Misión Individual'} title={mision.nombre} zIndex={1100}>
+    <Modal open onClose={onClose} kicker={done ? 'Misión completada' : 'Misión Individual'} title={mision.nombre} zIndex={1100} lockScroll={false}>
       <div style={{ display: 'grid', gap: 16 }}>
         {(mision.foto_mision || npc?.imagen_mini) && (
           <div style={{ height: 140, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
