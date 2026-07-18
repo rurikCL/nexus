@@ -15,6 +15,7 @@ export function MissionCompleteBanner({ open, mision, busy, onComplete, onClose 
   const objetivos = summarize((mision.objetivos ?? []).map(o => o.nombre), 2);
   const recompensas = summarize((mision.recompensas ?? []).map(r => {
     if (r.tipo === 'habilidad' && r.habilidad?.nombre) return r.habilidad.nombre;
+    if (r.tipo === 'hito' && (r.hito || r.nombre)) return r.hito || r.nombre;
     return r.nombre ? `${r.nombre}${r.valor > 0 ? ` x${r.valor}` : ''}` : null;
   }), 2);
 

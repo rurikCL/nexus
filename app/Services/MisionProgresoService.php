@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Mision;
 use App\Models\User;
 use App\Notifications\MisionListaParaCompletar;
+use Illuminate\Support\Collection;
 
 /**
  * Registra avance automático de objetivos de misión (cualquier tipo_mision)
@@ -15,6 +16,91 @@ use App\Notifications\MisionListaParaCompletar;
  */
 class MisionProgresoService
 {
+    private static function calcularProgresoGeneral(Mision $mision, array $progresoJson, array $characterHitos = []): int
+    {
+        $objetivos = self::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
+        if ($objetivos->isEmpty()) {
+            return 0;
+        }
+
+        $porcentajes = $objetivos->map(function (array $o) {
+            $meta = (int) ($o['meta'] ?? 0);
+            if ($meta <= 0) {
+                return 100;
+            }
+            return min(100, ((int) ($o['progreso_actual'] ?? 0) / $meta) * 100);
+        });
+
+        return (int) round($porcentajes->avg());
+    }
+
+    public static function buildObjetivosConProgreso(Mision $mision, array $progresoJson, array $characterHitos = []): Collection
+    {
+        $hitos = array_map('strval', $characterHitos);
+
+        return $mision->objetivos->map(function ($o) use ($progresoJson, $hitos) {
+            $meta = (int) ($o->meta ?? 0);
+            $unidad = trim((string) ($o->unidad ?? ''));
+            $actual = (int) ($progresoJson[(string) $o->id] ?? 0);
+
+            if ($o->tipo === 'hito') {
+                $actual = in_array($unidad, $hitos, true) ? max(1, $meta) : 0;
+            }
+
+            return [
+                'id' => $o->id,
+                'nombre' => $o->nombre,
+                'descripcion' => $o->descripcion,
+                'tipo' => $o->tipo,
+                'meta' => $o->meta,
+                'unidad' => $o->unidad,
+                'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+                'progreso_actual' => min($meta > 0 ? $meta : 0, $actual),
+                'completado' => $actual >= $meta,
+            ];
+        })->values();
+    }
+
+    public static function registrarHito(User $user, string $hito): void
+    {
+        $hito = trim($hito);
+        if ($hito === '') {
+            return;
+        }
+
+        $misiones = Mision::where('activa', true)
+            ->whereHas('objetivos', fn ($q) => $q->where('tipo', 'hito')->where('unidad', $hito))
+            ->with('objetivos')
+            ->get();
+
+        foreach ($misiones as $mision) {
+            $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+            if (! $pivot || $pivot->status === 'completada') {
+                continue;
+            }
+
+            $progresoAntes = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $progresoJson = $progresoAntes;
+
+            foreach ($mision->objetivos->where('tipo', 'hito')->where('unidad', $hito) as $objetivo) {
+                $progresoJson[(string) $objetivo->id] = max((int) $objetivo->meta, 1);
+            }
+
+            $characterHitos = $user->character ? $user->character->hitos()->pluck('hito')->all() : [];
+            $progresoGeneral = self::calcularProgresoGeneral($mision, $progresoJson, $characterHitos);
+
+            $mision->users()->syncWithoutDetaching([
+                $user->id => [
+                    'status' => $progresoGeneral > 0 ? 'en-curso' : 'pendiente',
+                    'progreso' => $progresoGeneral,
+                    'progreso_json' => json_encode($progresoJson),
+                ],
+            ]);
+
+            self::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoJson);
+        }
+    }
+
     public static function registrar(User $user, string $tipo, int $cantidad = 1): void
     {
         $misiones = Mision::where('activa', true)
@@ -36,10 +122,8 @@ class MisionProgresoService
                 $progresoJson[(string) $objetivo->id] = min($objetivo->meta, $actual + $cantidad);
             }
 
-            $porcentajes = $mision->objetivos->map(fn ($o) => $o->meta > 0
-                ? min(100, (($progresoJson[(string) $o->id] ?? 0) / $o->meta) * 100)
-                : 100);
-            $progresoGeneral = $porcentajes->isEmpty() ? 0 : (int) round($porcentajes->avg());
+            $characterHitos = $user->character ? $user->character->hitos()->pluck('hito')->all() : [];
+            $progresoGeneral = self::calcularProgresoGeneral($mision, $progresoJson, $characterHitos);
 
             $mision->users()->syncWithoutDetaching([
                 $user->id => [
@@ -79,10 +163,8 @@ class MisionProgresoService
                 $progresoJson[(string) $objetivo->id] = $objetivo->meta;
             }
 
-            $porcentajes = $mision->objetivos->map(fn ($o) => $o->meta > 0
-                ? min(100, (($progresoJson[(string) $o->id] ?? 0) / $o->meta) * 100)
-                : 100);
-            $progresoGeneral = $porcentajes->isEmpty() ? 0 : (int) round($porcentajes->avg());
+            $characterHitos = $user->character ? $user->character->hitos()->pluck('hito')->all() : [];
+            $progresoGeneral = self::calcularProgresoGeneral($mision, $progresoJson, $characterHitos);
 
             $mision->users()->syncWithoutDetaching([
                 $user->id => [
@@ -117,17 +199,7 @@ class MisionProgresoService
         $character = $user->character;
         $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
-        $objetivos = $mision->objetivos->map(fn ($o) => [
-            'id' => $o->id,
-            'nombre' => $o->nombre,
-            'descripcion' => $o->descripcion,
-            'tipo' => $o->tipo,
-            'meta' => $o->meta,
-            'unidad' => $o->unidad,
-            'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
-            'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
-            'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
-        ])->values();
+        $objetivos = self::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
 
         $recompensas = $mision->recompensas->map(fn ($r) => [
             'id' => $r->id,
@@ -135,6 +207,7 @@ class MisionProgresoService
             'descripcion' => $r->descripcion,
             'tipo' => $r->tipo,
             'valor' => $r->valor,
+            'hito' => $r->hito,
             'habilidad' => $r->relationLoaded('habilidad') && $r->habilidad
                 ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre]
                 : null,
@@ -181,6 +254,7 @@ class MisionProgresoService
             return true;
         }
 
-        return $mision->objetivos->every(fn ($o) => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta);
+        return self::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos)
+            ->every(fn ($o) => $o['completado']);
     }
 }

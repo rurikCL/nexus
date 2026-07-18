@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Configuracion;
 use App\Models\CharacterHito;
+use App\Services\MisionProgresoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -143,6 +144,11 @@ class CharacterController extends Controller
             'character_id' => $character->id,
             'hito' => 'personaje_creado',
         ]);
+        MisionProgresoService::registrarHito($user, 'personaje_creado');
+
+        $character->load([
+            'hitos' => fn ($q) => $q->latest(),
+        ]);
 
         return response()->json([
             'character' => $character->append(['winrate']),
@@ -254,6 +260,7 @@ class CharacterController extends Controller
             'character_id' => $character->id,
             'hito'         => $hito,
         ]);
+        \App\Services\MisionProgresoService::registrarHito($request->user(), $hito);
         \App\Services\MisionProgresoService::registrar($request->user(), 'combate', 1);
 
         return response()->json(['hito' => $hito]);
@@ -277,6 +284,7 @@ class CharacterController extends Controller
             'character_id' => $character->id,
             'hito'         => $hito,
         ]);
+        \App\Services\MisionProgresoService::registrarHito($request->user(), $hito);
         \App\Services\MisionProgresoService::registrar($request->user(), 'combate', 1);
 
         return response()->json(['hito' => $hito]);

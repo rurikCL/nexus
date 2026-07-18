@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, Chip, Modal, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
@@ -151,6 +151,16 @@ function applySaberTheme(saberName) {
   root.style.setProperty('--holo-faint', `color-mix(in srgb, ${t.holo} 18%, transparent)`);
   root.style.setProperty('--holo-line', `color-mix(in srgb, ${t.holo} 32%, transparent)`);
 }
+
+function serializeHitos(hitos) {
+  return (Array.isArray(hitos) ? hitos : [])
+    .map((h) => (typeof h === 'string' ? h : h?.hito))
+    .filter(Boolean)
+    .slice()
+    .sort()
+    .join('|');
+}
+
 import { ComandoView, PersonajeView } from './sections/Comando.jsx';
 import { TrainingView } from './sections/Entrenamiento.jsx';
 import { TareasView } from './sections/Tareas.jsx';
@@ -237,10 +247,22 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   const [externalChatTarget, setExternalChatTarget] = useState(null);
   const [completingMissionId, setCompletingMissionId] = useState(null);
   const prevUnreadIds = useRef(new Set());
+  const lastHitosSignature = useRef('');
   const isAdmin  = user?.roles?.includes('administrador');
   const unread = notifications.filter(n => !n.read).length;
   const me = S.byId('you') ?? { initials: (user?.name ?? '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(), color: '#38cdf0' };
   const activeMissionsCount = missionDrawerItems.length;
+  const menuObjectiveSlugs = useMemo(() => {
+    const slugs = new Set();
+    missionDrawerItems.forEach((mission) => {
+      (mission?.objetivos ?? []).forEach((obj) => {
+        if (obj?.tipo === 'menu' && !obj?.completado && obj?.unidad) {
+          slugs.add(String(obj.unidad));
+        }
+      });
+    });
+    return slugs;
+  }, [missionDrawerItems]);
 
   const isMissionReadyAlert = (notif) => (
     notif?.type === 'mision_lista_para_completar'
@@ -316,6 +338,10 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     const merged = resolved ? { ...normalized, ...resolved } : normalized;
 
     if (merged?.status === 'completada' || merged?.completada_por_mi) {
+      return null;
+    }
+
+    if (merged?.cumple_hitos === false) {
       return null;
     }
 
@@ -636,7 +662,9 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       };
 
       const items = [
-        ...((global?.misiones ?? []).map(m => flattenMission(m, 'global'))),
+        ...((global?.misiones ?? [])
+          .filter(m => m.cumple_hitos || m.status === 'completada')
+          .map(m => flattenMission(m, 'global'))),
         ...((individual?.misiones ?? []).map(m => flattenMission(m, 'individual'))),
         ...((comunidad?.misiones ?? [])
           .filter(m => m.aceptada || m.progreso > 0 || m.completada_por_mi)
@@ -679,6 +707,43 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       });
     return () => window.Echo.leave(`App.Models.User.${user.id}`);
   }, [user?.id]);
+
+  useEffect(() => {
+    lastHitosSignature.current = serializeHitos(user?.character?.hitos);
+  }, [user?.character?.hitos, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+
+    let cancelled = false;
+    const syncHitos = () => {
+      fetch('/api/me', {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(me => {
+          if (cancelled || !me?.character) return;
+          const nextSignature = serializeHitos(me.character.hitos);
+          if (nextSignature !== lastHitosSignature.current) {
+            lastHitosSignature.current = nextSignature;
+            onUserUpdate?.(me);
+            window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+              detail: { type: 'hitos-sync', hitos: me.character.hitos ?? [] },
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncHitos();
+    const interval = setInterval(syncHitos, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user?.id, onUserUpdate]);
 
   // Polling de mensajes no leídos
   useEffect(() => {
@@ -803,6 +868,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         <nav style={{ flex: 1, padding: 8, display: 'grid', gap: 2, alignContent: 'start' }}>
           {NAV.filter(n => !n.guard || n.guard(user)).map((n) => {
             const active = view === n.id;
+            const hasMenuObjective = menuObjectiveSlugs.has(n.id);
             return (
               <button
                 key={n.id}
@@ -829,6 +895,33 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
                 <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, maxWidth: sidebarCollapsed ? 0 : 200, transition: 'opacity .15s, max-width .22s' }}>
                   {n.label}
                 </span>
+                {hasMenuObjective && (
+                  <span
+                    title="Objetivo de misión activo"
+                    style={{
+                      position: 'absolute',
+                      right: 8,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: 'rgba(230,179,37,0.16)',
+                      border: '1px solid rgba(230,179,37,0.7)',
+                      color: '#E6B325',
+                      boxShadow: '0 0 10px -4px rgba(230,179,37,0.9)',
+                      fontSize: 11,
+                      fontFamily: 'var(--font-data)',
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    !
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1465,8 +1558,8 @@ function MissionItem({ mision, onCompleteMission, busy }) {
               border: '1px solid rgba(230,179,37,0.2)',
               color: '#E6B325',
             }}>
-              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
-              {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
+              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'hito' ? '⭐' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
+              {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}
               {r.tipo !== 'habilidad' && r.valor > 0 ? ` x${r.valor}` : ''}
             </span>
           ))}

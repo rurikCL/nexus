@@ -112,7 +112,7 @@ class MisionController extends Controller
 
                 $miPivot = $m->users->firstWhere('id', $user->id);
                 $miProgresoJson = $miPivot?->pivot->progreso_json ? json_decode($miPivot->pivot->progreso_json, true) : [];
-                $objetivosConProgreso = $this->buildObjetivosConProgreso($m, $miProgresoJson);
+                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $miProgresoJson, $characterHitos);
                 $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
                 $requeridos = $m->hito_requerimiento
                     ? array_filter(array_map('trim', explode(',', $m->hito_requerimiento)))
@@ -159,7 +159,7 @@ class MisionController extends Controller
                 $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
 
                 return array_merge($base, [
-                    'objetivos' => $this->buildObjetivosConProgreso($m, $progresoJson),
+                    'objetivos' => MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $user->character ? $user->character->hitos()->pluck('hito')->all() : []),
                     'status' => $pivot?->status ?? 'pendiente',
                     'progreso' => $pivot?->progreso ?? 0,
                     'progreso_json' => $progresoJson,
@@ -201,17 +201,7 @@ class MisionController extends Controller
                     : [];
                 $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
-                $objetivosConProgreso = $m->objetivos->map(fn ($o) => [
-                    'id' => $o->id,
-                    'nombre' => $o->nombre,
-                    'descripcion' => $o->descripcion,
-                    'tipo' => $o->tipo,
-                    'meta' => $o->meta,
-                    'unidad' => $o->unidad,
-                    'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
-                    'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
-                    'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
-                ])->values();
+                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $characterHitos);
 
                 $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
                 $completada = $pivot?->status === 'completada';
@@ -256,17 +246,7 @@ class MisionController extends Controller
                     : [];
                 $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
-                $objetivosConProgreso = $m->objetivos->map(fn ($o) => [
-                    'id' => $o->id,
-                    'nombre' => $o->nombre,
-                    'descripcion' => $o->descripcion,
-                    'tipo' => $o->tipo,
-                    'meta' => $o->meta,
-                    'unidad' => $o->unidad,
-                    'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
-                    'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
-                    'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
-                ])->values();
+                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $characterHitos);
 
                 $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
                 $completada = $pivot?->status === 'completada';
@@ -324,6 +304,7 @@ class MisionController extends Controller
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
             'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
+            'recompensas.*.hito' => 'nullable|string|max:255',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito' => 'nullable|string',
         ]);
@@ -387,6 +368,7 @@ class MisionController extends Controller
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
             'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
+            'recompensas.*.hito' => 'nullable|string|max:255',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito' => 'nullable|string',
         ]);
@@ -617,9 +599,11 @@ class MisionController extends Controller
         if ($mision->objetivos->isNotEmpty()) {
             $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
             $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
+            $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
 
-            $objetivosFaltantes = $mision->objetivos
-                ->filter(fn ($o) => ($progresoJson[(string) $o->id] ?? 0) < $o->meta)
+            $objetivosFaltantes = $objetivosConProgreso
+                ->filter(fn ($o) => ! $o['completado'])
                 ->pluck('nombre')
                 ->values();
 
@@ -643,6 +627,7 @@ class MisionController extends Controller
         $objetosSinEspacio = [];
         $creditosOtorgados = 0;
         $titulosOtorgados = [];
+        $hitosOtorgados = [];
         foreach ($mision->recompensas as $recompensa) {
             if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
                 $user->habilidadesAprendidas()->syncWithoutDetaching([$recompensa->habilidad_id]);
@@ -663,17 +648,26 @@ class MisionController extends Controller
                     ['tipo' => $recompensa->tipo, 'mision_id' => $mision->id]
                 );
                 $titulosOtorgados[] = $titulo->only(['id', 'nombre', 'tipo']);
+            } elseif ($recompensa->tipo === 'hito' && $character) {
+                $hito = trim((string) ($recompensa->hito ?: $recompensa->nombre));
+                if ($hito !== '') {
+                    CharacterHito::firstOrCreate(
+                        ['character_id' => $character->id, 'hito' => $hito]
+                    );
+                    MisionProgresoService::registrarHito($user, $hito);
+                    $hitosOtorgados[] = $hito;
+                }
             }
         }
 
         // Otorgar hitos de la misión
-        $hitosOtorgados = [];
         if ($mision->entregar_hito && $character) {
             $hitos = array_filter(array_map('trim', explode(',', $mision->entregar_hito)));
             foreach ($hitos as $hito) {
                 CharacterHito::firstOrCreate(
                     ['character_id' => $character->id, 'hito' => $hito]
                 );
+                MisionProgresoService::registrarHito($user, $hito);
                 $hitosOtorgados[] = $hito;
             }
         }
@@ -738,6 +732,7 @@ class MisionController extends Controller
                     'tipo' => $r->tipo,
                     'valor' => $r->valor,
                     'imagen' => $r->imagen,
+                    'hito' => $r->hito,
                     'habilidad_id' => $r->habilidad_id,
                     'habilidad' => $r->relationLoaded('habilidad') && $r->habilidad
                         ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre]
@@ -778,17 +773,7 @@ class MisionController extends Controller
             : [];
         $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
-        $objetivosConProgreso = $mision->objetivos->map(fn ($o) => [
-            'id' => $o->id,
-            'nombre' => $o->nombre,
-            'descripcion' => $o->descripcion,
-            'tipo' => $o->tipo,
-            'meta' => $o->meta,
-            'unidad' => $o->unidad,
-            'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
-            'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
-            'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
-        ])->values();
+        $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
 
         $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
         $completada = $pivot?->status === 'completada';
@@ -807,16 +792,9 @@ class MisionController extends Controller
 
     private function buildObjetivosConProgreso(Mision $mision, array $progresoJson): \Illuminate\Support\Collection
     {
-        return $mision->objetivos->map(fn ($o) => [
-            'id' => $o->id,
-            'nombre' => $o->nombre,
-            'descripcion' => $o->descripcion,
-            'tipo' => $o->tipo,
-            'meta' => $o->meta,
-            'unidad' => $o->unidad,
-            'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
-            'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
-            'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
-        ])->values();
+        $character = auth()->user()?->character;
+        $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
+
+        return MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
     }
 }

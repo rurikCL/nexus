@@ -603,7 +603,7 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
                   fontSize: 10, padding: '2px 8px', borderRadius: 4,
                   background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.25)', color: '#E6B325',
                 }}>
-                  {r.tipo === 'creditos' ? '💰' : '📦'} {r.nombre}{r.valor > 0 ? ` ×${r.valor}` : ''}
+              {r.tipo === 'creditos' ? '💰' : r.tipo === 'hito' ? '⭐' : '📦'} {r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}{r.valor > 0 ? ` ×${r.valor}` : ''}
                 </span>
               ))}
             </div>
@@ -791,7 +791,7 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
                             fontSize: 10, padding: '2px 8px', borderRadius: 4,
                             background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.25)', color: '#E6B325',
                           }}>
-                            {r.tipo === 'creditos' ? '💰' : '📦'} {r.nombre}{r.valor > 0 ? ` ×${r.valor}` : ''}
+                            {r.tipo === 'creditos' ? '💰' : r.tipo === 'hito' ? '⭐' : '📦'} {r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}{r.valor > 0 ? ` ×${r.valor}` : ''}
                           </span>
                         ))}
                       </div>

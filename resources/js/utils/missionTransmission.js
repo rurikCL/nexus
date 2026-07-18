@@ -9,6 +9,10 @@ function formatRewardLabel(reward) {
     return reward.habilidad?.nombre ?? reward.nombre ?? 'Habilidad';
   }
 
+  if (reward.tipo === 'hito') {
+    return reward.hito ?? reward.nombre ?? 'Hito';
+  }
+
   if (reward.tipo === 'titulo' || reward.tipo === 'insignia') {
     return reward.nombre ?? 'Título';
   }
@@ -47,6 +51,10 @@ function rewardLinesFromResponse(data) {
     if ((data?.objetos_otorgados ?? []).length > 0) {
       lines.push('Objeto recibido');
     }
+
+    (data?.hitos_otorgados ?? []).forEach((h) => {
+      if (h) lines.push(String(h));
+    });
   }
 
   return lines.filter(Boolean);

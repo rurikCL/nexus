@@ -800,6 +800,7 @@ class RaidCombatController extends Controller
                     'character_id' => $rpChar->id,
                     'hito' => "{$raid->npc->nombre} derrotado",
                 ]);
+                MisionProgresoService::registrarHito($rpUser, "{$raid->npc->nombre} derrotado");
                 MisionProgresoService::registrar($rpUser, 'combate', 1);
             }
         }

@@ -3254,7 +3254,7 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
   const isMobile = useIsMobile();
   const ESTADO_LABEL = { pendiente: 'Pendiente', 'en-curso': 'En curso', completada: 'Completada' };
   const ESTADO_COLOR = { pendiente: '#E6B325', 'en-curso': '#38cdf0', completada: '#10b981' };
-  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : '📦';
+  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'hito' ? '⭐' : t === 'habilidad' ? '⚡' : '📦';
 
   const hitosReq = mision.hito_requerimiento
     ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)
@@ -3331,7 +3331,7 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
                   }}>
                     <span style={{ fontSize: 13 }}>{recIcon(r.tipo)}</span>
                     <span style={{ fontSize: 11, color: 'var(--txt)' }}>
-                      {r.tipo === 'creditos' ? `${r.valor} créditos` : (r.habilidad?.nombre || r.objeto?.nombre || r.nombre)}
+                      {r.tipo === 'creditos' ? `${r.valor} créditos` : r.tipo === 'hito' ? (r.hito || r.nombre) : (r.habilidad?.nombre || r.objeto?.nombre || r.nombre)}
                     </span>
                   </div>
                 ))}
