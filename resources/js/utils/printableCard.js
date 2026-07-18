@@ -136,6 +136,40 @@ export async function paintCardLogo(ctx, boxRight, boxBottom, size = 34, margin 
   ctx.restore();
 }
 
+/** Fondo cuadriculado con degradé — mismo criterio visual que las tarjetas de zona/planeta
+    del Mapa Estelar (Mapa.jsx): resplandor radial cian de fondo + rejilla de líneas finas
+    de 48px encima, recortado al rectángulo (x, y, w, h). */
+export function paintGridBackground(ctx, x, y, w, h, radius = 0, spacing = 48) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+
+  const glow = ctx.createRadialGradient(x + w * 0.6, y + h * 0.4, 0, x + w * 0.6, y + h * 0.4, Math.max(w, h) * 0.75);
+  glow.addColorStop(0, 'rgba(56,205,240,0.14)');
+  glow.addColorStop(0.7, 'rgba(4,10,30,0.45)');
+  glow.addColorStop(1, 'rgba(4,10,30,0.45)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x, y, w, h);
+
+  ctx.strokeStyle = 'rgba(56,205,240,0.16)';
+  ctx.lineWidth = 1;
+  for (let gx = x; gx <= x + w; gx += spacing) {
+    ctx.beginPath();
+    ctx.moveTo(gx + 0.5, y);
+    ctx.lineTo(gx + 0.5, y + h);
+    ctx.stroke();
+  }
+  for (let gy = y; gy <= y + h; gy += spacing) {
+    ctx.beginPath();
+    ctx.moveTo(x, gy + 0.5);
+    ctx.lineTo(x + w, gy + 0.5);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 /* Metadatos de los 7 atributos de combate compartidos por personajes, NPCs,
    jefes y enemigos — mismos íconos/colores que BONUS_FIELDS en ArmadoSable.jsx,
    para mantener el lenguaje visual del resto de la app (ATQ naranja, DEF cian,
