@@ -9,10 +9,6 @@ function formatRewardLabel(reward) {
     return reward.habilidad?.nombre ?? reward.nombre ?? 'Habilidad';
   }
 
-  if (reward.tipo === 'hito') {
-    return reward.hito ?? reward.nombre ?? 'Hito';
-  }
-
   if (reward.tipo === 'titulo' || reward.tipo === 'insignia') {
     return reward.nombre ?? 'Título';
   }

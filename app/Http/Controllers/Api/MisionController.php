@@ -299,12 +299,11 @@ class MisionController extends Controller
             'recompensas' => 'sometimes|array',
             'recompensas.*.nombre' => 'required|string|max:255',
             'recompensas.*.descripcion' => 'nullable|string',
-            'recompensas.*.tipo' => 'sometimes|string|max:100',
+            'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia',
             'recompensas.*.valor' => 'sometimes|numeric',
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
             'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
-            'recompensas.*.hito' => 'nullable|string|max:255',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito' => 'nullable|string',
         ]);
@@ -363,12 +362,11 @@ class MisionController extends Controller
             'recompensas.*.id' => 'sometimes|integer',
             'recompensas.*.nombre' => 'required|string|max:255',
             'recompensas.*.descripcion' => 'nullable|string',
-            'recompensas.*.tipo' => 'sometimes|string|max:100',
+            'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia',
             'recompensas.*.valor' => 'sometimes|numeric',
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
             'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
-            'recompensas.*.hito' => 'nullable|string|max:255',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito' => 'nullable|string',
         ]);
@@ -648,15 +646,6 @@ class MisionController extends Controller
                     ['tipo' => $recompensa->tipo, 'mision_id' => $mision->id]
                 );
                 $titulosOtorgados[] = $titulo->only(['id', 'nombre', 'tipo']);
-            } elseif ($recompensa->tipo === 'hito' && $character) {
-                $hito = trim((string) ($recompensa->hito ?: $recompensa->nombre));
-                if ($hito !== '') {
-                    CharacterHito::firstOrCreate(
-                        ['character_id' => $character->id, 'hito' => $hito]
-                    );
-                    MisionProgresoService::registrarHito($user, $hito);
-                    $hitosOtorgados[] = $hito;
-                }
             }
         }
 
@@ -732,7 +721,6 @@ class MisionController extends Controller
                     'tipo' => $r->tipo,
                     'valor' => $r->valor,
                     'imagen' => $r->imagen,
-                    'hito' => $r->hito,
                     'habilidad_id' => $r->habilidad_id,
                     'habilidad' => $r->relationLoaded('habilidad') && $r->habilidad
                         ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre]

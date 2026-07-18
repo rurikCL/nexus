@@ -28,7 +28,7 @@ Las misiones y los NPCs son dos tablas separadas que se conectan por **una sola 
 completar. No hay un motor de quests con nodos ni máquina de estados — es deliberadamente simple:
 
 ```
-NPC (quest-giver)  ──da──▶  Misión  ──recompensa──▶  objeto / habilidad / créditos / título / hito
+NPC (quest-giver)  ──da──▶  Misión  ──recompensa──▶  objeto / habilidad / créditos / título / insignia
      ▲                                                        │
      └──────── hito_requerimiento (string match) ◀────────────┘
      │
@@ -59,8 +59,8 @@ Dos tablas hijas (1 misión → N filas), normalizadas en `2026_06_30_230001_ext
 
 - **`objetivos`**: `mision_id, nombre, descripcion, tipo (general|entrenamiento|combate|tarea|viaje|dialogo|menu|hito|automatico),
   meta, unidad, progreso_tipo (conteo|porcentaje)`.
-- **`recompensas`**: `mision_id, nombre, descripcion, tipo (habilidad|objeto|creditos|titulo|insignia|hito),
-  valor, imagen, habilidad_id, objeto_id, hito`.
+- **`recompensas`**: `mision_id, nombre, descripcion, tipo (habilidad|objeto|creditos|titulo|insignia),
+  valor, imagen, habilidad_id, objeto_id`.
 
 Pivot de asignación **por usuario, no por personaje** — `mision_user`:
 ```
@@ -95,7 +95,7 @@ popup al ingresar?".
 | `objeto` | `character->rolObjetos()->syncWithoutDetaching([objeto_id])`, si hay espacio en el inventario (si no, queda en `objetos_sin_espacio` y no se entrega) |
 | `creditos` | `character->increment('credits', valor)` |
 | `titulo` / `insignia` | `character->titulos()->firstOrCreate(['nombre' => recompensa.nombre], ['tipo', 'mision_id'])` — se persiste en `character_titulos` (ver §1.3.1), ya no es sólo cosmético |
-| `hito` | `CharacterHito::firstOrCreate(['character_id' => ..., 'hito' => recompensa.hito|nombre])`, y además dispara `MisionProgresoService::registrarHito()` (encadena objetivos `hito` de otras misiones, ver §1.5) |
+| `hito` | No aplica como recompensa. Los hitos se entregan desde `entregar_hito` al completar la misión y luego disparan `MisionProgresoService::registrarHito()` (encadena objetivos `hito` de otras misiones, ver §1.5) |
 
 ### 1.3.1 Títulos e insignias — se ganan, se guardan y se equipan
 
@@ -276,8 +276,8 @@ Slugs actuales documentados para configuración manual:
 5. Completar — POST /misiones/{id}/completar
    → valida hito_requerimiento Y que todos los objetivos estén al 100% (ver §1.4)
    → marca status=completada, progreso=100
-   → otorga recompensas (habilidad/objeto/creditos/titulo/insignia/hito) — titulo/insignia y hito
-     ahora se persisten (§1.3, §1.3.1)
+   → otorga recompensas (habilidad/objeto/creditos/titulo/insignia) — titulo/insignia se
+     persisten (§1.3, §1.3.1) y los hitos salen por `entregar_hito`
    → escribe entregar_hito en character_hitos
 ```
 
@@ -486,7 +486,7 @@ MisionProgresoService::registrar()  ──▶  progreso_json + progreso (nunca '
         ▼               ▼              ▼                  ▼                  ▼
   habilidad/objeto   créditos   character_hitos    character_titulos   registrarHito()
   (recompensa)       (recompensa) (entregar_hito +  (recompensa         (encadena objetivos
-                                  recompensa hito)   titulo/insignia,    `hito` de otras
+                                  entrega_hito)     titulo/insignia,    `hito` de otras
                                                       equipable vía      misiones — §1.5.1)
                                                       TituloController)
                                         │
@@ -519,9 +519,9 @@ Misión `global` con notificar=true ──▶ popup al iniciar sesión (App.jsx)
   completa al aceptar la misión.
 - `completar()` ahora es un gate doble — hitos **y** objetivos — reforzado en el servidor, no sólo
   en la UI (el botón deshabilitado en el cliente es una comodidad, no la protección real).
-- Las recompensas `titulo`/`insignia` y `hito` dejaron de ser cosméticas: `titulo`/`insignia` se
-  acumulan en `character_titulos` con un mecanismo de "equipar" (§1.3.1) y `hito` escribe en
-  `character_hitos` igual que `entregar_hito`, encadenando objetivos `hito` de otras misiones.
+- Las recompensas `titulo`/`insignia` se acumulan en `character_titulos` con un mecanismo de
+  "equipar" (§1.3.1). Los hitos de misión se entregan por `entregar_hito` al completar y también
+  pueden venir de otras fuentes del juego, encadenando objetivos `hito` de otras misiones.
 - El sistema notifica proactivamente cuando una misión pasa a ser completable
   (`MisionListaParaCompletar`, §1.5.2), y separadamente puede empujar misiones `global` como popup
   al iniciar sesión (`notificar`, §1.2) — dos mecanismos de notificación distintos, uno reactivo a
