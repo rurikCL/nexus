@@ -5,7 +5,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintCardLogo, paintGridBackground,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
 } from '../utils/printableCard.js';
 
@@ -34,61 +34,6 @@ const SIDE_FRAME = {
   luminoso: { bg1: '#0a1a3a', bg2: '#040c1e', line: '#3aa0ff' },
   oscuro:   { bg1: '#2a0a0f', bg2: '#0f0304', line: '#ff2d45' },
 };
-
-/** Dibuja un corazón relleno (pip de Vida) con esquina superior-izquierda en (x, y). */
-function drawHeartPip(ctx, x, y, size, color) {
-  const topCurveHeight = size * 0.3;
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 4;
-  ctx.beginPath();
-  ctx.moveTo(x + size / 2, y + topCurveHeight);
-  ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + topCurveHeight);
-  ctx.bezierCurveTo(x, y + (size + topCurveHeight) / 2, x + size / 2, y + (size + topCurveHeight) / 2, x + size / 2, y + size);
-  ctx.bezierCurveTo(x + size / 2, y + (size + topCurveHeight) / 2, x + size, y + (size + topCurveHeight) / 2, x + size, y + topCurveHeight);
-  ctx.bezierCurveTo(x + size, y, x + size / 2, y, x + size / 2, y + topCurveHeight);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
-/** Dibuja un escudo de energía (pip de Escudo) con esquina superior-izquierda en (x, y). */
-function drawShieldPip(ctx, x, y, size, color) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(size / 24, size / 24);
-  const path = new Path2D(ICON_PATHS.shield);
-  ctx.fillStyle = `${color}33`;
-  ctx.fill(path);
-  ctx.lineWidth = 1.8;
-  ctx.strokeStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 3;
-  ctx.stroke(path);
-  ctx.restore();
-}
-
-/** Dibuja una fila de pips (corazones/escudos) que se envuelve si no caben en `maxWidth`; devuelve el Y final. */
-function drawPipRow(ctx, { count, draw, x, maxWidth, y, size = 20, gap = 6, maxPips = 30 }) {
-  const shown = Math.min(count, maxPips);
-  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
-  const rows = Math.max(1, Math.ceil(shown / perRow));
-  for (let i = 0; i < shown; i++) {
-    const row = Math.floor(i / perRow);
-    const col = i % perRow;
-    draw(x + col * (size + gap), y + row * (size + gap), size);
-  }
-  let bottomY = y + rows * (size + gap) - gap;
-  if (count > maxPips) {
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(220,230,255,0.75)';
-    ctx.font = '700 13px "JetBrains Mono"';
-    ctx.fillText(`+${count - maxPips}`, x, bottomY + 13);
-    bottomY += 16;
-  }
-  return bottomY;
-}
 
 /** Dibuja un sable de luz vertical (hoja + puño) — misma composición visual que SaberBlade en Comando.jsx. */
 function drawSaberBlade(ctx, x, y, w, h, color) {
@@ -315,33 +260,15 @@ export async function drawCharacterCard(character, user) {
   const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
   const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
 
-  let y = typeY + 26;
-
-  drawIcon(ctx, STAT_META.vida.icon, innerX + 13, y - 6, 22, STAT_META.vida.color, 2);
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(220,230,255,0.8)';
-  ctx.font = '600 16px "JetBrains Mono"';
-  ctx.fillText(STAT_META.vida.label.toUpperCase(), innerX + 34, y);
-  y += 14;
-  y = drawPipRow(ctx, {
-    count: vidaVal, x: innerX, maxWidth: innerW, y, size: 20, gap: 6,
-    draw: (px, py, s) => drawHeartPip(ctx, px, py, s, STAT_META.vida.color),
+  let y = typeY + 14;
+  y = paintVidaEscudoBox(ctx, {
+    x: innerX, y, w: innerW, vidaVal, escudoVal,
+    vidaMeta: STAT_META.vida, escudoMeta: STAT_META.escudo,
+    drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
   });
-  y += 10;
+  y += 16;
 
-  drawIcon(ctx, STAT_META.escudo.icon, innerX + 13, y - 6, 22, STAT_META.escudo.color, 2);
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(220,230,255,0.8)';
-  ctx.font = '600 16px "JetBrains Mono"';
-  ctx.fillText(STAT_META.escudo.label.toUpperCase(), innerX + 34, y);
-  y += 14;
-  y = drawPipRow(ctx, {
-    count: escudoVal, x: innerX, maxWidth: innerW, y, size: 20, gap: 6,
-    draw: (px, py, s) => drawShieldPip(ctx, px, py, s, STAT_META.escudo.color),
-  });
-  y += 14;
-
-  /* ── separador entre escudo y el primer atributo (Ataque) ── */
+  /* ── separador entre el cuadro de Vida/Escudo y el primer atributo (Ataque) ── */
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.lineWidth = 1;
   ctx.beginPath();

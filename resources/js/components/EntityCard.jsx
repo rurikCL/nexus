@@ -4,7 +4,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
 
@@ -371,14 +371,23 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     : (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? '');
   paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight);
 
-  const STAT_ORDER = ['vida', 'escudo', 'ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
-  const rows = STAT_ORDER.map((key) => ({
+  let statsY = typeY + 30;
+  statsY = paintVidaEscudoBox(ctx, {
+    x: innerX, y: statsY, w: innerW,
+    vidaVal: entity.vida ?? 0, escudoVal: entity.escudo ?? 0,
+    vidaMeta: COMBAT_STAT_META.vida, escudoMeta: COMBAT_STAT_META.escudo,
+    drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
+  });
+  statsY += 18;
+
+  const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
+  const rows = ATTR_ORDER.map((key) => ({
     icon: COMBAT_STAT_META[key].icon,
     label: COMBAT_STAT_META[key].label,
     color: COMBAT_STAT_META[key].color,
     value: entity[key] ?? 0,
   }));
-  const statsTop = typeY + 46;
+  const statsTop = statsY;
   const rowH = 47;
   paintRows(ctx, rows, statsTop, innerX, innerRight, rowH);
 
