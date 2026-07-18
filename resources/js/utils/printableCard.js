@@ -227,6 +227,38 @@ function drawPipRow(ctx, { count, draw, x, maxWidth, y, size = 20, gap = 6, maxP
   return bottomY;
 }
 
+/** Misma cuenta de `drawPipRow` pero sin dibujar — permite reservar el alto de la caja de fondo antes de pintar el contenido encima. */
+function pipRowHeight(count, maxWidth, size, gap, maxPips = 30) {
+  const shown = Math.min(count, maxPips);
+  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
+  const rows = Math.max(1, Math.ceil(shown / perRow));
+  let h = rows * (size + gap) - gap;
+  if (count > maxPips) h += 16;
+  return h;
+}
+
+/** Fondo negro con degradé semitransparente + borde sutil, recortado a un rectángulo redondeado. */
+export function paintBoxBg(ctx, x, y, w, h, radius = 10) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, 'rgba(0,0,0,0.55)');
+  g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Cuadro de Vida/Escudo en dos columnas divididas por una línea vertical — etiqueta+ícono
     arriba de cada columna y una fila de pips (corazones/escudos) debajo. `drawIcon` recibe
     (name, cx, cy, size, color, strokeWidth) — ya resuelto por el llamador (necesita ICON_PATHS
@@ -243,6 +275,13 @@ export function paintVidaEscudoBox(ctx, {
 
   const boxTop = y;
   const cy = boxTop + boxPad + 12;
+  const pipY = cy + 12;
+
+  const vidaH = pipRowHeight(vidaVal, leftW, pipSize, pipGap);
+  const escudoH = pipRowHeight(escudoVal, rightW, pipSize, pipGap);
+  const boxBottom = pipY + Math.max(vidaH, escudoH) + boxPad;
+
+  paintBoxBg(ctx, x, boxTop, w, boxBottom - boxTop, 10);
 
   ctx.textAlign = 'left';
   drawIcon(vidaMeta.icon, leftX + 11, cy - 6, 20, vidaMeta.color, 2);
@@ -255,23 +294,17 @@ export function paintVidaEscudoBox(ctx, {
   ctx.font = '600 16px "JetBrains Mono"';
   ctx.fillText(escudoMeta.label.toUpperCase(), rightX + 26, cy);
 
-  const pipY = cy + 12;
-  const vidaBottom = drawPipRow(ctx, {
+  drawPipRow(ctx, {
     count: vidaVal, x: leftX, maxWidth: leftW, y: pipY, size: pipSize, gap: pipGap,
     draw: (px, py, s) => drawHeartPip(ctx, px, py, s, vidaMeta.color),
   });
-  const escudoBottom = drawPipRow(ctx, {
+  drawPipRow(ctx, {
     count: escudoVal, x: rightX, maxWidth: rightW, y: pipY, size: pipSize, gap: pipGap,
     draw: (px, py, s) => drawShieldPip(ctx, px, py, s, escudoMeta.color),
   });
-  const boxBottom = Math.max(vidaBottom, escudoBottom) + boxPad;
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.roundRect(x, boxTop, w, boxBottom - boxTop, 10);
-  ctx.stroke();
-
   ctx.beginPath();
   ctx.moveTo(x + halfW, boxTop + 6);
   ctx.lineTo(x + halfW, boxBottom - 6);

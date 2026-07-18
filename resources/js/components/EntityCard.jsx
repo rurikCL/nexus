@@ -4,7 +4,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
 
@@ -396,6 +396,10 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const attrColX = innerX + saludoColW + colGap;
   const attrColW = innerW - saludoColW - colGap;
 
+  const attrBoxTop = statsTop - 16;
+  const attrBoxBottom = statsTop + sectionH + 10;
+  paintBoxBg(ctx, innerX, attrBoxTop, innerW, attrBoxBottom - attrBoxTop, 10);
+
   ctx.textAlign = 'left';
   ctx.fillStyle = frame.line;
   ctx.font = '700 11px "JetBrains Mono"';
@@ -409,11 +413,11 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(innerX + saludoColW + colGap / 2, statsTop - 4);
-  ctx.lineTo(innerX + saludoColW + colGap / 2, statsTop + sectionH - 8);
+  ctx.moveTo(innerX + saludoColW + colGap / 2, attrBoxTop + 6);
+  ctx.lineTo(innerX + saludoColW + colGap / 2, attrBoxBottom - 6);
   ctx.stroke();
 
   const footY = statsTop + sectionH + 22;

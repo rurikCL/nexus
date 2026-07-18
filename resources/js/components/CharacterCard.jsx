@@ -5,7 +5,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
 } from '../utils/printableCard.js';
 
@@ -266,15 +266,6 @@ export async function drawCharacterCard(character, user) {
     vidaMeta: STAT_META.vida, escudoMeta: STAT_META.escudo,
     drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
   });
-  y += 16;
-
-  /* ── separador entre el cuadro de Vida/Escudo y el primer atributo (Ataque) ── */
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(innerX, y);
-  ctx.lineTo(innerRight, y);
-  ctx.stroke();
   y += 18;
 
   /* ── dos columnas: lore (izquierda) + atributos de combate (derecha) ── */
@@ -286,6 +277,10 @@ export async function drawCharacterCard(character, user) {
   const loreColW = innerW * 0.42;
   const attrColX = innerX + loreColW + colGap;
   const attrColW = innerW - loreColW - colGap;
+
+  const attrBoxTop = statsTop - 16;
+  const attrBoxBottom = statsTop + sectionH + 10;
+  paintBoxBg(ctx, innerX, attrBoxTop, innerW, attrBoxBottom - attrBoxTop, 10);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#38cdf0';
@@ -322,11 +317,11 @@ export async function drawCharacterCard(character, user) {
     ctx.stroke();
   });
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(innerX + loreColW + colGap / 2, statsTop - 4);
-  ctx.lineTo(innerX + loreColW + colGap / 2, statsTop + sectionH - 8);
+  ctx.moveTo(innerX + loreColW + colGap / 2, attrBoxTop + 6);
+  ctx.lineTo(innerX + loreColW + colGap / 2, attrBoxBottom - 6);
   ctx.stroke();
 
   /* ── pie: QR de perfil, handle y medallas ── */
