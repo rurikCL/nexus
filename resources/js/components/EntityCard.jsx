@@ -4,7 +4,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
 
@@ -44,6 +44,8 @@ function paintFrame(ctx, frame) {
   ctx.fillStyle = bg;
   ctx.fillRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2);
   ctx.restore();
+
+  paintGridBackground(ctx, pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
 
   ctx.save();
   ctx.beginPath();
