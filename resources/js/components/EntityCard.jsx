@@ -380,6 +380,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   });
   statsY += 18;
 
+  /* ── dos columnas: saludo inicial (izquierda) + atributos de combate (derecha) ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
   const rows = ATTR_ORDER.map((key) => ({
     icon: COMBAT_STAT_META[key].icon,
@@ -389,9 +390,33 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   }));
   const statsTop = statsY;
   const rowH = 47;
-  paintRows(ctx, rows, statsTop, innerX, innerRight, rowH);
+  const sectionH = rows.length * rowH;
+  const colGap = 22;
+  const saludoColW = innerW * 0.42;
+  const attrColX = innerX + saludoColW + colGap;
+  const attrColW = innerW - saludoColW - colGap;
 
-  const footY = statsTop + rows.length * rowH + 22;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = frame.line;
+  ctx.font = '700 11px "JetBrains Mono"';
+  ctx.fillText('SALUDO INICIAL', innerX, statsTop);
+  ctx.fillStyle = 'rgba(220,230,255,0.78)';
+  ctx.font = '400 15px "JetBrains Mono"';
+  const saludoLineH = 20;
+  const saludoMaxLines = Math.max(1, Math.floor((sectionH - 20) / saludoLineH));
+  const saludoText = entity.saludo ? `“${entity.saludo}”` : 'Sin saludo registrado.';
+  wrapText(ctx, saludoText, innerX, statsTop + 20, saludoColW, saludoLineH, saludoMaxLines);
+
+  paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerX + saludoColW + colGap / 2, statsTop - 4);
+  ctx.lineTo(innerX + saludoColW + colGap / 2, statsTop + sectionH - 8);
+  ctx.stroke();
+
+  const footY = statsTop + sectionH + 22;
   const habilidades = [entity.habilidad1, entity.habilidad2, entity.habilidad3, entity.habilidad4]
     .filter(Boolean).map(h => h.nombre).filter(Boolean);
   ctx.textAlign = 'center';
@@ -404,12 +429,6 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     const size = fitText(ctx, habilidades.join(' · '), innerW - 8, '15px "JetBrains Mono"', 11);
     ctx.font = `${size}px "JetBrains Mono"`;
     ctx.fillText(habilidades.join(' · '), CARD_W / 2, footY + 22);
-  } else if (entity.saludo) {
-    ctx.fillStyle = 'rgba(220,230,255,0.7)';
-    ctx.font = '400 15px "JetBrains Mono"';
-    const size = fitText(ctx, `“${entity.saludo}”`, innerW - 8, '15px "JetBrains Mono"', 11);
-    ctx.font = `${size}px "JetBrains Mono"`;
-    ctx.fillText(`“${entity.saludo}”`, CARD_W / 2, footY + 10);
   }
 
   await paintCardLogo(ctx, innerRight, CARD_H - pad);

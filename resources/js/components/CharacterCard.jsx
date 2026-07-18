@@ -5,7 +5,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
 } from '../utils/printableCard.js';
 
@@ -277,36 +277,60 @@ export async function drawCharacterCard(character, user) {
   ctx.stroke();
   y += 18;
 
-  /* ── atributos de combate: Ataque, Defensa, Puntería, Agilidad, Iniciativa ── */
+  /* ── dos columnas: lore (izquierda) + atributos de combate (derecha) ── */
   const statsTop = y;
   const rowH = 44;
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
+  const sectionH = ATTR_ORDER.length * rowH;
+  const colGap = 22;
+  const loreColW = innerW * 0.42;
+  const attrColX = innerX + loreColW + colGap;
+  const attrColW = innerW - loreColW - colGap;
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#38cdf0';
+  ctx.font = '700 11px "JetBrains Mono"';
+  ctx.fillText('LORE', innerX, statsTop);
+  ctx.fillStyle = 'rgba(220,230,255,0.78)';
+  ctx.font = '400 15px "JetBrains Mono"';
+  const loreLineH = 20;
+  const loreMaxLines = Math.max(1, Math.floor((sectionH - 20) / loreLineH));
+  const loreText = character.lore || character.bio || 'Sin historia registrada.';
+  wrapText(ctx, loreText, innerX, statsTop + 20, loreColW, loreLineH, loreMaxLines);
+
   ATTR_ORDER.forEach((key, i) => {
     const meta = STAT_META[key];
     const value = baseCombat[key] ?? character[key] ?? COMBAT_DEFAULTS[key];
     const rowY = statsTop + i * rowH;
 
-    drawIcon(ctx, meta.icon, innerX + 13, rowY - 6, 22, meta.color, 2);
+    drawIcon(ctx, meta.icon, attrColX + 11, rowY - 6, 20, meta.color, 2);
     ctx.textAlign = 'left';
     ctx.fillStyle = 'rgba(220,230,255,0.8)';
-    ctx.font = '600 16px "JetBrains Mono"';
-    ctx.fillText(meta.label.toUpperCase(), innerX + 34, rowY);
+    ctx.font = '600 14px "JetBrains Mono"';
+    ctx.fillText(meta.label.toUpperCase(), attrColX + 26, rowY);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = meta.color;
-    ctx.font = '800 24px Orbitron';
-    ctx.fillText(String(value), innerRight - 6, rowY + 3);
+    ctx.font = '800 22px Orbitron';
+    ctx.fillText(String(value), attrColX + attrColW - 4, rowY + 3);
 
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(innerX, rowY + 16);
-    ctx.lineTo(innerRight, rowY + 16);
+    ctx.moveTo(attrColX, rowY + 16);
+    ctx.lineTo(attrColX + attrColW, rowY + 16);
     ctx.stroke();
   });
 
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerX + loreColW + colGap / 2, statsTop - 4);
+  ctx.lineTo(innerX + loreColW + colGap / 2, statsTop + sectionH - 8);
+  ctx.stroke();
+
   /* ── pie: QR de perfil, handle y medallas ── */
-  const footY = statsTop + ATTR_ORDER.length * rowH + 14;
+  const footY = statsTop + sectionH + 14;
   if (qrImg) {
     drawImageRounded(ctx, qrImg, innerX, footY, 56, 56, 8, null);
   }
