@@ -2752,6 +2752,9 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       }
       setShowMisionPopup(false);
       onMisionChange?.();
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+        detail: { missionId: misionInfo.id, status: 'aceptada' },
+      }));
     } catch {
       toast('Error al aceptar la misión', { tone: 'error', icon: 'x' });
     } finally {
@@ -2775,7 +2778,15 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       // Las recompensas (créditos, hitos, títulos) ya se otorgaron en el servidor —
       // refresca el usuario global para que se reflejen sin recargar la página
       // (p. ej. el widget de Hitos en Comando).
-      apiFetch('/me').then((me) => onUserUpdate?.(me)).catch(() => {});
+      apiFetch('/me')
+        .then((me) => {
+          if (!me) return;
+          onUserUpdate?.(me);
+          window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+            detail: { type: 'hitos-sync', source: 'mission-complete', hitos: me.character?.hitos ?? [] },
+          }));
+        })
+        .catch(() => {});
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
@@ -3254,7 +3265,7 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
   const isMobile = useIsMobile();
   const ESTADO_LABEL = { pendiente: 'Pendiente', 'en-curso': 'En curso', completada: 'Completada' };
   const ESTADO_COLOR = { pendiente: '#E6B325', 'en-curso': '#38cdf0', completada: '#10b981' };
-  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'hito' ? '⭐' : t === 'habilidad' ? '⚡' : '📦';
+  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : '📦';
 
   const hitosReq = mision.hito_requerimiento
     ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)
@@ -3331,7 +3342,7 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
                   }}>
                     <span style={{ fontSize: 13 }}>{recIcon(r.tipo)}</span>
                     <span style={{ fontSize: 11, color: 'var(--txt)' }}>
-                      {r.tipo === 'creditos' ? `${r.valor} créditos` : r.tipo === 'hito' ? (r.hito || r.nombre) : (r.habilidad?.nombre || r.objeto?.nombre || r.nombre)}
+                      {r.tipo === 'creditos' ? `${r.valor} créditos` : (r.habilidad?.nombre || r.objeto?.nombre || r.nombre)}
                     </span>
                   </div>
                 ))}

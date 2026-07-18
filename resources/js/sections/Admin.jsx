@@ -1997,13 +1997,13 @@ export default function AdminView() {
 ───────────────────────────────────────────────────────────── */
 const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual', 'global'];
 const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'hito', 'automatico'];
-const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad', 'hito'];
+const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad'];
 
 const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
 const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
 
 const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unidad: '' };
-const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null, hito: '' };
+const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null };
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '',
@@ -2031,7 +2031,7 @@ function misionFromApi(m) {
     hito_requerimiento:   m.hito_requerimiento    ?? '',
     entregar_hito:        m.entregar_hito         ?? '',
     objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
-    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null, hito: r.hito ?? '' })),
+    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null })),
   };
 }
 
@@ -2574,7 +2574,7 @@ function MisionesAdmin() {
                   <button onClick={() => rmRec(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
                     <Icon name="x" size={12} />
                   </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto' || r.tipo === 'hito') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
                     <div>
                       <label className="nx-label">Nombre *</label>
                       <input className="nx-input" value={r.nombre} onChange={e => setRec(i, 'nombre', e.target.value)} placeholder="Ej: 500 Créditos" />
@@ -2585,7 +2585,7 @@ function MisionesAdmin() {
                         {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && r.tipo !== 'hito' && (
+                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && (
                       <div>
                         <label className="nx-label">Valor</label>
                         <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
@@ -2620,20 +2620,6 @@ function MisionesAdmin() {
                       {objetos.length === 0 && (
                         <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando objetos...</div>
                       )}
-                    </div>
-                  )}
-                  {r.tipo === 'hito' && (
-                    <div style={{ marginTop: 10 }}>
-                      <label className="nx-label">Hito a otorgar *</label>
-                      <input
-                        className="nx-input"
-                        value={r.hito ?? ''}
-                        onChange={e => setRec(i, 'hito', e.target.value)}
-                        placeholder="ej: tuto_03_sable"
-                      />
-                      <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
-                        Este hito se agregará al personaje al completar la misión.
-                      </div>
                     </div>
                   )}
                 </div>

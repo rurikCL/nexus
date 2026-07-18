@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { NX } from './data/seed.js';
 import { Icon, Avatar, Btn, Chip, Modal, ToastHost, toast } from './components/ui.jsx';
 import { useStore } from './store/useStore.js';
@@ -295,7 +295,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     };
   };
 
-  const fetchMissionCollections = async () => {
+  const fetchMissionCollections = useCallback(async () => {
     const token = localStorage.getItem('nx-token');
     if (!token) return null;
 
@@ -323,9 +323,9 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
         misiones.map(m => ({ ...m, temporada_nombre: temporada.nombre }))
       )),
     };
-  };
+  }, []);
 
-  const resolveMissionAlert = async (mission) => {
+  const resolveMissionAlert = useCallback(async (mission) => {
     const normalized = normalizeMissionAlert(mission);
     if (!normalized) return null;
 
@@ -346,13 +346,35 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     }
 
     return merged;
-  };
+  }, [fetchMissionCollections]);
 
-  const enqueueMissionAlert = async (mission) => {
+  const enqueueMissionAlert = useCallback(async (mission) => {
     const resolved = await resolveMissionAlert(mission);
     if (!resolved) return;
     setMisionNotifQueue(prev => prev.some(m => m.id === resolved.id) ? prev : [...prev, resolved]);
-  };
+  }, [resolveMissionAlert]);
+
+  const refreshNotifiableMissionQueue = useCallback(async () => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('nx-token');
+    if (!token) return;
+
+    try {
+      const response = await fetch('/api/misiones/global', {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = response.ok ? await response.json().catch(() => null) : null;
+      const pendientes = (data?.misiones ?? []).filter(m =>
+        m.notificar &&
+        !m.aceptada &&
+        m.status !== 'completada' &&
+        m.cumple_hitos
+      );
+      pendientes.forEach((mision) => {
+        void enqueueMissionAlert(mision);
+      });
+    } catch {}
+  }, [user?.id, enqueueMissionAlert]);
 
   const go = (v) => {
     setView(v);
@@ -573,23 +595,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
   // se muestran (una a la vez) solo si el usuario aún no las aceptó ni completó.
   useEffect(() => {
     if (!user?.id) return;
-    const token = localStorage.getItem('nx-token');
-    if (!token) return;
-    fetch('/api/misiones/global', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const pendientes = (data?.misiones ?? []).filter(m =>
-          m.notificar &&
-          !m.aceptada &&
-          m.status !== 'completada' &&
-          m.cumple_hitos
-        );
-        pendientes.forEach((mision) => {
-          void enqueueMissionAlert(mision);
-        });
-      })
-      .catch(() => {});
-  }, [user?.id, user?.character?.hitos]);
+    void refreshNotifiableMissionQueue();
+  }, [user?.id, user?.character?.hitos, refreshNotifiableMissionQueue]);
 
   const loadMissionDrawer = async () => {
     if (!user?.id) {
@@ -686,10 +693,15 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
   useEffect(() => {
     loadMissionDrawer();
-    const handler = () => loadMissionDrawer();
+    const handler = (ev) => {
+      loadMissionDrawer();
+      if (ev?.detail?.type === 'hitos-sync') {
+        void refreshNotifiableMissionQueue();
+      }
+    };
     window.addEventListener('nx-mision-updated', handler);
     return () => window.removeEventListener('nx-mision-updated', handler);
-  }, [user?.id, user?.character?.hitos]);
+  }, [user?.id, user?.character?.hitos, refreshNotifiableMissionQueue]);
 
   useEffect(() => {
     if (!user?.id || !window.Echo) return;
@@ -732,6 +744,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
             window.dispatchEvent(new CustomEvent('nx-mision-updated', {
               detail: { type: 'hitos-sync', hitos: me.character.hitos ?? [] },
             }));
+            void refreshNotifiableMissionQueue();
           }
         })
         .catch(() => {});
@@ -743,7 +756,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [user?.id, onUserUpdate]);
+  }, [user?.id, onUserUpdate, refreshNotifiableMissionQueue]);
 
   // Polling de mensajes no leídos
   useEffect(() => {
@@ -1558,8 +1571,8 @@ function MissionItem({ mision, onCompleteMission, busy }) {
               border: '1px solid rgba(230,179,37,0.2)',
               color: '#E6B325',
             }}>
-              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'hito' ? '⭐' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
-              {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}
+              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
+              {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
               {r.tipo !== 'habilidad' && r.valor > 0 ? ` x${r.valor}` : ''}
             </span>
           ))}

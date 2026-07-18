@@ -20,7 +20,6 @@ class Recompensa extends Model
         'imagen',
         'habilidad_id',
         'objeto_id',
-        'hito',
     ];
 
     public function mision(): BelongsTo

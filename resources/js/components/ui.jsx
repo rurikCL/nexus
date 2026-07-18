@@ -479,8 +479,13 @@ export function Modal({ open, onClose, title, kicker, children, width = 540, zIn
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
+    const prevScrollbarGutter = document.body.style.scrollbarGutter;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prevOverflow; };
+    document.body.style.scrollbarGutter = 'stable';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.scrollbarGutter = prevScrollbarGutter;
+    };
   }, [open]);
   if (!open) return null;
   return createPortal(
