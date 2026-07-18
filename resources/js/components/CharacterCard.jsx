@@ -6,7 +6,7 @@ import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintCardLogo,
-  COMBAT_STAT_META as STAT_META, COMBAT_STATS, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
+  COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -21,10 +21,126 @@ const TIER_COLOR = {
 };
 const MEDAL_TONE_COLOR = { gold: '#E6B325', orange: '#FF6B00', holo: '#38cdf0', red: '#ff2d45' };
 
+/* Mismos assets que RANGOS_JEDI en Comando.jsx (apartado "Rango" de Mi Personaje). */
+const TIER_RANGO_IMG = {
+  iniciado:    '/assets/INITIATE.png',
+  padawan:     '/assets/PADAWAN.png',
+  caballero:   '/assets/KNIGHT.png',
+  maestro:     '/assets/MASTER.png',
+  granmaestro: '/assets/GRANDMASTER.png',
+};
+
 const SIDE_FRAME = {
   luminoso: { bg1: '#0a1a3a', bg2: '#040c1e', line: '#3aa0ff' },
   oscuro:   { bg1: '#2a0a0f', bg2: '#0f0304', line: '#ff2d45' },
 };
+
+/** Dibuja un corazón relleno (pip de Vida) con esquina superior-izquierda en (x, y). */
+function drawHeartPip(ctx, x, y, size, color) {
+  const topCurveHeight = size * 0.3;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(x + size / 2, y + topCurveHeight);
+  ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + topCurveHeight);
+  ctx.bezierCurveTo(x, y + (size + topCurveHeight) / 2, x + size / 2, y + (size + topCurveHeight) / 2, x + size / 2, y + size);
+  ctx.bezierCurveTo(x + size / 2, y + (size + topCurveHeight) / 2, x + size, y + (size + topCurveHeight) / 2, x + size, y + topCurveHeight);
+  ctx.bezierCurveTo(x + size, y, x + size / 2, y, x + size / 2, y + topCurveHeight);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Dibuja un escudo de energía (pip de Escudo) con esquina superior-izquierda en (x, y). */
+function drawShieldPip(ctx, x, y, size, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(size / 24, size / 24);
+  const path = new Path2D(ICON_PATHS.shield);
+  ctx.fillStyle = `${color}33`;
+  ctx.fill(path);
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 3;
+  ctx.stroke(path);
+  ctx.restore();
+}
+
+/** Dibuja una fila de pips (corazones/escudos) que se envuelve si no caben en `maxWidth`; devuelve el Y final. */
+function drawPipRow(ctx, { count, draw, x, maxWidth, y, size = 20, gap = 6, maxPips = 30 }) {
+  const shown = Math.min(count, maxPips);
+  const perRow = Math.max(1, Math.floor((maxWidth + gap) / (size + gap)));
+  const rows = Math.max(1, Math.ceil(shown / perRow));
+  for (let i = 0; i < shown; i++) {
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+    draw(x + col * (size + gap), y + row * (size + gap), size);
+  }
+  let bottomY = y + rows * (size + gap) - gap;
+  if (count > maxPips) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(220,230,255,0.75)';
+    ctx.font = '700 13px "JetBrains Mono"';
+    ctx.fillText(`+${count - maxPips}`, x, bottomY + 13);
+    bottomY += 16;
+  }
+  return bottomY;
+}
+
+/** Dibuja un sable de luz vertical (hoja + puño) — misma composición visual que SaberBlade en Comando.jsx. */
+function drawSaberBlade(ctx, x, y, w, h, color) {
+  const hiltH = Math.min(64, h * 0.24);
+  const bladeGap = 6;
+  const bladeH = h - hiltH - bladeGap;
+  const bladeW = Math.max(7, Math.min(14, w * 0.42));
+  const bladeX = x + (w - bladeW) / 2;
+
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(bladeX, y, bladeW, bladeH, bladeW / 2);
+  ctx.fill();
+  ctx.restore();
+
+  const coreW = Math.max(2, bladeW * 0.38);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.beginPath();
+  ctx.roundRect(bladeX + (bladeW - coreW) / 2, y + 4, coreW, bladeH - 8, coreW / 2);
+  ctx.fill();
+
+  const hiltW = Math.max(16, Math.min(24, w * 0.7));
+  const hiltX = x + (w - hiltW) / 2;
+  const hiltY = y + bladeH + bladeGap;
+  const grad = ctx.createLinearGradient(hiltX, 0, hiltX + hiltW, 0);
+  grad.addColorStop(0, '#2c3445');
+  grad.addColorStop(0.5, '#a9b8cf');
+  grad.addColorStop(1, '#2c3445');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(hiltX, hiltY, hiltW, hiltH, 4);
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#161d29';
+  ctx.stroke();
+
+  ctx.fillStyle = '#161d29';
+  ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.14, hiltW - 4, hiltH * 0.12);
+
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = color;
+  ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.42, hiltW - 4, hiltH * 0.1);
+  ctx.restore();
+
+  ctx.fillStyle = '#161d29';
+  ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.66, hiltW - 4, hiltH * 0.12);
+}
 
 /** Dibuja la carta imprimible del personaje y devuelve el canvas listo para exportar. */
 export async function drawCharacterCard(character, user) {
@@ -41,11 +157,12 @@ export async function drawCharacterCard(character, user) {
   const publicUrl = `${window.location.origin}/c/${encodeURIComponent(handle)}`;
   const baseCombat = character.combat_base_stats ?? {};
 
-  const [photoImg, qrDataUrl] = await Promise.all([
+  const [photoImg, qrDataUrl, rankImg] = await Promise.all([
     loadImage(mediaUrl(character.photo ?? character.photo_url)),
     handle
       ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#eaf9ffcc', light: '#00000000' } }).catch(() => null)
       : Promise.resolve(null),
+    loadImage(TIER_RANGO_IMG[tierKey] ?? TIER_RANGO_IMG.iniciado),
   ]);
   const qrImg = qrDataUrl ? await loadImage(qrDataUrl) : null;
 
@@ -91,14 +208,40 @@ export async function drawCharacterCard(character, user) {
   ctx.fillStyle = '#eaf2ff';
   ctx.fillText(displayName, innerX, pad + 54);
 
-  ctx.beginPath();
-  ctx.arc(innerRight - 24, pad + 40, 23, 0, Math.PI * 2);
-  ctx.fillStyle = tierColor;
-  ctx.fill();
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#04070f';
-  ctx.font = '800 20px Orbitron';
-  ctx.fillText(tierLabel.charAt(0), innerRight - 24, pad + 48);
+  const badgeR = 23;
+  const badgeCx = innerRight - 24;
+  const badgeCy = pad + 40;
+  if (rankImg) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#04070f';
+    ctx.fillRect(badgeCx - badgeR, badgeCy - badgeR, badgeR * 2, badgeR * 2);
+    const scale = Math.max((badgeR * 2) / rankImg.width, (badgeR * 2) / rankImg.height);
+    const dw = rankImg.width * scale;
+    const dh = rankImg.height * scale;
+    ctx.drawImage(rankImg, badgeCx - dw / 2, badgeCy - dh / 2, dw, dh);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.save();
+    ctx.shadowColor = tierColor;
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = tierColor;
+    ctx.stroke();
+    ctx.restore();
+  } else {
+    ctx.beginPath();
+    ctx.arc(badgeCx, badgeCy, badgeR, 0, Math.PI * 2);
+    ctx.fillStyle = tierColor;
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#04070f';
+    ctx.font = '800 20px Orbitron';
+    ctx.fillText(tierLabel.charAt(0), badgeCx, badgeCy + 8);
+  }
 
   /* ── subencabezado: forma de combate + color de sable ── */
   const subY = pad + 96;
@@ -121,34 +264,38 @@ export async function drawCharacterCard(character, user) {
   ctx.fill();
   ctx.restore();
 
-  /* ── arte: foto de personaje ── */
+  /* ── arte: foto de personaje + sable de luz a la derecha (como en Mi Personaje) ── */
   const artY = pad + 118;
   const artH = 396;
+  const saberColW = 52;
+  const saberGap = 12;
+  const artW = innerW - saberColW - saberGap;
   if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, artY, innerW, artH, 16, `${side.line}66`);
+    drawImageRounded(ctx, photoImg, innerX, artY, artW, artH, 16, `${side.line}66`);
   } else {
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(innerX, artY, innerW, artH, 16);
+    ctx.roundRect(innerX, artY, artW, artH, 16);
     ctx.clip();
     const artBg = ctx.createRadialGradient(
-      innerX + innerW / 2, artY + artH / 2, 20,
-      innerX + innerW / 2, artY + artH / 2, innerW / 1.3,
+      innerX + artW / 2, artY + artH / 2, 20,
+      innerX + artW / 2, artY + artH / 2, artW / 1.3,
     );
     artBg.addColorStop(0, `${classInfo.accent}22`);
     artBg.addColorStop(1, '#04070f');
     ctx.fillStyle = artBg;
-    ctx.fillRect(innerX, artY, innerW, artH);
+    ctx.fillRect(innerX, artY, artW, artH);
     ctx.globalAlpha = 0.4;
-    drawIcon(ctx, classInfo.icon, innerX + innerW / 2, artY + artH / 2, 150, classInfo.accent, 1.6);
+    drawIcon(ctx, classInfo.icon, innerX + artW / 2, artY + artH / 2, 130, classInfo.accent, 1.6);
     ctx.globalAlpha = 1;
     ctx.restore();
     ctx.beginPath();
-    ctx.roundRect(innerX, artY, innerW, artH, 16);
+    ctx.roundRect(innerX, artY, artW, artH, 16);
     ctx.lineWidth = 3;
     ctx.strokeStyle = `${side.line}66`;
     ctx.stroke();
   }
+  drawSaberBlade(ctx, innerX + artW + saberGap, artY, saberColW, artH, saberColor);
 
   /* ── línea de tipo: lado de la Fuerza ── */
   const typeY = artY + artH + 36;
@@ -162,10 +309,36 @@ export async function drawCharacterCard(character, user) {
   ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(innerX, typeY + 12); ctx.lineTo(innerRight, typeY + 12); ctx.stroke();
 
-  /* ── atributos de combate ── */
-  const statsTop = typeY + 46;
-  const rowH = 47;
-  COMBAT_STATS.forEach((key, i) => {
+  /* ── vida (corazones) y escudo (energía) — solo íconos, un pip por punto ── */
+  const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
+  const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
+
+  let y = typeY + 30;
+  y = drawPipRow(ctx, {
+    count: vidaVal, x: innerX, maxWidth: innerW, y, size: 22, gap: 6,
+    draw: (px, py, s) => drawHeartPip(ctx, px, py, s, STAT_META.vida.color),
+  });
+  y += 16;
+  y = drawPipRow(ctx, {
+    count: escudoVal, x: innerX, maxWidth: innerW, y, size: 22, gap: 6,
+    draw: (px, py, s) => drawShieldPip(ctx, px, py, s, STAT_META.escudo.color),
+  });
+  y += 18;
+
+  /* ── separador entre escudo y el primer atributo (Ataque) ── */
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerX, y);
+  ctx.lineTo(innerRight, y);
+  ctx.stroke();
+  y += 22;
+
+  /* ── atributos de combate: Ataque, Defensa, Puntería, Agilidad, Iniciativa ── */
+  const statsTop = y;
+  const rowH = 44;
+  const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
+  ATTR_ORDER.forEach((key, i) => {
     const meta = STAT_META[key];
     const value = baseCombat[key] ?? character[key] ?? COMBAT_DEFAULTS[key];
     const rowY = statsTop + i * rowH;
@@ -190,7 +363,7 @@ export async function drawCharacterCard(character, user) {
   });
 
   /* ── pie: QR de perfil, handle y medallas ── */
-  const footY = statsTop + COMBAT_STATS.length * rowH + 18;
+  const footY = statsTop + ATTR_ORDER.length * rowH + 14;
   if (qrImg) {
     drawImageRounded(ctx, qrImg, innerX, footY, 56, 56, 8, null);
   }
@@ -203,9 +376,10 @@ export async function drawCharacterCard(character, user) {
   ctx.font = '400 12px "JetBrains Mono"';
   ctx.fillText('Perfil público', handleX, footY + 42);
 
+  const LOGO_SIZE = 62;
   if (medalIds.length) {
     const medalR = 15;
-    const LOGO_RESERVE = 50; // deja libre la esquina inferior derecha para el logo de esgrima
+    const LOGO_RESERVE = LOGO_SIZE + 8 + 16; // deja libre la esquina inferior derecha para el logo de esgrima
     let medalX = innerRight - medalR - LOGO_RESERVE;
     for (const id of [...medalIds].reverse()) {
       const medal = NX.MEDALS[id];
@@ -230,7 +404,7 @@ export async function drawCharacterCard(character, user) {
   ctx.font = '400 12px "JetBrains Mono"';
   ctx.fillText(`NÉXUS ACADEMIA — ${dateStr}`, CARD_W / 2, CARD_H - pad - 8);
 
-  await paintCardLogo(ctx, innerRight, CARD_H - pad);
+  await paintCardLogo(ctx, innerRight, CARD_H - pad, LOGO_SIZE);
 
   return canvas;
 }
