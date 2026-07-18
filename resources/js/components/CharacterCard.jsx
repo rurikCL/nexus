@@ -122,12 +122,13 @@ export async function drawCharacterCard(character, user) {
   const sableDanoPerforante = character.sable_activo?.dano_perforante ?? 0;
   const sableNombre = (character.sable_activo?.nombre ?? '').toUpperCase() || 'BONOS DEL SABLE';
 
-  const [photoImg, qrDataUrl, rankImg] = await Promise.all([
+  const [photoImg, qrDataUrl, rankImg, formaImg] = await Promise.all([
     loadImage(mediaUrl(character.photo ?? character.photo_url)),
     handle
       ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#eaf9ffcc', light: '#00000000' } }).catch(() => null)
       : Promise.resolve(null),
     loadImage(TIER_RANGO_IMG[tierKey] ?? TIER_RANGO_IMG.iniciado),
+    loadImage(classInfo.img),
   ]);
   const qrImg = qrDataUrl ? await loadImage(qrDataUrl) : null;
 
@@ -168,10 +169,11 @@ export async function drawCharacterCard(character, user) {
   ctx.stroke();
   ctx.restore();
 
-  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 14 ── */
+  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 14, margen superior 12 ── */
   const headerPad = 14;
   const logoR = 30;
-  const headerTop = pad;
+  const headerMarginTop = 12;
+  const headerTop = pad + headerMarginTop;
   const headerH = Math.max(logoR * 2 + headerPad * 2, 64);
   const headerBottom = headerTop + headerH;
   paintBoxBg(ctx, innerX, headerTop, innerW, headerH, 10, 2);
@@ -271,18 +273,12 @@ export async function drawCharacterCard(character, user) {
   });
   y += 14;
 
-  /* ── cuadro grande: sable equipado | bonos del sable | valores finales (base + bonos) ── */
+  /* ── cuadro grande: forma del usuario | sable equipado | bonos del sable | valores finales (base + bonos) ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
-  const EXTRA_ORDER = [
-    { label: 'Daño', color: '#ff5f2e', icon: 'flame', value: sableDano },
-    { label: 'Daño Perforante', color: '#8aa0c0', icon: 'fire', value: sableDanoPerforante },
-    { label: 'Bono Fuerza', color: '#22c55e', icon: 'dumbbell', value: saberBonos.fuerza ?? 0 },
-    { label: 'Regen. Fuerza', color: '#84cc16', icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
-  ];
   const bonusRowH = 30;
   const boxPad2 = 14;
   const headerLabelH = 22;
-  const totalRows = ATTR_ORDER.length + EXTRA_ORDER.length;
+  const totalRows = ATTR_ORDER.length;
   const rightColContentH = headerLabelH + totalRows * bonusRowH;
   const saberBoxTop = y;
   const saberBoxH = boxPad2 * 2 + rightColContentH;
@@ -290,16 +286,69 @@ export async function drawCharacterCard(character, user) {
   paintBoxBg(ctx, innerX, saberBoxTop, innerW, saberBoxH, 10);
 
   const colGap2 = 14;
-  const saberColW = innerW * 0.22;
-  const finalColW = innerW * 0.19;
-  const bonosColX = innerX + saberColW + colGap2;
-  const bonosColW = innerW - saberColW - finalColW - colGap2 * 2;
+  const formaColW = innerW * 0.22;
+  const saberColW = innerW * 0.18;
+  const finalColW = innerW * 0.16;
+  const formaX = innerX;
+  const saberX = formaX + formaColW + colGap2;
+  const bonosColX = saberX + saberColW + colGap2;
+  const bonosColW = innerW - formaColW - saberColW - finalColW - colGap2 * 3;
   const finalColX = bonosColX + bonosColW + colGap2;
+
+  /* columna de la forma: imagen a todo el alto del cuadro + rótulo con el nombre */
+  const formaBoxX = formaX + boxPad2 / 2;
+  const formaBoxY = saberBoxTop + boxPad2;
+  const formaBoxW = formaColW - boxPad2;
+  const formaBoxH = rightColContentH;
+  if (formaImg) {
+    drawImageRounded(ctx, formaImg, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, `${classInfo.accent}66`);
+  } else {
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10);
+    ctx.clip();
+    ctx.fillStyle = '#04070f';
+    ctx.fillRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH);
+    drawIcon(ctx, classInfo.icon, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH / 2, 40, classInfo.accent, 1.8);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.roundRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = `${classInfo.accent}66`;
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10);
+  ctx.clip();
+  const capH = 44;
+  const capY = formaBoxY + formaBoxH - capH;
+  const capGrad = ctx.createLinearGradient(0, capY, 0, formaBoxY + formaBoxH);
+  capGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  capGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
+  ctx.fillStyle = capGrad;
+  ctx.fillRect(formaBoxX, capY, formaBoxW, capH);
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(220,230,255,0.7)';
+  ctx.font = '700 9px "JetBrains Mono"';
+  ctx.fillText(classInfo.num.toUpperCase(), formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 26);
+
+  let formaNameSize = 15;
+  ctx.font = `800 ${formaNameSize}px Orbitron`;
+  while (formaNameSize > 10 && ctx.measureText(classInfo.name).width > formaBoxW - 10) {
+    formaNameSize -= 1;
+    ctx.font = `800 ${formaNameSize}px Orbitron`;
+  }
+  ctx.fillStyle = '#eaf2ff';
+  ctx.fillText(classInfo.name, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 10);
 
   drawSaberBlade(
     ctx,
-    innerX + boxPad2, saberBoxTop + boxPad2,
-    saberColW - boxPad2 * 2, rightColContentH,
+    saberX + boxPad2 / 2, saberBoxTop + boxPad2,
+    saberColW - boxPad2, rightColContentH,
     equippedSaberColor,
   );
 
@@ -349,23 +398,17 @@ export async function drawCharacterCard(character, user) {
     const finalValue = combatStats[key] ?? ((baseCombat[key] ?? COMBAT_DEFAULTS[key] ?? 0) + bono);
     drawFinalValue(i, meta.color, finalValue);
   });
-  EXTRA_ORDER.forEach((row, j) => {
-    drawBonusRow(ATTR_ORDER.length + j, row.icon, row.color, row.label, row.value);
-  });
-
-  const dividerY = rowsStartY + ATTR_ORDER.length * bonusRowH - bonusRowH / 2 - 2;
-  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(bonosColX, dividerY);
-  ctx.lineTo(finalColX + finalColW, dividerY);
-  ctx.stroke();
 
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(innerX + saberColW + colGap2 / 2, saberBoxTop + 8);
-  ctx.lineTo(innerX + saberColW + colGap2 / 2, saberBoxBottom - 8);
+  ctx.moveTo(formaX + formaColW + colGap2 / 2, saberBoxTop + 8);
+  ctx.lineTo(formaX + formaColW + colGap2 / 2, saberBoxBottom - 8);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(saberX + saberColW + colGap2 / 2, saberBoxTop + 8);
+  ctx.lineTo(saberX + saberColW + colGap2 / 2, saberBoxBottom - 8);
   ctx.stroke();
 
   ctx.beginPath();
@@ -373,8 +416,51 @@ export async function drawCharacterCard(character, user) {
   ctx.lineTo(bonosColX + bonosColW + colGap2 / 2, saberBoxBottom - 8);
   ctx.stroke();
 
+  /* ── cuadro horizontal: daño, daño perforante, bono fuerza y regen. fuerza ── */
+  const EXTRA_ORDER = [
+    { label: 'Daño', color: '#ff5f2e', icon: 'flame', value: sableDano },
+    { label: 'Daño Perforante', color: '#8aa0c0', icon: 'fire', value: sableDanoPerforante },
+    { label: 'Bono Fuerza', color: '#22c55e', icon: 'dumbbell', value: saberBonos.fuerza ?? 0 },
+    { label: 'Regen. Fuerza', color: '#84cc16', icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
+  ];
+  const extraBoxTop = saberBoxBottom + 14;
+  const extraBoxH = 76;
+  const extraBoxBottom = extraBoxTop + extraBoxH;
+  paintBoxBg(ctx, innerX, extraBoxTop, innerW, extraBoxH, 10);
+
+  const cellW = innerW / EXTRA_ORDER.length;
+  EXTRA_ORDER.forEach((item, i) => {
+    const cx = innerX + cellW * i + cellW / 2;
+    drawIcon(ctx, item.icon, cx, extraBoxTop + 24, 18, item.color, 2);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = item.color;
+    ctx.font = '800 20px Orbitron';
+    const sign = item.value > 0 ? '+' : '';
+    ctx.fillText(`${sign}${item.value}`, cx, extraBoxTop + 50);
+
+    let labelSize = 10;
+    const label = item.label.toUpperCase();
+    ctx.font = `600 ${labelSize}px "JetBrains Mono"`;
+    while (labelSize > 7 && ctx.measureText(label).width > cellW - 10) {
+      labelSize -= 1;
+      ctx.font = `600 ${labelSize}px "JetBrains Mono"`;
+    }
+    ctx.fillStyle = 'rgba(220,230,255,0.7)';
+    ctx.fillText(label, cx, extraBoxTop + 64);
+
+    if (i > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(innerX + cellW * i, extraBoxTop + 8);
+      ctx.lineTo(innerX + cellW * i, extraBoxBottom - 8);
+      ctx.stroke();
+    }
+  });
+
   /* ── pie: 3 columnas — QR + alias | logo de esgrima | ID de personaje ── */
-  const footY = saberBoxBottom + 16;
+  const footY = extraBoxBottom + 16;
   const footH = 60;
   const qrSize = 48;
   if (qrImg) {
