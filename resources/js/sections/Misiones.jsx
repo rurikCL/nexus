@@ -129,14 +129,15 @@ export function MisionesView({ S, user, onUserUpdate, onTransmision }) {
 function GlobalSection({ misiones, onUpdate, onUserUpdate, onTransmision }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
-  const activas     = misiones.filter(m => m.status !== 'completada');
-  const completadas = misiones.filter(m => m.status === 'completada');
+  const visibles    = misiones.filter(m => m.cumple_hitos || m.aceptada || m.completada_por_mi || m.status === 'completada');
+  const activas     = visibles.filter(m => m.status !== 'completada');
+  const completadas = visibles.filter(m => m.status === 'completada');
   const gridCols = isMobile ? '1fr' : 'repeat(2, 1fr)';
-  const selected = misiones.find(m => m.id === selectedId) ?? null;
+  const selected = visibles.find(m => m.id === selectedId) ?? null;
 
   return (
     <Panel kicker="Global" title="Misiones Globales" icon="target">
-      {misiones.length === 0 && <Empty label="No hay misiones globales activas" />}
+      {visibles.length === 0 && <Empty label="No hay misiones globales activas" />}
       {activas.length > 0 && (
         <div style={{
           display: 'grid', gridTemplateColumns: gridCols, gap: 14,
