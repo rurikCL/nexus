@@ -56,8 +56,10 @@ export function drawIcon(ctx, iconPaths, name, cx, cy, size, color, strokeWidth 
   ctx.restore();
 }
 
-/** Dibuja una imagen recortada dentro de un rectángulo de esquinas redondeadas, con borde opcional. */
-export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, borderWidth = 3) {
+/** Dibuja una imagen recortada dentro de un rectángulo de esquinas redondeadas, con borde opcional.
+    `alignY: 'top'` ancla el recorte a la parte superior de la imagen (centrada en horizontal)
+    en vez de centrarlo también verticalmente — útil para retratos donde la cara suele quedar arriba. */
+export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, borderWidth = 3, alignY = 'center') {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
@@ -69,7 +71,8 @@ export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, bord
     const scale = Math.max(w / img.width, h / img.height);
     const dw = img.width * scale;
     const dh = img.height * scale;
-    ctx.drawImage(img, x + w / 2 - dw / 2, y + h / 2 - dh / 2, dw, dh);
+    const dy = alignY === 'top' ? y : y + h / 2 - dh / 2;
+    ctx.drawImage(img, x + w / 2 - dw / 2, dy, dw, dh);
   }
   ctx.restore();
 
