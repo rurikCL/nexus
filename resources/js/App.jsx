@@ -647,7 +647,9 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       };
 
       const items = [
-        ...((global?.misiones ?? []).map(m => flattenMission(m, 'global'))),
+        ...((global?.misiones ?? [])
+          .filter(m => m.cumple_hitos || m.status === 'completada')
+          .map(m => flattenMission(m, 'global'))),
         ...((individual?.misiones ?? []).map(m => flattenMission(m, 'individual'))),
         ...((comunidad?.misiones ?? [])
           .filter(m => m.aceptada || m.progreso > 0 || m.completada_por_mi)
