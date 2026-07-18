@@ -667,6 +667,7 @@ class PvpCombatController extends Controller
                     'character_id' => $winnerChar->id,
                     'hito' => "{$loserChar->name} derrotado",
                 ]);
+                MisionProgresoService::registrarHito($winnerUser, "{$loserChar->name} derrotado");
                 MisionProgresoService::registrar($winnerUser, 'combate', 1);
             }
         }

@@ -29,6 +29,7 @@ const TIPO_OBJ = {
   viaje:         'Viaje',
   dialogo:       'Diálogo',
   menu:          'Menú',
+  hito:          'Hito',
   automatico:    'Automático',
 };
 
@@ -354,8 +355,8 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
                   fontSize: 10, padding: '2px 8px', borderRadius: 4,
                   background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.25)', color: '#E6B325',
                 }}>
-                  {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
-                  {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
+                  {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'hito' ? '⭐' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
+                  {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}
                   {r.tipo !== 'habilidad' && r.valor > 0 ? ` ×${r.valor}` : ''}
                 </span>
               ))}
@@ -540,10 +541,10 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                   <span style={{ fontSize: 13 }}>
-                    {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : '📦'}
+                    {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'hito' ? '⭐' : r.tipo === 'habilidad' ? '⚡' : '📦'}
                   </span>
                   <span style={{ fontSize: 12, color: r.tipo === 'habilidad' ? '#a78bfa' : '#E6B325' }}>
-                    {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
+                    {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}
                     {r.tipo !== 'habilidad' && r.valor > 0 ? ` (${r.valor})` : ''}
                   </span>
                 </div>
@@ -757,10 +758,10 @@ function IndividualMisionPopup({ mision, onClose }) {
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
                   <span style={{ fontSize: 12 }}>
-                    {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'habilidad' ? '⚡' : '📦'}
+                    {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'hito' ? '⭐' : r.tipo === 'habilidad' ? '⚡' : '📦'}
                   </span>
                   <span style={{ fontSize: 11, color: '#E6B325' }}>
-                    {r.nombre}{r.valor > 0 ? ` (${r.valor})` : ''}
+                    {r.tipo === 'hito' ? (r.hito || r.nombre) : r.nombre}{r.valor > 0 ? ` (${r.valor})` : ''}
                   </span>
                 </div>
               ))}
