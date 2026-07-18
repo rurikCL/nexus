@@ -107,9 +107,9 @@ export async function drawCharacterCard(character, user) {
   await ensureFonts();
 
   const side = SIDE_FRAME[character.side] ?? SIDE_FRAME.luminoso;
-  const saberColor = NX.SABERS[character.saber] ?? NX.SABERS.azul;
+  const saberColor = NX.SABERS[character.saber_color] ?? NX.SABERS.azul;
   const classInfo = NX.CLASSES.find(c => c.id === character.cls) ?? NX.CLASSES[0];
-  const equippedSaberColor = character.sable_activo?.color_hoja || saberColor;
+  const equippedSaberColor = NX.SABERS[character.sable_activo?.color_hoja] ?? saberColor;
   const tierKey = user?.tier ?? character.tier ?? 'iniciado';
   const tierLabel = NX.TIERS[tierKey]?.label ?? 'Iniciado';
   const tierColor = TIER_COLOR[tierKey] ?? TIER_COLOR.iniciado;
@@ -352,20 +352,26 @@ export async function drawCharacterCard(character, user) {
     equippedSaberColor,
   );
 
+  const saberIconSize = 13;
+  drawIcon(ctx, 'sword', bonosColX + saberIconSize / 2, saberBoxTop + boxPad2 + 4, saberIconSize, '#38cdf0', 2);
+
   ctx.textAlign = 'left';
   ctx.fillStyle = '#38cdf0';
   let saberNameSize = 11;
+  const saberNameX = bonosColX + saberIconSize + 6;
+  const saberNameMaxW = bonosColW - saberIconSize - 6 - 8;
   ctx.font = `700 ${saberNameSize}px "JetBrains Mono"`;
-  while (saberNameSize > 8 && ctx.measureText(sableNombre).width > bonosColW - 8) {
+  while (saberNameSize > 8 && ctx.measureText(sableNombre).width > saberNameMaxW) {
     saberNameSize -= 1;
     ctx.font = `700 ${saberNameSize}px "JetBrains Mono"`;
   }
-  ctx.fillText(sableNombre, bonosColX, saberBoxTop + boxPad2 + 8);
+  ctx.fillText(sableNombre, saberNameX, saberBoxTop + boxPad2 + 8);
 
+  const finalPad = 14;
   ctx.textAlign = 'right';
   ctx.fillStyle = '#38cdf0';
   ctx.font = '700 11px "JetBrains Mono"';
-  ctx.fillText('FINAL', finalColX + finalColW - 4, saberBoxTop + boxPad2 + 8);
+  ctx.fillText('FINAL', finalColX + finalColW - finalPad, saberBoxTop + boxPad2 + 8);
 
   const rowsStartY = saberBoxTop + boxPad2 + headerLabelH + 10;
   const drawBonusRow = (i, icon, color, label, value) => {
@@ -388,7 +394,7 @@ export async function drawCharacterCard(character, user) {
     ctx.textAlign = 'right';
     ctx.fillStyle = color;
     ctx.font = '800 16px Orbitron';
-    ctx.fillText(`${value}`, finalColX + finalColW - 4, rowY + 2);
+    ctx.fillText(`${value}`, finalColX + finalColW - finalPad, rowY + 2);
   };
 
   ATTR_ORDER.forEach((key, i) => {
