@@ -5,6 +5,14 @@
 export const CARD_W = 750;
 export const CARD_H = 1050;
 
+/* Tokens rectangulares (marcadores de Buff/Debuff/Estado): mini-carta con la
+   misma proporción 5:7 y el mismo px/mm que la carta completa (CARD_W/63 ≈
+   11.9 px/mm), pero a tamaño de ficha de mesa en vez de carta jugable. */
+export const TOKEN_W = 380;
+export const TOKEN_H = 532;
+export const TOKEN_W_MM = Math.round(TOKEN_W * 63 / CARD_W); // ≈ 32mm
+export const TOKEN_H_MM = Math.round(TOKEN_H * 88 / CARD_H); // ≈ 45mm
+
 export function mediaUrl(path) {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -362,5 +370,27 @@ export function printCardImage(dataUrl, onBlocked) {
   </head><body><img src="${dataUrl}" /></body></html>`);
   win.document.close();
   // algunos navegadores no disparan onload del documento recién escrito con document.write
+  setTimeout(() => { win.focus(); win.print(); }, 350);
+}
+
+/** Imprime una hoja con varias copias de un token rectangular pequeño (`dataUrl`),
+    pensada para cortar como marcador físico de estado/buff en mesa. A diferencia
+    de `printCardImage`, no fija un tamaño de página propio: se imprime sobre el
+    papel que ya tenga cargado el usuario, repitiendo el token `copies` veces
+    (el navegador pagina solo si no caben todas en una hoja). */
+export function printTokenSheet(dataUrl, { mmW = TOKEN_W_MM, mmH = TOKEN_H_MM, copies = 8 } = {}, onBlocked) {
+  const win = window.open('', '_blank', 'width=480,height=640');
+  if (!win) { onBlocked?.(); return; }
+  const cells = Array.from({ length: copies }, () => `<div class="token"><img src="${dataUrl}" /></div>`).join('');
+  win.document.write(`<!doctype html><html><head><title>Marcadores imprimibles</title>
+    <style>
+      @page { margin: 10mm; }
+      html, body { margin: 0; padding: 0; background: #fff; }
+      .sheet { display: flex; flex-wrap: wrap; gap: 4mm; }
+      .token { width: ${mmW}mm; height: ${mmH}mm; border: 1px dashed #999; border-radius: 3mm; overflow: hidden; }
+      .token img { width: 100%; height: 100%; display: block; }
+    </style>
+  </head><body><div class="sheet">${cells}</div></body></html>`);
+  win.document.close();
   setTimeout(() => { win.focus(); win.print(); }, 350);
 }

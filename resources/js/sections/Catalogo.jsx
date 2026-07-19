@@ -3,6 +3,7 @@ import { Icon, Panel, Chip, toast } from '../components/ui.jsx';
 import { NX } from '../data/seed.js';
 import { mediaUrl } from '../utils/printableCard.js';
 import EntityCardModal, { TIPO_HAB_LABEL, RAREZA_LABEL, NPC_TIPO_LABEL } from '../components/EntityCard.jsx';
+import { ESTADOS_COMBATE, STATS_COMBATE, CATEGORIA_ESTADO_LABEL } from '../data/estadosCombate.js';
 import { Empty } from './Comando.jsx';
 
 /* NÉXUS — Catálogo: archivo de referencia de habilidades, objetos, NPCs, jefes
@@ -40,6 +41,31 @@ const CATEGORIES = [
   { id: 'npcs', label: 'NPCs', icon: 'user', kind: 'npc', filters: [{ field: 'tipo', label: 'Tipo', labels: NPC_TIPO_LABEL }] },
   { id: 'jefes', label: 'Jefes', icon: 'crown', kind: 'npc', filters: [] },
   { id: 'enemigos', label: 'Enemigos', icon: 'flame', kind: 'enemigo', filters: [{ field: 'tipo', label: 'Tipo', labels: NPC_TIPO_LABEL }] },
+  {
+    id: 'buffs_estados',
+    label: 'Buffs y Estados',
+    icon: 'zap',
+    kind: 'mixed',
+    filters: [
+      {
+        field: 'kind',
+        label: 'Tipo',
+        labels: { stat_combate: 'Stat', estado: 'Estado' },
+      },
+      {
+        field: 'categoria',
+        label: 'Categoría',
+        labels: CATEGORIA_ESTADO_LABEL,
+      },
+    ],
+  },
+];
+
+/* Referencia estática (no viene de la API): stats con Buff(+1)/Debuff(−1) y los
+   9 estados de combate — ver app/Support/Combat/AplicaEstadosCombate.php. */
+const BUFFS_ESTADOS_REF = [
+  ...STATS_COMBATE.map(s => ({ ...s, id: `stat-${s.id}`, kind: 'stat_combate', nombre: s.label })),
+  ...ESTADOS_COMBATE.map(e => ({ ...e, id: `estado-${e.id}`, kind: 'estado', nombre: e.label })),
 ];
 
 const STAT_META = {
@@ -71,7 +97,8 @@ const groupStack = (stack) => {
 };
 
 function EntityGridCard({ item, category, onClick }) {
-  const thumb = mediaUrl(item.imagen ?? item.imagen_mini ?? item.icono_url ?? item.icono);
+  const isReferencia = category.id === 'buffs_estados';
+  const thumb = isReferencia ? null : mediaUrl(item.imagen ?? item.imagen_mini ?? item.icono_url ?? item.icono);
   const badge = category.id === 'jefes' || category.id === 'enemigos'
     ? `Nivel ${item.nivel ?? 1}`
     : (category.filters?.[0] ? (category.filters[0].labels[item[category.filters[0].field]] ?? item[category.filters[0].field]) : null);
@@ -87,11 +114,11 @@ function EntityGridCard({ item, category, onClick }) {
     >
       <div style={{
         width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden',
-        background: 'rgba(255,255,255,.04)', display: 'grid', placeItems: 'center', color: 'var(--holo)',
+        background: 'rgba(255,255,255,.04)', display: 'grid', placeItems: 'center', color: isReferencia ? item.color : 'var(--holo)',
       }}>
         {thumb
           ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <Icon name={category.icon} size={26} />}
+          : <Icon name={isReferencia ? item.icon : category.icon} size={26} />}
       </div>
       <div style={{
         border: '1px solid rgba(255,255,255,0.08)',
@@ -107,6 +134,11 @@ function EntityGridCard({ item, category, onClick }) {
         }}>
           {item.nombre}
         </div>
+        {isReferencia && item.resumen && (
+          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-dim)', lineHeight: 1.4 }}>
+            {item.resumen}
+          </div>
+        )}
         {isSkill && (
           <>
             <div style={{ display: 'grid', gap: 4 }}>
@@ -153,10 +185,10 @@ function EntityGridCard({ item, category, onClick }) {
 
 export function CatalogoView() {
   const isMobile = useWindowWidth() < 640;
-  const [data, setData] = useState({ habilidades: [], objetos: [], npcs: [], jefes: [], enemigos: [] });
+  const [data, setData] = useState({ habilidades: [], objetos: [], npcs: [], jefes: [], enemigos: [], buffs_estados: BUFFS_ESTADOS_REF });
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('habilidades');
-  const [activeFilters, setActiveFilters] = useState({ tipo: 'todos', forma: 'todos', rareza: 'todos' });
+  const [activeFilters, setActiveFilters] = useState({ tipo: 'todos', forma: 'todos', rareza: 'todos', kind: 'todos', categoria: 'todos' });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
 
@@ -177,6 +209,7 @@ export function CatalogoView() {
           npcs: allNpcs.filter(n => n.tipo !== 'jefe'),
           jefes: allNpcs.filter(n => n.tipo === 'jefe'),
           enemigos: enemigoRes.enemigos ?? [],
+          buffs_estados: BUFFS_ESTADOS_REF,
         });
       })
       .catch(() => toast('No se pudo cargar el catálogo', { tone: 'error', icon: 'x' }))
@@ -184,7 +217,7 @@ export function CatalogoView() {
   }, []);
 
   useEffect(() => {
-    setActiveFilters({ tipo: 'todos', forma: 'todos', rareza: 'todos' });
+    setActiveFilters({ tipo: 'todos', forma: 'todos', rareza: 'todos', kind: 'todos', categoria: 'todos' });
     setSearch('');
   }, [activeCategory]);
 
@@ -220,7 +253,7 @@ export function CatalogoView() {
         <div className="nx-kicker">Archivo de la Academia</div>
         <h1 className="nx-display" style={{ fontSize: isMobile ? 20 : 26, margin: '4px 0 4px', color: 'var(--txt)' }}>Catálogo</h1>
         <div className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
-          Habilidades, objetos, NPCs, jefes y enemigos — pulsa cualquier registro para ver su carta imprimible.
+          Habilidades, objetos, NPCs, jefes, enemigos y Buffs/Estados de combate — pulsa cualquier registro para ver su carta imprimible.
         </div>
       </section>
 
@@ -291,7 +324,7 @@ export function CatalogoView() {
                 key={item.id}
                 item={item}
                 category={category}
-                onClick={() => setSelected({ kind: category.kind, item })}
+                onClick={() => setSelected({ kind: item.kind ?? category.kind, item })}
               />
             ))}
           </div>

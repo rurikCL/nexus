@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
-  CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
+  CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
 
@@ -22,6 +22,7 @@ const FRAME = {
   gold:    { bg1: '#2a2008', bg2: '#120e02', line: '#E6B325' },
   purple:  { bg1: '#1c0a2a', bg2: '#0a0312', line: '#b15cff' },
   orange:  { bg1: '#2a1608', bg2: '#120a03', line: '#FF6B00' },
+  toxic:   { bg1: '#1c2a08', bg2: '#0a1203', line: '#84cc16' },
 };
 
 const stackCounts = (value) => {
@@ -606,6 +607,295 @@ export async function drawEnemigoCard(enemigo) {
   return canvas;
 }
 
+/* ═══════════════ TOKENS DE ESTADO / STAT (marcadores físicos) ═══════════════
+   Las entradas de Buffs y Estados no se imprimen como carta completa: son
+   marcadores rectangulares pequeños (mini-carta) pensados para imprimir varias
+   copias, cortar y colocar sobre la miniatura/hoja de personaje mientras dura
+   el efecto en mesa. Usan la misma mecánica física de rotación que las cartas
+   de habilidad (paintCooldownBorderMarkers): un reloj de arena arriba, dos a
+   la derecha, tres abajo y cuatro a la izquierda — se gira la carta 90° cada
+   ronda para llevar la cuenta de los turnos restantes. Documentan las reglas
+   de app/Support/Combat/AplicaEstadosCombate.php. */
+
+/** Igual mecánica que `paintCooldownBorderMarkers` pero parametrizada en
+ * ancho/alto/pad/tamaño de ícono (esa función solo sirve para CARD_W×CARD_H)
+ * y limitada a `maxTurns` bandas — un estado con duración fija de 2 rondas
+ * solo imprime 1 arriba y 2 a la derecha, nunca las bandas de 3 o 4 que jamás
+ * usaría. `maxTurns` null/0 no imprime ninguna banda (estados sin duración
+ * en rondas, como Marcado/Protegido, que se consumen al recibir un ataque). */
+function paintTurnBorderMarkers(ctx, w, h, pad, color, maxTurns) {
+  if (!maxTurns) return;
+  const bandC = pad / 2;
+  const iconSize = pad * 0.55;
+  const spacing = iconSize * 1.3;
+  const draw = (cx, cy, angle, count) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    const totalW = (count - 1) * spacing;
+    for (let i = 0; i < count; i++) {
+      drawHourglassIcon(ctx, -totalW / 2 + i * spacing, 0, iconSize, color);
+    }
+    ctx.restore();
+  };
+  const bands = [
+    { cx: w / 2, cy: bandC, angle: 0, count: 1 },
+    { cx: w - bandC, cy: h / 2, angle: Math.PI / 2, count: 2 },
+    { cx: w / 2, cy: h - bandC, angle: Math.PI, count: 3 },
+    { cx: bandC, cy: h / 2, angle: -Math.PI / 2, count: 4 },
+  ];
+  bands.filter(b => b.count <= Math.min(maxTurns, 4)).forEach(b => draw(b.cx, b.cy, b.angle, b.count));
+}
+
+/* ── "Arte" del token: composiciones vectoriales (ícono grande + un motivo de
+   acento) dibujadas 100% en canvas — no hay assets externos, así que cada
+   estado/stat tiene su propia mini-ilustración generada por código. */
+function motifBurstLines(ctx, cx, cy, r, color, count = 8) {
+  ctx.save();
+  ctx.strokeStyle = `${color}77`;
+  ctx.lineWidth = 3;
+  for (let i = 0; i < count; i++) {
+    const a = (Math.PI * 2 * i) / count;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r * 0.78, cy + Math.sin(a) * r * 0.78);
+    ctx.lineTo(cx + Math.cos(a) * r * 1.08, cy + Math.sin(a) * r * 1.08);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function motifRings(ctx, cx, cy, r, color, count = 3) {
+  ctx.save();
+  ctx.strokeStyle = `${color}55`;
+  ctx.lineWidth = 2;
+  for (let i = 1; i <= count; i++) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, (r * i) / count, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function motifOrbitDots(ctx, cx, cy, r, color, count = 6) {
+  ctx.save();
+  ctx.fillStyle = color;
+  for (let i = 0; i < count; i++) {
+    const a = (Math.PI * 2 * i) / count;
+    ctx.globalAlpha = 0.35 + 0.4 * (i % 2);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r * 0.98, cy + Math.sin(a) * r * 0.98, r * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function motifDrips(ctx, cx, cy, r, color, count = 4) {
+  ctx.save();
+  ctx.fillStyle = `${color}99`;
+  for (let i = 0; i < count; i++) {
+    const dx = cx + (i - (count - 1) / 2) * r * 0.5;
+    const dy = cy + r * 0.82;
+    const s = r * 0.16;
+    ctx.beginPath();
+    ctx.moveTo(dx, dy - s);
+    ctx.quadraticCurveTo(dx + s * 0.8, dy + s * 0.3, dx, dy + s);
+    ctx.quadraticCurveTo(dx - s * 0.8, dy + s * 0.3, dx, dy - s);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function motifArrowDown(ctx, cx, cy, r, color) {
+  ctx.save();
+  ctx.strokeStyle = `${color}88`;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r * 0.9);
+  ctx.lineTo(cx, cy + r * 0.6);
+  ctx.moveTo(cx - r * 0.35, cy + r * 0.25);
+  ctx.lineTo(cx, cy + r * 0.6);
+  ctx.lineTo(cx + r * 0.35, cy + r * 0.25);
+  ctx.stroke();
+  ctx.restore();
+}
+function motifCrossPulse(ctx, cx, cy, r, color, count = 3) {
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const dy = cy + r * 0.7 - i * r * 0.6;
+    const s = r * 0.16;
+    ctx.globalAlpha = 0.9 - i * 0.25;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.rect(cx - s / 4, dy - s, s / 2, s * 2);
+    ctx.rect(cx - s, dy - s / 4, s * 2, s / 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function motifStreaks(ctx, cx, cy, r, color, count = 4) {
+  ctx.save();
+  ctx.strokeStyle = `${color}77`;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < count; i++) {
+    const off = (i - (count - 1) / 2) * r * 0.32;
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.8 + off, cy + r * 0.5);
+    ctx.lineTo(cx + r * 0.3 + off, cy - r * 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* Motivo de acento por estado/stat (clave = id sin el prefijo `estado-`/`stat-`
+   que le agrega Catalogo.jsx) — null significa "solo brillo + ícono, sin acento". */
+const ART_MOTIF = {
+  paralizado: motifRings,
+  aturdido: motifBurstLines,
+  confundido: motifOrbitDots,
+  marcado: motifRings,
+  protegido: null,
+  sangrado: motifDrips,
+  envenenado: motifDrips,
+  debilitado: motifArrowDown,
+  regeneracion: motifCrossPulse,
+  ataque: motifBurstLines,
+  defensa: motifRings,
+  punteria: motifRings,
+  movimiento: motifStreaks,
+  iniciativa: motifBurstLines,
+};
+
+/** Caja de "arte" del token: fondo con resplandor radial, motivo de acento
+ * (si tiene) detrás y el ícono principal encima, todo recortado a un
+ * rectángulo redondeado con borde — el reemplazo, 100% vectorial, de una
+ * imagen ilustrada por ítem. */
+function paintArtBox(ctx, x, y, w, h, frame, icon, motifFn) {
+  const radius = 12;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, Math.max(w, h) * 0.7);
+  g.addColorStop(0, `${frame.line}26`);
+  g.addColorStop(1, frame.bg2);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  const r = Math.min(w, h) / 2 - 8;
+  if (motifFn) motifFn(ctx, cx, cy, r, frame.line);
+  drawIcon(ctx, icon, cx, cy, r * 0.95, frame.line, 2.4);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `${frame.line}66`;
+  ctx.stroke();
+}
+
+/** Token rectangular: caja de arte, etiqueta y una franja inferior — "+1"
+ * grande para stats (`bottom.type === 'big'`) o un cuadro negro semi-
+ * transparente con la descripción para estados (`bottom.type === 'desc'`,
+ * reutiliza `paintBoxBg`). Los marcadores de turno de `paintTurnBorderMarkers`
+ * van en los 4 bordes cuando `maxTurns` tiene valor. Todo dentro de
+ * TOKEN_W×TOKEN_H. */
+async function drawTokenCard({ id, label, icon, frame, maxTurns, bottom }) {
+  await ensureFonts();
+  const canvas = document.createElement('canvas');
+  canvas.width = TOKEN_W;
+  canvas.height = TOKEN_H;
+  const ctx = canvas.getContext('2d');
+
+  const pad = 20;
+  const radius = 16;
+
+  ctx.fillStyle = frame.bg2;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, TOKEN_W, TOKEN_H, radius);
+  ctx.fill();
+
+  const bg = ctx.createLinearGradient(0, 0, 0, TOKEN_H);
+  bg.addColorStop(0, frame.bg1);
+  bg.addColorStop(1, frame.bg2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2, radius - 6);
+  ctx.clip();
+  ctx.fillStyle = bg;
+  ctx.fillRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2);
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2, radius - 6);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = `${frame.line}aa`;
+  ctx.stroke();
+  ctx.restore();
+
+  paintTurnBorderMarkers(ctx, TOKEN_W, TOKEN_H, pad, frame.line, maxTurns);
+
+  const artX = pad + 14;
+  const artY = pad + 16;
+  const artW = TOKEN_W - artX * 2;
+  const artH = TOKEN_H * 0.42;
+  paintArtBox(ctx, artX, artY, artW, artH, frame, icon, ART_MOTIF[id]);
+
+  const cx = TOKEN_W / 2;
+  const labelY = artY + artH + 40;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#eaf2ff';
+  const fontSize = fitText(ctx, label.toUpperCase(), TOKEN_W - pad * 4, '30px Orbitron', 14);
+  ctx.font = `800 ${fontSize}px Orbitron`;
+  ctx.fillText(label.toUpperCase(), cx, labelY);
+
+  const bottomX = artX;
+  const bottomW = artW;
+  const bottomY = labelY + 24;
+  const bottomBottom = TOKEN_H - pad - 12;
+
+  if (bottom.type === 'big') {
+    const baseSize = Math.round((bottomBottom - bottomY) * 0.8);
+    const bigSize = fitText(ctx, bottom.text, bottomW - 10, `${baseSize}px Orbitron`, 40);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = frame.line;
+    ctx.font = `800 ${bigSize}px Orbitron`;
+    ctx.fillText(bottom.text, cx, (bottomY + bottomBottom) / 2 + bigSize * 0.32);
+  } else if (bottom.type === 'desc') {
+    paintBoxBg(ctx, bottomX, bottomY, bottomW, bottomBottom - bottomY, 10);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(220,230,255,0.86)';
+    ctx.font = '400 15px "JetBrains Mono"';
+    wrapText(ctx, bottom.text, cx, bottomY + 20, bottomW - 16, 19, 7);
+  }
+
+  return canvas;
+}
+
+export async function drawEstadoCard(estado) {
+  const frame = FRAME[estado.frame] ?? FRAME.neutral;
+  const motifKey = estado.id.replace(/^estado-/, '');
+  return drawTokenCard({
+    id: motifKey,
+    label: estado.label,
+    icon: estado.icon,
+    frame,
+    maxTurns: estado.turnsMax,
+    bottom: { type: 'desc', text: estado.mecanica },
+  });
+}
+
+export async function drawStatCombateCard(stat) {
+  const frame = FRAME[stat.frame] ?? FRAME.neutral;
+  const motifKey = stat.id.replace(/^stat-/, '');
+  return drawTokenCard({
+    id: motifKey,
+    label: stat.label,
+    icon: stat.icon,
+    frame,
+    maxTurns: 4,
+    bottom: { type: 'big', text: '+1' },
+  });
+}
+
 /* ═══════════════════════════ MODAL GENÉRICO ═══════════════════════════ */
 
 const DRAW_BY_KIND = {
@@ -613,6 +903,8 @@ const DRAW_BY_KIND = {
   objeto: drawObjetoCard,
   npc: drawNpcCard,
   enemigo: drawEnemigoCard,
+  estado: drawEstadoCard,
+  stat_combate: drawStatCombateCard,
 };
 
 /**
@@ -624,6 +916,7 @@ export default function EntityCardModal({ kind, item, onClose }) {
   const [dataUrl, setDataUrl] = useState(null);
   const [error, setError] = useState(false);
   const cancelledRef = useRef(false);
+  const isToken = kind === 'estado' || kind === 'stat_combate';
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -636,7 +929,7 @@ export default function EntityCardModal({ kind, item, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, item?.id]);
 
-  const fileName = `nexus-${kind}-${(item?.nombre ?? 'carta').toLowerCase().replace(/\s+/g, '-')}.png`;
+  const fileName = `nexus-${isToken ? 'token' : kind}-${(item?.nombre ?? 'carta').toLowerCase().replace(/\s+/g, '-')}.png`;
 
   const download = () => {
     if (!dataUrl) return;
@@ -648,7 +941,12 @@ export default function EntityCardModal({ kind, item, onClose }) {
 
   const printCard = () => {
     if (!dataUrl) return;
-    printCardImage(dataUrl, () => toast('El navegador bloqueó la ventana de impresión', { tone: 'error', icon: 'x' }));
+    const onBlocked = () => toast('El navegador bloqueó la ventana de impresión', { tone: 'error', icon: 'x' });
+    if (isToken) {
+      printTokenSheet(dataUrl, { mmW: TOKEN_W_MM, mmH: TOKEN_H_MM, copies: 8 }, onBlocked);
+    } else {
+      printCardImage(dataUrl, onBlocked);
+    }
   };
 
   const share = async () => {
@@ -675,27 +973,33 @@ export default function EntityCardModal({ kind, item, onClose }) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxHeight: '94vh' }}>
         {error ? (
           <div style={{ color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 12 }}>
-            No se pudo generar la carta.
+            No se pudo generar {isToken ? 'el token' : 'la carta'}.
           </div>
         ) : !dataUrl ? (
           <div style={{
-            width: 252, height: 353, display: 'grid', placeItems: 'center',
+            width: isToken ? 180 : 252, height: isToken ? 252 : 353, display: 'grid', placeItems: 'center',
             color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.14em',
           }}>
-            GENERANDO CARTA…
+            {isToken ? 'GENERANDO TOKEN…' : 'GENERANDO CARTA…'}
           </div>
         ) : (
           <img src={dataUrl} alt={item?.nombre ?? 'Carta'} style={{
-            width: 252, height: 353, borderRadius: 14,
+            width: isToken ? 180 : 252, height: isToken ? 252 : 353,
+            borderRadius: 14,
             boxShadow: '0 0 40px rgba(56,205,240,0.25)', display: 'block',
           }} />
+        )}
+        {isToken && dataUrl && (
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.06em', textAlign: 'center' }}>
+            Marcador de mesa · {TOKEN_W_MM}×{TOKEN_H_MM}mm · "Imprimir" genera una hoja con 8 copias para cortar
+          </div>
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button className="nx-btn nx-btn-ghost" onClick={onClose}>Cerrar</button>
           {dataUrl && (
             <>
               <button className="nx-btn nx-btn-accent" onClick={download}>⬇ Descargar</button>
-              <button className="nx-btn nx-btn-accent" onClick={printCard}>🖨 Imprimir</button>
+              <button className="nx-btn nx-btn-accent" onClick={printCard}>🖨 {isToken ? 'Imprimir hoja' : 'Imprimir'}</button>
               {canShareFiles && (
                 <button className="nx-btn nx-btn-accent" onClick={share}>📤 Compartir</button>
               )}
