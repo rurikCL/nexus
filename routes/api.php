@@ -199,6 +199,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/planetas/{planetaId}/pirata-encuentro', [PirataEncuentroController::class, 'check']);
     Route::post('/pirata-encuentros/{encuentroId}/victoria', [PirataEncuentroController::class, 'victoria']);
     Route::post('/map/lugares/{lugarId}/enemigo-encuentro', [LugarEncuentroController::class, 'check']);
+    Route::get('/map/location', [MapController::class, 'location']);
     Route::post('/map/location', [MapController::class, 'updateLocation']);
 
     // Naves

@@ -4452,26 +4452,41 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     }
   }, [syncCredits]);
 
-  /* restaura la última ubicación al volver al Mapa */
+  /* Restaura la última ubicación cada vez que se entra al Mapa (montaje del componente),
+     siempre en vivo desde /map/location (columnas map_*_id de `characters`, fuente de verdad)
+     en vez de confiar en el `user` cacheado en memoria/localStorage — ese cacheado puede quedar
+     desactualizado tras moverse dentro del mapa (updateLocation persiste en el servidor pero no
+     siempre se refleja de vuelta en `user`), lo que antes causaba quedar "afuera del sistema" al
+     volver de otra sección, o no restaurar bien tras recargar hasta un segundo intento. `initialLocation`
+     (prop derivada de `user`) solo se usa como respaldo si la consulta al servidor falla. */
   const hasRestored = useRef(false);
   useEffect(() => {
-    if (hasRestored.current || !initialLocation?.nivel) return;
+    if (hasRestored.current) return;
     hasRestored.current = true;
-    const loc = initialLocation;
-    if (loc.sistema_id) setSistema({ id: loc.sistema_id, nombre: loc.sistema_nombre });
-    if (loc.planeta_id) setPlaneta({ id: loc.planeta_id, nombre: loc.planeta_nombre });
-    if (loc.zona_id)    setZona   ({ id: loc.zona_id,    nombre: loc.zona_nombre    });
-    if (loc.lugar_id)   setLugar  ({ id: loc.lugar_id,   nombre: loc.lugar_nombre   });
-    setNivel(loc.nivel);
 
-    // Al restaurar directamente en un nivel profundo, PlanetaView nunca llega a montarse,
-    // así que su imagen (usada en la tarjeta de combate) no se carga por su propio efecto — se pide aquí.
-    if (loc.planeta_id) {
-      apiFetch(`/map/planetas/${loc.planeta_id}`)
-        .then((d) => setPlanetaImagen(d.planeta?.imagen ? mediaUrl(d.planeta.imagen) : null))
-        .catch(() => {});
-    }
-  }, [initialLocation]);
+    const applyLocation = (loc) => {
+      if (!loc?.nivel) return;
+      setSistema(loc.sistema_id ? { id: loc.sistema_id, nombre: loc.sistema_nombre } : null);
+      setPlaneta(loc.planeta_id ? { id: loc.planeta_id, nombre: loc.planeta_nombre } : null);
+      setZona(loc.zona_id ? { id: loc.zona_id, nombre: loc.zona_nombre } : null);
+      setLugar(loc.lugar_id ? { id: loc.lugar_id, nombre: loc.lugar_nombre } : null);
+      setNivel(loc.nivel);
+      setMapLocation?.(loc);
+
+      // Al restaurar directamente en un nivel profundo, PlanetaView nunca llega a montarse,
+      // así que su imagen (usada en la tarjeta de combate) no se carga por su propio efecto — se pide aquí.
+      if (loc.planeta_id) {
+        apiFetch(`/map/planetas/${loc.planeta_id}`)
+          .then((d) => setPlanetaImagen(d.planeta?.imagen ? mediaUrl(d.planeta.imagen) : null))
+          .catch(() => {});
+      }
+    };
+
+    apiFetch('/map/location')
+      .then((d) => applyLocation(d?.location))
+      .catch(() => applyLocation(initialLocation));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const goGalaxy  = () => {
     setNivel('galaxy'); setSistema(null); setPlaneta(null); setZona(null); setLugar(null);

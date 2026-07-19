@@ -148,24 +148,7 @@ class MeController extends Controller
                 'photo_url' => $character->photo
                     ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                     : null,
-                'map_location' => [
-                    'sistema_id' => $character->map_sistema_id,
-                    'sistema_nombre' => $character->mapSistema?->nombre,
-                    'planeta_id' => $character->map_planeta_id,
-                    'planeta_nombre' => $character->mapPlaneta?->nombre,
-                    'zona_id' => $character->map_zona_id,
-                    'zona_nombre' => $character->mapZona?->nombre,
-                    'lugar_id' => $character->map_lugar_id,
-                    'lugar_nombre' => $character->mapLugar?->nombre,
-                    'nombre' => $character->mapLugar?->nombre
-                                     ?? $character->mapZona?->nombre
-                                     ?? $character->mapPlaneta?->nombre
-                                     ?? $character->mapSistema?->nombre,
-                    'nivel' => $character->map_lugar_id ? 'lugar'
-                                      : ($character->map_zona_id ? 'zona'
-                                      : ($character->map_planeta_id ? 'planeta'
-                                      : ($character->map_sistema_id ? 'sistema' : null))),
-                ],
+                'map_location' => $character->mapLocationArray(),
             ] : null,
         ]);
     }

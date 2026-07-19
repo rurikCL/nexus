@@ -94,6 +94,29 @@ class Character extends Model
         return $this->belongsTo(MapLugar::class, 'map_lugar_id');
     }
 
+    /** Ubicación actual del personaje en el mapa galáctico, siempre leída en vivo desde la BD. */
+    public function mapLocationArray(): array
+    {
+        return [
+            'sistema_id' => $this->map_sistema_id,
+            'sistema_nombre' => $this->mapSistema?->nombre,
+            'planeta_id' => $this->map_planeta_id,
+            'planeta_nombre' => $this->mapPlaneta?->nombre,
+            'zona_id' => $this->map_zona_id,
+            'zona_nombre' => $this->mapZona?->nombre,
+            'lugar_id' => $this->map_lugar_id,
+            'lugar_nombre' => $this->mapLugar?->nombre,
+            'nombre' => $this->mapLugar?->nombre
+                             ?? $this->mapZona?->nombre
+                             ?? $this->mapPlaneta?->nombre
+                             ?? $this->mapSistema?->nombre,
+            'nivel' => $this->map_lugar_id ? 'lugar'
+                              : ($this->map_zona_id ? 'zona'
+                              : ($this->map_planeta_id ? 'planeta'
+                              : ($this->map_sistema_id ? 'sistema' : null))),
+        ];
+    }
+
     public function habilidad1(): BelongsTo
     {
         return $this->belongsTo(RolHabilidad::class, 'habilidad_1');

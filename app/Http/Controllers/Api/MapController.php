@@ -125,6 +125,21 @@ class MapController extends Controller
         return response()->json(['lugar' => $lugar]);
     }
 
+    /**
+     * Ubicación actual del personaje, leída en vivo desde `characters` (fuente de verdad).
+     * El cliente la consulta cada vez que entra al Mapa en vez de confiar en el `user` cacheado
+     * en memoria/localStorage, que puede quedar desactualizado tras moverse dentro del mapa.
+     */
+    public function location(Request $request): JsonResponse
+    {
+        $character = $request->user()?->character;
+        if (! $character) {
+            return response()->json(['ok' => false], 404);
+        }
+
+        return response()->json(['ok' => true, 'location' => $character->mapLocationArray()]);
+    }
+
     public function updateLocation(Request $request): JsonResponse
     {
         $user = $request->user();
