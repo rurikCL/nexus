@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
-  CARD_W, CARD_H, TOKEN_PX, TOKEN_MM, mediaUrl, loadImage, ensureFonts,
+  CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
@@ -608,63 +608,98 @@ export async function drawEnemigoCard(enemigo) {
 
 /* ═══════════════ TOKENS DE ESTADO / STAT (marcadores físicos) ═══════════════
    Las entradas de Buffs y Estados no se imprimen como carta completa: son
-   marcadores circulares pequeños pensados para imprimir varias copias, cortar
-   y colocar sobre la miniatura/hoja de personaje mientras dura el efecto en
-   mesa. Documentan las reglas de app/Support/Combat/AplicaEstadosCombate.php. */
+   marcadores rectangulares pequeños (mini-carta) pensados para imprimir varias
+   copias, cortar y colocar sobre la miniatura/hoja de personaje mientras dura
+   el efecto en mesa. Usan la misma mecánica física de rotación que las cartas
+   de habilidad (paintCooldownBorderMarkers): un reloj de arena arriba, dos a
+   la derecha, tres abajo y cuatro a la izquierda — se gira la carta 90° cada
+   ronda para llevar la cuenta de los turnos restantes. Documentan las reglas
+   de app/Support/Combat/AplicaEstadosCombate.php. */
 
-/** Token circular: ícono grande + etiqueta dentro del círculo, con una pastilla
- * de esquina (badge) para la duración/monto — todo dentro de TOKEN_PX×TOKEN_PX. */
-async function drawTokenCard({ label, icon, frame, badge }) {
+/** Igual mecánica que `paintCooldownBorderMarkers` pero parametrizada en
+ * ancho/alto/pad/tamaño de ícono (esa función solo sirve para CARD_W×CARD_H)
+ * y limitada a `maxTurns` bandas — un estado con duración fija de 2 rondas
+ * solo imprime 1 arriba y 2 a la derecha, nunca las bandas de 3 o 4 que jamás
+ * usaría. `maxTurns` null/0 no imprime ninguna banda (estados sin duración
+ * en rondas, como Marcado/Protegido, que se consumen al recibir un ataque). */
+function paintTurnBorderMarkers(ctx, w, h, pad, color, maxTurns) {
+  if (!maxTurns) return;
+  const bandC = pad / 2;
+  const iconSize = pad * 0.55;
+  const spacing = iconSize * 1.3;
+  const draw = (cx, cy, angle, count) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    const totalW = (count - 1) * spacing;
+    for (let i = 0; i < count; i++) {
+      drawHourglassIcon(ctx, -totalW / 2 + i * spacing, 0, iconSize, color);
+    }
+    ctx.restore();
+  };
+  const bands = [
+    { cx: w / 2, cy: bandC, angle: 0, count: 1 },
+    { cx: w - bandC, cy: h / 2, angle: Math.PI / 2, count: 2 },
+    { cx: w / 2, cy: h - bandC, angle: Math.PI, count: 3 },
+    { cx: bandC, cy: h / 2, angle: -Math.PI / 2, count: 4 },
+  ];
+  bands.filter(b => b.count <= Math.min(maxTurns, 4)).forEach(b => draw(b.cx, b.cy, b.angle, b.count));
+}
+
+/** Token rectangular: mini-marco con ícono + etiqueta, y marcadores de turno
+ * en los 4 bordes cuando `maxTurns` tiene un valor — todo dentro de
+ * TOKEN_W×TOKEN_H. `badge` es un subtítulo corto (±1, ∞) para lo que las
+ * bandas de borde no alcanzan a expresar (magnitud del modificador, o "sin
+ * duración en rondas" en Marcado/Protegido). */
+async function drawTokenCard({ label, icon, frame, maxTurns, badge }) {
   await ensureFonts();
   const canvas = document.createElement('canvas');
-  canvas.width = TOKEN_PX;
-  canvas.height = TOKEN_PX;
+  canvas.width = TOKEN_W;
+  canvas.height = TOKEN_H;
   const ctx = canvas.getContext('2d');
 
-  const cx = TOKEN_PX / 2;
-  const cy = TOKEN_PX / 2;
-  const r = TOKEN_PX / 2 - 14;
+  const pad = 20;
+  const radius = 16;
+
+  ctx.fillStyle = frame.bg2;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, TOKEN_W, TOKEN_H, radius);
+  ctx.fill();
+
+  const bg = ctx.createLinearGradient(0, 0, 0, TOKEN_H);
+  bg.addColorStop(0, frame.bg1);
+  bg.addColorStop(1, frame.bg2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2, radius - 6);
+  ctx.clip();
+  ctx.fillStyle = bg;
+  ctx.fillRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2);
+  ctx.restore();
 
   ctx.save();
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.clip();
-  const bg = ctx.createRadialGradient(cx, cy - r * 0.3, 4, cx, cy, r * 1.3);
-  bg.addColorStop(0, frame.bg1);
-  bg.addColorStop(1, frame.bg2);
-  ctx.fillStyle = bg;
-  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.roundRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2, radius - 6);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = `${frame.line}aa`;
+  ctx.stroke();
   ctx.restore();
 
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = frame.line;
-  ctx.stroke();
+  paintTurnBorderMarkers(ctx, TOKEN_W, TOKEN_H, pad, frame.line, maxTurns);
 
-  drawIcon(ctx, icon, cx, cy - r * 0.24, r * 0.72, frame.line, 2.2);
+  const cx = TOKEN_W / 2;
+  drawIcon(ctx, icon, cx, TOKEN_H * 0.4, TOKEN_W * 0.36, frame.line, 2.4);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#eaf2ff';
-  const fontSize = fitText(ctx, label.toUpperCase(), r * 1.7, `${Math.round(r * 0.24)}px Orbitron`, 12);
+  const fontSize = fitText(ctx, label.toUpperCase(), TOKEN_W - pad * 4, '32px Orbitron', 14);
   ctx.font = `800 ${fontSize}px Orbitron`;
-  ctx.fillText(label.toUpperCase(), cx, cy + r * 0.62);
+  ctx.fillText(label.toUpperCase(), cx, TOKEN_H * 0.68);
 
   if (badge) {
-    const br = r * 0.32;
-    const bx = cx + r * 0.6;
-    const by = cy + r * 0.6;
-    ctx.beginPath();
-    ctx.arc(bx, by, br, 0, Math.PI * 2);
     ctx.fillStyle = frame.line;
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = frame.bg2;
-    ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#04070f';
-    ctx.font = `800 ${Math.round(br * 0.85)}px Orbitron`;
-    ctx.fillText(String(badge), bx, by + br * 0.32);
+    ctx.font = '700 16px "JetBrains Mono"';
+    ctx.fillText(badge, cx, TOKEN_H * 0.78);
   }
 
   return canvas;
@@ -672,12 +707,18 @@ async function drawTokenCard({ label, icon, frame, badge }) {
 
 export async function drawEstadoCard(estado) {
   const frame = FRAME[estado.frame] ?? FRAME.neutral;
-  return drawTokenCard({ label: estado.label, icon: estado.icon, frame, badge: estado.badge });
+  return drawTokenCard({
+    label: estado.label,
+    icon: estado.icon,
+    frame,
+    maxTurns: estado.turnsMax,
+    badge: estado.turnsMax ? null : '∞ · hasta consumirse',
+  });
 }
 
 export async function drawStatCombateCard(stat) {
   const frame = FRAME[stat.frame] ?? FRAME.neutral;
-  return drawTokenCard({ label: stat.label, icon: stat.icon, frame, badge: '±1' });
+  return drawTokenCard({ label: stat.label, icon: stat.icon, frame, maxTurns: 4, badge: '±1 por acumulación' });
 }
 
 /* ═══════════════════════════ MODAL GENÉRICO ═══════════════════════════ */
@@ -727,7 +768,7 @@ export default function EntityCardModal({ kind, item, onClose }) {
     if (!dataUrl) return;
     const onBlocked = () => toast('El navegador bloqueó la ventana de impresión', { tone: 'error', icon: 'x' });
     if (isToken) {
-      printTokenSheet(dataUrl, { mm: TOKEN_MM, copies: 12 }, onBlocked);
+      printTokenSheet(dataUrl, { mmW: TOKEN_W_MM, mmH: TOKEN_H_MM, copies: 8 }, onBlocked);
     } else {
       printCardImage(dataUrl, onBlocked);
     }
@@ -761,21 +802,21 @@ export default function EntityCardModal({ kind, item, onClose }) {
           </div>
         ) : !dataUrl ? (
           <div style={{
-            width: isToken ? 180 : 252, height: isToken ? 180 : 353, display: 'grid', placeItems: 'center',
+            width: isToken ? 180 : 252, height: isToken ? 252 : 353, display: 'grid', placeItems: 'center',
             color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.14em',
           }}>
             {isToken ? 'GENERANDO TOKEN…' : 'GENERANDO CARTA…'}
           </div>
         ) : (
           <img src={dataUrl} alt={item?.nombre ?? 'Carta'} style={{
-            width: isToken ? 180 : 252, height: isToken ? 180 : 353,
-            borderRadius: isToken ? '50%' : 14,
+            width: isToken ? 180 : 252, height: isToken ? 252 : 353,
+            borderRadius: 14,
             boxShadow: '0 0 40px rgba(56,205,240,0.25)', display: 'block',
           }} />
         )}
         {isToken && dataUrl && (
           <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.06em', textAlign: 'center' }}>
-            Marcador de mesa · ⌀{TOKEN_MM}mm · "Imprimir" genera una hoja con 12 copias para cortar
+            Marcador de mesa · {TOKEN_W_MM}×{TOKEN_H_MM}mm · "Imprimir" genera una hoja con 8 copias para cortar
           </div>
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
