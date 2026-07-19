@@ -38,6 +38,38 @@ const FORMA_LABELS = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'N
 const formaLabel = (f) => f > 0 ? FORMA_LABELS[f - 1] : 'Universal';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
 const tipoIcon = (tipo) => tipo === 'melee' ? '⚔' : '◎';
+const ESTADO_ICON = {
+  paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
+  sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+};
+const ESTADO_LABEL = {
+  paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
+  sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+};
+
+/* Badges compactos (ícono + turnos) para los estados activos de un combatiente o del jefe. */
+function EstadoBadges({ estados, align = 'left' }) {
+  if (!Array.isArray(estados) || estados.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+      {estados.map((e, i) => {
+        const label = ESTADO_LABEL[e.tipo] ?? e.tipo;
+        const turnsLabel = e.turns === null ? 'hasta consumirse' : `${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`;
+        return (
+          <span key={`${e.tipo}-${i}`} title={`${label} · ${turnsLabel}`} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 2,
+            fontSize: 8, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 4,
+            background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.45)', color: '#E6B325', fontWeight: 700,
+          }}>
+            <span style={{ fontSize: 9, lineHeight: 1 }}>{ESTADO_ICON[e.tipo] ?? '❔'}</span>
+            {e.turns === null ? '∞' : e.turns}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 /* Badges horizontales de atributos (ataque/defensa/puntería/movimiento) con flecha
    ▲ si el buff los sube o ▼ si el debuff los baja, respecto al valor base. */
@@ -739,6 +771,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                 <div style={{ marginTop: 6, display: 'flex', justifyContent: 'center' }}>
                   <AttrBadges entity={raid.npc} />
                 </div>
+                <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center' }}>
+                  <EstadoBadges estados={raid.npc.estados} />
+                </div>
               </div>
               {raid.es_turno_del_jefe && (
                 <div style={{ fontSize: 11, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>⚔ TURNO DEL JEFE</div>
@@ -808,6 +843,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                   <StatBar label="VID" value={j.hp} max={j.max_hp} color={j.hp / j.max_hp > 0.5 ? '#10b981' : j.hp / j.max_hp > 0.25 ? '#E6B325' : '#ff2d45'} />
                   <div style={{ marginTop: 3 }}>
                     <AttrBadges entity={j} />
+                  </div>
+                  <div style={{ marginTop: 3 }}>
+                    <EstadoBadges estados={j.estados} />
                   </div>
                 </div>
               </div>

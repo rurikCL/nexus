@@ -12,6 +12,7 @@ use App\Models\RaidCombat;
 use App\Models\RaidCombatPlayer;
 use App\Models\RolHabilidad;
 use App\Services\MisionProgresoService;
+use App\Support\Combat\AplicaEstadosCombate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +35,8 @@ use Illuminate\Support\Facades\Storage;
  */
 class RaidCombatController extends Controller
 {
+    use AplicaEstadosCombate;
+
     /* Tabla de efectividad entre formas: forma atacante → formas que supera (igual que PvP/NPC) */
     private const BEATS = [
         1 => [6],     // Shii-Cho    → Niman
@@ -300,6 +303,8 @@ class RaidCombatController extends Controller
         $myCooldowns = array_filter(array_map(fn ($v) => $v - 1, $myPlayer->cooldowns ?? []), fn ($v) => $v > 0);
         $myBuffs = $myPlayer->buffs ?? [];
         $myDebuffs = $myPlayer->debuffs ?? [];
+        $myEstados = $myPlayer->estados ?? [];
+        $npcEstados = $raid->npc_estados ?? [];
         $myFuerza = $myPlayer->fuerza;
 
         $actorStats = self::getEffectiveStats(self::getCombatStats($actorChar), $myBuffs, $myDebuffs);
@@ -308,7 +313,13 @@ class RaidCombatController extends Controller
         $log = $raid->log ?? [];
         $entry = ['turn' => count($log) + 1, 'actor' => 'jugador', 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
 
-        if ($skill === 'flee') {
+        /* Parálisis: pierde el turno sin importar el skill enviado, y queda inmune al próximo intento */
+        $paralisisInfo = self::resolverParalisisAlEmpezarTurno($myEstados);
+        $myEstados = $paralisisInfo['estados'];
+
+        if ($paralisisInfo['paralizado']) {
+            $entry['messages'][] = "{$actorChar->name} está paralizado y pierde el turno";
+        } elseif ($skill === 'flee') {
             $roll = self::rollIniciativa($actorStats['iniciativa'], $npcEffective['iniciativa']);
             $entry['messages'][] = "{$actorChar->name} intenta huir: 1d20({$roll['atk_dado']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
                 ."vs 1d20({$roll['def_dado']})+{$npcEffective['iniciativa']}={$roll['def_total']}";
@@ -328,12 +339,18 @@ class RaidCombatController extends Controller
             $myPlayer->current_forma = $forma;
             $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
         } elseif ($skill === 'unarmed') {
+            $confundido = self::resolverConfundido($myEstados);
+            if ($confundido) {
+                $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
+            }
+            $statsObjetivo = $confundido ? $actorStats : $npcEffective;
+
             $arma = $actorChar->armaEfectiva();
             $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
             $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
-            $defVal = $esDistancia ? $npcEffective['movimiento'] : $npcEffective['defensa'];
-            $atkDado = random_int(1, 20);
-            $defDado = random_int(1, 20);
+            $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
+            $atkDado = self::mitigarTiradaAturdido($myEstados, random_int(1, 20));
+            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $npcEstados, random_int(1, 20));
             $atkRoll = $atkDado + $atkVal;
             $defRoll = $defDado + $defVal;
             $critico = $arma['critico'] ?? 0;
@@ -341,15 +358,45 @@ class RaidCombatController extends Controller
             $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
             $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}";
             $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
-            $entry['hit'] = $esCritico || $atkRoll > $defRoll;
+
+            $estadosObjetivo = $confundido ? $myEstados : $npcEstados;
+            $protegidoInfo = self::consumirProtegido($estadosObjetivo);
+            $estadosObjetivo = $protegidoInfo['estados'];
+            $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
+            $estadosObjetivo = $marcaInfo['estados'];
+            if ($confundido) {
+                $myEstados = $estadosObjetivo;
+            } else {
+                $npcEstados = $estadosObjetivo;
+            }
+
+            $hit = $esCritico || $atkRoll > $defRoll;
+            if ($protegidoInfo['activo']) {
+                $hit = false;
+                $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
+            } elseif ($marcaInfo['activo']) {
+                $hit = $marcaInfo['forzar_exito'];
+                $entry['messages'][] = $hit
+                    ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
+                    : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
+            }
+            $entry['hit'] = $hit;
             $entry['crit'] = $esCritico;
 
-            if ($esCritico || $atkRoll > $defRoll) {
-                $dmg = ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0);
+            if ($hit) {
+                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0));
                 $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0);
-                $escudoAntes = $raid->npc_escudo;
-                [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, 0, $dmgPerforante);
-                $myPlayer->dano_al_jefe += $dmg + $dmgPerforante;
+                if ($confundido) {
+                    $escudoAntes = $myPlayer->escudo;
+                    [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, 0, $dmgPerforante);
+                    if ($myPlayer->hp <= 0) {
+                        $myPlayer->status = 'derrotado';
+                    }
+                } else {
+                    $escudoAntes = $raid->npc_escudo;
+                    [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, 0, $dmgPerforante);
+                    $myPlayer->dano_al_jefe += $dmg + $dmgPerforante;
+                }
                 $desc = self::describeDano($dmg, 0, $dmgPerforante, $escudoAntes);
                 $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
             } else {
@@ -408,8 +455,13 @@ class RaidCombatController extends Controller
                 }
 
                 $targetBuffsArr = $esUnoMismo ? $myBuffs : ($targetPlayer->buffs ?? []);
+                $targetEstadosArr = $esUnoMismo ? $myEstados : ($targetPlayer->estados ?? []);
                 foreach ($habBuff as $stat) {
-                    $targetBuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
+                    if (self::esTipoEstado($stat)) {
+                        $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat);
+                    } else {
+                        $targetBuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
+                    }
                 }
 
                 $targetMax = self::getCombatStats($targetChar);
@@ -441,8 +493,10 @@ class RaidCombatController extends Controller
 
                 if ($esUnoMismo) {
                     $myBuffs = $targetBuffsArr;
+                    $myEstados = $targetEstadosArr;
                 } else {
                     $targetPlayer->buffs = $targetBuffsArr;
+                    $targetPlayer->estados = $targetEstadosArr;
                     $targetPlayer->save();
                 }
             } elseif ($dmg < 0) {
@@ -451,35 +505,77 @@ class RaidCombatController extends Controller
                 $raid->npc_hp = min($maxHp, $raid->npc_hp + $heal);
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$raid->npc->nombre}";
             } else {
+                $confundidoHab = self::resolverConfundido($myEstados);
+                if ($confundidoHab) {
+                    $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
+                }
+                $statsObjetivoHab = $confundidoHab ? $actorStats : $npcEffective;
+
                 $useAtq = $hab->tipo === 'melee';
                 $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
-                $defVal = $useAtq ? $npcEffective['defensa'] : $npcEffective['movimiento'];
-                $atkDado = random_int(1, 20);
-                $defDado = random_int(1, 20);
+                $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
+                $atkDado = self::mitigarTiradaAturdido($myEstados, random_int(1, 20));
+                $defDado = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $npcEstados, random_int(1, 20));
                 $atkRoll = $atkDado + $atkVal;
                 $defRoll = $defDado + $defVal;
 
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre} contra {$raid->npc->nombre}: "
                     ."1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}";
                 $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
-                $entry['hit'] = $atkRoll > $defRoll;
 
-                if ($atkRoll > $defRoll) {
-                    $effective = self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
+                $estadosObjetivoHab = $confundidoHab ? $myEstados : $npcEstados;
+                $protegidoHab = self::consumirProtegido($estadosObjetivoHab);
+                $estadosObjetivoHab = $protegidoHab['estados'];
+                $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDado);
+                $estadosObjetivoHab = $marcaHab['estados'];
+                if ($confundidoHab) {
+                    $myEstados = $estadosObjetivoHab;
+                } else {
+                    $npcEstados = $estadosObjetivoHab;
+                }
+
+                $hitHab = $atkRoll > $defRoll;
+                if ($protegidoHab['activo']) {
+                    $hitHab = false;
+                    $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
+                } elseif ($marcaHab['activo']) {
+                    $hitHab = $marcaHab['forzar_exito'];
+                    $entry['messages'][] = $hitHab
+                        ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
+                        : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
+                }
+                $entry['hit'] = $hitHab;
+
+                if ($hitHab) {
+                    $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
                     if ($effective) {
                         $dmg = (int) round($dmg * 1.5);
                         $dmgEscudo = (int) round($dmgEscudo * 1.5);
                         $dmgPerforante = (int) round($dmgPerforante * 1.5);
                     }
-                    $escudoAntes = $raid->npc_escudo;
-                    [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                    $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
+                    $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
-                    $npcDebuffs = $raid->npc_debuffs ?? [];
-                    foreach ($habDebuff as $stat) {
-                        $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                    if ($confundidoHab) {
+                        $escudoAntes = $myPlayer->escudo;
+                        [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                        if ($myPlayer->hp <= 0) {
+                            $myPlayer->status = 'derrotado';
+                        }
+                    } else {
+                        $escudoAntes = $raid->npc_escudo;
+                        [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                        $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
+
+                        $npcDebuffs = $raid->npc_debuffs ?? [];
+                        foreach ($habDebuff as $stat) {
+                            if (self::esTipoEstado($stat)) {
+                                $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat);
+                            } else {
+                                $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                            }
+                        }
+                        $raid->npc_debuffs = $npcDebuffs;
                     }
-                    $raid->npc_debuffs = $npcDebuffs;
 
                     $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
                     $entry['messages'][] = ($effective ? '¡Forma efectiva! ×1.5 — ' : '')."¡Impacto! {$desc}";
@@ -493,11 +589,17 @@ class RaidCombatController extends Controller
         $myPlayer->cooldowns = $myCooldowns ?: null;
         $myPlayer->buffs = $myBuffs ?: null;
         $myPlayer->debuffs = $myDebuffs ?: null;
+        $myPlayer->estados = $myEstados ?: null;
+        $raid->npc_estados = $npcEstados ?: null;
 
         if ($raid->npc_hp <= 0 && $raid->status === 'activo') {
             $raid->status = 'ganado';
             $entry['messages'][] = "¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo.";
             $this->grantVictoryRewards($raid);
+        } elseif ($raid->status === 'activo' && $raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count() === 0) {
+            /* Puede pasar si la confusión hizo que el último jugador activo se golpeara a sí mismo. */
+            $raid->status = 'perdido';
+            $entry['messages'][] = 'Todos los jugadores han caído. El jefe los ha derrotado.';
         }
 
         $log[] = $entry;
@@ -585,10 +687,38 @@ class RaidCombatController extends Controller
                 }
                 $rp->buffs = self::tickEffects($rp->buffs ?? []) ?: null;
                 $rp->debuffs = self::tickEffects($rp->debuffs ?? []) ?: null;
+
+                $rpChar = $rp->user->character;
+                $tick = self::tickEstadosRonda($rp->estados ?? [], $rp->hp, self::getCombatStats($rpChar)['vida'], $rpChar->name);
+                $rp->estados = $tick['estados'] ?: null;
+                $rp->hp = $tick['hp'];
+                if ($rp->hp <= 0) {
+                    $rp->status = 'derrotado';
+                }
+                foreach ($tick['mensajes'] as $mensajeEstado) {
+                    $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => [$mensajeEstado]];
+                }
+
                 $rp->save();
             }
             $raid->npc_buffs = self::tickEffects($raid->npc_buffs ?? []) ?: null;
             $raid->npc_debuffs = self::tickEffects($raid->npc_debuffs ?? []) ?: null;
+
+            $npcTick = self::tickEstadosRonda($raid->npc_estados ?? [], $raid->npc_hp, self::getNpcStats($raid->npc)['vida'], $raid->npc->nombre);
+            $raid->npc_estados = $npcTick['estados'] ?: null;
+            $raid->npc_hp = $npcTick['hp'];
+            foreach ($npcTick['mensajes'] as $mensajeEstado) {
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => [$mensajeEstado]];
+            }
+
+            /* El sangrado/envenenado del tick puede haber matado al jefe o a los jugadores restantes */
+            if ($raid->npc_hp <= 0) {
+                $raid->status = 'ganado';
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo."]];
+                $this->grantVictoryRewards($raid);
+
+                return;
+            }
 
             $activos = $raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count();
             if ($activos === 0) {
@@ -676,8 +806,31 @@ class RaidCombatController extends Controller
             return;
         }
 
+        /* Parálisis del jefe: pierde el turno y queda inmune al próximo intento */
+        $npcEstados = $raid->npc_estados ?? [];
+        $paralisisInfo = self::resolverParalisisAlEmpezarTurno($npcEstados);
+        $npcEstados = $paralisisInfo['estados'];
+        if ($paralisisInfo['paralizado']) {
+            $raid->npc_estados = $npcEstados ?: null;
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} está paralizado y pierde el turno"]];
+
+            return;
+        }
+
+        /* Confundido: el jefe puede golpearse a sí mismo en vez del objetivo elegido */
         $target = $activos->sortByDesc('dano_al_jefe')->first();
-        $targetChar = $target->user->character;
+        $targetEsNpc = false;
+        if (self::resolverConfundido($npcEstados)) {
+            $opciones = array_merge(['npc'], $activos->pluck('user_id')->all());
+            $elegido = $opciones[array_rand($opciones)];
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["¡{$npc->nombre} está confundido!"]];
+            if ($elegido === 'npc') {
+                $targetEsNpc = true;
+            } else {
+                $target = $activos->firstWhere('user_id', $elegido);
+            }
+        }
+        $targetChar = $targetEsNpc ? null : $target->user->character;
 
         $npcStats = self::getEffectiveStats(self::getNpcStats($npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $npcCooldowns = array_filter(array_map(fn ($v) => $v - 1, $raid->npc_cooldowns ?? []), fn ($v) => $v > 0);
@@ -701,29 +854,73 @@ class RaidCombatController extends Controller
         }
         $raid->npc_cooldowns = $npcCooldowns ?: null;
 
-        $targetStats = self::getEffectiveStats(self::getCombatStats($targetChar), $target->buffs ?? [], $target->debuffs ?? []);
-        $atkDado = random_int(1, 20);
-        $defDado = random_int(1, 20);
+        $targetStats = $targetEsNpc ? $npcStats : self::getEffectiveStats(self::getCombatStats($targetChar), $target->buffs ?? [], $target->debuffs ?? []);
+        $targetEstadosPrevios = $targetEsNpc ? $npcEstados : ($target->estados ?? []);
+
+        $atkDado = self::mitigarTiradaAturdido($npcEstados, random_int(1, 20));
+        $defDado = self::mitigarTiradaAturdido($targetEstadosPrevios, random_int(1, 20));
         $atkVal = $npcStats['ataque'];
         $defVal = $targetStats['defensa'];
         $atkRoll = $atkDado + $atkVal;
         $defRoll = $defDado + $defVal;
         $esCritico = $atkDado >= $npc->critThreshold(); // Umbral según nivel de dificultad (ej. nivel 4 → 21-4=17, crítico con 17-20)
 
+        $nombreObjetivo = $targetEsNpc ? $npc->nombre : $targetChar->name;
         $log[] = [
             'turn' => count($log) + 1, 'actor' => 'npc',
-            'target_user_id' => $target->user_id,
+            'target_user_id' => $targetEsNpc ? null : $target->user_id,
             'dice' => ['atk' => $atkDado, 'def' => $defDado],
             'messages' => [
-                "{$npc->nombre} {$accion} contra {$targetChar->name}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}",
+                "{$npc->nombre} {$accion} contra {$nombreObjetivo}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}",
             ],
         ];
 
-        if (! ($esCritico || $atkRoll > $defRoll)) {
+        /* Marcado/protegido del objetivo se consumen sin importar si el golpe finalmente conecta */
+        $protegidoInfo = self::consumirProtegido($targetEstadosPrevios);
+        $targetEstadosPrevios = $protegidoInfo['estados'];
+        $marcaInfo = self::consumirMarcado($targetEstadosPrevios, $atkDado);
+        $targetEstadosPrevios = $marcaInfo['estados'];
+        if ($targetEsNpc) {
+            $npcEstados = $targetEstadosPrevios;
+        } else {
+            $target->estados = $targetEstadosPrevios ?: null;
+        }
+        $raid->npc_estados = $npcEstados ?: null;
+
+        $hit = $esCritico || $atkRoll > $defRoll;
+        if ($protegidoInfo['activo']) {
+            $hit = false;
+        } elseif ($marcaInfo['activo']) {
+            $hit = $marcaInfo['forzar_exito'];
+        }
+
+        if (! $hit) {
+            $missMsg = match (true) {
+                $protegidoInfo['activo'] => '¡El objetivo estaba protegido y bloquea el golpe automáticamente!',
+                $marcaInfo['activo'] => '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!',
+                default => "{$nombreObjetivo} esquiva/bloquea el ataque de {$npc->nombre}.",
+            };
             $log[] = [
-                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $target->user_id,
-                'messages' => ["{$targetChar->name} esquiva/bloquea el ataque de {$npc->nombre}."],
+                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $targetEsNpc ? null : $target->user_id,
+                'messages' => [$missMsg],
             ];
+            if (! $targetEsNpc) {
+                $target->save();
+            }
+
+            return;
+        }
+        if ($marcaInfo['activo']) {
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'messages' => ['¡El objetivo estaba marcado — el golpe conecta automáticamente!']];
+        }
+
+        if ($targetEsNpc) {
+            /* Confundido: el jefe se golpea a sí mismo — sin la mecánica de crítico en área */
+            $dmg = self::mitigarDanoDebilitado($npcEstados, $dmgBase);
+            $escudoAntes = $raid->npc_escudo;
+            [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudoBase, $dmgPerfBase);
+            $desc = self::describeDano($dmg, $dmgEscudoBase, $dmgPerfBase, $escudoAntes);
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'messages' => ["{$npc->nombre} se golpea a sí mismo: {$desc}"]];
 
             return;
         }
@@ -735,7 +932,7 @@ class RaidCombatController extends Controller
             foreach ($activos as $rp) {
                 $rpChar = $rp->user->character;
                 $rpEffective = self::isEffective($formaAtaque, (int) $rp->current_forma);
-                $d = ($rpEffective ? (int) round($dmgBase * 1.5) : $dmgBase) + $critBonus;
+                $d = self::mitigarDanoDebilitado($npcEstados, ($rpEffective ? (int) round($dmgBase * 1.5) : $dmgBase) + $critBonus);
                 $dE = $rpEffective ? (int) round($dmgEscudoBase * 1.5) : $dmgEscudoBase;
                 $dP = $rpEffective ? (int) round($dmgPerfBase * 1.5) : $dmgPerfBase;
                 $escudoAntes = $rp->escudo;
@@ -751,7 +948,7 @@ class RaidCombatController extends Controller
             $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'crit' => true, 'hit' => true, 'aoe' => true, 'targets' => $targets, 'messages' => $msgs];
         } else {
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
-            $dmg = $effective ? (int) round($dmgBase * 1.5) : $dmgBase;
+            $dmg = self::mitigarDanoDebilitado($npcEstados, $effective ? (int) round($dmgBase * 1.5) : $dmgBase);
             $dmgEscudo = $effective ? (int) round($dmgEscudoBase * 1.5) : $dmgEscudoBase;
             $dmgPerf = $effective ? (int) round($dmgPerfBase * 1.5) : $dmgPerfBase;
             $escudoAntes = $target->escudo;
@@ -764,10 +961,16 @@ class RaidCombatController extends Controller
                 $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
                 if (! empty($habDebuff)) {
                     $tb = $target->debuffs ?? [];
+                    $te = $target->estados ?? [];
                     foreach ($habDebuff as $stat) {
-                        $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
+                        if (self::esTipoEstado($stat)) {
+                            $te = self::aplicarEstadoDeHabilidad($te, $stat);
+                        } else {
+                            $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
+                        }
                     }
                     $target->debuffs = $tb;
+                    $target->estados = $te ?: null;
                 }
             }
             $target->save();
@@ -855,6 +1058,7 @@ class RaidCombatController extends Controller
                 'cooldowns' => $rp->cooldowns ?? [],
                 'buffs' => $rp->buffs ?? [],
                 'debuffs' => $rp->debuffs ?? [],
+                'estados' => $rp->estados ?? [],
                 'status' => $rp->status,
                 'dano_al_jefe' => $rp->dano_al_jefe,
                 'habilidades' => $habilidades,
@@ -906,6 +1110,7 @@ class RaidCombatController extends Controller
                 'movimiento_base' => $npcBase['movimiento'],
                 'buffs' => $raid->npc_buffs ?? [],
                 'debuffs' => $raid->npc_debuffs ?? [],
+                'estados' => $raid->npc_estados ?? [],
             ],
             'jugadores' => $jugadores->values(),
             'mi_slot' => $myPlayer['slot'] ?? null,

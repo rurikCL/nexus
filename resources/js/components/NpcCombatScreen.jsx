@@ -31,6 +31,94 @@ const formaEsEfectiva = (atkForma, defForma) => {
   return (FORMA_BEATS[atkForma] ?? []).includes(defForma);
 };
 
+/* ─── Estados de combate ───────────────────────────────────────────────
+   Espejo en JS de app/Support/Combat/AplicaEstadosCombate.php — este combate
+   contra NPC es 100% client-side (localStorage), sin servidor autoritativo. */
+const TIPOS_ESTADO = [
+  'paralizado', 'inmune_paralisis', 'aturdido', 'marcado', 'protegido',
+  'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion',
+];
+const DEFAULTS_ESTADO = {
+  paralizado: { turns: 1, valor: 0 },
+  aturdido: { turns: 1, valor: 0 },
+  marcado: { turns: null, valor: 0 },
+  protegido: { turns: null, valor: 0 },
+  sangrado: { turns: 2, valor: 1 },
+  envenenado: { turns: 3, valor: 2 },
+  debilitado: { turns: 2, valor: 0 },
+  confundido: { turns: 1, valor: 0 },
+  regeneracion: { turns: 2, valor: 2 },
+};
+const ESTADOS_DOT = { sangrado: true, envenenado: true };
+const ESTADOS_HOT = { regeneracion: true };
+const ESTADO_ICON = {
+  paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
+  sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+};
+const ESTADO_LABEL = {
+  paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
+  sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+};
+
+const esTipoEstado = (stat) => TIPOS_ESTADO.includes(stat);
+const tieneEstado = (estados, tipo) => estados.some(e => e.tipo === tipo);
+const quitarEstado = (estados, tipo) => estados.filter(e => e.tipo !== tipo);
+const agregarEstado = (estados, tipo, turns, valor = 0) => {
+  const i = estados.findIndex(e => e.tipo === tipo);
+  if (i === -1) return [...estados, { tipo, turns, valor }];
+  const next = [...estados];
+  const actual = next[i];
+  next[i] = {
+    ...actual,
+    turns: (turns === null || actual.turns === null) ? null : Math.max(actual.turns, turns),
+    valor: valor > 0 ? valor : actual.valor,
+  };
+  return next;
+};
+const agregarEstadoPorTipo = (estados, tipo) => {
+  const def = DEFAULTS_ESTADO[tipo] ?? { turns: 1, valor: 0 };
+  return agregarEstado(estados, tipo, def.turns, def.valor);
+};
+const intentarParalizar = (estados) => {
+  if (tieneEstado(estados, 'inmune_paralisis')) return { estados, aplicado: false };
+  return { estados: agregarEstadoPorTipo(estados, 'paralizado'), aplicado: true };
+};
+const resolverParalisisAlEmpezarTurno = (estados) => {
+  if (!tieneEstado(estados, 'paralizado')) return { estados, paralizado: false };
+  const sinParalisis = quitarEstado(estados, 'paralizado');
+  return { estados: agregarEstadoPorTipo(sinParalisis, 'inmune_paralisis'), paralizado: true };
+};
+const mitigarTiradaAturdido = (estados, roll) => (tieneEstado(estados, 'aturdido') ? Math.floor(roll / 2) : roll);
+const mitigarDanoDebilitado = (estadosAtacante, dmg) => (tieneEstado(estadosAtacante, 'debilitado') ? Math.floor(dmg / 2) : dmg);
+const resolverConfundido = (estados) => tieneEstado(estados, 'confundido') && Math.random() < 0.5;
+const consumirProtegido = (estadosObjetivo) => {
+  if (!tieneEstado(estadosObjetivo, 'protegido')) return { estados: estadosObjetivo, activo: false };
+  return { estados: quitarEstado(estadosObjetivo, 'protegido'), activo: true };
+};
+const consumirMarcado = (estadosObjetivo, atkDadoNatural) => {
+  if (!tieneEstado(estadosObjetivo, 'marcado')) return { estados: estadosObjetivo, activo: false, forzarExito: false };
+  return { estados: quitarEstado(estadosObjetivo, 'marcado'), activo: true, forzarExito: atkDadoNatural !== 1 };
+};
+const aplicarEstadoDeHabilidad = (estados, tipo) => (tipo === 'paralizado' ? intentarParalizar(estados).estados : agregarEstadoPorTipo(estados, tipo));
+const tickEstadosRonda = (estados, hp, maxHp, nombreActor) => {
+  let nextHp = hp;
+  const mensajes = [];
+  const restantes = [];
+  for (const e of estados) {
+    if (ESTADOS_DOT[e.tipo] && e.valor > 0) {
+      nextHp = Math.max(0, nextHp - e.valor);
+      mensajes.push(`${nombreActor} sufre ${e.tipo}: −${e.valor} vida`);
+    } else if (ESTADOS_HOT[e.tipo] && e.valor > 0) {
+      nextHp = Math.min(maxHp, nextHp + e.valor);
+      mensajes.push(`${nombreActor} se regenera: +${e.valor} vida`);
+    }
+    if (e.turns === null) { restantes.push(e); continue; }
+    const turns = e.turns - 1;
+    if (turns > 0) restantes.push({ ...e, turns });
+  }
+  return { estados: restantes, hp: nextHp, mensajes };
+};
+
 function useIsMobile() {
   const [m, setM] = useState(() => window.innerWidth < 640);
   useEffect(() => {
@@ -216,6 +304,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [cooldowns,    setCooldowns]    = useState(initialState?.cooldowns     ?? {});
   const [playerBuffs,  setPlayerBuffs]  = useState(initialState?.playerBuffs  ?? []);
   const [npcDebuffs,   setNpcDebuffs]   = useState(initialState?.npcDebuffs   ?? []);
+  const [playerEstados, setPlayerEstados] = useState(initialState?.playerEstados ?? []);
+  const [npcEstados,    setNpcEstados]    = useState(initialState?.npcEstados    ?? []);
   const [statusFx, setStatusFx]        = useState(null);
 
   /* Forma actual y cambio de estancia */
@@ -344,8 +434,18 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     })();
   }, []);
 
-  /* Termina el turno de quien actuó — decide si sigue la ronda o se tira nueva iniciativa */
-  const endTurnAfter = async (actor) => {
+  /*
+   * Termina el turno de quien actuó — decide si sigue la ronda o se tira nueva
+   * iniciativa. `overrides` permite pasar el hp/estados YA actualizados por la
+   * acción que se acaba de resolver (setPlayerHp/setPlayerEstados son async y
+   * el closure de esta función seguiría viendo el valor previo al re-render).
+   */
+  const endTurnAfter = async (actor, overrides = {}) => {
+    const curPlayerHp = overrides.playerHp ?? playerHp;
+    const curNpcHp = overrides.npcHp ?? npcHp;
+    const curPlayerEstados = overrides.playerEstados ?? playerEstados;
+    const curNpcEstados = overrides.npcEstados ?? npcEstados;
+
     if (rondaTurno === 0) {
       /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
       const next = actor === 'player' ? 'npc' : 'player';
@@ -353,9 +453,37 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       setCurrTurn(next);
       if (next === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
     } else {
-      /* Ambos actuaron: termina la ronda — tick de buffs/debuffs (duran N rondas) y nueva iniciativa */
+      /* Ambos actuaron: termina la ronda — tick de buffs/debuffs/estados (duran N rondas) y nueva iniciativa */
       setPlayerBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
       setNpcDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
+
+      const playerTick = tickEstadosRonda(curPlayerEstados, curPlayerHp.vida, maxPlayer.vida, player.nombre);
+      const npcTick = tickEstadosRonda(curNpcEstados, curNpcHp.vida, maxNpc.vida, npc.nombre);
+      setPlayerEstados(playerTick.estados);
+      setNpcEstados(npcTick.estados);
+
+      const nextPlayerHp = { ...curPlayerHp, vida: playerTick.hp };
+      const nextNpcHp = { ...curNpcHp, vida: npcTick.hp };
+      if (nextPlayerHp.vida !== curPlayerHp.vida) setPlayerHp(nextPlayerHp);
+      if (nextNpcHp.vida !== curNpcHp.vida) setNpcHp(nextNpcHp);
+
+      const tickMsgs = [...playerTick.mensajes, ...npcTick.mensajes];
+      if (tickMsgs.length > 0) {
+        setLog(prev => [...prev, ...tickMsgs.map((text, i) => ({ text, type: 'info', id: prev.length + i, ronda, actor: 'system' }))]);
+      }
+
+      if (nextNpcHp.vida <= 0) {
+        setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
+        setPhase('victory');
+
+        return;
+      }
+      if (nextPlayerHp.vida <= 0) {
+        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
+        setPhase('defeat');
+
+        return;
+      }
 
       const pR = d20(); const nR = d20();
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
@@ -380,9 +508,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     if (phase === 'initiative' || phase === 'victory' || phase === 'defeat' || phase === 'fled') return;
     localStorage.setItem(NPC_COMBAT_LS, JSON.stringify({
       npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen,
-      state: { playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma },
+      state: { playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, playerEstados, npcEstados, currentForma },
     }));
-  }, [playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, currentForma]);
+  }, [playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, playerEstados, npcEstados, currentForma]);
 
   /* Turno del NPC */
   useEffect(() => {
@@ -394,14 +522,44 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       await sleep(700);
       if (cancelled) return;
 
+      /* Parálisis: el NPC pierde el turno automáticamente y queda inmune al próximo intento */
+      const paralisisInfo = resolverParalisisAlEmpezarTurno(npcEstados);
+      if (paralisisInfo.paralizado) {
+        setNpcEstados(paralisisInfo.estados);
+        setLog(prev => [...prev, { text: `${npc.nombre} está paralizado y pierde el turno`, type: 'info', id: prev.length, ronda, actor: 'npc' }]);
+        setNpcBusy(false);
+        endTurnAfter('npc', { npcEstados: paralisisInfo.estados });
+
+        return;
+      }
+
+      /* Confundido: 50% de probabilidad de que el NPC se golpee a sí mismo en vez de atacar */
+      const confundidoNpc = resolverConfundido(npcEstados);
+      if (confundidoNpc) {
+        setLog(prev => [...prev, { text: `¡${npc.nombre} está confundido!`, type: 'info', id: prev.length, ronda, actor: 'npc' }]);
+      }
+
       /* Leer stats efectivos ahora (closure over current state at render time) */
-      const useRanged = effNpcPnt > 0 && Math.random() > 0.5;
-      const [aR, dR] = [d20(), d20()];
-      const [aT, dT] = useRanged
-        ? [aR + effNpcPnt, dR + effPlayerMov]
-        : [aR + effNpcAtk, dR + effPlayerDef];
-      const esCritico = aR >= npcCritThreshold;
-      const hit = esCritico || aT > dT;
+      const useRanged = !confundidoNpc && effNpcPnt > 0 && Math.random() > 0.5;
+      const defEstadosPrevios = confundidoNpc ? npcEstados : playerEstados;
+      const aR = mitigarTiradaAturdido(npcEstados, d20());
+      const dR = mitigarTiradaAturdido(defEstadosPrevios, d20());
+      const atkStatVal = confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk);
+      const defStatVal = confundidoNpc ? effNpcDef : (useRanged ? effPlayerMov : effPlayerDef);
+      const [aT, dT] = [aR + atkStatVal, dR + defStatVal];
+      const esCritico = !confundidoNpc && aR >= npcCritThreshold;
+
+      /* Marcado/protegido del objetivo se consumen sin importar si el golpe finalmente conecta */
+      let estadosObjetivo = defEstadosPrevios;
+      const protegidoInfo = consumirProtegido(estadosObjetivo);
+      estadosObjetivo = protegidoInfo.estados;
+      const marcaInfo = consumirMarcado(estadosObjetivo, aR);
+      estadosObjetivo = marcaInfo.estados;
+      if (confundidoNpc) setNpcEstados(estadosObjetivo); else setPlayerEstados(estadosObjetivo);
+
+      let hit = esCritico || aT > dT;
+      if (protegidoInfo.activo) hit = false;
+      else if (marcaInfo.activo) hit = marcaInfo.forzarExito;
 
       await rollDice([
         { key: 'npc', color: '#ff6b6b', label: npcLabel, value: aR },
@@ -409,47 +567,70 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       ]);
       if (cancelled) return;
 
-      const dmgBase = (useRanged ? effNpcPnt : effNpcAtk) + npcDanoNivel + (esCritico ? npcCritBonus : 0);
+      const dmgBaseRaw = (confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk)) + npcDanoNivel + (esCritico ? npcCritBonus : 0);
+      const dmgBase = mitigarDanoDebilitado(npcEstados, dmgBaseRaw);
       await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, dmg: dmgBase });
 
-      let entries;
+      const rollDesc = confundidoNpc
+        ? `${npc.nombre} se ataca a sí mismo: 1d20(${aR})+${atkStatVal}=${aT} vs 1d20(${dR})+${defStatVal}=${dT}`
+        : useRanged
+          ? `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`
+          : `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`;
+      let entries = confundidoNpc
+        ? [{ text: rollDesc, type: 'info', diceColors: ['#ff6b6b'] }]
+        : [
+          { text: rollDesc, type: 'info', diceColors: ['#ff6b6b'] },
+          { text: useRanged ? `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}` : `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
+        ];
+
       let newHp;
-      if (useRanged) {
-        entries = [
-          { text: `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
-          { text: `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
-        ];
-        newHp = hit ? applyDmg(dmgBase, playerHp) : { ...playerHp };
+      if (confundidoNpc) {
+        newHp = hit ? applyDmg(dmgBase, npcHp) : { ...npcHp };
         entries.push(hit
-          ? { text: esCritico ? `¡CRÍTICO! −${dmgBase} daño` : `¡Te impactan! −${dmgBase} daño`, type: 'danger' }
-          : { text: '¡Esquivas!', type: 'success' });
+          ? { text: `¡Se golpea a sí mismo! −${dmgBase} daño`, type: 'danger' }
+          : { text: 'Falla el golpe contra sí mismo', type: 'info' });
       } else {
-        entries = [
-          { text: `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`, type: 'info', diceColors: ['#ff6b6b'] },
-          { text: `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
-        ];
         newHp = hit ? applyDmg(dmgBase, playerHp) : { ...playerHp };
         entries.push(hit
-          ? { text: esCritico ? `¡CRÍTICO! −${dmgBase} daño` : `¡Golpe! −${dmgBase} daño`, type: 'danger' }
-          : { text: 'Bloqueas el ataque', type: 'success' });
+          ? { text: esCritico ? `¡CRÍTICO! −${dmgBase} daño` : `¡${useRanged ? 'Te impactan' : 'Golpe'}! −${dmgBase} daño`, type: 'danger' }
+          : { text: useRanged ? '¡Esquivas!' : 'Bloqueas el ataque', type: 'success' });
       }
       entries = entries.map(e => ({ ...e, ronda, actor: 'npc' }));
 
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i }))]);
-      setPlayerHp(newHp);
+      if (confundidoNpc) setNpcHp(newHp); else setPlayerHp(newHp);
 
-      /* Al fin del turno NPC: decrementar cooldowns (los buffs/debuffs se tickean por ronda en endTurnAfter) */
+      /* Al fin del turno NPC: decrementar cooldowns (los buffs/debuffs/estados se tickean por ronda en endTurnAfter) */
       setCooldowns(prev => Object.fromEntries(
         Object.entries(prev).filter(([, v]) => v > 1).map(([k, v]) => [k, v - 1])
       ));
 
       setNpcBusy(false);
-      if (newHp.vida <= 0) {
+      if (confundidoNpc && newHp.vida <= 0) {
+        setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
+        setPhase('victory');
+      } else if (!confundidoNpc && newHp.vida <= 0) {
         setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
         setPhase('defeat');
       } else {
-        endTurnAfter('npc');
+        endTurnAfter('npc', confundidoNpc ? { npcHp: newHp, npcEstados: estadosObjetivo } : { playerHp: newHp, playerEstados: estadosObjetivo });
       }
+    })();
+    return () => { cancelled = true; };
+  }, [currTurn, phase, ronda]);
+
+  /* Parálisis del jugador: pierde el turno automáticamente sin necesidad de que elija una acción */
+  useEffect(() => {
+    if (currTurn !== 'player' || phase !== 'battle') return;
+    if (!tieneEstado(playerEstados, 'paralizado')) return;
+    let cancelled = false;
+    (async () => {
+      await sleep(500);
+      if (cancelled) return;
+      const info = resolverParalisisAlEmpezarTurno(playerEstados);
+      setPlayerEstados(info.estados);
+      setLog(prev => [...prev, { text: `${player.nombre} está paralizado y pierde el turno`, type: 'danger', id: prev.length, ronda, actor: 'player' }]);
+      endTurnAfter('player', { playerEstados: info.estados });
     })();
     return () => { cancelled = true; };
   }, [currTurn, phase, ronda]);
@@ -475,14 +656,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       setCooldowns(prev => ({ ...prev, [habId]: hab.cooldown }));
     }
 
-    const pendingBuffs = habBuff.length > 0 ? habBuff.map(stat => ({ stat, turns: habRondas })) : [];
+    const habBuffStats = habBuff.filter(s => !esTipoEstado(s));
+    const habBuffEstados = habBuff.filter(esTipoEstado);
+    const pendingBuffs = habBuffStats.length > 0 ? habBuffStats.map(stat => ({ stat, turns: habRondas })) : [];
 
     const entries = [];
 
     /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
     if (hab.objetivo === 'self') {
-      const buffDesc = habBuff.map(s => `+1 ${s}`).join(', ');
+      const buffDesc = habBuffStats.map(s => `+1 ${s}`).join(', ');
       entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
+      if (habBuffEstados.length > 0) {
+        entries.push({ text: `${player.nombre}: ${habBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+      }
 
       const selfDmg = hab.damage ?? 0;
       const selfDmgEscudo = hab.damage_escudo ?? 0;
@@ -500,6 +686,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         entries.push({ text: `¡Curación! +${healEsc} escudo`, type: 'success' });
       }
 
+      let selfEstados = playerEstados;
+      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo); });
+
       if (pendingBuffs.length > 0) {
         await playStatusFx(playerHudRef, 'buff');
         setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
@@ -510,9 +699,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         if (selfDmgEscudo < 0) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${healEsc}` });
         setPlayerHp(healedHp);
       }
+      setPlayerEstados(selfEstados);
 
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
-      endTurnAfter('player');
+      endTurnAfter('player', { playerHp: healedHp, playerEstados: selfEstados });
       return;
     }
 
@@ -525,26 +715,33 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
         type: 'info',
       });
+      let selfEstados = playerEstados;
+      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo); });
       if (pendingBuffs.length > 0) {
         await playStatusFx(playerHudRef, 'buff');
         setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
       }
+      setPlayerEstados(selfEstados);
       await playStatusFx(npcHudRef, 'heal');
       showFloatText(npcHudRef, { variant: 'heal', text: `Curación: ${heal}` });
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       setNpcHp(newNpcHp);
-      endTurnAfter('player');
+      endTurnAfter('player', { npcHp: newNpcHp, playerEstados: selfEstados });
       return;
     }
 
     /* ─── Habilidad de ataque ───────────────────────────────────── */
+    const confundidoHab = resolverConfundido(playerEstados);
+    if (confundidoHab) {
+      entries.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    }
     const useAtq  = hab.tipo === 'melee';
     const atkVal  = useAtq ? effPlayerAtk : effPlayerPnt;
-    const defVal  = useAtq ? effNpcDef    : effNpcMov;
+    const defVal  = confundidoHab ? (useAtq ? effPlayerDef : effPlayerMov) : (useAtq ? effNpcDef : effNpcMov);
 
-    const [aR, dR] = [d20(), d20()];
+    const aR = mitigarTiradaAturdido(playerEstados, d20());
+    const dR = mitigarTiradaAturdido(confundidoHab ? playerEstados : npcEstados, d20());
     const [aT, dT] = [aR + atkVal, dR + defVal];
-    const hit = aT > dT;
 
     await rollDice([
       { key: 'ply', color: '#38cdf0', label: 'TÚ', value: aR },
@@ -556,26 +753,62 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       type: 'info',
     });
 
+    let estadosObjetivoHab = confundidoHab ? playerEstados : npcEstados;
+    const protegidoHab = consumirProtegido(estadosObjetivoHab);
+    estadosObjetivoHab = protegidoHab.estados;
+    const marcaHab = consumirMarcado(estadosObjetivoHab, aR);
+    estadosObjetivoHab = marcaHab.estados;
+    let playerEstadosFinal = confundidoHab ? estadosObjetivoHab : playerEstados;
+    let npcEstadosFinal = confundidoHab ? npcEstados : estadosObjetivoHab;
+
+    let hit = aT > dT;
+    if (protegidoHab.activo) {
+      hit = false;
+      entries.push({ text: '¡El objetivo estaba protegido y bloquea el golpe automáticamente!', type: 'info' });
+    } else if (marcaHab.activo) {
+      hit = marcaHab.forzarExito;
+      entries.push({
+        text: hit ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!' : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!',
+        type: 'info',
+      });
+    }
+
+    const habDebuffStats = habDebuff.filter(s => !esTipoEstado(s));
+    const habDebuffEstados = habDebuff.filter(esTipoEstado);
+
     let newNpcHp = { ...npcHp };
+    let newPlayerHpSelf = { ...playerHp };
     let dmgAplicado = 0;
     if (hit) {
       let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
       let dmgEscudo = hab.damage_escudo ?? 0;
       let dmgPerforante = hab.damage_perforante ?? 0;
-      const effective = formaEsEfectiva(hab.forma, npc.forma ?? 0);
+      const effective = !confundidoHab && formaEsEfectiva(hab.forma, npc.forma ?? 0);
       if (effective) {
         dmg = Math.round(dmg * 1.5);
         dmgEscudo = Math.round(dmgEscudo * 1.5);
         dmgPerforante = Math.round(dmgPerforante * 1.5);
         entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
       }
-      dmgAplicado = dmg + dmgPerforante + (npcHp.escudo > 0 ? Math.max(0, dmgEscudo) : 0);
-      const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, npcHp.escudo);
-      newNpcHp = applyDmg(dmg, npcHp, dmgEscudo, dmgPerforante);
-      entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
+      dmg = mitigarDanoDebilitado(playerEstados, dmg);
 
-      if (habDebuff.length > 0) {
-        entries.push({ text: `${npc.nombre}: ${habDebuff.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
+      if (confundidoHab) {
+        dmgAplicado = dmg + dmgPerforante + (playerHp.escudo > 0 ? Math.max(0, dmgEscudo) : 0);
+        const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, playerHp.escudo);
+        newPlayerHpSelf = applyDmg(dmg, playerHp, dmgEscudo, dmgPerforante);
+        entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
+      } else {
+        dmgAplicado = dmg + dmgPerforante + (npcHp.escudo > 0 ? Math.max(0, dmgEscudo) : 0);
+        const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, npcHp.escudo);
+        newNpcHp = applyDmg(dmg, npcHp, dmgEscudo, dmgPerforante);
+        entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
+
+        if (habDebuffStats.length > 0) {
+          entries.push({ text: `${npc.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
+        }
+        if (habDebuffEstados.length > 0) {
+          entries.push({ text: `${npc.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+        }
       }
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
@@ -587,18 +820,36 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       await playStatusFx(playerHudRef, 'buff');
       setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
     }
-    if (hit && habDebuff.length > 0) {
-      setNpcDebuffs(prev => [...prev, ...habDebuff.map(stat => ({ stat, turns: habRondas }))]);
+    habBuffEstados.forEach(tipo => { playerEstadosFinal = aplicarEstadoDeHabilidad(playerEstadosFinal, tipo); });
+    if (hit && !confundidoHab) {
+      if (habDebuffStats.length > 0) {
+        setNpcDebuffs(prev => [...prev, ...habDebuffStats.map(stat => ({ stat, turns: habRondas }))]);
+      }
+      habDebuffEstados.forEach(tipo => { npcEstadosFinal = aplicarEstadoDeHabilidad(npcEstadosFinal, tipo); });
     }
+    setPlayerEstados(playerEstadosFinal);
+    setNpcEstados(npcEstadosFinal);
 
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
-    setNpcHp(newNpcHp);
+    if (confundidoHab) {
+      setPlayerHp(newPlayerHpSelf);
+    } else {
+      setNpcHp(newNpcHp);
+    }
 
-    if (newNpcHp.vida <= 0) {
+    if (!confundidoHab && newNpcHp.vida <= 0) {
       setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
       setPhase('victory');
+    } else if (confundidoHab && newPlayerHpSelf.vida <= 0) {
+      setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
+      setPhase('defeat');
     } else {
-      endTurnAfter('player');
+      endTurnAfter('player', {
+        npcHp: confundidoHab ? npcHp : newNpcHp,
+        playerHp: confundidoHab ? newPlayerHpSelf : playerHp,
+        playerEstados: playerEstadosFinal,
+        npcEstados: npcEstadosFinal,
+      });
     }
   };
 
@@ -607,7 +858,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
 
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
-    const [pR, nR] = [d20(), d20()];
+    const pR = mitigarTiradaAturdido(playerEstados, d20());
+    const nR = mitigarTiradaAturdido(npcEstados, d20());
     const [pT, nT] = [pR + effPlayerIni, nR + effNpcIni];
     const success = pT >= nT;
 
@@ -652,16 +904,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const doPlayerBasicAttack = async () => {
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
 
+    const confundido = resolverConfundido(playerEstados);
+    const entries = [];
+    if (confundido) {
+      entries.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    }
+
     const arma        = player.arma_equipada;
     const esDistancia = arma?.tipo_ataque === 'distancia';
     const atkVal       = esDistancia ? effPlayerPnt : effPlayerAtk;
-    const defVal       = esDistancia ? effNpcMov    : effNpcDef;
+    const defVal       = confundido
+      ? (esDistancia ? effPlayerMov : effPlayerDef)
+      : (esDistancia ? effNpcMov : effNpcDef);
 
-    const [aR, dR] = [d20(), d20()];
+    const aR = mitigarTiradaAturdido(playerEstados, d20());
+    const dR = mitigarTiradaAturdido(confundido ? playerEstados : npcEstados, d20());
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const critico   = arma?.critico ?? 0;
-    const esCritico = aR >= (20 - critico);
-    const hit = esCritico || aT > dT;
+    const esCritico = !confundido && aR >= (20 - critico);
     const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
 
     await rollDice([
@@ -669,35 +929,75 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: dR },
     ]);
 
-    const entries = [{
+    entries.push({
       text: `${player.nombre} ${accion}: 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
       type: 'info',
-    }];
+    });
+
+    let estadosObjetivo = confundido ? playerEstados : npcEstados;
+    const protegidoInfo = consumirProtegido(estadosObjetivo);
+    estadosObjetivo = protegidoInfo.estados;
+    const marcaInfo = consumirMarcado(estadosObjetivo, aR);
+    estadosObjetivo = marcaInfo.estados;
+    const playerEstadosFinal = confundido ? estadosObjetivo : playerEstados;
+    const npcEstadosFinal = confundido ? npcEstados : estadosObjetivo;
+
+    let hit = esCritico || aT > dT;
+    if (protegidoInfo.activo) {
+      hit = false;
+      entries.push({ text: '¡El objetivo estaba protegido y bloquea el golpe automáticamente!', type: 'info' });
+    } else if (marcaInfo.activo) {
+      hit = marcaInfo.forzarExito;
+      entries.push({
+        text: hit ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!' : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!',
+        type: 'info',
+      });
+    }
 
     let newNpcHp = { ...npcHp };
-    let dmg = 0;
+    let newPlayerHpSelf = { ...playerHp };
     let dmgTotal = 0;
     if (hit) {
-      dmg = (arma?.dano ?? 3) + (esCritico ? 1 : 0);
+      const dmg = mitigarDanoDebilitado(playerEstados, (arma?.dano ?? 3) + (esCritico ? 1 : 0));
       const dmgPerforante = arma?.dano_perforante ?? 0;
       dmgTotal = dmg + dmgPerforante;
-      const descDano = describeDano(dmg, 0, dmgPerforante, npcHp.escudo);
-      newNpcHp = applyDmg(dmg, npcHp, 0, dmgPerforante);
-      entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) ${descDano}` : `¡Impacto! ${descDano}`, type: 'success' });
+      if (confundido) {
+        const descDano = describeDano(dmg, 0, dmgPerforante, playerHp.escudo);
+        newPlayerHpSelf = applyDmg(dmg, playerHp, 0, dmgPerforante);
+        entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
+      } else {
+        const descDano = describeDano(dmg, 0, dmgPerforante, npcHp.escudo);
+        newNpcHp = applyDmg(dmg, npcHp, 0, dmgPerforante);
+        entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) ${descDano}` : `¡Impacto! ${descDano}`, type: 'success' });
+      }
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
     await triggerStrike({ playerIsAttacker: true, ranged: esDistancia, hit, crit: esCritico, dmg: dmgTotal });
 
+    setPlayerEstados(playerEstadosFinal);
+    setNpcEstados(npcEstadosFinal);
     setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
-    setNpcHp(newNpcHp);
+    if (confundido) {
+      setPlayerHp(newPlayerHpSelf);
+    } else {
+      setNpcHp(newNpcHp);
+    }
 
-    if (newNpcHp.vida <= 0) {
+    if (!confundido && newNpcHp.vida <= 0) {
       setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
       setPhase('victory');
+    } else if (confundido && newPlayerHpSelf.vida <= 0) {
+      setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
+      setPhase('defeat');
     } else {
-      endTurnAfter('player');
+      endTurnAfter('player', {
+        npcHp: confundido ? npcHp : newNpcHp,
+        playerHp: confundido ? newPlayerHpSelf : playerHp,
+        playerEstados: playerEstadosFinal,
+        npcEstados: npcEstadosFinal,
+      });
     }
   };
 
@@ -757,7 +1057,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const npcBadges    = naveMode ? npcBadgesFull.filter(naveBadgeFilter)    : npcBadgesFull;
   const playerBadges = naveMode ? playerBadgesFull.filter(naveBadgeFilter) : playerBadgesFull;
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [], forma = 0, formaSide, effectsPosition = 'side', avatarRef, onAvatarClick }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, borderColor, badges, ini, align, fallbackIcon = 'user', buffs = [], debuffs = [], estados = [], forma = 0, formaSide, effectsPosition = 'side', avatarRef, onAvatarClick }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -771,7 +1071,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         <img src={formaImgSrc} alt={`Forma ${formaLabel(forma)}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
-    const effects = Object.values(
+    const statEffects = Object.values(
       [...buffs.map(b => ({ ...b, kind: 'buff' })), ...debuffs.map(d => ({ ...d, kind: 'debuff' }))]
         .reduce((acc, e) => {
           const key = `${e.kind}-${e.stat}`;
@@ -781,7 +1081,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           return acc;
         }, {})
     );
-    const renderBadge = (e, i) => {
+    const renderStatBadge = (e, i) => {
       const abbr = STAT_ABBR[e.stat] ?? e.stat.slice(0, 3).toUpperCase();
       const c = e.kind === 'buff' ? '#10b981' : '#ff6b6b';
       return (
@@ -796,14 +1096,30 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         </span>
       );
     };
-    const effectsColumn = effects.length > 0 && (
+    const renderEstadoBadge = (e, i) => {
+      const label = ESTADO_LABEL[e.tipo] ?? e.tipo;
+      const turnsLabel = e.turns === null ? 'hasta consumirse' : `${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`;
+      return (
+        <span key={`estado-${e.tipo}-${i}`} title={`${label} · ${turnsLabel}`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
+          fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
+          background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.45)', color: '#E6B325', fontWeight: 700,
+        }}>
+          <span style={{ fontSize: 9, lineHeight: 1 }}>{ESTADO_ICON[e.tipo] ?? '❔'}</span>{label}
+          <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns === null ? '∞' : `${e.turns}r`}</span>
+        </span>
+      );
+    };
+    const effectsColumn = (statEffects.length > 0 || estados.length > 0) && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, justifyContent: 'center' }}>
-        {effects.map(renderBadge)}
+        {estados.map(renderEstadoBadge)}
+        {statEffects.map(renderStatBadge)}
       </div>
     );
-    const effectsRow = effects.length > 0 && (
+    const effectsRow = (statEffects.length > 0 || estados.length > 0) && (
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
-        {effects.map(renderBadge)}
+        {estados.map(renderEstadoBadge)}
+        {statEffects.map(renderStatBadge)}
       </div>
     );
 
@@ -1252,6 +1568,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 borderColor="rgba(255,45,69,0.40)" badges={npcBadges} align="left"
                 fallbackIcon={naveMode ? 'ship' : 'user'}
                 debuffs={npcDebuffs}
+                estados={npcEstados}
                 forma={naveMode ? 0 : (npc.forma ?? 0)} formaSide="right"
                 effectsPosition="below"
               />
@@ -1273,6 +1590,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
                 fallbackIcon={naveMode ? 'ship' : 'user'}
                 buffs={playerBuffs}
+                estados={playerEstados}
                 forma={naveMode ? 0 : currentForma} formaSide="left"
                 effectsPosition="above"
                 avatarRef={playerAvatarRef}
@@ -1291,6 +1609,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 borderColor="rgba(255,45,69,0.40)" badges={npcBadges} align="left"
                 fallbackIcon={naveMode ? 'ship' : 'user'}
                 debuffs={npcDebuffs}
+                estados={npcEstados}
                 forma={naveMode ? 0 : (npc.forma ?? 0)} formaSide="right"
               />
             </div>
@@ -1303,6 +1622,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 borderColor="rgba(56,205,240,0.30)" badges={playerBadges} align="right"
                 fallbackIcon={naveMode ? 'ship' : 'user'}
                 buffs={playerBuffs}
+                estados={playerEstados}
                 forma={naveMode ? 0 : currentForma} formaSide="left"
                 avatarRef={playerAvatarRef}
               />
