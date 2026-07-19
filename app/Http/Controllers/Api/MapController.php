@@ -280,6 +280,12 @@ class MapController extends Controller
                 ? array_filter(array_map('trim', explode(',', $mision->hito_requerimiento)))
                 : [];
             $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+            $npcLabels = $mision->objetivos->where('tipo', 'npc')
+                ->pluck('unidad')
+                ->filter()
+                ->unique()
+                ->mapWithKeys(fn ($id) => [(int) $id => MapNpc::find((int) $id)?->nombre])
+                ->toArray();
 
             $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
             $objetivosCompletos = $mision->objetivos->every(
@@ -301,6 +307,9 @@ class MapController extends Controller
                     'tipo'            => $o->tipo,
                     'meta'            => $o->meta,
                     'unidad'          => $o->unidad,
+                    'unidad_label'    => $o->tipo === 'npc'
+                        ? ($npcLabels[(int) $o->unidad] ?? $o->unidad)
+                        : null,
                     'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
                     'completado'      => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
                 ])->values(),

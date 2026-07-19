@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Mision;
+use App\Models\MapNpc;
 use App\Models\User;
 use App\Notifications\MisionListaParaCompletar;
 use Illuminate\Support\Collection;
@@ -37,8 +38,19 @@ class MisionProgresoService
     public static function buildObjetivosConProgreso(Mision $mision, array $progresoJson, array $characterHitos = []): Collection
     {
         $hitos = array_map('strval', $characterHitos);
+        $npcIds = $mision->objetivos
+            ->where('tipo', 'npc')
+            ->pluck('unidad')
+            ->map(fn ($unidad) => (string) $unidad)
+            ->filter()
+            ->unique()
+            ->values();
+        $npcLabels = $npcIds->isEmpty()
+            ? collect()
+            : MapNpc::whereIn('id', $npcIds->map(fn ($id) => (int) $id)->all())
+                ->pluck('nombre', 'id');
 
-        return $mision->objetivos->map(function ($o) use ($progresoJson, $hitos) {
+        return $mision->objetivos->map(function ($o) use ($progresoJson, $hitos, $npcLabels) {
             $meta = (int) ($o->meta ?? 0);
             $unidad = trim((string) ($o->unidad ?? ''));
             $actual = (int) ($progresoJson[(string) $o->id] ?? 0);
@@ -54,6 +66,9 @@ class MisionProgresoService
                 'tipo' => $o->tipo,
                 'meta' => $o->meta,
                 'unidad' => $o->unidad,
+                'unidad_label' => $o->tipo === 'npc'
+                    ? ($npcLabels[(int) $unidad] ?? $o->unidad)
+                    : null,
                 'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
                 'progreso_actual' => min($meta > 0 ? $meta : 0, $actual),
                 'completado' => $actual >= $meta,
@@ -161,6 +176,47 @@ class MisionProgresoService
 
             foreach ($mision->objetivos->where('tipo', 'menu')->where('unidad', $slug) as $objetivo) {
                 $progresoJson[(string) $objetivo->id] = $objetivo->meta;
+            }
+
+            $characterHitos = $user->character ? $user->character->hitos()->pluck('hito')->all() : [];
+            $progresoGeneral = self::calcularProgresoGeneral($mision, $progresoJson, $characterHitos);
+
+            $mision->users()->syncWithoutDetaching([
+                $user->id => [
+                    'status' => $progresoGeneral > 0 ? 'en-curso' : 'pendiente',
+                    'progreso' => $progresoGeneral,
+                    'progreso_json' => json_encode($progresoJson),
+                ],
+            ]);
+
+            self::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoJson);
+        }
+    }
+
+    public static function registrarNpc(User $user, int $npcId): void
+    {
+        if ($npcId <= 0) {
+            return;
+        }
+
+        $npcId = (string) $npcId;
+
+        $misiones = Mision::where('activa', true)
+            ->whereHas('objetivos', fn ($q) => $q->where('tipo', 'npc')->where('unidad', $npcId))
+            ->with('objetivos')
+            ->get();
+
+        foreach ($misiones as $mision) {
+            $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+            if (! $pivot || $pivot->status === 'completada') {
+                continue;
+            }
+
+            $progresoAntes = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
+            $progresoJson = $progresoAntes;
+
+            foreach ($mision->objetivos->where('tipo', 'npc')->where('unidad', $npcId) as $objetivo) {
+                $progresoJson[(string) $objetivo->id] = max((int) $objetivo->meta, 1);
             }
 
             $characterHitos = $user->character ? $user->character->hitos()->pluck('hito')->all() : [];

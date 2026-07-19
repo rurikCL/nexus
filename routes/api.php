@@ -153,6 +153,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/misiones/{mision}/users/{userId}', [MisionController::class, 'unassign']);
     Route::patch('/misiones/{mision}/progress', [MisionController::class, 'updateProgress']);
     Route::post('/misiones/menu-visit', [MisionController::class, 'menuVisit']);
+    Route::post('/misiones/npc-visit', [MisionController::class, 'npcVisit']);
 
     Route::get('/torneos', [TorneoController::class, 'index']);
     Route::post('/torneos', [TorneoController::class, 'store']);

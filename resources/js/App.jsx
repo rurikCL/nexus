@@ -1545,7 +1545,7 @@ function MissionItem({ mision, onCompleteMission, busy }) {
                   {obj.nombre}
                 </div>
                 <span className="nx-data" style={{ fontSize: 10, color: obj.completado ? '#10b981' : 'var(--txt-faint)' }}>
-                  {actual}/{total}{obj.unidad ? ` ${obj.unidad}` : ''}
+                  {actual}/{total}{(obj.unidad_label ?? obj.unidad) ? ` ${(obj.unidad_label ?? obj.unidad)}` : ''}
                 </span>
               </div>
               {obj.descripcion && (

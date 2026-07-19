@@ -12,6 +12,7 @@ use App\Models\MapNpc;
 use App\Models\MapPlaneta;
 use App\Models\NpcChatLog;
 use App\Models\RolObjeto;
+use App\Services\MisionProgresoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -212,6 +213,8 @@ class NpcChatController extends Controller
 
         NpcChatLog::create(['user_id' => $user->id, 'npc_id' => $id, 'role' => 'user',      'content' => $request->message]);
         NpcChatLog::create(['user_id' => $user->id, 'npc_id' => $id, 'role' => 'assistant', 'content' => $reply]);
+
+        MisionProgresoService::registrarNpc($user, $npc->id);
 
         return response()->json([
             'reply'        => $reply,
