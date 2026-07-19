@@ -190,7 +190,16 @@ function paintRows(ctx, rows, startY, innerX, innerRight, rowH = 47) {
     ctx.textAlign = 'right';
     ctx.fillStyle = r.color;
     ctx.font = '800 22px Orbitron';
-    ctx.fillText(String(r.value), innerRight - 6, rowY + 3);
+    const valueText = String(r.value);
+    const valueX = r.suffixIcon ? innerRight - 34 : innerRight - 6;
+    ctx.fillText(valueText, valueX, rowY + 3);
+    if (r.suffixIcon) {
+      ctx.save();
+      ctx.translate(innerRight - 14, rowY);
+      ctx.rotate(r.suffixRotation ?? 0);
+      drawIcon(ctx, r.suffixIcon, -8, -8, 16, r.color, 2);
+      ctx.restore();
+    }
 
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
@@ -214,6 +223,12 @@ function paintColofon(ctx, text) {
 const TIPO_HAB_FRAME = { melee: 'orange', distancia: 'info', nave: 'purple' };
 export const TIPO_HAB_LABEL = { melee: 'Cuerpo a cuerpo', distancia: 'A distancia', nave: 'Nave' };
 const TIPO_HAB_ICON  = { melee: 'sword', distancia: 'target', nave: 'ship' };
+const COOLDOWN_ARROW = {
+  1: { rotation: Math.PI, label: '←' },
+  2: { rotation: Math.PI / 2, label: '↓' },
+  3: { rotation: 0, label: '→' },
+  4: { rotation: -Math.PI / 2, label: '↑' },
+};
 
 export async function drawHabilidadCard(habilidad) {
   await ensureFonts();
@@ -257,7 +272,14 @@ export async function drawHabilidadCard(habilidad) {
   if (habilidad.damage) rows.push({ icon: 'sword', label: 'Daño', color: '#ff7043', value: habilidad.damage });
   if (habilidad.damage_escudo) rows.push({ icon: 'shield', label: 'Daño a Escudo', color: '#26e3e3', value: habilidad.damage_escudo });
   if (habilidad.damage_perforante) rows.push({ icon: 'fire', label: 'Daño Perforante', color: '#8aa0c0', value: habilidad.damage_perforante });
-  rows.push({ icon: 'clock', label: 'Cooldown', color: '#38cdf0', value: `${habilidad.cooldown ?? 0}t` });
+  rows.push({
+    icon: 'clock',
+    label: 'Cooldown',
+    color: '#38cdf0',
+    value: habilidad.cooldown ?? 0,
+    suffixIcon: 'arrow',
+    suffixRotation: COOLDOWN_ARROW[habilidad.cooldown]?.rotation ?? 0,
+  });
 
   const statsTop = typeY + 44;
   const rowsEndY = paintRows(ctx, rows, statsTop, innerX, innerRight, 42);

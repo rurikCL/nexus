@@ -1,5 +1,13 @@
+import { Icon } from './ui.jsx';
+
 const STAT_LABEL = { ataque: 'Ataque', defensa: 'Defensa', punteria: 'Puntería', movimiento: 'Agilidad', iniciativa: 'Iniciativa' };
 const formaLabel = (f) => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
+const COOLDOWN_ARROW = {
+  1: { rotation: 180 },
+  2: { rotation: 90 },
+  3: { rotation: 0 },
+  4: { rotation: -90 },
+};
 
 const Chip = ({ color = 'rgba(200,225,255,0.7)', children }) => (
   <span style={{
@@ -32,7 +40,19 @@ export function SkillTooltip({ hab }) {
         <Chip color="#a78bfa">{hab.tipo === 'melee' ? '⚔ Cuerpo a cuerpo' : hab.tipo === 'nave' ? '🚀 Naval' : '◎ A distancia'}</Chip>
         {hab.forma > 0 && <Chip color="#a78bfa">Forma {formaLabel(hab.forma)}</Chip>}
         <Chip color="#38cdf0">⚡ {hab.costo_fuerza}</Chip>
-        {hab.cooldown > 0 && <Chip color="#E6B325">CD {hab.cooldown}t</Chip>}
+        {hab.cooldown > 0 && (
+          <Chip color="#E6B325">
+            CD {hab.cooldown}{' '}
+            <Icon
+              name="arrow"
+              size={10}
+              style={{
+                transform: `rotate(${COOLDOWN_ARROW[hab.cooldown]?.rotation ?? 0}deg)`,
+                transformOrigin: '50% 50%',
+              }}
+            />
+          </Chip>
+        )}
         {!isSelf && <Chip color="#ff7043">DMG {hab.damage}</Chip>}
         {!!hab.damage_escudo && (
           hab.damage_escudo > 0
