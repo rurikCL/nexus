@@ -396,20 +396,21 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const attrColX = innerX + saludoColW + colGap;
   const attrColW = innerW - saludoColW - colGap;
 
-  const attrBoxTop = statsTop - 16;
-  const attrBoxBottom = statsTop + sectionH + 10;
+  const attrBoxPad = 6;
+  const attrBoxTop = statsTop - 16 - attrBoxPad;
+  const attrBoxBottom = statsTop + sectionH + 10 + attrBoxPad;
   paintBoxBg(ctx, innerX, attrBoxTop, innerW, attrBoxBottom - attrBoxTop, 10);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = frame.line;
   ctx.font = '700 11px "JetBrains Mono"';
-  ctx.fillText('SALUDO INICIAL', innerX, statsTop);
+  ctx.fillText('SALUDO INICIAL', innerX + attrBoxPad, statsTop);
   ctx.fillStyle = 'rgba(220,230,255,0.78)';
   ctx.font = '400 15px "JetBrains Mono"';
   const saludoLineH = 20;
   const saludoMaxLines = Math.max(1, Math.floor((sectionH - 20) / saludoLineH));
   const saludoText = entity.saludo ? `“${entity.saludo}”` : 'Sin saludo registrado.';
-  wrapText(ctx, saludoText, innerX, statsTop + 20, saludoColW, saludoLineH, saludoMaxLines);
+  wrapText(ctx, saludoText, innerX + attrBoxPad, statsTop + 20, saludoColW - attrBoxPad, saludoLineH, saludoMaxLines);
 
   paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
 
