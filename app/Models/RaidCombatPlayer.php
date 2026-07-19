@@ -14,7 +14,7 @@ class RaidCombatPlayer extends Model
     protected $fillable = [
         'raid_combat_id', 'user_id', 'slot',
         'hp', 'escudo', 'fuerza', 'current_forma', 'last_forma',
-        'cooldowns', 'buffs', 'debuffs', 'dano_al_jefe', 'status', 'listo',
+        'cooldowns', 'buffs', 'debuffs', 'estados', 'dano_al_jefe', 'status', 'listo',
     ];
 
     protected $casts = [
@@ -27,6 +27,7 @@ class RaidCombatPlayer extends Model
         'cooldowns' => 'array',
         'buffs' => 'array',
         'debuffs' => 'array',
+        'estados' => 'array',
         'dano_al_jefe' => 'integer',
         'listo' => 'boolean',
     ];

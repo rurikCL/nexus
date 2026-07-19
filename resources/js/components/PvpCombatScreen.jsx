@@ -163,6 +163,14 @@ const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const formaLabel = (f)    => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow', INI: 'zap' };
 const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI' };
+const ESTADO_ICON = {
+  paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
+  sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+};
+const ESTADO_LABEL = {
+  paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
+  sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+};
 
 /* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */
 const mergeEffects = (buffs = [], debuffs = []) => Object.values(
@@ -214,6 +222,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myDebuffs  = combat.my_debuffs   ?? [];
   const oppDebuffs = combat.opp_debuffs  ?? [];
   const oppBuffs   = combat.opp_buffs    ?? [];
+  const myEstados  = combat.my_estados   ?? [];
+  const oppEstados = combat.opp_estados  ?? [];
   const myLastForma    = combat.my_last_forma    ?? 0;
   const oppLastForma   = combat.opp_last_forma   ?? 0;
   const myCurrentForma = combat.my_current_forma ?? 1;
@@ -488,7 +498,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const myEffects  = withDurationPct('my', mergeEffects(myBuffs, myDebuffs));
   const oppEffects = withDurationPct('opp', mergeEffects(oppBuffs, oppDebuffs));
 
-  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], forma = 0, effectsPosition = 'side', avatarRef, onAvatarClick }) => {
+  const HUD = ({ hp, maxHp, escudo, maxEscudo, photoUrl, nombre, handle, borderColor, badges, ini, align, effects = [], estados = [], forma = 0, effectsPosition = 'side', avatarRef, onAvatarClick }) => {
     const vPct = pct(hp, maxHp);
     const ePct = pct(escudo, maxEscudo);
     const vc   = vcol(vPct);
@@ -513,13 +523,29 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         </span>
       );
     };
-    const effectsColumn = effects.length > 0 && (
+    const renderEstadoBadge = (e, i) => {
+      const label = ESTADO_LABEL[e.tipo] ?? e.tipo;
+      const turnsLabel = e.turns === null ? 'hasta consumirse' : `${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`;
+      return (
+        <span key={`estado-${e.tipo}-${i}`} title={`${label} · ${turnsLabel}`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap',
+          fontSize: 8, fontFamily: 'var(--font-data)', padding: '2px 5px', borderRadius: 4,
+          background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.45)', color: '#E6B325', fontWeight: 700,
+        }}>
+          <span style={{ fontSize: 9, lineHeight: 1 }}>{ESTADO_ICON[e.tipo] ?? '❔'}</span>{label}
+          <span style={{ opacity: 0.75, fontWeight: 400 }}>· {e.turns === null ? '∞' : `${e.turns}r`}</span>
+        </span>
+      );
+    };
+    const effectsColumn = (effects.length > 0 || estados.length > 0) && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, justifyContent: 'center' }}>
+        {estados.map(renderEstadoBadge)}
         {effects.map(renderBadge)}
       </div>
     );
-    const effectsRow = effects.length > 0 && (
+    const effectsRow = (effects.length > 0 || estados.length > 0) && (
       <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+        {estados.map(renderEstadoBadge)}
         {effects.map(renderBadge)}
       </div>
     );
@@ -1063,6 +1089,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
+                estados={oppEstados}
                 forma={oppFormaProp}
                 effectsPosition="below"
               />
@@ -1083,6 +1110,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
+                estados={myEstados}
                 forma={myFormaProp}
                 effectsPosition="above"
                 avatarRef={myAvatarRef}
@@ -1100,6 +1128,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={opp.name} handle={opp.handle} photoUrl={oppPhotoUrl} ini={oppIni}
                 borderColor="rgba(255,45,69,0.40)" badges={oppBadges} align="left"
                 effects={oppEffects}
+                estados={oppEstados}
                 forma={oppFormaProp}
               />
             </div>
@@ -1111,6 +1140,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 nombre={me.name} handle={me.handle} photoUrl={myPhotoUrl} ini={myIni}
                 borderColor="rgba(56,205,240,0.30)" badges={myBadges} align="right"
                 effects={myEffects}
+                estados={myEstados}
                 forma={myFormaProp}
                 avatarRef={myAvatarRef}
               />

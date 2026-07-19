@@ -43,6 +43,17 @@ const HABILIDAD_OBJETIVO_OPTS = ['target', 'self'];
 const BUFF_STATS  = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
 const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI' };
 const BUFF_COLOR  = { ataque: '#ff7043', defensa: '#38cdf0', punteria: '#10b981', movimiento: '#a78bfa', iniciativa: '#E6B325' };
+/* Estados de combate (ver app/Support/Combat/AplicaEstadosCombate.php): nombres reservados que,
+   al aparecer en el buff/debuff de una habilidad, se aplican como estado en vez de +1/-1 a un stat. */
+const ESTADO_STATS = ['paralizado', 'aturdido', 'marcado', 'protegido', 'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion'];
+const ESTADO_LABEL = {
+  paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
+  sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+};
+const ESTADO_ICON = {
+  paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
+  sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+};
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
 const SABER_OPTS      = ['azul', 'verde', 'ambar', 'purpura', 'cian', 'blanco', 'rojo'];
@@ -333,8 +344,8 @@ const ENTITY_CONFIG = {
       { key: 'damage_perforante', label: 'Daño Perforante',   type: 'number',    min: 0, hint: 'Ignora el escudo por completo: siempre pasa directo a la vida, tenga o no tenga escudo el objetivo.' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
       { key: 'efecto',       label: 'Efecto',                type: 'textarea',  span: 2, hint: 'Descripción del efecto de la habilidad' },
-      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic suma +1 al stat. Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa para el usuario' },
-      { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se resta al objetivo. Ej: PNT×1 + AGI×1 = -1 puntería y -1 agilidad al rival' },
+      { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic en un stat suma +1 (Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa). Los estados de abajo se auto-aplican al usuario (ej. Regeneración)' },
+      { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se aplica al objetivo solo si el ataque conecta. Los estados de abajo (ej. Paralizado, Sangrado) se aplican al objetivo al impactar' },
       { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
     ],
     defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
@@ -716,44 +727,73 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     const arr = Array.isArray(value) ? value : [];
     const counts = Object.fromEntries(BUFF_STATS.map(s => [s, 0]));
     arr.forEach(s => { if (s in counts) counts[s]++; });
+    const estadosActivos = arr.filter(s => ESTADO_STATS.includes(s));
 
     const update = (stat, delta) => {
       const newCount = Math.max(0, counts[stat] + delta);
-      const newArr = BUFF_STATS.flatMap(s => Array(s === stat ? newCount : counts[s]).fill(s));
+      const newArr = [
+        ...BUFF_STATS.flatMap(s => Array(s === stat ? newCount : counts[s]).fill(s)),
+        ...estadosActivos,
+      ];
       onChange(newArr);
     };
 
+    const toggleEstado = (tipo) => {
+      const sinEstado = arr.filter(s => s !== tipo);
+      onChange(estadosActivos.includes(tipo) ? sinEstado : [...sinEstado, tipo]);
+    };
+
     return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {BUFF_STATS.map(stat => {
-          const count = counts[stat];
-          const c = BUFF_COLOR[stat];
-          const active = count > 0;
-          const btnBase = {
-            width: 20, height: 20, borderRadius: 4, border: '1px solid rgba(255,255,255,0.12)',
-            background: 'rgba(255,255,255,0.06)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, lineHeight: 1, color: 'var(--txt)', padding: 0,
-          };
-          return (
-            <div key={stat} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              background: active ? `${c}18` : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${active ? `${c}55` : 'var(--holo-line)'}`,
-              borderRadius: 8, padding: '5px 9px', transition: 'all 0.15s',
-            }}>
-              <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', color: active ? c : 'var(--txt-dim)', minWidth: 30 }}>
-                {BUFF_LABEL[stat]}
-              </span>
-              <button type="button" onClick={() => update(stat, -1)} disabled={!active}
-                style={{ ...btnBase, opacity: active ? 1 : 0.25, cursor: active ? 'pointer' : 'not-allowed' }}>−</button>
-              <span style={{ fontSize: 13, fontFamily: 'var(--font-data)', minWidth: 14, textAlign: 'center', color: active ? c : 'var(--txt-faint)', fontWeight: active ? 700 : 400 }}>
-                {count}
-              </span>
-              <button type="button" onClick={() => update(stat, 1)} style={btnBase}>+</button>
-            </div>
-          );
-        })}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {BUFF_STATS.map(stat => {
+            const count = counts[stat];
+            const c = BUFF_COLOR[stat];
+            const active = count > 0;
+            const btnBase = {
+              width: 20, height: 20, borderRadius: 4, border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(255,255,255,0.06)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, lineHeight: 1, color: 'var(--txt)', padding: 0,
+            };
+            return (
+              <div key={stat} style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: active ? `${c}18` : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${active ? `${c}55` : 'var(--holo-line)'}`,
+                borderRadius: 8, padding: '5px 9px', transition: 'all 0.15s',
+              }}>
+                <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.08em', color: active ? c : 'var(--txt-dim)', minWidth: 30 }}>
+                  {BUFF_LABEL[stat]}
+                </span>
+                <button type="button" onClick={() => update(stat, -1)} disabled={!active}
+                  style={{ ...btnBase, opacity: active ? 1 : 0.25, cursor: active ? 'pointer' : 'not-allowed' }}>−</button>
+                <span style={{ fontSize: 13, fontFamily: 'var(--font-data)', minWidth: 14, textAlign: 'center', color: active ? c : 'var(--txt-faint)', fontWeight: active ? 700 : 400 }}>
+                  {count}
+                </span>
+                <button type="button" onClick={() => update(stat, 1)} style={btnBase}>+</button>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {ESTADO_STATS.map(tipo => {
+            const active = estadosActivos.includes(tipo);
+            return (
+              <button key={tipo} type="button" onClick={() => toggleEstado(tipo)} style={{
+                display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+                background: active ? 'rgba(230,179,37,0.18)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${active ? 'rgba(230,179,37,0.55)' : 'var(--holo-line)'}`,
+                borderRadius: 8, padding: '5px 9px', transition: 'all 0.15s',
+                fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
+                color: active ? '#E6B325' : 'var(--txt-dim)', fontWeight: active ? 700 : 400,
+              }}>
+                <span style={{ fontSize: 12, lineHeight: 1 }}>{ESTADO_ICON[tipo]}</span>
+                {ESTADO_LABEL[tipo]}
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }
