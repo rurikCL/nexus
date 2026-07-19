@@ -218,6 +218,62 @@ function paintColofon(ctx, text) {
   ctx.fillText(text, CARD_W / 2, CARD_H - 22 - 8);
 }
 
+/** Ícono de reloj de arena, dibujado centrado en (cx, cy) — usado en los marcadores de cooldown del borde. */
+function drawHourglassIcon(ctx, cx, cy, size, color) {
+  const hw = size * 0.42;
+  const hh = size * 0.46;
+  const nw = size * 0.08;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, size * 0.1);
+  ctx.beginPath();
+  ctx.moveTo(cx - hw, cy - hh);
+  ctx.lineTo(cx + hw, cy - hh);
+  ctx.lineTo(cx + nw, cy);
+  ctx.lineTo(cx + hw, cy + hh);
+  ctx.lineTo(cx - hw, cy + hh);
+  ctx.lineTo(cx - nw, cy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - hw - 2, cy - hh);
+  ctx.lineTo(cx + hw + 2, cy - hh);
+  ctx.moveTo(cx - hw - 2, cy + hh);
+  ctx.lineTo(cx + hw + 2, cy + hh);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Marcadores de cooldown "rotables" impresos en los 4 bordes de la carta — mecánica física de
+ * mesa: al usar la habilidad se deja la carta boca arriba sin girar (1 reloj arriba). Cada ronda
+ * siguiente se gira la carta 90° a la izquierda sobre la mesa, revelando el siguiente borde con
+ * un reloj de arena más (2 a la derecha, 3 abajo, 4 a la izquierda), siempre orientado hacia el
+ * jugador una vez girado. Cada marcador se imprime pre-rotado en sentido contrario al giro físico
+ * acumulado (0°, 90°, 180°, 270°) para que, tras N giros a la izquierda, quede derecho — soporta
+ * hasta 4 turnos de cooldown con un único diseño de carta.
+ */
+function paintCooldownBorderMarkers(ctx, pad, color) {
+  const bandC = pad / 2;
+  const iconSize = 18;
+  const spacing = 24;
+  const draw = (cx, cy, angle, count) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    const totalW = (count - 1) * spacing;
+    for (let i = 0; i < count; i++) {
+      drawHourglassIcon(ctx, -totalW / 2 + i * spacing, 0, iconSize, color);
+    }
+    ctx.restore();
+  };
+  draw(CARD_W / 2, bandC, 0, 1);
+  draw(CARD_W - bandC, CARD_H / 2, Math.PI / 2, 2);
+  draw(CARD_W / 2, CARD_H - bandC, Math.PI, 3);
+  draw(bandC, CARD_H / 2, -Math.PI / 2, 4);
+}
+
 /* ═══════════════════════════ HABILIDAD ═══════════════════════════ */
 
 const TIPO_HAB_FRAME = { melee: 'orange', distancia: 'info', nave: 'purple' };
@@ -244,6 +300,7 @@ export async function drawHabilidadCard(habilidad) {
 
   const { pad, innerX, innerRight } = paintFrame(ctx, frame);
   const innerW = innerRight - innerX;
+  paintCooldownBorderMarkers(ctx, pad, frame.line);
   paintHeader(ctx, {
     title: habilidad.nombre, pad, innerX, innerRight,
     badgeText: classInfo ? classInfo.num.replace('Forma ', '') : 'U',
