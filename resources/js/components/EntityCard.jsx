@@ -24,7 +24,64 @@ const FRAME = {
   orange:  { bg1: '#2a1608', bg2: '#120a03', line: '#FF6B00' },
 };
 
-const asObj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+const stackCounts = (value) => {
+  const counts = {};
+  if (Array.isArray(value)) {
+    for (const stat of value) {
+      if (!stat) continue;
+      counts[stat] = (counts[stat] ?? 0) + 1;
+    }
+    return counts;
+  }
+  if (value && typeof value === 'object') {
+    for (const [stat, raw] of Object.entries(value)) {
+      const n = Number(raw) || 0;
+      if (n > 0) counts[stat] = n;
+    }
+  }
+  return counts;
+};
+
+function paintStatPills(ctx, entries, x, y, maxWidth, emptyText, emptyColor) {
+  if (!entries.length) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = emptyColor;
+    ctx.font = '400 13px "JetBrains Mono"';
+    ctx.fillText(emptyText, x, y + 2);
+    return y + 18;
+  }
+
+  const gap = 6;
+  const height = 22;
+  let cx = x;
+  let cy = y;
+
+  for (const entry of entries) {
+    const label = `${entry.label}${entry.count > 1 ? ` ×${entry.count}` : ''}`;
+    ctx.font = '700 11px "JetBrains Mono"';
+    const textW = Math.ceil(ctx.measureText(label).width);
+    const pillW = textW + 16;
+    if (cx > x && cx + pillW > x + maxWidth) {
+      cx = x;
+      cy += height + 6;
+    }
+
+    ctx.beginPath();
+    ctx.roundRect(cx, cy, pillW, height, 8);
+    ctx.fillStyle = `${entry.color}18`;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `${entry.color}50`;
+    ctx.stroke();
+
+    ctx.fillStyle = entry.color;
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx + pillW / 2, cy + 14);
+    cx += pillW + gap;
+  }
+
+  return cy + height;
+}
 
 /** Pinta el marco (fondo + borde) de la carta y devuelve las coordenadas internas útiles. */
 function paintFrame(ctx, frame) {
@@ -205,27 +262,43 @@ export async function drawHabilidadCard(habilidad) {
   const statsTop = typeY + 44;
   const rowsEndY = paintRows(ctx, rows, statsTop, innerX, innerRight, 42);
 
-  const rulesY = rowsEndY + 26;
+  const infoTop = rowsEndY + 18;
+  const infoBottom = CARD_H - pad - 58;
+  paintBoxBg(ctx, innerX, infoTop, innerW, infoBottom - infoTop, 12);
+
+  let cursorY = infoTop + 18;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(150,200,255,0.55)';
+  ctx.font = '600 11px "JetBrains Mono"';
+  ctx.fillText('EFECTO', CARD_W / 2, cursorY);
+  cursorY += 20;
+
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(220,230,255,0.82)';
   ctx.font = '400 17px "JetBrains Mono"';
-  const rulesBottom = wrapText(ctx, habilidad.efecto || 'Sin descripción de efecto.', CARD_W / 2, rulesY, innerW - 8, 23, 4);
+  const rulesBottom = wrapText(ctx, habilidad.efecto || 'Sin descripción de efecto.', CARD_W / 2, cursorY, innerW - 16, 23, 4);
 
-  const buffs = asObj(habilidad.buff);
-  const debuffs = asObj(habilidad.debuff);
-  const buffEntries = [
-    ...Object.entries(buffs).map(([k, v]) => ({ k, v, sign: '+', color: '#10b981' })),
-    ...Object.entries(debuffs).map(([k, v]) => ({ k, v, sign: '−', color: '#ff2d45' })),
-  ];
-  if (buffEntries.length) {
-    ctx.textAlign = 'center';
-    ctx.font = '700 14px "JetBrains Mono"';
-    const text = buffEntries
-      .map(({ k, v, sign, }) => `${sign}${v} ${COMBAT_STAT_META[k]?.label ?? k.toUpperCase()}`)
-      .join('   ');
-    ctx.fillStyle = '#eaf2ff';
-    ctx.fillText(text, CARD_W / 2, Math.max(rulesBottom + 8, CARD_H - 70), );
-  }
+  const buffCounts = stackCounts(habilidad.buff);
+  const debuffCounts = stackCounts(habilidad.debuff);
+  const toEntries = (counts) => Object.entries(counts).map(([stat, count]) => ({
+    stat,
+    count,
+    label: COMBAT_STAT_META[stat]?.label ?? stat.toUpperCase(),
+    color: COMBAT_STAT_META[stat]?.color ?? '#cfe3ff',
+  }));
+
+  const buffStart = rulesBottom + 10;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(16,185,129,0.95)';
+  ctx.font = '700 11px "JetBrains Mono"';
+  ctx.fillText('BUFF', innerX + 12, buffStart);
+  const buffBottom = paintStatPills(ctx, toEntries(buffCounts), innerX + 12, buffStart + 10, innerW - 24, 'Sin Buff', 'rgba(220,230,255,0.55)');
+
+  const debuffTitleY = buffBottom + 16;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,93,117,0.95)';
+  ctx.fillText('DEBUFF', innerX + 12, debuffTitleY);
+  paintStatPills(ctx, toEntries(debuffCounts), innerX + 12, debuffTitleY + 10, innerW - 24, 'Sin Debuff', 'rgba(220,230,255,0.55)');
 
   paintColofon(ctx, `Habilidades · Catálogo NÉXUS`);
   await paintCardLogo(ctx, innerRight, CARD_H - pad);

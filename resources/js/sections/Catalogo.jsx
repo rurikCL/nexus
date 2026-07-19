@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icon, Panel, Chip, toast } from '../components/ui.jsx';
+import { NX } from '../data/seed.js';
 import { mediaUrl } from '../utils/printableCard.js';
 import EntityCardModal, { TIPO_HAB_LABEL, RAREZA_LABEL, NPC_TIPO_LABEL } from '../components/EntityCard.jsx';
 import { Empty } from './Comando.jsx';
@@ -18,18 +19,65 @@ function useWindowWidth() {
 }
 
 const CATEGORIES = [
-  { id: 'habilidades', label: 'Habilidades', icon: 'zap',   kind: 'habilidad', filterField: 'tipo',   filterLabels: TIPO_HAB_LABEL },
-  { id: 'objetos',      label: 'Objetos',     icon: 'box',   kind: 'objeto',    filterField: 'rareza', filterLabels: RAREZA_LABEL },
-  { id: 'npcs',         label: 'NPCs',        icon: 'user',  kind: 'npc',       filterField: 'tipo',   filterLabels: NPC_TIPO_LABEL },
-  { id: 'jefes',        label: 'Jefes',       icon: 'crown', kind: 'npc',       filterField: null,     filterLabels: {} },
-  { id: 'enemigos',     label: 'Enemigos',    icon: 'flame', kind: 'enemigo',   filterField: 'tipo',   filterLabels: NPC_TIPO_LABEL },
+  {
+    id: 'habilidades',
+    label: 'Habilidades',
+    icon: 'zap',
+    kind: 'habilidad',
+    filters: [
+      { field: 'tipo', label: 'Tipo', labels: TIPO_HAB_LABEL },
+      {
+        field: 'forma',
+        label: 'Forma',
+        labels: Object.fromEntries([
+          ['0', 'Universal'],
+          ...NX.CLASSES.map((c, i) => [String(i + 1), c.num]),
+        ]),
+      },
+    ],
+  },
+  { id: 'objetos', label: 'Objetos', icon: 'box', kind: 'objeto', filters: [{ field: 'rareza', label: 'Rareza', labels: RAREZA_LABEL }] },
+  { id: 'npcs', label: 'NPCs', icon: 'user', kind: 'npc', filters: [{ field: 'tipo', label: 'Tipo', labels: NPC_TIPO_LABEL }] },
+  { id: 'jefes', label: 'Jefes', icon: 'crown', kind: 'npc', filters: [] },
+  { id: 'enemigos', label: 'Enemigos', icon: 'flame', kind: 'enemigo', filters: [{ field: 'tipo', label: 'Tipo', labels: NPC_TIPO_LABEL }] },
 ];
+
+const STAT_META = {
+  ataque: { label: 'Ataque', color: '#ff7043' },
+  defensa: { label: 'Defensa', color: '#38cdf0' },
+  punteria: { label: 'Puntería', color: '#10b981' },
+  movimiento: { label: 'Agilidad', color: '#a78bfa' },
+  iniciativa: { label: 'Iniciativa', color: '#E6B325' },
+  escudo: { label: 'Escudo', color: '#26e3e3' },
+  vida: { label: 'Vida', color: '#ff2d45' },
+};
+
+const groupStack = (stack) => {
+  const counts = new Map();
+  if (Array.isArray(stack)) {
+    for (const stat of stack) {
+      if (!stat) continue;
+      counts.set(stat, (counts.get(stat) ?? 0) + 1);
+    }
+  } else if (stack && typeof stack === 'object') {
+    Object.entries(stack).forEach(([stat, count]) => {
+      const n = Number(count) || 0;
+      if (n > 0) counts.set(stat, n);
+    });
+  } else {
+    return [];
+  }
+  return [...counts.entries()].map(([stat, count]) => ({ stat, count }));
+};
 
 function EntityGridCard({ item, category, onClick }) {
   const thumb = mediaUrl(item.imagen ?? item.imagen_mini ?? item.icono_url ?? item.icono);
   const badge = category.id === 'jefes' || category.id === 'enemigos'
     ? `Nivel ${item.nivel ?? 1}`
-    : (category.filterField ? (category.filterLabels[item[category.filterField]] ?? item[category.filterField]) : null);
+    : (category.filters?.[0] ? (category.filters[0].labels[item[category.filters[0].field]] ?? item[category.filters[0].field]) : null);
+  const isSkill = category.id === 'habilidades';
+  const buffs = isSkill ? groupStack(item.buff) : [];
+  const debuffs = isSkill ? groupStack(item.debuff) : [];
 
   return (
     <button
@@ -46,10 +94,57 @@ function EntityGridCard({ item, category, onClick }) {
           : <Icon name={category.icon} size={26} />}
       </div>
       <div style={{
-        fontSize: 13, fontWeight: 700, color: 'var(--txt)',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.03)',
+        borderRadius: 8,
+        padding: 10,
+        display: 'grid',
+        gap: 8,
       }}>
-        {item.nombre}
+        <div style={{
+          fontSize: 13, fontWeight: 700, color: 'var(--txt)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {item.nombre}
+        </div>
+        {isSkill && (
+          <>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.08em' }}>Buff</div>
+              {buffs.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {buffs.map(({ stat, count }) => {
+                    const meta = STAT_META[stat] ?? { label: stat, color: 'var(--txt-dim)' };
+                    return (
+                      <Chip key={`buff-${stat}`} tone="dim" style={{ borderColor: `${meta.color}55`, color: meta.color }}>
+                        {meta.label}{count > 1 ? ` ×${count}` : ''}
+                      </Chip>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin Buff</div>
+              )}
+            </div>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.08em' }}>Debuff</div>
+              {debuffs.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {debuffs.map(({ stat, count }) => {
+                    const meta = STAT_META[stat] ?? { label: stat, color: 'var(--txt-dim)' };
+                    return (
+                      <Chip key={`debuff-${stat}`} tone="dim" style={{ borderColor: `${meta.color}55`, color: meta.color }}>
+                        {meta.label}{count > 1 ? ` ×${count}` : ''}
+                      </Chip>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin Debuff</div>
+              )}
+            </div>
+          </>
+        )}
       </div>
       {badge && <Chip tone="dim">{badge}</Chip>}
     </button>
@@ -61,7 +156,7 @@ export function CatalogoView() {
   const [data, setData] = useState({ habilidades: [], objetos: [], npcs: [], jefes: [], enemigos: [] });
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('habilidades');
-  const [activeFilter, setActiveFilter] = useState('todos');
+  const [activeFilters, setActiveFilters] = useState({ tipo: 'todos', forma: 'todos', rareza: 'todos' });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
 
@@ -88,25 +183,36 @@ export function CatalogoView() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { setActiveFilter('todos'); setSearch(''); }, [activeCategory]);
+  useEffect(() => {
+    setActiveFilters({ tipo: 'todos', forma: 'todos', rareza: 'todos' });
+    setSearch('');
+  }, [activeCategory]);
 
   const category = CATEGORIES.find(c => c.id === activeCategory);
   const rawList = data[activeCategory] ?? [];
+  const filterDefs = category.filters ?? [];
 
   const filterOptions = useMemo(() => {
-    if (!category.filterField) return [];
-    return [...new Set(rawList.map(x => x[category.filterField]).filter(Boolean))];
-  }, [rawList, category.filterField]);
+    return filterDefs.map(filter => ({
+      ...filter,
+      options: [...new Set(rawList
+        .map(x => x[filter.field])
+        .filter(v => v !== null && v !== undefined && v !== ''))],
+    }));
+  }, [rawList, filterDefs]);
 
   const list = useMemo(() => {
     let l = rawList;
-    if (category.filterField && activeFilter !== 'todos') l = l.filter(x => x[category.filterField] === activeFilter);
+    for (const filter of filterDefs) {
+      const active = activeFilters[filter.field] ?? 'todos';
+      if (active !== 'todos') l = l.filter(x => String(x[filter.field]) === String(active));
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       l = l.filter(x => (x.nombre ?? '').toLowerCase().includes(q));
     }
     return l;
-  }, [rawList, category.filterField, activeFilter, search]);
+  }, [rawList, filterDefs, activeFilters, search]);
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
@@ -145,14 +251,30 @@ export function CatalogoView() {
             />
           </div>
           {filterOptions.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button onClick={() => setActiveFilter('todos')} className={`nx-chip ${activeFilter === 'todos' ? '' : 'dim'}`} style={{ cursor: 'pointer' }}>
-                Todos
-              </button>
-              {filterOptions.map(opt => (
-                <button key={opt} onClick={() => setActiveFilter(opt)} className={`nx-chip ${activeFilter === opt ? '' : 'dim'}`} style={{ cursor: 'pointer' }}>
-                  {category.filterLabels[opt] ?? opt}
-                </button>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {filterOptions.map(filter => (
+                <div key={filter.field} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    {filter.label}
+                  </span>
+                  <button
+                    onClick={() => setActiveFilters(prev => ({ ...prev, [filter.field]: 'todos' }))}
+                    className={`nx-chip ${(activeFilters[filter.field] ?? 'todos') === 'todos' ? '' : 'dim'}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Todos
+                  </button>
+                  {filter.options.map(opt => (
+                    <button
+                      key={String(opt)}
+                      onClick={() => setActiveFilters(prev => ({ ...prev, [filter.field]: opt }))}
+                      className={`nx-chip ${(activeFilters[filter.field] ?? 'todos') === opt ? '' : 'dim'}`}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {filter.labels[String(opt)] ?? filter.labels[opt] ?? opt}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}
