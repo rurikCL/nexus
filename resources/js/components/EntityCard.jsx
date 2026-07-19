@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
+import { CATEGORIA_ESTADO_LABEL } from '../data/estadosCombate.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
@@ -606,6 +607,87 @@ export async function drawEnemigoCard(enemigo) {
   return canvas;
 }
 
+/* ═══════════════ ESTADO DE COMBATE / BUFF-DEBUFF DE STAT ═══════════════
+   Cartas de referencia (no ligadas a un registro de BD): documentan las
+   reglas de app/Support/Combat/AplicaEstadosCombate.php para consulta e
+   impresión en mesa. */
+
+/** Carta base compartida por Estado de combate y Stat de combate: ícono grande
+ * de respaldo (sin imagen), línea de tipo, filas opcionales y caja de mecánica. */
+async function drawReferenciaCard({ nombre, icon, frame, badge, typeLabel, rows, mecanica, colofon }) {
+  await ensureFonts();
+  const canvas = document.createElement('canvas');
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+  const ctx = canvas.getContext('2d');
+
+  const { pad, innerX, innerRight } = paintFrame(ctx, frame);
+  const innerW = innerRight - innerX;
+  paintHeader(ctx, { title: nombre, pad, innerX, innerRight, badgeText: badge, badgeColor: frame.line });
+
+  const artY = pad + 118;
+  const artH = 340;
+  await paintArt(ctx, null, icon, frame.line, innerX, artY, innerW, artH, frame.line);
+
+  const typeY = artY + artH + 36;
+  paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight);
+
+  let cursorY = typeY + 44;
+  if (rows.length > 0) {
+    cursorY = paintRows(ctx, rows, cursorY, innerX, innerRight, 42) + 18;
+  }
+
+  const infoTop = cursorY;
+  const infoBottom = CARD_H - pad - 58;
+  paintBoxBg(ctx, innerX, infoTop, innerW, infoBottom - infoTop, 12);
+
+  let textY = infoTop + 18;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(150,200,255,0.55)';
+  ctx.font = '600 11px "JetBrains Mono"';
+  ctx.fillText('MECÁNICA', CARD_W / 2, textY);
+  textY += 20;
+
+  ctx.fillStyle = 'rgba(220,230,255,0.82)';
+  ctx.font = '400 17px "JetBrains Mono"';
+  wrapText(ctx, mecanica, CARD_W / 2, textY, innerW - 16, 23, 7);
+
+  paintColofon(ctx, colofon);
+  await paintCardLogo(ctx, innerRight, CARD_H - pad);
+  return canvas;
+}
+
+export async function drawEstadoCard(estado) {
+  const frame = FRAME[estado.frame] ?? FRAME.neutral;
+  return drawReferenciaCard({
+    nombre: estado.label,
+    icon: estado.icon,
+    frame,
+    badge: estado.badge,
+    typeLabel: `Estado de Combate · ${CATEGORIA_ESTADO_LABEL[estado.categoria] ?? estado.categoria}`,
+    rows: [],
+    mecanica: estado.mecanica,
+    colofon: 'Estados de Combate · Catálogo NÉXUS',
+  });
+}
+
+export async function drawStatCombateCard(stat) {
+  const frame = FRAME[stat.frame] ?? FRAME.neutral;
+  return drawReferenciaCard({
+    nombre: stat.label,
+    icon: stat.icon,
+    frame,
+    badge: '±1',
+    typeLabel: 'Buff / Debuff de Stat',
+    rows: [
+      { icon: 'plus', label: 'Buff (acumulación)', color: '#10b981', value: '+1' },
+      { icon: 'x', label: 'Debuff (acumulación)', color: '#ff2d45', value: '−1' },
+    ],
+    mecanica: stat.mecanica,
+    colofon: 'Buffs y Debuffs · Catálogo NÉXUS',
+  });
+}
+
 /* ═══════════════════════════ MODAL GENÉRICO ═══════════════════════════ */
 
 const DRAW_BY_KIND = {
@@ -613,6 +695,8 @@ const DRAW_BY_KIND = {
   objeto: drawObjetoCard,
   npc: drawNpcCard,
   enemigo: drawEnemigoCard,
+  estado: drawEstadoCard,
+  stat_combate: drawStatCombateCard,
 };
 
 /**
