@@ -62,7 +62,6 @@ class CombatantController extends Controller
             'losses' => $stats['losses'],
             'streak' => $stats['streak'],
             'winrate' => $stats['winrate'],
-            'stats' => $character->stats,
             'combat_stats' => $character->combatStats(),
             'gold' => $character->gold,
             'side' => $character->side ?? 'luminoso',

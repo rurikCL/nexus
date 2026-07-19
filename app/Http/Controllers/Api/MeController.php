@@ -121,7 +121,6 @@ class MeController extends Controller
                 'losses' => $stats['losses'],
                 'streak' => $stats['streak'],
                 'winrate' => $stats['winrate'],
-                'stats' => $character->stats,
                 'combat_base_stats' => [
                     'vida' => $character->vida ?? 8,
                     'escudo' => $character->escudo ?? 4,

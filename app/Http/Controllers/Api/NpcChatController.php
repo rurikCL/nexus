@@ -382,7 +382,6 @@ class NpcChatController extends Controller
             'ubicacion_lugar' => $character->mapLugar?->nombre,
             'ubicacion_planeta' => $character->mapPlaneta?->nombre,
             'ubicacion_sistema' => $character->mapSistema?->nombre,
-            'stats'           => $character->stats,
         ], fn($v) => $v !== null && $v !== '');
     }
 
@@ -417,10 +416,6 @@ class NpcChatController extends Controller
             return "{$resultado} vs {$rival} — {$c->event_name}" . ($c->round ? " ({$c->round})" : '');
         })->toArray();
 
-        // Estilo de combate derivado de stats
-        $stats      = $character->stats ?? [];
-        $estiloTexto = $this->describirEstilo($character->cls, $stats);
-
         $total    = ($character->wins ?? 0) + ($character->losses ?? 0);
         $winrate  = $total > 0 ? round(($character->wins / $total) * 100) . '%' : 'sin combates';
 
@@ -452,10 +447,6 @@ class NpcChatController extends Controller
             'racha_actual'   => $character->streak ?? 0,
             'creditos'       => $character->credits,
 
-            // Stats físicos
-            'estadisticas'   => $stats,
-            'estilo_combate' => $estiloTexto,
-
             // Historial reciente
             'ultimos_combates' => $historialCombates ?: ['Sin combates registrados'],
 
@@ -465,43 +456,6 @@ class NpcChatController extends Controller
             'ubicacion_planeta' => $character->mapPlaneta?->nombre,
             'ubicacion_sistema' => $character->mapSistema?->nombre,
         ], fn($v) => $v !== null && $v !== '' && $v !== []);
-    }
-
-    private function describirEstilo(string $cls, array $stats): string
-    {
-        $fuerza    = $stats['fuerza']    ?? 0;
-        $velocidad = $stats['velocidad'] ?? 0;
-        $tecnica   = $stats['tecnica']   ?? 0;
-        $defensa   = $stats['defensa']   ?? 0;
-        $foco      = $stats['foco']      ?? 0;
-
-        $dominante = collect([
-            'fuerza'    => $fuerza,
-            'velocidad' => $velocidad,
-            'tecnica'   => $tecnica,
-            'defensa'   => $defensa,
-            'foco'      => $foco,
-        ])->sortDesc()->keys()->first();
-
-        $descripciones = [
-            'fuerza'    => 'Estilo de combate agresivo y físico. Prefiere el contacto directo y los golpes contundentes.',
-            'velocidad' => 'Estilo dinámico y evasivo. Se mueve constantemente, difícil de leer y de anticipar.',
-            'tecnica'   => 'Estilo técnico y preciso. Economiza movimientos y busca el momento exacto para atacar.',
-            'defensa'   => 'Estilo defensivo y resistente. Aguanta presión y contraataca desde posiciones sólidas.',
-            'foco'      => 'Estilo calculado y cerebral. Lee el combate con varios movimientos de anticipación.',
-        ];
-
-        $base = $descripciones[$dominante] ?? 'Estilo equilibrado.';
-
-        $modificador = match ($cls) {
-            'vanguardia' => ' Vanguardia: cierra distancias rápido y no da respiro.',
-            'espectro'   => ' Espectro: usa el espacio y la invisibilidad táctica a su favor.',
-            'titan'      => ' Titán: su presencia física intimida antes de que empiece el combate.',
-            'oraculo'    => ' Oráculo: convierte la lectura del rival en su principal arma.',
-            default      => '',
-        };
-
-        return $base . $modificador;
     }
 
     private function personajesEnLugar(string $lugar): array
