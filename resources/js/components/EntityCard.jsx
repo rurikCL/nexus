@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { CATEGORIA_ESTADO_LABEL } from '../data/estadosCombate.js';
 import {
-  CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
+  CARD_W, CARD_H, TOKEN_PX, TOKEN_MM, mediaUrl, loadImage, ensureFonts,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META,
 } from '../utils/printableCard.js';
 
@@ -607,85 +606,78 @@ export async function drawEnemigoCard(enemigo) {
   return canvas;
 }
 
-/* ═══════════════ ESTADO DE COMBATE / BUFF-DEBUFF DE STAT ═══════════════
-   Cartas de referencia (no ligadas a un registro de BD): documentan las
-   reglas de app/Support/Combat/AplicaEstadosCombate.php para consulta e
-   impresión en mesa. */
+/* ═══════════════ TOKENS DE ESTADO / STAT (marcadores físicos) ═══════════════
+   Las entradas de Buffs y Estados no se imprimen como carta completa: son
+   marcadores circulares pequeños pensados para imprimir varias copias, cortar
+   y colocar sobre la miniatura/hoja de personaje mientras dura el efecto en
+   mesa. Documentan las reglas de app/Support/Combat/AplicaEstadosCombate.php. */
 
-/** Carta base compartida por Estado de combate y Stat de combate: ícono grande
- * de respaldo (sin imagen), línea de tipo, filas opcionales y caja de mecánica. */
-async function drawReferenciaCard({ nombre, icon, frame, badge, typeLabel, rows, mecanica, colofon }) {
+/** Token circular: ícono grande + etiqueta dentro del círculo, con una pastilla
+ * de esquina (badge) para la duración/monto — todo dentro de TOKEN_PX×TOKEN_PX. */
+async function drawTokenCard({ label, icon, frame, badge }) {
   await ensureFonts();
   const canvas = document.createElement('canvas');
-  canvas.width = CARD_W;
-  canvas.height = CARD_H;
+  canvas.width = TOKEN_PX;
+  canvas.height = TOKEN_PX;
   const ctx = canvas.getContext('2d');
 
-  const { pad, innerX, innerRight } = paintFrame(ctx, frame);
-  const innerW = innerRight - innerX;
-  paintHeader(ctx, { title: nombre, pad, innerX, innerRight, badgeText: badge, badgeColor: frame.line });
+  const cx = TOKEN_PX / 2;
+  const cy = TOKEN_PX / 2;
+  const r = TOKEN_PX / 2 - 14;
 
-  const artY = pad + 118;
-  const artH = 340;
-  await paintArt(ctx, null, icon, frame.line, innerX, artY, innerW, artH, frame.line);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  const bg = ctx.createRadialGradient(cx, cy - r * 0.3, 4, cx, cy, r * 1.3);
+  bg.addColorStop(0, frame.bg1);
+  bg.addColorStop(1, frame.bg2);
+  ctx.fillStyle = bg;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.restore();
 
-  const typeY = artY + artH + 36;
-  paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = frame.line;
+  ctx.stroke();
 
-  let cursorY = typeY + 44;
-  if (rows.length > 0) {
-    cursorY = paintRows(ctx, rows, cursorY, innerX, innerRight, 42) + 18;
+  drawIcon(ctx, icon, cx, cy - r * 0.24, r * 0.72, frame.line, 2.2);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#eaf2ff';
+  const fontSize = fitText(ctx, label.toUpperCase(), r * 1.7, `${Math.round(r * 0.24)}px Orbitron`, 12);
+  ctx.font = `800 ${fontSize}px Orbitron`;
+  ctx.fillText(label.toUpperCase(), cx, cy + r * 0.62);
+
+  if (badge) {
+    const br = r * 0.32;
+    const bx = cx + r * 0.6;
+    const by = cy + r * 0.6;
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI * 2);
+    ctx.fillStyle = frame.line;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = frame.bg2;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#04070f';
+    ctx.font = `800 ${Math.round(br * 0.85)}px Orbitron`;
+    ctx.fillText(String(badge), bx, by + br * 0.32);
   }
 
-  const infoTop = cursorY;
-  const infoBottom = CARD_H - pad - 58;
-  paintBoxBg(ctx, innerX, infoTop, innerW, infoBottom - infoTop, 12);
-
-  let textY = infoTop + 18;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(150,200,255,0.55)';
-  ctx.font = '600 11px "JetBrains Mono"';
-  ctx.fillText('MECÁNICA', CARD_W / 2, textY);
-  textY += 20;
-
-  ctx.fillStyle = 'rgba(220,230,255,0.82)';
-  ctx.font = '400 17px "JetBrains Mono"';
-  wrapText(ctx, mecanica, CARD_W / 2, textY, innerW - 16, 23, 7);
-
-  paintColofon(ctx, colofon);
-  await paintCardLogo(ctx, innerRight, CARD_H - pad);
   return canvas;
 }
 
 export async function drawEstadoCard(estado) {
   const frame = FRAME[estado.frame] ?? FRAME.neutral;
-  return drawReferenciaCard({
-    nombre: estado.label,
-    icon: estado.icon,
-    frame,
-    badge: estado.badge,
-    typeLabel: `Estado de Combate · ${CATEGORIA_ESTADO_LABEL[estado.categoria] ?? estado.categoria}`,
-    rows: [],
-    mecanica: estado.mecanica,
-    colofon: 'Estados de Combate · Catálogo NÉXUS',
-  });
+  return drawTokenCard({ label: estado.label, icon: estado.icon, frame, badge: estado.badge });
 }
 
 export async function drawStatCombateCard(stat) {
   const frame = FRAME[stat.frame] ?? FRAME.neutral;
-  return drawReferenciaCard({
-    nombre: stat.label,
-    icon: stat.icon,
-    frame,
-    badge: '±1',
-    typeLabel: 'Buff / Debuff de Stat',
-    rows: [
-      { icon: 'plus', label: 'Buff (acumulación)', color: '#10b981', value: '+1' },
-      { icon: 'x', label: 'Debuff (acumulación)', color: '#ff2d45', value: '−1' },
-    ],
-    mecanica: stat.mecanica,
-    colofon: 'Buffs y Debuffs · Catálogo NÉXUS',
-  });
+  return drawTokenCard({ label: stat.label, icon: stat.icon, frame, badge: '±1' });
 }
 
 /* ═══════════════════════════ MODAL GENÉRICO ═══════════════════════════ */
@@ -708,6 +700,7 @@ export default function EntityCardModal({ kind, item, onClose }) {
   const [dataUrl, setDataUrl] = useState(null);
   const [error, setError] = useState(false);
   const cancelledRef = useRef(false);
+  const isToken = kind === 'estado' || kind === 'stat_combate';
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -720,7 +713,7 @@ export default function EntityCardModal({ kind, item, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, item?.id]);
 
-  const fileName = `nexus-${kind}-${(item?.nombre ?? 'carta').toLowerCase().replace(/\s+/g, '-')}.png`;
+  const fileName = `nexus-${isToken ? 'token' : kind}-${(item?.nombre ?? 'carta').toLowerCase().replace(/\s+/g, '-')}.png`;
 
   const download = () => {
     if (!dataUrl) return;
@@ -732,7 +725,12 @@ export default function EntityCardModal({ kind, item, onClose }) {
 
   const printCard = () => {
     if (!dataUrl) return;
-    printCardImage(dataUrl, () => toast('El navegador bloqueó la ventana de impresión', { tone: 'error', icon: 'x' }));
+    const onBlocked = () => toast('El navegador bloqueó la ventana de impresión', { tone: 'error', icon: 'x' });
+    if (isToken) {
+      printTokenSheet(dataUrl, { mm: TOKEN_MM, copies: 12 }, onBlocked);
+    } else {
+      printCardImage(dataUrl, onBlocked);
+    }
   };
 
   const share = async () => {
@@ -759,27 +757,33 @@ export default function EntityCardModal({ kind, item, onClose }) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxHeight: '94vh' }}>
         {error ? (
           <div style={{ color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 12 }}>
-            No se pudo generar la carta.
+            No se pudo generar {isToken ? 'el token' : 'la carta'}.
           </div>
         ) : !dataUrl ? (
           <div style={{
-            width: 252, height: 353, display: 'grid', placeItems: 'center',
+            width: isToken ? 180 : 252, height: isToken ? 180 : 353, display: 'grid', placeItems: 'center',
             color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.14em',
           }}>
-            GENERANDO CARTA…
+            {isToken ? 'GENERANDO TOKEN…' : 'GENERANDO CARTA…'}
           </div>
         ) : (
           <img src={dataUrl} alt={item?.nombre ?? 'Carta'} style={{
-            width: 252, height: 353, borderRadius: 14,
+            width: isToken ? 180 : 252, height: isToken ? 180 : 353,
+            borderRadius: isToken ? '50%' : 14,
             boxShadow: '0 0 40px rgba(56,205,240,0.25)', display: 'block',
           }} />
+        )}
+        {isToken && dataUrl && (
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.06em', textAlign: 'center' }}>
+            Marcador de mesa · ⌀{TOKEN_MM}mm · "Imprimir" genera una hoja con 12 copias para cortar
+          </div>
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button className="nx-btn nx-btn-ghost" onClick={onClose}>Cerrar</button>
           {dataUrl && (
             <>
               <button className="nx-btn nx-btn-accent" onClick={download}>⬇ Descargar</button>
-              <button className="nx-btn nx-btn-accent" onClick={printCard}>🖨 Imprimir</button>
+              <button className="nx-btn nx-btn-accent" onClick={printCard}>🖨 {isToken ? 'Imprimir hoja' : 'Imprimir'}</button>
               {canShareFiles && (
                 <button className="nx-btn nx-btn-accent" onClick={share}>📤 Compartir</button>
               )}
