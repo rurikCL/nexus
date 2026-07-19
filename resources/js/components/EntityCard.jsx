@@ -22,6 +22,7 @@ const FRAME = {
   gold:    { bg1: '#2a2008', bg2: '#120e02', line: '#E6B325' },
   purple:  { bg1: '#1c0a2a', bg2: '#0a0312', line: '#b15cff' },
   orange:  { bg1: '#2a1608', bg2: '#120a03', line: '#FF6B00' },
+  toxic:   { bg1: '#1c2a08', bg2: '#0a1203', line: '#84cc16' },
 };
 
 const stackCounts = (value) => {
@@ -646,12 +647,157 @@ function paintTurnBorderMarkers(ctx, w, h, pad, color, maxTurns) {
   bands.filter(b => b.count <= Math.min(maxTurns, 4)).forEach(b => draw(b.cx, b.cy, b.angle, b.count));
 }
 
-/** Token rectangular: mini-marco con ícono + etiqueta, y marcadores de turno
- * en los 4 bordes cuando `maxTurns` tiene un valor — todo dentro de
- * TOKEN_W×TOKEN_H. `badge` es un subtítulo corto (±1, ∞) para lo que las
- * bandas de borde no alcanzan a expresar (magnitud del modificador, o "sin
- * duración en rondas" en Marcado/Protegido). */
-async function drawTokenCard({ label, icon, frame, maxTurns, badge }) {
+/* ── "Arte" del token: composiciones vectoriales (ícono grande + un motivo de
+   acento) dibujadas 100% en canvas — no hay assets externos, así que cada
+   estado/stat tiene su propia mini-ilustración generada por código. */
+function motifBurstLines(ctx, cx, cy, r, color, count = 8) {
+  ctx.save();
+  ctx.strokeStyle = `${color}77`;
+  ctx.lineWidth = 3;
+  for (let i = 0; i < count; i++) {
+    const a = (Math.PI * 2 * i) / count;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * r * 0.78, cy + Math.sin(a) * r * 0.78);
+    ctx.lineTo(cx + Math.cos(a) * r * 1.08, cy + Math.sin(a) * r * 1.08);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function motifRings(ctx, cx, cy, r, color, count = 3) {
+  ctx.save();
+  ctx.strokeStyle = `${color}55`;
+  ctx.lineWidth = 2;
+  for (let i = 1; i <= count; i++) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, (r * i) / count, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function motifOrbitDots(ctx, cx, cy, r, color, count = 6) {
+  ctx.save();
+  ctx.fillStyle = color;
+  for (let i = 0; i < count; i++) {
+    const a = (Math.PI * 2 * i) / count;
+    ctx.globalAlpha = 0.35 + 0.4 * (i % 2);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r * 0.98, cy + Math.sin(a) * r * 0.98, r * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function motifDrips(ctx, cx, cy, r, color, count = 4) {
+  ctx.save();
+  ctx.fillStyle = `${color}99`;
+  for (let i = 0; i < count; i++) {
+    const dx = cx + (i - (count - 1) / 2) * r * 0.5;
+    const dy = cy + r * 0.82;
+    const s = r * 0.16;
+    ctx.beginPath();
+    ctx.moveTo(dx, dy - s);
+    ctx.quadraticCurveTo(dx + s * 0.8, dy + s * 0.3, dx, dy + s);
+    ctx.quadraticCurveTo(dx - s * 0.8, dy + s * 0.3, dx, dy - s);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function motifArrowDown(ctx, cx, cy, r, color) {
+  ctx.save();
+  ctx.strokeStyle = `${color}88`;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r * 0.9);
+  ctx.lineTo(cx, cy + r * 0.6);
+  ctx.moveTo(cx - r * 0.35, cy + r * 0.25);
+  ctx.lineTo(cx, cy + r * 0.6);
+  ctx.lineTo(cx + r * 0.35, cy + r * 0.25);
+  ctx.stroke();
+  ctx.restore();
+}
+function motifCrossPulse(ctx, cx, cy, r, color, count = 3) {
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const dy = cy + r * 0.7 - i * r * 0.6;
+    const s = r * 0.16;
+    ctx.globalAlpha = 0.9 - i * 0.25;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.rect(cx - s / 4, dy - s, s / 2, s * 2);
+    ctx.rect(cx - s, dy - s / 4, s * 2, s / 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function motifStreaks(ctx, cx, cy, r, color, count = 4) {
+  ctx.save();
+  ctx.strokeStyle = `${color}77`;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < count; i++) {
+    const off = (i - (count - 1) / 2) * r * 0.32;
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.8 + off, cy + r * 0.5);
+    ctx.lineTo(cx + r * 0.3 + off, cy - r * 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* Motivo de acento por estado/stat (clave = id sin el prefijo `estado-`/`stat-`
+   que le agrega Catalogo.jsx) — null significa "solo brillo + ícono, sin acento". */
+const ART_MOTIF = {
+  paralizado: motifRings,
+  aturdido: motifBurstLines,
+  confundido: motifOrbitDots,
+  marcado: motifRings,
+  protegido: null,
+  sangrado: motifDrips,
+  envenenado: motifDrips,
+  debilitado: motifArrowDown,
+  regeneracion: motifCrossPulse,
+  ataque: motifBurstLines,
+  defensa: motifRings,
+  punteria: motifRings,
+  movimiento: motifStreaks,
+  iniciativa: motifBurstLines,
+};
+
+/** Caja de "arte" del token: fondo con resplandor radial, motivo de acento
+ * (si tiene) detrás y el ícono principal encima, todo recortado a un
+ * rectángulo redondeado con borde — el reemplazo, 100% vectorial, de una
+ * imagen ilustrada por ítem. */
+function paintArtBox(ctx, x, y, w, h, frame, icon, motifFn) {
+  const radius = 12;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, Math.max(w, h) * 0.7);
+  g.addColorStop(0, `${frame.line}26`);
+  g.addColorStop(1, frame.bg2);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  const r = Math.min(w, h) / 2 - 8;
+  if (motifFn) motifFn(ctx, cx, cy, r, frame.line);
+  drawIcon(ctx, icon, cx, cy, r * 0.95, frame.line, 2.4);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `${frame.line}66`;
+  ctx.stroke();
+}
+
+/** Token rectangular: caja de arte, etiqueta y una franja inferior — "+1"
+ * grande para stats (`bottom.type === 'big'`) o un cuadro negro semi-
+ * transparente con la descripción para estados (`bottom.type === 'desc'`,
+ * reutiliza `paintBoxBg`). Los marcadores de turno de `paintTurnBorderMarkers`
+ * van en los 4 bordes cuando `maxTurns` tiene valor. Todo dentro de
+ * TOKEN_W×TOKEN_H. */
+async function drawTokenCard({ id, label, icon, frame, maxTurns, bottom }) {
   await ensureFonts();
   const canvas = document.createElement('canvas');
   canvas.width = TOKEN_W;
@@ -687,19 +833,38 @@ async function drawTokenCard({ label, icon, frame, maxTurns, badge }) {
 
   paintTurnBorderMarkers(ctx, TOKEN_W, TOKEN_H, pad, frame.line, maxTurns);
 
-  const cx = TOKEN_W / 2;
-  drawIcon(ctx, icon, cx, TOKEN_H * 0.4, TOKEN_W * 0.36, frame.line, 2.4);
+  const artX = pad + 14;
+  const artY = pad + 16;
+  const artW = TOKEN_W - artX * 2;
+  const artH = TOKEN_H * 0.42;
+  paintArtBox(ctx, artX, artY, artW, artH, frame, icon, ART_MOTIF[id]);
 
+  const cx = TOKEN_W / 2;
+  const labelY = artY + artH + 40;
   ctx.textAlign = 'center';
   ctx.fillStyle = '#eaf2ff';
-  const fontSize = fitText(ctx, label.toUpperCase(), TOKEN_W - pad * 4, '32px Orbitron', 14);
+  const fontSize = fitText(ctx, label.toUpperCase(), TOKEN_W - pad * 4, '30px Orbitron', 14);
   ctx.font = `800 ${fontSize}px Orbitron`;
-  ctx.fillText(label.toUpperCase(), cx, TOKEN_H * 0.68);
+  ctx.fillText(label.toUpperCase(), cx, labelY);
 
-  if (badge) {
+  const bottomX = artX;
+  const bottomW = artW;
+  const bottomY = labelY + 24;
+  const bottomBottom = TOKEN_H - pad - 12;
+
+  if (bottom.type === 'big') {
+    const baseSize = Math.round((bottomBottom - bottomY) * 0.8);
+    const bigSize = fitText(ctx, bottom.text, bottomW - 10, `${baseSize}px Orbitron`, 40);
+    ctx.textAlign = 'center';
     ctx.fillStyle = frame.line;
-    ctx.font = '700 16px "JetBrains Mono"';
-    ctx.fillText(badge, cx, TOKEN_H * 0.78);
+    ctx.font = `800 ${bigSize}px Orbitron`;
+    ctx.fillText(bottom.text, cx, (bottomY + bottomBottom) / 2 + bigSize * 0.32);
+  } else if (bottom.type === 'desc') {
+    paintBoxBg(ctx, bottomX, bottomY, bottomW, bottomBottom - bottomY, 10);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(220,230,255,0.86)';
+    ctx.font = '400 15px "JetBrains Mono"';
+    wrapText(ctx, bottom.text, cx, bottomY + 20, bottomW - 16, 19, 7);
   }
 
   return canvas;
@@ -707,18 +872,28 @@ async function drawTokenCard({ label, icon, frame, maxTurns, badge }) {
 
 export async function drawEstadoCard(estado) {
   const frame = FRAME[estado.frame] ?? FRAME.neutral;
+  const motifKey = estado.id.replace(/^estado-/, '');
   return drawTokenCard({
+    id: motifKey,
     label: estado.label,
     icon: estado.icon,
     frame,
     maxTurns: estado.turnsMax,
-    badge: estado.turnsMax ? null : '∞ · hasta consumirse',
+    bottom: { type: 'desc', text: estado.mecanica },
   });
 }
 
 export async function drawStatCombateCard(stat) {
   const frame = FRAME[stat.frame] ?? FRAME.neutral;
-  return drawTokenCard({ label: stat.label, icon: stat.icon, frame, maxTurns: 4, badge: '±1 por acumulación' });
+  const motifKey = stat.id.replace(/^stat-/, '');
+  return drawTokenCard({
+    id: motifKey,
+    label: stat.label,
+    icon: stat.icon,
+    frame,
+    maxTurns: 4,
+    bottom: { type: 'big', text: '+1' },
+  });
 }
 
 /* ═══════════════════════════ MODAL GENÉRICO ═══════════════════════════ */

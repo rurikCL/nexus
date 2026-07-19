@@ -49,7 +49,7 @@ export const ESTADOS_COMBATE = [
     mecanica: 'Al cierre de cada ronda pierde 1 punto de vida, durante 2 rondas.',
   },
   {
-    id: 'envenenado', label: 'Envenenado', icon: 'flame', color: '#ff2d45', frame: 'danger',
+    id: 'envenenado', label: 'Envenenado', icon: 'flame', color: '#84cc16', frame: 'toxic',
     categoria: 'dot', duracion: '3 rondas', badge: '3R', turnsMax: 3,
     resumen: 'Pierde 2 de vida al cierre de cada ronda.',
     mecanica: 'Al cierre de cada ronda pierde 2 puntos de vida, durante 3 rondas.',
