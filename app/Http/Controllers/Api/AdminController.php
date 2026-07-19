@@ -180,9 +180,13 @@ class AdminController extends Controller
 
         $perPage = min((int) $request->input('per_page', 25), 100);
 
-        return response()->json(
-            $query->orderByDesc('id')->paginate($perPage)
-        );
+        if ($entity === 'rol_habilidades') {
+            $query->orderBy('forma')->orderBy('nombre')->orderBy('id');
+        } else {
+            $query->orderByDesc('id');
+        }
+
+        return response()->json($query->paginate($perPage));
     }
 
     public function store(Request $request, string $entity): JsonResponse
