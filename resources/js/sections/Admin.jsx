@@ -2007,7 +2007,7 @@ export default function AdminView() {
    MISIONES ADMIN — CRUD completo con objetivos y recompensas inline
 ───────────────────────────────────────────────────────────── */
 const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual', 'global'];
-const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'hito', 'automatico'];
+const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'hito', 'npc', 'automatico'];
 const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad'];
 
 const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
@@ -2538,7 +2538,18 @@ function MisionesAdmin() {
                     </div>
                     <div>
                       <label className="nx-label">Unidad</label>
-                      <input className="nx-input" value={o.unidad ?? ''} onChange={e => setObj(i, 'unidad', e.target.value)} placeholder="victorias" />
+                      {o.tipo === 'npc' ? (
+                        <select className="nx-select" value={o.unidad ?? ''} onChange={e => setObj(i, 'unidad', e.target.value)}>
+                          <option value="">— Seleccionar NPC —</option>
+                          {npcsOptions.map(n => (
+                            <option key={n.id} value={String(n.id)}>
+                              {n.nombre}{n.lugar ? ` · ${n.lugar}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input className="nx-input" value={o.unidad ?? ''} onChange={e => setObj(i, 'unidad', e.target.value)} placeholder="victorias" />
+                      )}
                       {o.tipo === 'menu' && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
                           Usa el slug exacto del menú, por ejemplo: <span className="nx-data">mapa</span>, <span className="nx-data">misiones</span> o <span className="nx-data">personaje</span>.
@@ -2552,6 +2563,11 @@ function MisionesAdmin() {
                       {o.tipo === 'automatico' && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
                           Este objetivo se marca completo al aceptar la misión.
+                        </div>
+                      )}
+                      {o.tipo === 'npc' && (
+                        <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
+                          Se completa automáticamente al hablar con este NPC.
                         </div>
                       )}
                     </div>

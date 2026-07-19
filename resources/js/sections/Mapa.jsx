@@ -2502,6 +2502,17 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
   }, [npc]);
   const [misionBusy, setMisionBusy]   = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    apiPost('/misiones/npc-visit', { npc_id: npc.id })
+      .then(() => {
+        if (cancelled) return;
+        onMisionChange?.();
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [npc.id, onMisionChange]);
+
   /* Bloquea el scroll de la página mientras el diálogo está en pantalla */
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
@@ -3321,7 +3332,7 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
                     <Icon name="target" size={13} style={{ color: 'var(--holo)', marginTop: 1, flexShrink: 0 }} />
                     <div>
                       <div style={{ fontSize: 12, color: 'var(--txt)', fontWeight: 600 }}>
-                        {o.nombre}{o.meta > 1 ? ` (${o.meta}${o.unidad ? ` ${o.unidad}` : ''})` : ''}
+                        {o.nombre}{o.meta > 1 ? ` (${o.meta}${(o.unidad_label ?? o.unidad) ? ` ${(o.unidad_label ?? o.unidad)}` : ''})` : ''}
                       </div>
                       {o.descripcion && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 2 }}>{o.descripcion}</div>}
                     </div>

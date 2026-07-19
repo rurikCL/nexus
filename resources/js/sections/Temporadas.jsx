@@ -566,7 +566,7 @@ function MisionDetallePopup({ mision, busy, onClose, onCompletar }) {
                       <Icon name={o.completado ? 'check' : 'target'} size={13} style={{ color: o.completado ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--txt)', fontWeight: 600 }}>{o.nombre}</div>
                       <span className="nx-data" style={{ fontSize: 10, color: o.completado ? '#10b981' : 'var(--txt-faint)' }}>
-                        {actual}/{o.meta}{o.unidad ? ` ${o.unidad}` : ''}
+                        {actual}/{o.meta}{(o.unidad_label ?? o.unidad) ? ` ${(o.unidad_label ?? o.unidad)}` : ''}
                       </span>
                     </div>
                     {o.descripcion && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 3, marginLeft: 21 }}>{o.descripcion}</div>}
@@ -776,7 +776,7 @@ function MisionesTemporadaModal({ temporadaId, temporadaNombre, onClose, onUserU
                             <div style={{ width: 4, height: 4, borderRadius: '50%', background: (done || obj.completado) ? '#10b981' : 'var(--holo)', flexShrink: 0 }} />
                             {obj.nombre}
                             <span style={{ marginLeft: 'auto' }}>
-                              {obj.progreso_actual ?? 0}/{obj.meta} {obj.unidad ?? ''}
+                              {obj.progreso_actual ?? 0}/{obj.meta} {obj.unidad_label ?? obj.unidad ?? ''}
                             </span>
                           </div>
                         ))}

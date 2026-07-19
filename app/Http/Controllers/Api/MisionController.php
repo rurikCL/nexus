@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CharacterHito;
+use App\Models\MapNpc;
 use App\Models\Mision;
 use App\Models\Objetivo;
 use App\Models\Recompensa;
@@ -38,6 +39,36 @@ class MisionController extends Controller
                 $request->merge([$field => json_decode($value, true) ?? []]);
             }
         }
+    }
+
+    private function validateNpcObjetivos(array $objetivos): ?JsonResponse
+    {
+        foreach ($objetivos as $index => $objetivo) {
+            if (($objetivo['tipo'] ?? null) !== 'npc') {
+                continue;
+            }
+
+            $unidad = trim((string) ($objetivo['unidad'] ?? ''));
+            if ($unidad === '') {
+                return response()->json([
+                    'message' => 'Los objetivos de tipo NPC requieren un NPC asignado.',
+                    'errors' => [
+                        "objetivos.{$index}.unidad" => ['Debes seleccionar un NPC para este objetivo.'],
+                    ],
+                ], 422);
+            }
+
+            if (! MapNpc::whereKey((int) $unidad)->exists()) {
+                return response()->json([
+                    'message' => 'El NPC seleccionado para el objetivo no existe.',
+                    'errors' => [
+                        "objetivos.{$index}.unidad" => ['El NPC seleccionado no existe.'],
+                    ],
+                ], 422);
+            }
+        }
+
+        return null;
     }
 
     // ── GET /api/misiones/npcs-mision ────────────────────────────────────────
@@ -312,6 +343,10 @@ class MisionController extends Controller
             $data['foto_mision'] = $this->saveAsWebp($request->file('foto_mision'), 'admin/misiones');
         }
 
+        if ($error = $this->validateNpcObjetivos($data['objetivos'] ?? [])) {
+            return $error;
+        }
+
         $mision = Mision::create(Arr::except($data, ['objetivos', 'recompensas']));
 
         foreach ($data['objetivos'] ?? [] as $obj) {
@@ -379,6 +414,10 @@ class MisionController extends Controller
         }
         if ($reemplazandoFoto) {
             $data['foto_mision'] = $this->saveAsWebp($request->file('foto_mision'), 'admin/misiones');
+        }
+
+        if ($error = $this->validateNpcObjetivos($data['objetivos'] ?? [])) {
+            return $error;
         }
 
         $mision->update(Arr::except($data, ['objetivos', 'recompensas']));
@@ -570,6 +609,18 @@ class MisionController extends Controller
         return response()->json(['message' => 'Menú registrado.']);
     }
 
+    // ── POST /api/misiones/npc-visit ───────────────────────────────────────
+    public function npcVisit(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'npc_id' => 'required|integer|exists:map_npcs,id',
+        ]);
+
+        MisionProgresoService::registrarNpc($request->user(), (int) $data['npc_id']);
+
+        return response()->json(['message' => 'NPC registrado.']);
+    }
+
     // ── POST /api/misiones/{mision}/completar ─────────────────────────────────
     public function completar(Request $request, Mision $mision): JsonResponse
     {
@@ -702,17 +753,7 @@ class MisionController extends Controller
             'npc' => $mision->relationLoaded('npc') && $mision->npc
                 ? ['id' => $mision->npc->id, 'nombre' => $mision->npc->nombre, 'imagen_mini' => $mision->npc->imagen_mini]
                 : null,
-            'objetivos' => $mision->relationLoaded('objetivos')
-                ? $mision->objetivos->map(fn ($o) => [
-                    'id' => $o->id,
-                    'nombre' => $o->nombre,
-                    'descripcion' => $o->descripcion,
-                    'tipo' => $o->tipo,
-                    'meta' => $o->meta,
-                    'unidad' => $o->unidad,
-                    'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
-                ])->values()
-                : [],
+            'objetivos' => [],
             'recompensas' => $mision->relationLoaded('recompensas')
                 ? $mision->recompensas->map(fn ($r) => [
                     'id' => $r->id,
@@ -732,6 +773,31 @@ class MisionController extends Controller
                 ])->values()
                 : [],
         ];
+
+        if ($mision->relationLoaded('objetivos')) {
+            $npcLabels = $mision->objetivos->where('tipo', 'npc')
+                ->pluck('unidad')
+                ->filter()
+                ->unique()
+                ->map(fn ($id) => (int) $id)
+                ->isEmpty()
+                ? collect()
+                : MapNpc::whereIn('id', $mision->objetivos->where('tipo', 'npc')->pluck('unidad')->filter()->unique()->map(fn ($id) => (int) $id)->all())
+                    ->pluck('nombre', 'id');
+
+            $base['objetivos'] = $mision->objetivos->map(fn ($o) => [
+                'id' => $o->id,
+                'nombre' => $o->nombre,
+                'descripcion' => $o->descripcion,
+                'tipo' => $o->tipo,
+                'meta' => $o->meta,
+                'unidad' => $o->unidad,
+                'unidad_label' => $o->tipo === 'npc'
+                    ? ($npcLabels[(int) $o->unidad] ?? $o->unidad)
+                    : null,
+                'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
+            ])->values();
+        }
 
         if ($withUsers && $mision->relationLoaded('users')) {
             $base['users'] = $mision->users->map(fn ($u) => [

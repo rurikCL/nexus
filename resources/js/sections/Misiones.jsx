@@ -30,6 +30,7 @@ const TIPO_OBJ = {
   dialogo:       'Diálogo',
   menu:          'Menú',
   hito:          'Hito',
+  npc:           'NPC',
   automatico:    'Automático',
 };
 
@@ -315,7 +316,7 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
                       <Icon name={o.completado ? 'check' : 'target'} size={13} style={{ color: o.completado ? '#10b981' : '#8b5cf6', flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'var(--txt)', fontWeight: 600 }}>{o.nombre}</div>
                       <span className="nx-data" style={{ fontSize: 10, color: o.completado ? '#10b981' : 'var(--txt-faint)' }}>
-                        {actual}/{o.meta}{o.unidad ? ` ${o.unidad}` : ''}
+                        {actual}/{o.meta}{(o.unidad_label ?? o.unidad) ? ` ${(o.unidad_label ?? o.unidad)}` : ''}
                       </span>
                     </div>
                     {o.descripcion && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 3, marginLeft: 21 }}>{o.descripcion}</div>}
@@ -523,7 +524,7 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
                   }} />
                   <span style={{ flex: 1, fontSize: 12, color: 'var(--txt-dim)' }}>{obj.nombre}</span>
                   <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
-                    {obj.tipo ? TIPO_OBJ[obj.tipo] ?? obj.tipo : ''} · meta {obj.meta} {obj.unidad ?? ''}
+                    {obj.tipo ? TIPO_OBJ[obj.tipo] ?? obj.tipo : ''} · meta {obj.meta} {obj.unidad_label ?? obj.unidad ?? ''}
                   </span>
                 </div>
               ))}
@@ -739,7 +740,7 @@ function IndividualMisionPopup({ mision, onClose }) {
                     </div>
                     <span style={{ flex: 1, fontSize: 12, color: objDone ? '#10b981' : 'var(--txt-dim)' }}>{obj.nombre}</span>
                     <span className="nx-num" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
-                      {progreso} / {obj.meta} {obj.unidad ?? ''}
+                      {progreso} / {obj.meta} {obj.unidad_label ?? obj.unidad ?? ''}
                     </span>
                   </div>
                 );
