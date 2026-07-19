@@ -57,7 +57,7 @@ function paintStatPills(ctx, entries, x, y, maxWidth, emptyText, emptyColor) {
   let cy = y;
 
   for (const entry of entries) {
-    const label = `${entry.label}${entry.count > 1 ? ` ×${entry.count}` : ''}`;
+    const label = `${entry.label}${entry.count > 1 ? ` +${entry.count}` : ''}`;
     ctx.font = '700 11px "JetBrains Mono"';
     const textW = Math.ceil(ctx.measureText(label).width);
     const pillW = textW + 16;

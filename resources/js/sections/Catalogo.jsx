@@ -117,7 +117,7 @@ function EntityGridCard({ item, category, onClick }) {
                     const meta = STAT_META[stat] ?? { label: stat, color: 'var(--txt-dim)' };
                     return (
                       <Chip key={`buff-${stat}`} tone="dim" style={{ borderColor: `${meta.color}55`, color: meta.color }}>
-                        {meta.label}{count > 1 ? ` ×${count}` : ''}
+                        {meta.label}{count > 1 ? ` +${count}` : ''}
                       </Chip>
                     );
                   })}
