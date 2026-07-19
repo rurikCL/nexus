@@ -448,6 +448,122 @@ function NaveEquipadaPanel() {
   );
 }
 
+function WeaponCard({ objeto, selected, onClick }) {
+  const isUnarmed = !objeto;
+  const img = objeto ? mediaUrl(objeto.imagen) : null;
+  const dano = isUnarmed ? 3 : (objeto.dano ?? null);
+  const danoPerforante = isUnarmed ? 0 : (objeto.dano_perforante ?? 0);
+  const tipoAtaque = isUnarmed ? null : objeto.tipo_ataque;
+
+  return (
+    <button
+      onClick={onClick}
+      title={isUnarmed ? 'Sin arma (desarmado)' : objeto.nombre}
+      className="nx-panel solid"
+      style={{
+        padding: 0, overflow: 'hidden', cursor: 'pointer', textAlign: 'left',
+        display: 'flex', alignItems: 'stretch', width: '100%',
+        borderColor: selected ? 'var(--holo)' : undefined,
+        boxShadow: selected ? '0 0 16px -6px var(--holo)' : undefined,
+        background: selected ? 'color-mix(in srgb, var(--holo) 8%, var(--space-panel-solid))' : undefined,
+        transition: 'all .18s',
+      }}
+    >
+      <div style={{
+        width: 60, height: 60, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: 'color-mix(in srgb, var(--holo) 5%, rgba(4,9,18,0.9))',
+        borderRight: `1px solid ${selected ? 'var(--holo)' + '55' : 'var(--holo-line)'}`,
+      }}>
+        {img ? (
+          <img src={img} alt={objeto.nombre} style={{
+            width: 44, height: 44, objectFit: 'contain',
+            filter: selected ? 'drop-shadow(0 0 6px var(--holo))' : 'brightness(0.75) saturate(0.8)',
+            transition: 'filter .18s',
+          }} />
+        ) : (
+          <Icon name="sword" size={26} style={{ color: 'var(--txt-faint)', opacity: isUnarmed ? 0.4 : 0.7 }} />
+        )}
+      </div>
+      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+        <div className="nx-display" style={{
+          fontSize: 12, color: selected ? 'var(--holo)' : 'var(--txt)', lineHeight: 1.2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {isUnarmed ? 'Sin arma (desarmado)' : objeto.nombre}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {dano != null && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {dano}
+            </span>
+          )}
+          {danoPerforante > 0 && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <Icon name="fire" size={12} style={{ color: '#8aa0c0' }} /> +{danoPerforante}P
+            </span>
+          )}
+          {tipoAtaque && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)', textTransform: 'capitalize' }}>
+              <Icon name={tipoAtaque === 'melee' ? 'sword' : 'target'} size={12} /> {tipoAtaque}
+            </span>
+          )}
+        </div>
+      </div>
+      {selected && (
+        <div style={{ display: 'flex', alignItems: 'center', paddingRight: 12 }}>
+          <Icon name="check" size={16} style={{ color: 'var(--holo)' }} />
+        </div>
+      )}
+    </button>
+  );
+}
+
+function InventoryItemCard({ objeto, icon = 'star' }) {
+  const img = mediaUrl(objeto.imagen);
+  const typeLabel = objeto.tipo ? String(objeto.tipo).replaceAll('_', ' ') : '';
+
+  return (
+    <div className="nx-panel solid" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'stretch' }}>
+      <div style={{
+        width: 60, height: 60, flexShrink: 0, display: 'grid', placeItems: 'center',
+        background: 'color-mix(in srgb, var(--holo) 5%, rgba(4,9,18,0.9))',
+        borderRight: '1px solid var(--holo-line)',
+      }}>
+        {img ? (
+          <img src={img} alt={objeto.nombre} style={{ width: 44, height: 44, objectFit: 'contain', filter: 'brightness(0.85) saturate(0.85)' }} />
+        ) : (
+          <Icon name={icon} size={24} style={{ color: 'var(--txt-faint)', opacity: 0.6 }} />
+        )}
+      </div>
+      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+        <div className="nx-display" style={{ fontSize: 12, color: 'var(--txt)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {objeto.nombre}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {objeto.rareza && (
+            <span className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', textTransform: 'capitalize' }}>{objeto.rareza}</span>
+          )}
+          {typeLabel && (
+            <span className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', textTransform: 'capitalize' }}>{typeLabel}</span>
+          )}
+          {objeto.tipo === 'nucleo_energia' && !!objeto.energia_maxima && (
+            <span className="nx-data" style={{ fontSize: 10, color: '#ffb020' }}>Máx {objeto.energia_maxima} EN</span>
+          )}
+          {!!objeto.consumo_energia && (
+            <span className="nx-data" style={{ fontSize: 10, color: '#ffb020' }}>Consumo {objeto.consumo_energia} EN</span>
+          )}
+          {objeto.tipo === 'cristal' && objeto.color_hoja && (
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: NX.SABERS[objeto.color_hoja] || '#38cdf0' }} />
+              {objeto.color_hoja}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
   const me = S.byId('you') ?? {};
@@ -1112,41 +1228,22 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                       </div>
                     ) : (
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-                        <button
-                          onClick={() => setArmaEquipadaId('')}
-                          className="nx-panel solid"
-                          style={{
-                            minHeight: 92, padding: 12, borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                            textAlign: 'left', borderColor: !armaEquipadaId ? 'var(--holo)' : 'var(--holo-line)',
-                            boxShadow: !armaEquipadaId ? '0 0 14px -6px var(--holo)' : 'none',
-                          }}
-                        >
-                          <div className="nx-display" style={{ fontSize: 12 }}>Desarmado</div>
-                          <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Sin arma equipada</div>
-                        </button>
+                        <WeaponCard objeto={null} selected={!armaEquipadaId} onClick={() => setArmaEquipadaId('')} />
                         {armasDisponibles.map(o => (
-                          <button
-                            key={o.id}
-                            onClick={() => setArmaEquipadaId(o.id)}
-                            className="nx-panel solid"
-                            style={{
-                              minHeight: 92, padding: 12, borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                              textAlign: 'left', borderColor: armaEquipadaId === o.id ? 'var(--holo)' : 'var(--holo-line)',
-                              boxShadow: armaEquipadaId === o.id ? '0 0 14px -6px var(--holo)' : 'none',
-                            }}
-                          >
-                            <div className="nx-display" style={{ fontSize: 12 }}>{o.nombre}</div>
-                            <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
-                              {o.tipo_ataque === 'distancia' ? 'Ataque a distancia' : 'Ataque melee'}
-                            </div>
-                          </button>
+                          <WeaponCard key={o.id} objeto={o} selected={armaEquipadaId === o.id} onClick={() => setArmaEquipadaId(o.id)} />
                         ))}
                       </div>
                     )}
                   </>
-                ) : (
+                ) : itemsDeTab.length === 0 ? (
                   <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
-                    No hay otros tipos de inventario visibles en esta vista.
+                    No posees objetos de este tipo. Los componentes de sable se instalan desde «Armado de Sable».
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                    {itemsDeTab.map(o => (
+                      <InventoryItemCard key={o.id} objeto={o} icon={ITEM_TYPES.find(t => t.value === invTab)?.icon} />
+                    ))}
                   </div>
                 )}
               </Panel>
