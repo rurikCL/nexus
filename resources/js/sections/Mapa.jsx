@@ -4695,6 +4695,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           lugarNombre={activeNpcCombat.lugarNombre}
           planetaImagen={activeNpcCombat.planetaImagen || planetaImagen}
           initialState={activeNpcCombat.state}
+          esEnemigo={!!activeNpcCombat.esEnemigoAmbush}
           onVictory={async () => {
             localStorage.removeItem('nx-npc-combat');
             if (activeNpcCombat.npcTipo === 'entrenador') {

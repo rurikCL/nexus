@@ -99,7 +99,7 @@ function SpaceBackground() {
   );
 }
 
-export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false }) {
+export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false, esEnemigo = false }) {
   const d20 = () => Math.floor(Math.random() * 20) + 1;
 
   /* En combate naval, `player.vida`/`.escudo` es el HP/escudo ACTUAL (posiblemente
@@ -108,12 +108,14 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
      empieza cada combate a full), así que caen de vuelta a player.vida/escudo. */
   const maxPlayer = { vida: player.vida_max ?? player.vida, escudo: player.escudo_max ?? player.escudo };
 
-  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel, +nivel de daño/curación
-     adicional, +floor(nivel/2) extra en críticos, y redefine el umbral de crítico (dado ≥ 21-nivel).
-     No aplica a naves. */
+  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel siempre, y redefine el
+     umbral de crítico (dado ≥ 21-nivel). No aplica a naves. El bono plano de +nivel en daño y el
+     +floor(nivel/2) extra en críticos son EXCLUSIVOS de los Jefes (combate RAID) — un enemigo de
+     encuentro aleatorio (map_enemigos, `esEnemigo`) no los recibe. */
   const npcNivel = naveMode ? 0 : (npc.nivel ?? 1);
   const npcCritThreshold = 21 - npcNivel;
-  const npcCritBonus = Math.floor(npcNivel / 2);
+  const npcDanoNivel = esEnemigo ? 0 : npcNivel;
+  const npcCritBonus = esEnemigo ? 0 : Math.floor(npcNivel / 2);
 
   const maxNpc    = { vida: Math.max(npc.vida, 1) + npcNivel, escudo: (npc.escudo ?? 0) + npcNivel };
 
@@ -407,7 +409,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       ]);
       if (cancelled) return;
 
-      const dmgBase = (useRanged ? effNpcPnt : effNpcAtk) + npcNivel + (esCritico ? npcCritBonus : 0);
+      const dmgBase = (useRanged ? effNpcPnt : effNpcAtk) + npcDanoNivel + (esCritico ? npcCritBonus : 0);
       await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, dmg: dmgBase });
 
       let entries;

@@ -215,14 +215,31 @@ export async function drawCharacterCard(character, user) {
   const nameY = headerTop + headerPad + 26;
   ctx.fillText(nameText, innerX + headerPad, nameY);
 
+  /* ── sub-línea: título activo (izq., dorado) + grito de guerra (der., en cursiva/cita) ── */
   const bio = character.bio ?? '';
-  if (bio) {
-    const cryText = `“${bio}”`;
-    const cryY = nameY + 20;
-    const crySize = fitText(ctx, cryText, nameMaxW, '13px "JetBrains Mono"', 10);
-    ctx.fillStyle = 'rgba(220,230,255,0.6)';
-    ctx.font = `${crySize}px "JetBrains Mono"`;
-    ctx.fillText(cryText, innerX + headerPad, cryY);
+  const tituloText = (character.titulo_activo?.nombre ?? '').toUpperCase();
+  if (tituloText || bio) {
+    const subY = nameY + 20;
+    const subGap = 14;
+    const subColW = (nameMaxW - subGap) / 2;
+
+    if (tituloText) {
+      ctx.textAlign = 'left';
+      const tituloSize = fitText(ctx, tituloText, subColW, '13px "JetBrains Mono"', 9);
+      ctx.font = `700 ${tituloSize}px "JetBrains Mono"`;
+      ctx.fillStyle = '#E6B325';
+      ctx.fillText(tituloText, innerX + headerPad, subY);
+    }
+
+    if (bio) {
+      const cryText = `“${bio}”`;
+      const cryColX = innerX + headerPad + nameMaxW;
+      ctx.textAlign = 'right';
+      const crySize = fitText(ctx, cryText, subColW, '13px "JetBrains Mono"', 9);
+      ctx.font = `${crySize}px "JetBrains Mono"`;
+      ctx.fillStyle = 'rgba(220,230,255,0.6)';
+      ctx.fillText(cryText, cryColX, subY);
+    }
   }
 
   if (rankImg) {
