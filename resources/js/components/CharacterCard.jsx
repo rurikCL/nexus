@@ -85,6 +85,32 @@ function drawSaberBlade(ctx, x, y, w, h, color) {
   ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.66, hiltW - 4, hiltH * 0.12);
 }
 
+/** Ícono místico de La Fuerza: anillo con un destello de cuatro puntas en el centro —
+    evoca un aura/energía en vez de fuerza física (por eso no se usa 'dumbbell'). */
+function drawForceIcon(ctx, cx, cy, size, color) {
+  const r = size / 2;
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 5;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const sr = r * 0.62;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - sr);
+  ctx.quadraticCurveTo(cx, cy, cx + sr, cy);
+  ctx.quadraticCurveTo(cx, cy, cx, cy + sr);
+  ctx.quadraticCurveTo(cx, cy, cx - sr, cy);
+  ctx.quadraticCurveTo(cx, cy, cx, cy - sr);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
 /** Degradé oscuro sobre los bordes de la foto — mantiene el centro limpio y oscurece hacia las esquinas. */
 function paintPhotoVignette(ctx, x, y, w, h, radius) {
   ctx.save();
@@ -107,9 +133,9 @@ export async function drawCharacterCard(character, user) {
   await ensureFonts();
 
   const side = SIDE_FRAME[character.side] ?? SIDE_FRAME.luminoso;
-  const saberColor = NX.SABERS[character.saber] ?? NX.SABERS.azul;
+  const saberColor = NX.SABERS[character.saber_color] ?? NX.SABERS.azul;
   const classInfo = NX.CLASSES.find(c => c.id === character.cls) ?? NX.CLASSES[0];
-  const equippedSaberColor = character.sable_activo?.color_hoja || saberColor;
+  const equippedSaberColor = NX.SABERS[character.sable_activo?.color_hoja] ?? saberColor;
   const tierKey = user?.tier ?? character.tier ?? 'iniciado';
   const tierLabel = NX.TIERS[tierKey]?.label ?? 'Iniciado';
   const tierColor = TIER_COLOR[tierKey] ?? TIER_COLOR.iniciado;
@@ -235,7 +261,7 @@ export async function drawCharacterCard(character, user) {
   const photoTop = headerBottom + 14;
   const photoH = 400;
   if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}66`);
+    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}66`, 3, 'top');
   } else {
     ctx.save();
     ctx.beginPath();
@@ -352,20 +378,26 @@ export async function drawCharacterCard(character, user) {
     equippedSaberColor,
   );
 
+  const saberIconSize = 13;
+  drawIcon(ctx, 'sword', bonosColX + saberIconSize / 2, saberBoxTop + boxPad2 + 4, saberIconSize, '#38cdf0', 2);
+
   ctx.textAlign = 'left';
   ctx.fillStyle = '#38cdf0';
   let saberNameSize = 11;
+  const saberNameX = bonosColX + saberIconSize + 6;
+  const saberNameMaxW = bonosColW - saberIconSize - 6 - 8;
   ctx.font = `700 ${saberNameSize}px "JetBrains Mono"`;
-  while (saberNameSize > 8 && ctx.measureText(sableNombre).width > bonosColW - 8) {
+  while (saberNameSize > 8 && ctx.measureText(sableNombre).width > saberNameMaxW) {
     saberNameSize -= 1;
     ctx.font = `700 ${saberNameSize}px "JetBrains Mono"`;
   }
-  ctx.fillText(sableNombre, bonosColX, saberBoxTop + boxPad2 + 8);
+  ctx.fillText(sableNombre, saberNameX, saberBoxTop + boxPad2 + 8);
 
+  const finalPad = 14;
   ctx.textAlign = 'right';
   ctx.fillStyle = '#38cdf0';
   ctx.font = '700 11px "JetBrains Mono"';
-  ctx.fillText('FINAL', finalColX + finalColW - 4, saberBoxTop + boxPad2 + 8);
+  ctx.fillText('FINAL', finalColX + finalColW - finalPad, saberBoxTop + boxPad2 + 8);
 
   const rowsStartY = saberBoxTop + boxPad2 + headerLabelH + 10;
   const drawBonusRow = (i, icon, color, label, value) => {
@@ -388,7 +420,7 @@ export async function drawCharacterCard(character, user) {
     ctx.textAlign = 'right';
     ctx.fillStyle = color;
     ctx.font = '800 16px Orbitron';
-    ctx.fillText(`${value}`, finalColX + finalColW - 4, rowY + 2);
+    ctx.fillText(`${value}`, finalColX + finalColW - finalPad, rowY + 2);
   };
 
   ATTR_ORDER.forEach((key, i) => {
@@ -420,7 +452,7 @@ export async function drawCharacterCard(character, user) {
   const EXTRA_ORDER = [
     { label: 'Daño', color: '#ff5f2e', icon: 'flame', value: sableDano },
     { label: 'Daño Perforante', color: '#8aa0c0', icon: 'fire', value: sableDanoPerforante },
-    { label: 'Bono Fuerza', color: '#22c55e', icon: 'dumbbell', value: saberBonos.fuerza ?? 0 },
+    { label: 'Bono Fuerza', color: '#22c55e', icon: 'force', value: saberBonos.fuerza ?? 0 },
     { label: 'Regen. Fuerza', color: '#84cc16', icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
   ];
   const extraBoxTop = saberBoxBottom + 14;
@@ -431,7 +463,11 @@ export async function drawCharacterCard(character, user) {
   const cellW = innerW / EXTRA_ORDER.length;
   EXTRA_ORDER.forEach((item, i) => {
     const cx = innerX + cellW * i + cellW / 2;
-    drawIcon(ctx, item.icon, cx, extraBoxTop + 24, 18, item.color, 2);
+    if (item.icon === 'force') {
+      drawForceIcon(ctx, cx, extraBoxTop + 24, 18, item.color);
+    } else {
+      drawIcon(ctx, item.icon, cx, extraBoxTop + 24, 18, item.color, 2);
+    }
 
     ctx.textAlign = 'center';
     ctx.fillStyle = item.color;
