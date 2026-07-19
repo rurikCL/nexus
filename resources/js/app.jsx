@@ -1,6 +1,6 @@
 import './bootstrap.js';
 import '../css/app.css';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
 import './styles/hud.css';
@@ -120,7 +120,7 @@ function Root() {
     });
   };
 
-  const handleUserUpdate = (updatedUser) => {
+  const handleUserUpdate = useCallback((updatedUser) => {
     setUser(prev => {
       const next = { ...(prev ?? {}), ...updatedUser };
       if (updatedUser?.character) {
@@ -138,7 +138,7 @@ function Root() {
       localStorage.setItem('nx-user', JSON.stringify(next));
       return next;
     });
-  };
+  }, []);
 
 
   if (checking && !user) {

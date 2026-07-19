@@ -222,9 +222,12 @@ function DesarmarModal({ sable, recuperarId, onSelect, saving, onConfirm, onClos
 
 export function ArmadoSableView({ user, onUserUpdate }) {
   const inventario = user?.character?.rol_objetos ?? [];
+  const refreshedMeRef = useRef(false);
 
   useEffect(() => {
     if (!onUserUpdate) return;
+    if (refreshedMeRef.current) return;
+    refreshedMeRef.current = true;
     apiFetch('/me')
       .then((me) => {
         if (me) onUserUpdate(me);
