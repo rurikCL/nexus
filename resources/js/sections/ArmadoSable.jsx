@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Icon, Panel, Btn, Chip, toast } from '../components/ui.jsx';
 import { NX } from '../data/seed.js';
 
