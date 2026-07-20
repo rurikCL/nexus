@@ -311,6 +311,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [playerBuffs,  setPlayerBuffs]  = useState(initialState?.playerBuffs  ?? []);
   const [npcDebuffs,   setNpcDebuffs]   = useState(initialState?.npcDebuffs   ?? []);
   const [playerDebuffs, setPlayerDebuffs] = useState(initialState?.playerDebuffs ?? []);
+  /* Buffs del propio enemigo — de una habilidad suya que se refuerza a sí mismo al usarla
+     (ver npcHabilidades). Ningún NPC regular llega a poblar esto hoy. */
+  const [npcBuffs, setNpcBuffs] = useState(initialState?.npcBuffs ?? []);
   const [playerEstados, setPlayerEstados] = useState(initialState?.playerEstados ?? []);
   const [npcEstados,    setNpcEstados]    = useState(initialState?.npcEstados    ?? []);
   /* Cooldowns de las habilidades PROPIAS del enemigo (`npcHabilidades`) — análogo a `cooldowns`
@@ -359,6 +362,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Stats efectivos considerando buffs/debuffs */
   const countBuff       = (stat) => playerBuffs.filter(b => b.stat === stat).length;
+  const countNpcBuff    = (stat) => npcBuffs.filter(b => b.stat === stat).length;
   const countNpcDeb     = (stat) => npcDebuffs.filter(d => d.stat === stat).length;
   const countPlayerDeb  = (stat) => playerDebuffs.filter(d => d.stat === stat).length;
 
@@ -367,13 +371,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const effPlayerPnt = Math.max(0, player.punteria   + countBuff('punteria')   - countPlayerDeb('punteria'));
   const effPlayerMov = Math.max(1, player.movimiento + countBuff('movimiento') - countPlayerDeb('movimiento'));
 
-  const effNpcAtk = Math.max(1, npcAtk - countNpcDeb('ataque'));
-  const effNpcDef = Math.max(1, npcDef - countNpcDeb('defensa'));
-  const effNpcMov = Math.max(1, npcMov - countNpcDeb('movimiento'));
-  const effNpcPnt = Math.max(0, npcPnt - countNpcDeb('punteria'));
+  const effNpcAtk = Math.max(1, npcAtk + countNpcBuff('ataque')     - countNpcDeb('ataque'));
+  const effNpcDef = Math.max(1, npcDef + countNpcBuff('defensa')    - countNpcDeb('defensa'));
+  const effNpcMov = Math.max(1, npcMov + countNpcBuff('movimiento') - countNpcDeb('movimiento'));
+  const effNpcPnt = Math.max(0, npcPnt + countNpcBuff('punteria')   - countNpcDeb('punteria'));
 
   const effPlayerIni = Math.max(1, player.iniciativa + countBuff('iniciativa') - countPlayerDeb('iniciativa'));
-  const effNpcIni     = Math.max(1, npcIni - countNpcDeb('iniciativa'));
+  const effNpcIni     = Math.max(1, npcIni + countNpcBuff('iniciativa') - countNpcDeb('iniciativa'));
 
   /* Fondo desde el lugar del NPC (no aplica a combates navales: usan fondo espacial fijo) */
   useEffect(() => {
@@ -466,6 +470,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     } else {
       /* Ambos actuaron: termina la ronda — tick de buffs/debuffs/estados (duran N rondas) y nueva iniciativa */
       setPlayerBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
+      setNpcBuffs(prev => prev.map(b => ({ ...b, turns: b.turns - 1 })).filter(b => b.turns > 0));
       setNpcDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
       setPlayerDebuffs(prev => prev.map(d => ({ ...d, turns: d.turns - 1 })).filter(d => d.turns > 0));
 
@@ -534,10 +539,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen,
       state: {
         playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns,
-        playerBuffs, npcDebuffs, playerDebuffs, npcCooldowns, playerEstados, npcEstados, currentForma,
+        playerBuffs, npcBuffs, npcDebuffs, playerDebuffs, npcCooldowns, playerEstados, npcEstados, currentForma,
       },
     }));
-  }, [playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcDebuffs, playerDebuffs, npcCooldowns, playerEstados, npcEstados, currentForma]);
+  }, [playerHp, npcHp, phase, currTurn, log, ronda, rondaTurno, playerFuerza, cooldowns, playerBuffs, npcBuffs, npcDebuffs, playerDebuffs, npcCooldowns, playerEstados, npcEstados, currentForma]);
 
   /* Turno del NPC */
   useEffect(() => {
@@ -578,6 +583,25 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         : null;
       if (hab && hab.cooldown > 0) {
         setNpcCooldowns(prev => ({ ...prev, [hab.id]: hab.cooldown }));
+      }
+
+      /* El buff propio de la habilidad (si tiene uno) se aplica al enemigo mismo al usarla,
+         sin importar si el golpe conecta — mismo criterio que el buff del jugador. No afecta
+         la tirada de ESTE turno (los stats efectivos ya se leen más abajo con el buff previo),
+         solo a partir del próximo, igual que el resto de los buffs/debuffs del combate. */
+      const habBuffNpc = hab && Array.isArray(hab.buff) ? hab.buff : [];
+      let npcEstadosAfterSelfBuff = npcEstados;
+      if (habBuffNpc.length > 0) {
+        const habBuffStatsNpc = habBuffNpc.filter(s => !esTipoEstado(s));
+        const habBuffEstadosNpc = habBuffNpc.filter(esTipoEstado);
+        const habRondasNpc = hab.duracion ?? 2;
+        if (habBuffStatsNpc.length > 0) {
+          setNpcBuffs(prev => [...prev, ...habBuffStatsNpc.map(stat => ({ stat, turns: habRondasNpc }))]);
+        }
+        if (habBuffEstadosNpc.length > 0) {
+          npcEstadosAfterSelfBuff = habBuffEstadosNpc.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), npcEstadosAfterSelfBuff);
+          setNpcEstados(npcEstadosAfterSelfBuff);
+        }
       }
 
       /* Leer stats efectivos ahora (closure over current state at render time) */
@@ -709,7 +733,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
         setPhase('defeat');
       } else {
-        endTurnAfter('npc', confundidoNpc ? { npcHp: newHp, npcEstados: estadosObjetivo } : { playerHp: newHp, playerEstados: finalPlayerEstados });
+        endTurnAfter('npc', confundidoNpc
+          ? { npcHp: newHp, npcEstados: estadosObjetivo }
+          : { playerHp: newHp, playerEstados: finalPlayerEstados, npcEstados: npcEstadosAfterSelfBuff });
       }
     })();
     return () => { cancelled = true; };
@@ -785,6 +811,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       let selfEstados = playerEstados;
       habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo); });
 
+      /* Una habilidad "self" no tiene tirada de ataque — si además carga un debuff (p.ej.
+       * un estado) para el enemigo, se aplica sin condición de impacto, igual que en PvP/RAID. */
+      const habDebuffStats = habDebuff.filter(s => !esTipoEstado(s));
+      const habDebuffEstados = habDebuff.filter(esTipoEstado);
+      let npcEstadosFinal = npcEstados;
+      if (habDebuffStats.length > 0) {
+        setNpcDebuffs(prev => [...prev, ...habDebuffStats.map(stat => ({ stat, turns: habRondas }))]);
+        entries.push({ text: `${npc.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
+      }
+      if (habDebuffEstados.length > 0) {
+        npcEstadosFinal = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), npcEstadosFinal);
+        entries.push({ text: `${npc.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+      }
+
       if (pendingBuffs.length > 0) {
         await playStatusFx(playerHudRef, 'buff');
         setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
@@ -796,9 +836,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         setPlayerHp(healedHp);
       }
       setPlayerEstados(selfEstados);
+      if (npcEstadosFinal !== npcEstados) setNpcEstados(npcEstadosFinal);
 
       setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
-      endTurnAfter('player', { playerHp: healedHp, playerEstados: selfEstados });
+      endTurnAfter('player', { playerHp: healedHp, playerEstados: selfEstados, npcEstados: npcEstadosFinal });
       return;
     }
 
