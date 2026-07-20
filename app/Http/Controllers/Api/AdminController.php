@@ -15,6 +15,7 @@ use App\Models\MapNpc;
 use App\Models\MapPlaneta;
 use App\Models\MapSistema;
 use App\Models\MapZona;
+use App\Models\Medalla;
 use App\Models\Role;
 use App\Models\RolCharacterObjeto;
 use App\Models\RolHabilidad;
@@ -51,6 +52,7 @@ class AdminController extends Controller
             // Usado solo por options() para los selectores de habilidad de las naves.
             'rol_habilidades_nave' => RolHabilidad::class,
             'rol_sonidos'        => RolSonido::class,
+            'medallas'    => Medalla::class,
             'configuraciones'    => Configuracion::class,
             'sedes'       => Sede::class,
             default            => abort(404, "Entidad no reconocida: {$entity}"),
@@ -296,6 +298,7 @@ class AdminController extends Controller
     {
         return match ($entity) {
             'rol_habilidades' => ['forma'],
+            'medallas'        => ['imagen', 'rareza'],
             default           => [],
         };
     }

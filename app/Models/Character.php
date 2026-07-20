@@ -202,6 +202,16 @@ class Character extends Model
         return $this->hasOne(CharacterTitulo::class)->where('activo', true);
     }
 
+    public function medallas(): HasMany
+    {
+        return $this->hasMany(CharacterMedalla::class);
+    }
+
+    public function medallaActiva(): HasOne
+    {
+        return $this->hasOne(CharacterMedalla::class)->where('activo', true);
+    }
+
     /**
      * Arma que se usa realmente en el ataque básico de combate: el sable
      * armado tiene prioridad sobre el arma clásica equipada.

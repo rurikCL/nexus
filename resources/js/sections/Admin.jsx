@@ -85,7 +85,11 @@ const H_COLOR = {
 const R_COLOR = {
   comun: '#8aa0c0', poco_comun: '#38cdf0', raro: '#10b981',
   epico: '#8b5cf6', legendario: '#E6B325',
+  // Rareza de medallas (borde de la insignia) — mismos tonos, escala de 4 en vez de 5.
+  basica: '#8aa0c0', rara: '#38cdf0', epica: '#8b5cf6', legendaria: '#E6B325',
 };
+
+const RAREZA_MEDALLA_OPTS = ['basica', 'rara', 'epica', 'legendaria'];
 
 const CROP_ASPECTS_PERSONAJE = [
   { ratio: 1, label: 'Cuadrada 1:1' },
@@ -224,7 +228,7 @@ const ENTITY_CONFIG = {
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'nivel',         label: 'Nivel (★)',        type: 'number', min: 0, hint: 'Nivel de dificultad, representado con estrellas. Afecta combates contra este NPC y (si es jefe) contra RAID: +1 a todos sus atributos por nivel, +nivel de daño/curación adicional, +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel (ej. nivel 4 → crítico con 17-20).' },
+      { key: 'nivel',         label: 'Nivel (★)',        type: 'number', min: 0, hint: 'Nivel de dificultad, representado con estrellas. Afecta combates contra este NPC y (si es jefe) contra RAID: +1 a todos sus atributos por nivel, +nivel de daño/curación adicional sobre el daño base (ver Daño/Daño a Escudo/Daño Perforante más abajo), +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel (ej. nivel 4 → crítico con 17-20).' },
       { key: 'fecha_inicio',  label: 'Disponible desde', type: 'date', hint: 'Opcional. El NPC solo aparece a partir de esta fecha.' },
       { key: 'fecha_fin',     label: 'Disponible hasta', type: 'date', hint: 'Opcional. El NPC deja de aparecer después de esta fecha.' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
@@ -239,6 +243,9 @@ const ENTITY_CONFIG = {
       { key: 'movimiento',    label: 'Agilidad',       type: 'number', min: 0 },
       { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
       { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
+      { key: 'dano',            label: 'Daño',              type: 'number', min: 0, hint: 'Daño base de un ataque normal (sin habilidad). Si es Jefe, se le suma +nivel de dificultad encima.' },
+      { key: 'dano_escudo',     label: 'Daño a Escudo',     type: 'number', min: 0, hint: 'Daño extra que solo afecta al escudo del objetivo, en un ataque normal.' },
+      { key: 'dano_perforante', label: 'Daño Perforante',   type: 'number', min: 0, hint: 'Daño de un ataque normal que ignora el escudo y llega directo a la vida.' },
       { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del NPC, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
       { key: 'habilidad_1',   label: 'Habilidad de Jefe — Slot 1', type: 'relatedSelect', related: 'rol_habilidades', span: 2, hint: 'Solo aplica si Tipo = jefe · usada en Combate RAID' },
       { key: 'habilidad_2',   label: 'Habilidad de Jefe — Slot 2', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
@@ -246,7 +253,7 @@ const ENTITY_CONFIG = {
       { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
       { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, nivel: 1, raid_slots: 4 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, raid_slots: 4 },
   },
 
   enemigos: {
@@ -266,7 +273,7 @@ const ENTITY_CONFIG = {
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, hint: 'Nivel de dificultad por defecto: +1 a todos sus atributos por nivel, +nivel de daño/curación adicional, +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel. Al asignar este enemigo a un Lugar puedes sobrescribirlo con un nivel específico para ese lugar.' },
+      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, hint: 'Nivel de dificultad por defecto: +1 a todos sus atributos por nivel, y redefine el umbral de crítico (dado ≥ 21-nivel). A diferencia de los Jefes, un enemigo NO recibe bono plano de daño ni de crítico por nivel. Al asignar este enemigo a un Lugar puedes sobrescribirlo con un nivel específico para ese lugar.' },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
       { key: 'escudo',        label: 'Escudo',           type: 'number', min: 0 },
       { key: 'defensa',       label: 'Defensa',          type: 'number', min: 0 },
@@ -274,9 +281,14 @@ const ENTITY_CONFIG = {
       { key: 'movimiento',    label: 'Agilidad',         type: 'number', min: 0 },
       { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
       { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
+      { key: 'dano',            label: 'Daño',              type: 'number', min: 0, hint: 'Daño base de un ataque normal (sin habilidad).' },
+      { key: 'dano_escudo',     label: 'Daño a Escudo',     type: 'number', min: 0, hint: 'Daño extra que solo afecta al escudo del objetivo, en un ataque normal.' },
+      { key: 'dano_perforante', label: 'Daño Perforante',   type: 'number', min: 0, hint: 'Daño de un ataque normal que ignora el escudo y llega directo a la vida.' },
       { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del enemigo, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
+      { key: 'habilidad_1',   label: 'Habilidad — Slot 1', type: 'relatedSelect', related: 'rol_habilidades', span: 2, hint: 'Hasta 2 habilidades propias — en combate, 60% de probabilidad de usar una disponible (sin cooldown) en vez de su ataque normal, igual que un Jefe.' },
+      { key: 'habilidad_2',   label: 'Habilidad — Slot 2', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, forma: 0, nivel: 1 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1 },
   },
 
   naves: {
@@ -415,6 +427,27 @@ const ENTITY_CONFIG = {
       { key: 'bono_cooldown',   label: 'Bono Cooldown', type: 'number', min: -99, hint: 'Solo si tipo = mejora_nave · negativo = reduce el cooldown (en rondas) de la habilidad seleccionada' },
     ],
     defaults: { activo: true },
+  },
+
+  medallas: {
+    label: 'Medallas', icon: 'medal', group: 'ROL',
+    filters: [
+      { key: 'rareza', label: 'Rareza', options: RAREZA_MEDALLA_OPTS.map(r => ({ value: r, label: r })) },
+    ],
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'imagen', label: 'Img', type: 'image', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
+    ],
+    fields: [
+      { key: 'nombre',  label: 'Nombre',   type: 'text', required: true, span: 2, hint: 'Se otorga como recompensa de misión (tipo "insignia") y el jugador puede activarla en Mi Personaje → Medallas.' },
+      { key: 'imagen',  label: 'Imagen',   type: 'file', span: 2, hint: 'Se muestra recortada en un círculo, enmarcada con el color de la rareza elegida.' },
+      { key: 'rareza',  label: 'Rareza',   type: 'select', options: RAREZA_MEDALLA_OPTS, hint: 'Define el color del borde de la medalla' },
+      { key: 'visible', label: 'Visible',  type: 'toggle' },
+    ],
+    defaults: { rareza: 'basica', visible: true },
   },
 
   /* ── SISTEMA ── */
@@ -2055,7 +2088,7 @@ const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'S
 const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
 
 const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unidad: '' };
-const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null };
+const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null, medalla_id: null };
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '',
@@ -2083,7 +2116,7 @@ function misionFromApi(m) {
     hito_requerimiento:   m.hito_requerimiento    ?? '',
     entregar_hito:        m.entregar_hito         ?? '',
     objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
-    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null })),
+    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null, medalla_id: r.medalla_id ?? null })),
   };
 }
 
@@ -2257,6 +2290,7 @@ function MisionesAdmin() {
   const [filter, setFilter]         = useState('');
   const [habilidades, setHabilidades]   = useState([]);
   const [objetos, setObjetos]           = useState([]);
+  const [medallas, setMedallas]         = useState([]);
   const [npcsOptions, setNpcsOptions]   = useState([]);
   const [temporadasOptions, setTemporadasOptions] = useState([]);
 
@@ -2271,6 +2305,13 @@ function MisionesAdmin() {
   useEffect(() => {
     api('GET', '/admin/rol_objetos/options')
       .then(d => setObjetos(d.options ?? []))
+      .catch(() => {});
+  }, []);
+
+  /* Load medallas options once */
+  useEffect(() => {
+    api('GET', '/admin/medallas/options')
+      .then(d => setMedallas(d.options ?? []))
       .catch(() => {});
   }, []);
 
@@ -2642,7 +2683,7 @@ function MisionesAdmin() {
                   <button onClick={() => rmRec(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
                     <Icon name="x" size={12} />
                   </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto' || r.tipo === 'insignia') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
                     <div>
                       <label className="nx-label">Nombre *</label>
                       <input className="nx-input" value={r.nombre} onChange={e => setRec(i, 'nombre', e.target.value)} placeholder="Ej: 500 Créditos" />
@@ -2653,7 +2694,7 @@ function MisionesAdmin() {
                         {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{TIPO_RECOMPENSA_LABEL[t] ?? t}</option>)}
                       </select>
                     </div>
-                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && (
+                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && r.tipo !== 'insignia' && (
                       <div>
                         <label className="nx-label">Valor</label>
                         <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
@@ -2687,6 +2728,21 @@ function MisionesAdmin() {
                       </select>
                       {objetos.length === 0 && (
                         <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando objetos...</div>
+                      )}
+                    </div>
+                  )}
+                  {r.tipo === 'insignia' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label className="nx-label">Medalla a otorgar *</label>
+                      <select className="nx-select" value={r.medalla_id ?? ''}
+                        onChange={e => setRec(i, 'medalla_id', e.target.value ? +e.target.value : null)}>
+                        <option value="">— Seleccionar medalla —</option>
+                        {medallas.map(m => (
+                          <option key={m.id} value={m.id}>{m.label} ({m.rareza})</option>
+                        ))}
+                      </select>
+                      {medallas.length === 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando medallas...</div>
                       )}
                     </div>
                   )}

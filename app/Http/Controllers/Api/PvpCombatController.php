@@ -628,6 +628,20 @@ class PvpCombatController extends Controller
                     $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo";
                 }
 
+                /* Una habilidad "self" puede llevar, además del buff propio, un debuff que
+                 * cae sobre el rival (p.ej. "gano +defensa y paralizo al oponente") — no hay
+                 * tirada de ataque en esta rama, así que se aplica sin condición de impacto. */
+                if (! empty($habDebuff)) {
+                    foreach ($habDebuff as $stat) {
+                        if (self::esTipoEstado($stat)) {
+                            $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat);
+                        } else {
+                            $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                        }
+                    }
+                    $entry['messages'][] = "{$opponentChar->name} sufre: ".implode(', ', $habDebuff);
+                }
+
                 /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ── */
             } elseif ($dmg < 0) {
                 $heal = -$dmg;

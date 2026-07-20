@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, cloneElement } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, MedallaBadge, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { BONUS_FIELDS } from './ArmadoSable.jsx';
 import CharacterCardModal from '../components/CharacterCard.jsx';
@@ -447,6 +447,9 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                 <span className="nx-data" style={{ fontSize: isMobile ? 11 : 13, color: 'var(--holocron-oro)' }}>
                   {user.character.titulo_activo.nombre}
                 </span>
+              )}
+              {user?.character?.medalla_activa?.medalla && (
+                <MedallaBadge medalla={user.character.medalla_activa.medalla} size={isMobile ? 22 : 26} />
               )}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1894,7 +1897,7 @@ export function TitulosPanel({ user, onCharacterCreated }) {
   });
 
   return (
-    <Panel kicker="Reconocimientos" title="Títulos e Insignias" icon="medal">
+    <Panel kicker="Reconocimientos" title="Títulos" icon="roster">
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <button onClick={() => activar(null)} disabled={busy !== null} style={chipStyle(!activo)}>
           Ninguno
@@ -1906,6 +1909,76 @@ export function TitulosPanel({ user, onCharacterCreated }) {
           </button>
         ))}
       </div>
+    </Panel>
+  );
+}
+
+/** Medallas ganadas (recompensa de misión tipo "insignia") — imagen enmarcada por rareza.
+    Se puede activar como máximo una a la vez: se muestra en Comando (junto al título) y en
+    la esquina inferior derecha de la foto en la carta imprimible de personaje. */
+export function MedallasPanel({ user, onCharacterCreated }) {
+  const [busy, setBusy] = useState(null);
+  const medallas = user?.character?.medallas ?? [];
+  const activaId = user?.character?.medalla_activa?.id ?? null;
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  const activar = async (cm) => {
+    setBusy(cm?.id ?? 'ninguna');
+    try {
+      const path = cm ? `/medallas/${cm.id}/activar` : '/medallas/desactivar';
+      const res = await fetch(`/api${path}`, { method: 'POST', headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      onCharacterCreated?.({
+        ...user.character,
+        medalla_activa: cm ?? null,
+        medallas: medallas.map(m => ({ ...m, activo: cm ? m.id === cm.id : false })),
+      });
+      toast(cm ? `Mostrando "${cm.medalla?.nombre}"` : 'Medalla retirada', { tone: 'success', icon: 'check' });
+    } catch {
+      toast('No se pudo actualizar tu medalla', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Panel kicker="Logros" title="Medallas" icon="medal">
+      {medallas.length === 0 ? (
+        <div className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Aún no ganas ninguna medalla.</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+            {medallas.map(cm => {
+              const on = activaId === cm.id;
+              return (
+                <button
+                  key={cm.id}
+                  onClick={() => activar(on ? null : cm)}
+                  disabled={busy !== null}
+                  title={cm.medalla?.nombre}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 68,
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    opacity: busy !== null && !on ? 0.6 : 1,
+                  }}
+                >
+                  <MedallaBadge medalla={cm.medalla} size={48} active={on} />
+                  <span className="nx-data" style={{
+                    fontSize: 9, textAlign: 'center', lineHeight: 1.25,
+                    color: on ? 'var(--holocron-oro)' : 'var(--txt-faint)',
+                  }}>
+                    {cm.medalla?.nombre}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 10 }}>
+            Toca una medalla para mostrarla en Comando y en tu carta imprimible — toca de nuevo para retirarla.
+          </div>
+        </>
+      )}
     </Panel>
   );
 }

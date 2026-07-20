@@ -35,6 +35,9 @@ class MapEnemigo extends Model
         'movimiento',
         'iniciativa',
         'punteria',
+        'dano',
+        'dano_escudo',
+        'dano_perforante',
         'forma',
         'nivel',
         'hito_requerimiento',
@@ -56,6 +59,9 @@ class MapEnemigo extends Model
         'movimiento' => 'integer',
         'iniciativa' => 'integer',
         'punteria' => 'integer',
+        'dano' => 'integer',
+        'dano_escudo' => 'integer',
+        'dano_perforante' => 'integer',
         'forma' => 'integer',
         'nivel' => 'integer',
         'fecha_inicio' => 'date',
@@ -92,24 +98,21 @@ class MapEnemigo extends Model
         return $this->belongsTo(RolHabilidad::class, 'habilidad_4');
     }
 
-    /** IDs de las hasta 4 habilidades asignadas (tipo jefe), sin nulos. */
+    /**
+     * IDs de las hasta 2 habilidades asignadas, sin nulos — los enemigos comunes solo tienen
+     * 2 slots (habilidad_3/habilidad_4 existen en la tabla por historia compartida con
+     * map_npcs, pero no se exponen ni se usan para este modelo).
+     */
     public function habilidadIds(): array
     {
-        return array_values(array_filter([
-            $this->habilidad_1, $this->habilidad_2, $this->habilidad_3, $this->habilidad_4,
-        ]));
-    }
-
-    /** Cupos configurados para el Combate RAID de este jefe (mínimo 2, por defecto 4). */
-    public function raidCupos(): int
-    {
-        return max(2, $this->raid_slots ?: 4);
+        return array_values(array_filter([$this->habilidad_1, $this->habilidad_2]));
     }
 
     /**
      * Nivel de dificultad base del catálogo (representado con estrellas en la UI): otorga
-     * +1 a todos los atributos por nivel, un bono plano adicional de +nivel en daño/curación,
-     * +floor(nivel/2) extra en críticos, y redefine el umbral de crítico (dado ≥ 21-nivel).
+     * +1 a todos los atributos por nivel y redefine el umbral de crítico (dado ≥ 21-nivel).
+     * A diferencia de los Jefes, un enemigo común NO recibe el bono plano de +nivel en daño
+     * ni el +floor(nivel/2) extra en críticos (ver NpcCombatScreen.jsx, prop `esEnemigo`).
      * Al aparecer en un lugar concreto, este valor puede quedar sobrescrito por el nivel de
      * la asignación (pivot `map_lugar_enemigos.nivel`) — ver LugarEncuentroController.
      */

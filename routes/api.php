@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BetController;
 use App\Http\Controllers\Api\CatalogoController;
 use App\Http\Controllers\Api\ChallengeController;
 use App\Http\Controllers\Api\CharacterController;
+use App\Http\Controllers\Api\CharacterMedallaController;
 use App\Http\Controllers\Api\CharacterPhotoController;
 use App\Http\Controllers\Api\CombatantController;
 use App\Http\Controllers\Api\CombatController;
@@ -85,10 +86,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/sable/sables/{sable}', [SableController::class, 'destroy']);
     Route::post('/sable/sables/{sable}/activar', [SableController::class, 'activar']);
 
-    // Títulos e insignias
+    // Títulos
     Route::get('/titulos', [TituloController::class, 'index']);
     Route::post('/titulos/{titulo}/activar', [TituloController::class, 'activar']);
     Route::post('/titulos/desactivar', [TituloController::class, 'desactivar']);
+
+    // Medallas
+    Route::get('/medallas', [CharacterMedallaController::class, 'index']);
+    Route::post('/medallas/{medalla}/activar', [CharacterMedallaController::class, 'activar']);
+    Route::post('/medallas/desactivar', [CharacterMedallaController::class, 'desactivar']);
 
     Route::get('/combatants', [CombatantController::class, 'index']);
     Route::get('/combatants/{handle}', [CombatantController::class, 'show']);

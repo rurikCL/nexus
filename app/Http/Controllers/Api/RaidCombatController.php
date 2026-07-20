@@ -434,6 +434,12 @@ class RaidCombatController extends Controller
             $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
             $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
 
+            /* El buff (si la habilidad tiene uno) SIEMPRE se aplica al usarla, sin importar
+             * si además es una habilidad de ataque contra el jefe (igual que en PvP) — solo
+             * las habilidades "self" permiten elegir a cuál de los combatientes del grupo
+             * afecta; el resto siempre beneficia a quien la usa. */
+            $buffTargetPlayer = $myPlayer;
+            $esBuffUnoMismo = true;
             if ($hab->objetivo === 'self') {
                 /* En RAID, una habilidad "self" no afecta automáticamente a quien la usa:
                  * el jugador elige a cuál de los 4 combatientes (incluso él mismo) afecta. */
@@ -442,20 +448,16 @@ class RaidCombatController extends Controller
                 if (! $targetPlayer || $targetPlayer->status !== 'activo') {
                     return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente activo del grupo.'], 422);
                 }
-                $esUnoMismo = $targetPlayer->id === $myPlayer->id;
-                $targetChar = $targetPlayer->user->character;
-                $entry['target_user_id'] = $targetUserId;
+                $buffTargetPlayer = $targetPlayer;
+                $esBuffUnoMismo = $targetPlayer->id === $myPlayer->id;
+            }
+            $buffTargetChar = $buffTargetPlayer->user->character;
+            $buffTargetUserId = $buffTargetPlayer->user_id;
 
-                $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
-                $entry['messages'][] = $esUnoMismo
-                    ? "{$actorChar->name} usa {$hab->nombre}{$buffDesc}"
-                    : "{$actorChar->name} usa {$hab->nombre} en {$targetChar->name}{$buffDesc}";
-                if (! empty($habBuff)) {
-                    $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $targetUserId];
-                }
-
-                $targetBuffsArr = $esUnoMismo ? $myBuffs : ($targetPlayer->buffs ?? []);
-                $targetEstadosArr = $esUnoMismo ? $myEstados : ($targetPlayer->estados ?? []);
+            $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
+            if (! empty($habBuff)) {
+                $targetBuffsArr = $esBuffUnoMismo ? $myBuffs : ($buffTargetPlayer->buffs ?? []);
+                $targetEstadosArr = $esBuffUnoMismo ? $myEstados : ($buffTargetPlayer->estados ?? []);
                 foreach ($habBuff as $stat) {
                     if (self::esTipoEstado($stat)) {
                         $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat);
@@ -463,41 +465,66 @@ class RaidCombatController extends Controller
                         $targetBuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
                     }
                 }
+                if ($esBuffUnoMismo) {
+                    $myBuffs = $targetBuffsArr;
+                    $myEstados = $targetEstadosArr;
+                } else {
+                    $buffTargetPlayer->buffs = $targetBuffsArr;
+                    $buffTargetPlayer->estados = $targetEstadosArr;
+                }
+                $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $buffTargetUserId];
+            }
 
-                $targetMax = self::getCombatStats($targetChar);
-                $targetHp = $esUnoMismo ? $myPlayer->hp : $targetPlayer->hp;
-                $targetEscudo = $esUnoMismo ? $myPlayer->escudo : $targetPlayer->escudo;
+            if ($hab->objetivo === 'self') {
+                $entry['target_user_id'] = $buffTargetUserId;
+                $entry['messages'][] = $esBuffUnoMismo
+                    ? "{$actorChar->name} usa {$hab->nombre}{$buffDesc}"
+                    : "{$actorChar->name} usa {$hab->nombre} en {$buffTargetChar->name}{$buffDesc}";
+
+                $targetMax = self::getCombatStats($buffTargetChar);
+                $targetHp = $esBuffUnoMismo ? $myPlayer->hp : $buffTargetPlayer->hp;
+                $targetEscudo = $esBuffUnoMismo ? $myPlayer->escudo : $buffTargetPlayer->escudo;
 
                 if ($dmg < 0) {
                     $heal = -$dmg;
                     $newHp = min($targetMax['vida'], $targetHp + $heal);
-                    if ($esUnoMismo) {
+                    if ($esBuffUnoMismo) {
                         $myPlayer->hp = $newHp;
                     } else {
-                        $targetPlayer->hp = $newHp;
+                        $buffTargetPlayer->hp = $newHp;
                     }
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $targetUserId];
-                    $entry['messages'][] = "¡Curación! +{$heal} vida".($esUnoMismo ? '' : " a {$targetChar->name}");
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
+                    $entry['messages'][] = "¡Curación! +{$heal} vida".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
                 }
                 if ($dmgEscudo < 0) {
                     $healEsc = -$dmgEscudo;
                     $newEsc = min($targetMax['escudo'], $targetEscudo + $healEsc);
-                    if ($esUnoMismo) {
+                    if ($esBuffUnoMismo) {
                         $myPlayer->escudo = $newEsc;
                     } else {
-                        $targetPlayer->escudo = $newEsc;
+                        $buffTargetPlayer->escudo = $newEsc;
                     }
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $targetUserId];
-                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esUnoMismo ? '' : " a {$targetChar->name}");
+                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
+                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
                 }
 
-                if ($esUnoMismo) {
-                    $myBuffs = $targetBuffsArr;
-                    $myEstados = $targetEstadosArr;
-                } else {
-                    $targetPlayer->buffs = $targetBuffsArr;
-                    $targetPlayer->estados = $targetEstadosArr;
-                    $targetPlayer->save();
+                if (! $esBuffUnoMismo) {
+                    $buffTargetPlayer->save();
+                }
+
+                /* Una habilidad "self" no tiene tirada de ataque — si además carga un debuff
+                 * (p.ej. un estado) para el jefe, se aplica sin condición de impacto. */
+                if (! empty($habDebuff)) {
+                    $npcDebuffsArr = $raid->npc_debuffs ?? [];
+                    foreach ($habDebuff as $stat) {
+                        if (self::esTipoEstado($stat)) {
+                            $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat);
+                        } else {
+                            $npcDebuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
+                        }
+                    }
+                    $raid->npc_debuffs = $npcDebuffsArr;
+                    $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
                 }
             } elseif ($dmg < 0) {
                 $heal = -$dmg;
@@ -835,14 +862,41 @@ class RaidCombatController extends Controller
         $npcStats = self::getEffectiveStats(self::getNpcStats($npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $npcCooldowns = array_filter(array_map(fn ($v) => $v - 1, $raid->npc_cooldowns ?? []), fn ($v) => $v > 0);
 
-        $disponibles = array_values(array_filter($npc->habilidadIds(), fn ($hid) => ($npcCooldowns[(string) $hid] ?? 0) <= 0));
+        /* "self" (buffs sobre sí mismo) queda excluido: el turno automático del jefe solo sabe
+         * atacar, no tiene forma de dirigir una habilidad de buff hacia sí mismo. */
+        $habilidadesNpc = RolHabilidad::whereIn('id', $npc->habilidadIds())->get()->keyBy('id');
+        $disponibles = array_values(array_filter(
+            $npc->habilidadIds(),
+            fn ($hid) => ($npcCooldowns[(string) $hid] ?? 0) <= 0 && ($habilidadesNpc->get($hid)?->objetivo) !== 'self'
+        ));
         $hab = (! empty($disponibles) && random_int(1, 100) <= 60)
-            ? RolHabilidad::find($disponibles[array_rand($disponibles)])
+            ? $habilidadesNpc->get($disponibles[array_rand($disponibles)])
             : null;
 
-        $dmgBase = $hab ? (int) ($hab->damage ?? 0) : max(1, (int) round($npcStats['ataque'] * 0.3));
-        $dmgEscudoBase = $hab ? (int) ($hab->damage_escudo ?? 0) : 0;
-        $dmgPerfBase = $hab ? (int) ($hab->damage_perforante ?? 0) : 0;
+        /* El buff propio de la habilidad (si tiene uno) se aplica al jefe mismo al usarla,
+         * sin importar si el golpe conecta — mismo criterio que el buff del jugador. No
+         * afecta la tirada de ESTE turno (npcStats ya se calculó más arriba), solo a partir
+         * del próximo, igual que el resto de los buffs/debuffs del combate. */
+        $habBuffNpc = $hab && is_array($hab->buff) ? $hab->buff : [];
+        if (! empty($habBuffNpc)) {
+            $npcBuffsArr = $raid->npc_buffs ?? [];
+            $habRondasNpc = $hab->duracion ?: 2;
+            foreach ($habBuffNpc as $stat) {
+                if (self::esTipoEstado($stat)) {
+                    $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat);
+                } else {
+                    $npcBuffsArr[] = ['stat' => $stat, 'turns' => $habRondasNpc];
+                }
+            }
+            $raid->npc_buffs = $npcBuffsArr;
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} se refuerza: +".implode(', +', $habBuffNpc)]];
+        }
+
+        /* Daño base de un ataque normal (sin habilidad): configurado en la ficha del Jefe
+         * (dano/dano_escudo/dano_perforante) — el stat de Ataque solo decide si conecta. */
+        $dmgBase = $hab ? (int) ($hab->damage ?? 0) : (int) ($npc->dano ?? 0);
+        $dmgEscudoBase = $hab ? (int) ($hab->damage_escudo ?? 0) : (int) ($npc->dano_escudo ?? 0);
+        $dmgPerfBase = $hab ? (int) ($hab->damage_perforante ?? 0) : (int) ($npc->dano_perforante ?? 0);
         $formaAtaque = $hab ? (int) $hab->forma : (int) $raid->npc_forma;
         $accion = $hab ? "usa {$hab->nombre}" : 'ataca';
 
@@ -927,6 +981,7 @@ class RaidCombatController extends Controller
 
         if ($esCritico) {
             $critBonus = $npc->nivelBonoCritico();
+            $habDebuffCrit = $hab && is_array($hab->debuff) ? $hab->debuff : [];
             $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su furia y golpea a todos los combatientes."];
             $targets = [];
             foreach ($activos as $rp) {
@@ -939,6 +994,22 @@ class RaidCombatController extends Controller
                 [$rp->hp, $rp->escudo] = self::applyDamage($rp->hp, $rp->escudo, $d, $dE, $dP);
                 if ($rp->hp <= 0) {
                     $rp->status = 'derrotado';
+                }
+                /* Antes solo se aplicaba el debuff de la habilidad en el golpe no-crítico (rama
+                 * de abajo) — un jefe crítico dejaba pasar el efecto de estado de su propia
+                 * habilidad en el AoE. Se aplica igual a cada combatiente golpeado. */
+                if (! empty($habDebuffCrit)) {
+                    $tb = $rp->debuffs ?? [];
+                    $te = $rp->estados ?? [];
+                    foreach ($habDebuffCrit as $stat) {
+                        if (self::esTipoEstado($stat)) {
+                            $te = self::aplicarEstadoDeHabilidad($te, $stat);
+                        } else {
+                            $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
+                        }
+                    }
+                    $rp->debuffs = $tb;
+                    $rp->estados = $te ?: null;
                 }
                 $rp->save();
                 $desc = self::describeDano($d, $dE, $dP, $escudoAntes);

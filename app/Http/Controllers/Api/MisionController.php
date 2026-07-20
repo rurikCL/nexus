@@ -99,7 +99,7 @@ class MisionController extends Controller
             return response()->json(['misiones' => []]);
         }
 
-        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users', 'npc']);
+        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users', 'npc']);
 
         if ($request->filled('tipo')) {
             $query->where('tipo_mision', $request->tipo);
@@ -119,7 +119,7 @@ class MisionController extends Controller
         $character = $user->character;
         $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users.character'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users.character'])
             ->where('tipo_mision', 'comunidad')
             ->where('activa', true)
             ->orderBy('orden')
@@ -177,7 +177,7 @@ class MisionController extends Controller
 
         // Solo misiones individuales que el usuario ya pidió al NPC (tiene registro en mision_user),
         // sin importar el estado (pendiente, en-curso o completada).
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'npc.lugar'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'npc.lugar'])
             ->where('tipo_mision', 'individual')
             ->where('activa', true)
             ->whereIn('id', $userMisionIds)
@@ -215,7 +215,7 @@ class MisionController extends Controller
         $character = $user->character;
         $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla'])
             ->where('tipo_mision', 'temporada')
             ->where('temporada_id', $temporadaId)
             ->where('activa', true)
@@ -260,7 +260,7 @@ class MisionController extends Controller
         $character = $user->character;
         $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla'])
             ->where('tipo_mision', 'global')
             ->where('activa', true)
             ->orderBy('orden')
@@ -335,6 +335,7 @@ class MisionController extends Controller
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
             'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
+            'recompensas.*.medalla_id' => 'nullable|integer|exists:medallas,id',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito' => 'nullable|string',
         ]);
@@ -357,7 +358,7 @@ class MisionController extends Controller
             $mision->recompensas()->create(Arr::except($rec, ['id']));
         }
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']);
 
         return response()->json(['mision' => $this->formatMision($mision, true)], 201);
     }
@@ -402,6 +403,7 @@ class MisionController extends Controller
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
             'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
+            'recompensas.*.medalla_id' => 'nullable|integer|exists:medallas,id',
             'hito_requerimiento' => 'nullable|string',
             'entregar_hito' => 'nullable|string',
         ]);
@@ -463,9 +465,9 @@ class MisionController extends Controller
             }
         }
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']);
 
-        return response()->json(['mision' => $this->formatMision($mision->fresh(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']), true)]);
+        return response()->json(['mision' => $this->formatMision($mision->fresh(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']), true)]);
     }
 
     // ── DELETE /api/misiones/{mision} ─────────────────────────────────────────
@@ -495,7 +497,7 @@ class MisionController extends Controller
             $data['user_id'] => ['status' => 'pendiente', 'progreso' => 0],
         ]);
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']);
 
         return response()->json(['mision' => $this->formatMision($mision, true)]);
     }
@@ -533,7 +535,7 @@ class MisionController extends Controller
             ]);
         }
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']);
         $pivotActual = $mision->users()->where('user_id', $user->id)->first()?->pivot;
         $progresoDespues = $pivotActual?->progreso_json ? json_decode($pivotActual->progreso_json, true) : [];
         MisionProgresoService::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoDespues);
@@ -553,7 +555,7 @@ class MisionController extends Controller
 
         $mision->users()->detach($userId);
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']);
 
         return response()->json(['mision' => $this->formatMision($mision, true)]);
     }
@@ -589,7 +591,7 @@ class MisionController extends Controller
         }
 
         $mision->users()->updateExistingPivot($user->id, $pivotData);
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'users']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users']);
         $pivotDespues = $mision->users()->where('user_id', $user->id)->first()?->pivot;
         $progresoDespues = $pivotDespues?->progreso_json ? json_decode($pivotDespues->progreso_json, true) : [];
         MisionProgresoService::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoDespues);
@@ -668,7 +670,7 @@ class MisionController extends Controller
             $user->id => ['status' => 'completada', 'progreso' => 100],
         ]);
 
-        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto']);
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla']);
 
         // Otorgar recompensas según su tipo
         $habilidadesAprendidas = [];
@@ -677,6 +679,7 @@ class MisionController extends Controller
         $creditosOtorgados = 0;
         $puntosLibresOtorgados = 0;
         $titulosOtorgados = [];
+        $medallasOtorgadas = [];
         $hitosOtorgados = [];
         foreach ($mision->recompensas as $recompensa) {
             if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
@@ -695,12 +698,19 @@ class MisionController extends Controller
             } elseif ($recompensa->tipo === 'punto_habilidad' && $recompensa->valor && $character) {
                 $character->increment('puntos_libres', $recompensa->valor);
                 $puntosLibresOtorgados += $recompensa->valor;
-            } elseif (in_array($recompensa->tipo, ['titulo', 'insignia'], true) && $character) {
+            } elseif ($recompensa->tipo === 'titulo' && $character) {
                 $titulo = $character->titulos()->firstOrCreate(
                     ['nombre' => $recompensa->nombre],
-                    ['tipo' => $recompensa->tipo, 'mision_id' => $mision->id]
+                    ['tipo' => 'titulo', 'mision_id' => $mision->id]
                 );
                 $titulosOtorgados[] = $titulo->only(['id', 'nombre', 'tipo']);
+            } elseif ($recompensa->tipo === 'insignia' && $recompensa->medalla_id && $character) {
+                $medalla = $character->medallas()->firstOrCreate(
+                    ['medalla_id' => $recompensa->medalla_id],
+                    ['mision_id' => $mision->id]
+                );
+                $medalla->load('medalla');
+                $medallasOtorgadas[] = ['id' => $medalla->id, 'medalla_id' => $medalla->medalla_id, 'medalla' => $medalla->medalla];
             }
         }
 
@@ -726,6 +736,7 @@ class MisionController extends Controller
             'creditos_otorgados' => $creditosOtorgados,
             'puntos_libres_otorgados' => $puntosLibresOtorgados,
             'titulos_otorgados' => $titulosOtorgados,
+            'medallas_otorgadas' => $medallasOtorgadas,
             'hitos_otorgados' => $hitosOtorgados,
             'mision' => array_merge($this->formatMision($mision), [
                 'status' => $pivot?->status ?? 'completada',
@@ -774,6 +785,10 @@ class MisionController extends Controller
                     'objeto_id' => $r->objeto_id,
                     'objeto' => $r->relationLoaded('objeto') && $r->objeto
                         ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen]
+                        : null,
+                    'medalla_id' => $r->medalla_id,
+                    'medalla' => $r->relationLoaded('medalla') && $r->medalla
+                        ? ['id' => $r->medalla->id, 'nombre' => $r->medalla->nombre, 'imagen' => $r->medalla->imagen, 'rareza' => $r->medalla->rareza]
                         : null,
                 ])->values()
                 : [],

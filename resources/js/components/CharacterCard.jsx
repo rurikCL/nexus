@@ -128,6 +128,41 @@ function paintPhotoVignette(ctx, x, y, w, h, radius) {
   ctx.restore();
 }
 
+/* Mismos tonos que MEDALLA_RAREZA_COLOR en ui.jsx (canvas 2D no puede resolver var(--css)). */
+const MEDALLA_RAREZA_COLOR = {
+  basica: '#8aa0c0', rara: '#38cdf0', epica: '#8b5cf6', legendaria: '#E6B325',
+};
+
+/** Medalla activa del personaje, en un círculo enmarcado por el color de su rareza. */
+function drawMedallaBadge(ctx, img, rareza, cx, cy, size) {
+  const r = size / 2;
+  const color = MEDALLA_RAREZA_COLOR[rareza] ?? MEDALLA_RAREZA_COLOR.basica;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = '#04070f';
+  ctx.fillRect(cx - r, cy - r, size, size);
+  if (img) {
+    const scale = Math.max(size / img.width, size / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Dibuja la carta imprimible del personaje y devuelve el canvas listo para exportar. */
 export async function drawCharacterCard(character, user) {
   await ensureFonts();
@@ -148,13 +183,16 @@ export async function drawCharacterCard(character, user) {
   const sableDanoPerforante = character.sable_activo?.dano_perforante ?? 0;
   const sableNombre = (character.sable_activo?.nombre ?? '').toUpperCase() || 'BONOS DEL SABLE';
 
-  const [photoImg, qrDataUrl, rankImg, formaImg] = await Promise.all([
+  const medallaActiva = character.medalla_activa?.medalla ?? null;
+
+  const [photoImg, qrDataUrl, rankImg, formaImg, medallaImg] = await Promise.all([
     loadImage(mediaUrl(character.photo ?? character.photo_url)),
     handle
       ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#eaf9ffcc', light: '#00000000' } }).catch(() => null)
       : Promise.resolve(null),
     loadImage(TIER_RANGO_IMG[tierKey] ?? TIER_RANGO_IMG.iniciado),
     loadImage(classInfo.img),
+    medallaActiva ? loadImage(mediaUrl(medallaActiva.imagen)) : Promise.resolve(null),
   ]);
   const qrImg = qrDataUrl ? await loadImage(qrDataUrl) : null;
 
@@ -303,6 +341,17 @@ export async function drawCharacterCard(character, user) {
     ctx.stroke();
   }
   paintPhotoVignette(ctx, innerX, photoTop, innerW, photoH, 16);
+
+  /* ── medalla activa: esquina inferior derecha de la foto ── */
+  if (medallaActiva) {
+    const medallaSize = 56;
+    const medallaMargin = 12;
+    drawMedallaBadge(
+      ctx, medallaImg, medallaActiva.rareza,
+      innerRight - medallaMargin - medallaSize / 2, photoTop + photoH - medallaMargin - medallaSize / 2,
+      medallaSize,
+    );
+  }
 
   /* ── vida (corazones) y escudo (energía) ── */
   const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
