@@ -1577,7 +1577,7 @@ function MissionItem({ mision, onCompleteMission, busy }) {
               border: '1px solid rgba(230,179,37,0.2)',
               color: '#E6B325',
             }}>
-              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : '📦'}{' '}
+              {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : r.tipo === 'punto_habilidad' ? '⭐' : '📦'}{' '}
               {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
               {r.tipo !== 'habilidad' && r.valor > 0 ? ` x${r.valor}` : ''}
             </span>

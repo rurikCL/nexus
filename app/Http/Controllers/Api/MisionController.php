@@ -330,7 +330,7 @@ class MisionController extends Controller
             'recompensas' => 'sometimes|array',
             'recompensas.*.nombre' => 'required|string|max:255',
             'recompensas.*.descripcion' => 'nullable|string',
-            'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia',
+            'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia,punto_habilidad',
             'recompensas.*.valor' => 'sometimes|numeric',
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
@@ -397,7 +397,7 @@ class MisionController extends Controller
             'recompensas.*.id' => 'sometimes|integer',
             'recompensas.*.nombre' => 'required|string|max:255',
             'recompensas.*.descripcion' => 'nullable|string',
-            'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia',
+            'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia,punto_habilidad',
             'recompensas.*.valor' => 'sometimes|numeric',
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
@@ -675,6 +675,7 @@ class MisionController extends Controller
         $objetosOtorgados = [];
         $objetosSinEspacio = [];
         $creditosOtorgados = 0;
+        $puntosLibresOtorgados = 0;
         $titulosOtorgados = [];
         $hitosOtorgados = [];
         foreach ($mision->recompensas as $recompensa) {
@@ -691,6 +692,9 @@ class MisionController extends Controller
             } elseif ($recompensa->tipo === 'creditos' && $recompensa->valor && $character) {
                 $character->increment('credits', $recompensa->valor);
                 $creditosOtorgados += $recompensa->valor;
+            } elseif ($recompensa->tipo === 'punto_habilidad' && $recompensa->valor && $character) {
+                $character->increment('puntos_libres', $recompensa->valor);
+                $puntosLibresOtorgados += $recompensa->valor;
             } elseif (in_array($recompensa->tipo, ['titulo', 'insignia'], true) && $character) {
                 $titulo = $character->titulos()->firstOrCreate(
                     ['nombre' => $recompensa->nombre],
@@ -720,6 +724,7 @@ class MisionController extends Controller
             'objetos_otorgados' => $objetosOtorgados,
             'objetos_sin_espacio' => $objetosSinEspacio,
             'creditos_otorgados' => $creditosOtorgados,
+            'puntos_libres_otorgados' => $puntosLibresOtorgados,
             'titulos_otorgados' => $titulosOtorgados,
             'hitos_otorgados' => $hitosOtorgados,
             'mision' => array_merge($this->formatMision($mision), [

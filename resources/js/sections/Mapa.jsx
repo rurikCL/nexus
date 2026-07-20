@@ -3276,7 +3276,7 @@ function MisionOfrecidaPopup({ mision, busy, onClose, onAceptar, onCompletar }) 
   const isMobile = useIsMobile();
   const ESTADO_LABEL = { pendiente: 'Pendiente', 'en-curso': 'En curso', completada: 'Completada' };
   const ESTADO_COLOR = { pendiente: '#E6B325', 'en-curso': '#38cdf0', completada: '#10b981' };
-  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : '📦';
+  const recIcon = (t) => t === 'creditos' ? '💰' : t === 'titulo' ? '🏷️' : t === 'insignia' ? '🏅' : t === 'habilidad' ? '⚡' : t === 'punto_habilidad' ? '⭐' : '📦';
 
   const hitosReq = mision.hito_requerimiento
     ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)

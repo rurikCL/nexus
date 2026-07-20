@@ -2048,7 +2048,8 @@ export default function AdminView() {
 ───────────────────────────────────────────────────────────── */
 const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual', 'global'];
 const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'hito', 'npc', 'automatico'];
-const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad'];
+const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad', 'punto_habilidad'];
+const TIPO_RECOMPENSA_LABEL = { punto_habilidad: 'Punto Habilidad' };
 
 const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
 const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
@@ -2649,7 +2650,7 @@ function MisionesAdmin() {
                     <div>
                       <label className="nx-label">Tipo</label>
                       <select className="nx-select" value={r.tipo ?? 'creditos'} onChange={e => setRec(i, 'tipo', e.target.value)}>
-                        {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
+                        {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{TIPO_RECOMPENSA_LABEL[t] ?? t}</option>)}
                       </select>
                     </div>
                     {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && (
