@@ -36,7 +36,7 @@ class LugarEncuentroController extends Controller
      */
     public function check(Request $request, int $lugarId): JsonResponse
     {
-        $lugar = MapLugar::with(['zona', 'enemigos'])->findOrFail($lugarId);
+        $lugar = MapLugar::with(['zona', 'enemigos.habilidad1', 'enemigos.habilidad2'])->findOrFail($lugarId);
 
         $character = $request->user()->character;
         if (!$character) {

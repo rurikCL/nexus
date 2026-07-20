@@ -835,14 +835,22 @@ class RaidCombatController extends Controller
         $npcStats = self::getEffectiveStats(self::getNpcStats($npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $npcCooldowns = array_filter(array_map(fn ($v) => $v - 1, $raid->npc_cooldowns ?? []), fn ($v) => $v > 0);
 
-        $disponibles = array_values(array_filter($npc->habilidadIds(), fn ($hid) => ($npcCooldowns[(string) $hid] ?? 0) <= 0));
+        /* "self" (buffs sobre sí mismo) queda excluido: el turno automático del jefe solo sabe
+         * atacar, no tiene forma de dirigir una habilidad de buff hacia sí mismo. */
+        $habilidadesNpc = RolHabilidad::whereIn('id', $npc->habilidadIds())->get()->keyBy('id');
+        $disponibles = array_values(array_filter(
+            $npc->habilidadIds(),
+            fn ($hid) => ($npcCooldowns[(string) $hid] ?? 0) <= 0 && ($habilidadesNpc->get($hid)?->objetivo) !== 'self'
+        ));
         $hab = (! empty($disponibles) && random_int(1, 100) <= 60)
-            ? RolHabilidad::find($disponibles[array_rand($disponibles)])
+            ? $habilidadesNpc->get($disponibles[array_rand($disponibles)])
             : null;
 
-        $dmgBase = $hab ? (int) ($hab->damage ?? 0) : max(1, (int) round($npcStats['ataque'] * 0.3));
-        $dmgEscudoBase = $hab ? (int) ($hab->damage_escudo ?? 0) : 0;
-        $dmgPerfBase = $hab ? (int) ($hab->damage_perforante ?? 0) : 0;
+        /* Daño base de un ataque normal (sin habilidad): configurado en la ficha del Jefe
+         * (dano/dano_escudo/dano_perforante) — el stat de Ataque solo decide si conecta. */
+        $dmgBase = $hab ? (int) ($hab->damage ?? 0) : (int) ($npc->dano ?? 0);
+        $dmgEscudoBase = $hab ? (int) ($hab->damage_escudo ?? 0) : (int) ($npc->dano_escudo ?? 0);
+        $dmgPerfBase = $hab ? (int) ($hab->damage_perforante ?? 0) : (int) ($npc->dano_perforante ?? 0);
         $formaAtaque = $hab ? (int) $hab->forma : (int) $raid->npc_forma;
         $accion = $hab ? "usa {$hab->nombre}" : 'ataca';
 
@@ -927,6 +935,7 @@ class RaidCombatController extends Controller
 
         if ($esCritico) {
             $critBonus = $npc->nivelBonoCritico();
+            $habDebuffCrit = $hab && is_array($hab->debuff) ? $hab->debuff : [];
             $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su furia y golpea a todos los combatientes."];
             $targets = [];
             foreach ($activos as $rp) {
@@ -939,6 +948,22 @@ class RaidCombatController extends Controller
                 [$rp->hp, $rp->escudo] = self::applyDamage($rp->hp, $rp->escudo, $d, $dE, $dP);
                 if ($rp->hp <= 0) {
                     $rp->status = 'derrotado';
+                }
+                /* Antes solo se aplicaba el debuff de la habilidad en el golpe no-crítico (rama
+                 * de abajo) — un jefe crítico dejaba pasar el efecto de estado de su propia
+                 * habilidad en el AoE. Se aplica igual a cada combatiente golpeado. */
+                if (! empty($habDebuffCrit)) {
+                    $tb = $rp->debuffs ?? [];
+                    $te = $rp->estados ?? [];
+                    foreach ($habDebuffCrit as $stat) {
+                        if (self::esTipoEstado($stat)) {
+                            $te = self::aplicarEstadoDeHabilidad($te, $stat);
+                        } else {
+                            $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
+                        }
+                    }
+                    $rp->debuffs = $tb;
+                    $rp->estados = $te ?: null;
                 }
                 $rp->save();
                 $desc = self::describeDano($d, $dE, $dP, $escudoAntes);
