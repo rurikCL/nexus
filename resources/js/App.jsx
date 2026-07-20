@@ -713,11 +713,11 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     if (!user?.id || !window.Echo) return;
     window.Echo.private(`App.Models.User.${user.id}`)
       .notification((notif) => {
-        setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
         if (isMissionReadyAlert(notif)) {
           void enqueueMissionAlert({ ...notif, notification_id: notif.id ?? Date.now() });
           return;
         }
+        setNotifications(prev => [{ id: notif.id ?? Date.now(), data: notif, read: false, created_at: new Date().toISOString() }, ...prev]);
         if (notif?.type === 'desafio_recibido' || notif?.type === 'pvp_combat') {
           void playNotificacionDuelo();
         }

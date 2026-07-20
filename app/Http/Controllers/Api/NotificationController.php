@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Notifications\MisionListaParaCompletar;
 use App\Notifications\TestTransmision;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,11 +11,21 @@ use Pusher\Pusher;
 
 class NotificationController extends Controller
 {
+    /**
+     * Tipos de notificación que tienen su propia sección dedicada en la UI y
+     * por eso se excluyen del feed/campana general (siguen llegando por
+     * broadcast/WebPush para disparar su propia UI, sólo no se listan aquí).
+     */
+    private const EXCLUIDAS_DEL_FEED_GENERAL = [
+        MisionListaParaCompletar::class,
+    ];
+
     // GET /notifications
     public function index(Request $request): JsonResponse
     {
         $notifications = $request->user()
             ->notifications()
+            ->whereNotIn('type', self::EXCLUIDAS_DEL_FEED_GENERAL)
             ->latest()
             ->limit(50)
             ->get()
@@ -28,7 +39,9 @@ class NotificationController extends Controller
 
         return response()->json([
             'data' => $notifications,
-            'unread_count' => $request->user()->unreadNotifications()->count(),
+            'unread_count' => $request->user()->unreadNotifications()
+                ->whereNotIn('type', self::EXCLUIDAS_DEL_FEED_GENERAL)
+                ->count(),
         ]);
     }
 
