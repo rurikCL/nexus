@@ -62,7 +62,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 4, 'credits' => 4250, 'gold' => true, 'joined_year' => 2024,
                 'sector' => 'Sector Andes', 'sponsor' => 'Banco Estado',
                 'bio' => 'Cierro distancias antes de que respires. Vanguardia pura.',
-                'stats' => ['fuerza' => 78, 'velocidad' => 64, 'tecnica' => 71, 'defensa' => 58, 'foco' => 82],
             ],
             [
                 'user_id' => $carlos->id, 'name' => 'Carlos Méndez', 'handle' => 'C-MNDZ',
@@ -70,7 +69,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 7, 'credits' => 6120, 'gold' => true,
                 'sector' => 'Sector Litoral', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'No me vas a ver venir.',
-                'stats' => ['fuerza' => 60, 'velocidad' => 88, 'tecnica' => 84, 'defensa' => 49, 'foco' => 76],
             ],
             [
                 'user_id' => $maria->id, 'name' => 'María González', 'handle' => 'M-GNZL',
@@ -78,7 +76,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 2, 'credits' => 3380, 'gold' => false,
                 'sector' => 'Sector Andes', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'Pasa si puedes.',
-                'stats' => ['fuerza' => 85, 'velocidad' => 41, 'tecnica' => 66, 'defensa' => 90, 'foco' => 70],
             ],
             [
                 'user_id' => $diego->id, 'name' => 'Diego Fuentes', 'handle' => 'D-FNTS',
@@ -86,7 +83,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 11, 'credits' => 9870, 'gold' => true,
                 'sector' => 'Sector Litoral', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'Leo el combate tres turnos antes que tú.',
-                'stats' => ['fuerza' => 58, 'velocidad' => 72, 'tecnica' => 91, 'defensa' => 63, 'foco' => 95],
             ],
             [
                 'user_id' => $javiera->id, 'name' => 'Javiera Rojas', 'handle' => 'J-ROJS',
@@ -94,7 +90,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 0, 'credits' => 1540, 'gold' => false,
                 'sector' => 'Sector Sur', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'Subiendo rápido.',
-                'stats' => ['fuerza' => 55, 'velocidad' => 79, 'tecnica' => 62, 'defensa' => 51, 'foco' => 68],
             ],
             [
                 'user_id' => $tomas->id, 'name' => 'Tomás Bravo', 'handle' => 'T-BRVO',
@@ -102,7 +97,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 0, 'credits' => 720, 'gold' => false,
                 'sector' => 'Sector Sur', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'Recluta con hambre.',
-                'stats' => ['fuerza' => 70, 'velocidad' => 52, 'tecnica' => 48, 'defensa' => 60, 'foco' => 44],
             ],
             [
                 'user_id' => $ignacia->id, 'name' => 'Ignacia Lillo', 'handle' => 'I-LILO',
@@ -110,7 +104,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 1, 'credits' => 410, 'gold' => false,
                 'sector' => 'Sector Andes', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'Aprendiendo a leer el ring.',
-                'stats' => ['fuerza' => 40, 'velocidad' => 58, 'tecnica' => 64, 'defensa' => 47, 'foco' => 72],
             ],
             [
                 'user_id' => $felipe->id, 'name' => 'Felipe Araya', 'handle' => 'F-ARYA',
@@ -118,7 +111,6 @@ class DatabaseSeeder extends Seeder
                 'streak' => 0, 'credits' => 180, 'gold' => false,
                 'sector' => 'Sector Litoral', 'sponsor' => null, 'joined_year' => null,
                 'bio' => 'Día uno.',
-                'stats' => ['fuerza' => 66, 'velocidad' => 38, 'tecnica' => 40, 'defensa' => 71, 'foco' => 50],
             ],
         ];
 

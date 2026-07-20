@@ -24,8 +24,7 @@ function saveState(s) {
 }
 
 const DEFAULT_CHAR = {
-  name: '', handle: '', bio: '', cls: 'forma1', saber: 'azul', side: 'luminoso',
-  stats: { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 }, pool: 6,
+  name: '', handle: '', bio: '', cls: 'forma1', saber: 'azul', side: 'luminoso', pool: 6,
 };
 
 export function useStore() {

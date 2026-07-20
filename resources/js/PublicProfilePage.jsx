@@ -36,7 +36,6 @@ function mapPublicCombatant(p) {
     losses:    p.losses ?? 0,
     streak:    p.streak ?? 0,
     winrate:   p.winrate ?? 0,
-    stats:     p.stats ?? { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 },
     combat_stats: combatStats,
     gold:      p.gold ?? false,
     tier:      p.tier ?? 'iniciado',

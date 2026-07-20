@@ -839,7 +839,6 @@ export function Empty({ label }) {
 /* ===================== CREAR PERSONAJE ===================== */
 export function CharacterCreation({ user, S, onCharacterCreated }) {
   const isMobile = useWindowWidth() < 640;
-  const DEFAULT_STATS = { fuerza: 50, velocidad: 50, tecnica: 50, defensa: 50, foco: 50 };
   const [form, setForm] = useState({
     name: user?.name ?? '',
     handle: '',
@@ -848,7 +847,6 @@ export function CharacterCreation({ user, S, onCharacterCreated }) {
     cls: 'vanguardia',
     side: 'luminoso',
     saber: 'cian',
-    stats: DEFAULT_STATS,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -881,7 +879,6 @@ export function CharacterCreation({ user, S, onCharacterCreated }) {
           cls: form.cls,
           side: form.side,
           saber_color: form.saber,
-          stats: form.stats,
         }),
       });
       const data = await res.json();
@@ -2114,7 +2111,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           name: ch.name, handle: ch.handle, bio: ch.bio || '', lore: ch.lore || '',
-          cls: ch.cls, side: ch.side, saber_color: ch.saber, stats: ch.stats,
+          cls: ch.cls, side: ch.side, saber_color: ch.saber,
           vida: ch.vida ?? 8, escudo: ch.escudo ?? 4, defensa: ch.defensa ?? 2,
           ataque: ch.ataque ?? 2, movimiento: ch.movimiento ?? 2,
           iniciativa: ch.iniciativa ?? 2, punteria: ch.punteria ?? 2,

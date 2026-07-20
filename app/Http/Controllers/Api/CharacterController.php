@@ -51,12 +51,6 @@ class CharacterController extends Controller
             'sector'      => 'nullable|string',
             'sponsor'     => 'nullable|string',
             'joined_year' => 'nullable|digits:4|integer',
-            'stats'       => 'nullable|array',
-            'stats.fuerza'    => 'nullable|integer|min:0|max:100',
-            'stats.velocidad' => 'nullable|integer|min:0|max:100',
-            'stats.tecnica'   => 'nullable|integer|min:0|max:100',
-            'stats.defensa'   => 'nullable|integer|min:0|max:100',
-            'stats.foco'      => 'nullable|integer|min:0|max:100',
             'gold'        => 'nullable|boolean',
             'grado'       => 'nullable|integer|min:1|max:5',
             'clase'       => 'nullable|string|in:Sentinela,Guardian,Consul',
@@ -121,14 +115,11 @@ class CharacterController extends Controller
             return response()->json(['message' => 'El handle ya está en uso.'], 422);
         }
 
-        $defaultStats = ['fuerza' => 50, 'velocidad' => 50, 'tecnica' => 50, 'defensa' => 50, 'foco' => 50];
-
         $character = $user->character()->updateOrCreate(
             ['user_id' => $user->id],
             array_merge([
                 'saber_color'   => 'azul',
                 'gold'          => false,
-                'stats'         => $defaultStats,
                 'vida'          => $combatStats['vida'],
                 'escudo'        => $combatStats['escudo'],
                 'defensa'       => $combatStats['defensa'],

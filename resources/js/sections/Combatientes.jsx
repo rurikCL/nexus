@@ -113,7 +113,7 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
   const cls    = NX.CLASSES.find(x => x.id === c.cls);
   const tasks  = S.tasks.filter(t => (t.pupil === c.id || t.pupil_id === c.userId) && t.status !== 'completada');
   const recent = S.combats.filter(m => m.a === c.id || m.b === c.id || m._a?.userId === c.userId || m._b?.userId === c.userId);
-  const combatStats = c.combat_stats ?? c.stats ?? {};
+  const combatStats = c.combat_stats ?? {};
   const STAT_LABEL = {
     vida: 'Vida',
     escudo: 'Escudo',

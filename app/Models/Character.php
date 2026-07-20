@@ -13,7 +13,7 @@ class Character extends Model
 {
     protected $fillable = [
         'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'cls', 'saber_color', 'side',
-        'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'stats', 'gold',
+        'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'gold',
         'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria', 'puntos_libres',
         'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
@@ -26,7 +26,6 @@ class Character extends Model
     public const CAPACIDAD_CARGA_BASE = 10;
 
     protected $casts = [
-        'stats' => 'array',
         'gold' => 'boolean',
         'reputation' => 'integer',
         'map_sistema_id' => 'integer',
@@ -49,7 +48,7 @@ class Character extends Model
         'current_forma' => 'integer',
     ];
 
-    /** Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje */
+    /** Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje. */
     public function formaEspecializacion(): int
     {
         $n = (int) str_replace('forma', '', $this->cls ?? 'forma1');
@@ -243,6 +242,7 @@ class Character extends Model
         return null;
     }
 
+    /** Bonos activos del sable ensamblado/equipado sobre las 7 stats de combate y Fuerza. */
     public function sableBonos(): array
     {
         $vacio = [
@@ -269,6 +269,10 @@ class Character extends Model
         ];
     }
 
+    /**
+     * Estadísticas efectivas de combate del personaje.
+     * Toma las 7 columnas persistidas en `characters` y les suma los bonos del sable activo.
+     */
     public function combatStats(): array
     {
         $cap = max(1, (int) Configuracion::valor('cap_stats_items', 15));
