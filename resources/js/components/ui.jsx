@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import { NX } from '../data/seed.js';
+import { mediaUrl } from '../utils/printableCard.js';
 
 /* ---- Icon set (línea fina, estilo HUD) ---- */
 export const ICON_PATHS = {
@@ -162,6 +163,37 @@ export function MedalIcon({ id, size = 34 }) {
       boxShadow: `0 0 14px -4px ${tone}` }}>
       <Icon name={m.icon} size={size * 0.5} />
     </div>
+  );
+}
+
+/* ---- Medalla (catálogo con imagen propia, otorgada como recompensa de misión "insignia") ----
+   El borde se colorea según la rareza — mismos tonos que RolObjeto en el resto de la app. */
+export const MEDALLA_RAREZA_COLOR = {
+  basica: '#8aa0c0', rara: '#38cdf0', epica: '#8b5cf6', legendaria: '#E6B325',
+};
+
+export function MedallaBadge({ medalla, size = 40, active = false, onClick, title }) {
+  if (!medalla) return null;
+  const color = MEDALLA_RAREZA_COLOR[medalla.rareza] ?? MEDALLA_RAREZA_COLOR.basica;
+  const img = mediaUrl(medalla.imagen);
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      title={title ?? medalla.nombre}
+      style={{
+        width: size, height: size, borderRadius: '50%', position: 'relative', flexShrink: 0,
+        display: 'grid', placeItems: 'center', overflow: 'hidden', padding: 0,
+        border: `2px solid ${color}`, background: `radial-gradient(circle at 35% 30%, ${color}33, #04070f 70%)`,
+        boxShadow: active ? `0 0 16px -2px ${color}, 0 0 0 3px ${color}66` : `0 0 10px -4px ${color}`,
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+    >
+      {img
+        ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <Icon name="medal" size={size * 0.5} style={{ color }} />}
+    </Tag>
   );
 }
 

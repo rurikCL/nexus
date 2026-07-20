@@ -85,7 +85,11 @@ const H_COLOR = {
 const R_COLOR = {
   comun: '#8aa0c0', poco_comun: '#38cdf0', raro: '#10b981',
   epico: '#8b5cf6', legendario: '#E6B325',
+  // Rareza de medallas (borde de la insignia) — mismos tonos, escala de 4 en vez de 5.
+  basica: '#8aa0c0', rara: '#38cdf0', epica: '#8b5cf6', legendaria: '#E6B325',
 };
+
+const RAREZA_MEDALLA_OPTS = ['basica', 'rara', 'epica', 'legendaria'];
 
 const CROP_ASPECTS_PERSONAJE = [
   { ratio: 1, label: 'Cuadrada 1:1' },
@@ -423,6 +427,27 @@ const ENTITY_CONFIG = {
       { key: 'bono_cooldown',   label: 'Bono Cooldown', type: 'number', min: -99, hint: 'Solo si tipo = mejora_nave · negativo = reduce el cooldown (en rondas) de la habilidad seleccionada' },
     ],
     defaults: { activo: true },
+  },
+
+  medallas: {
+    label: 'Medallas', icon: 'medal', group: 'ROL',
+    filters: [
+      { key: 'rareza', label: 'Rareza', options: RAREZA_MEDALLA_OPTS.map(r => ({ value: r, label: r })) },
+    ],
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'imagen', label: 'Img', type: 'image', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'rareza', label: 'Rareza', type: 'rareza' },
+      { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
+    ],
+    fields: [
+      { key: 'nombre',  label: 'Nombre',   type: 'text', required: true, span: 2, hint: 'Se otorga como recompensa de misión (tipo "insignia") y el jugador puede activarla en Mi Personaje → Medallas.' },
+      { key: 'imagen',  label: 'Imagen',   type: 'file', span: 2, hint: 'Se muestra recortada en un círculo, enmarcada con el color de la rareza elegida.' },
+      { key: 'rareza',  label: 'Rareza',   type: 'select', options: RAREZA_MEDALLA_OPTS, hint: 'Define el color del borde de la medalla' },
+      { key: 'visible', label: 'Visible',  type: 'toggle' },
+    ],
+    defaults: { rareza: 'basica', visible: true },
   },
 
   /* ── SISTEMA ── */
@@ -2062,7 +2087,7 @@ const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'S
 const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
 
 const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unidad: '' };
-const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null };
+const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null, medalla_id: null };
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '',
@@ -2090,7 +2115,7 @@ function misionFromApi(m) {
     hito_requerimiento:   m.hito_requerimiento    ?? '',
     entregar_hito:        m.entregar_hito         ?? '',
     objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
-    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null })),
+    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null, medalla_id: r.medalla_id ?? null })),
   };
 }
 
@@ -2264,6 +2289,7 @@ function MisionesAdmin() {
   const [filter, setFilter]         = useState('');
   const [habilidades, setHabilidades]   = useState([]);
   const [objetos, setObjetos]           = useState([]);
+  const [medallas, setMedallas]         = useState([]);
   const [npcsOptions, setNpcsOptions]   = useState([]);
   const [temporadasOptions, setTemporadasOptions] = useState([]);
 
@@ -2278,6 +2304,13 @@ function MisionesAdmin() {
   useEffect(() => {
     api('GET', '/admin/rol_objetos/options')
       .then(d => setObjetos(d.options ?? []))
+      .catch(() => {});
+  }, []);
+
+  /* Load medallas options once */
+  useEffect(() => {
+    api('GET', '/admin/medallas/options')
+      .then(d => setMedallas(d.options ?? []))
       .catch(() => {});
   }, []);
 
@@ -2649,7 +2682,7 @@ function MisionesAdmin() {
                   <button onClick={() => rmRec(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
                     <Icon name="x" size={12} />
                   </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto' || r.tipo === 'insignia') ? '1fr 110px' : '1fr 110px 80px', gap: 10, paddingRight: 28 }}>
                     <div>
                       <label className="nx-label">Nombre *</label>
                       <input className="nx-input" value={r.nombre} onChange={e => setRec(i, 'nombre', e.target.value)} placeholder="Ej: 500 Créditos" />
@@ -2660,7 +2693,7 @@ function MisionesAdmin() {
                         {TIPO_RECOMPENSA_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && (
+                    {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && r.tipo !== 'insignia' && (
                       <div>
                         <label className="nx-label">Valor</label>
                         <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
@@ -2694,6 +2727,21 @@ function MisionesAdmin() {
                       </select>
                       {objetos.length === 0 && (
                         <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando objetos...</div>
+                      )}
+                    </div>
+                  )}
+                  {r.tipo === 'insignia' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label className="nx-label">Medalla a otorgar *</label>
+                      <select className="nx-select" value={r.medalla_id ?? ''}
+                        onChange={e => setRec(i, 'medalla_id', e.target.value ? +e.target.value : null)}>
+                        <option value="">— Seleccionar medalla —</option>
+                        {medallas.map(m => (
+                          <option key={m.id} value={m.id}>{m.label} ({m.rareza})</option>
+                        ))}
+                      </select>
+                      {medallas.length === 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando medallas...</div>
                       )}
                     </div>
                   )}

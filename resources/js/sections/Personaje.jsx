@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, toast, ImageSlot } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Avatar, TierBadge, toast, ImageSlot } from '../components/ui.jsx';
 import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import {
   useWindowWidth,
@@ -16,6 +16,7 @@ import {
   HabilidadSlot,
   HabilidadPickerModal,
   TitulosPanel,
+  MedallasPanel,
   SaberBlade,
 } from './Comando.jsx';
 
@@ -850,11 +851,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
             )}
           </Panel>
 
-          <Panel kicker="Logros" title="Medallas" icon="medal">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              {(me.medals ?? []).map((m) => <MedalIcon key={m} id={m} size={40} />)}
-            </div>
-          </Panel>
+          <MedallasPanel user={user} onCharacterCreated={onCharacterCreated} />
 
           <Panel kicker="Orden Jedi" title="Rango" icon="shield">
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 6 }}>

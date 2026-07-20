@@ -87,6 +87,7 @@ class MeController extends Controller
                 'mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada',
                 'sableActivo' => fn ($q) => $q->with(array_keys(CharacterSable::SLOTS)),
                 'titulos', 'tituloActivo',
+                'medallas.medalla', 'medallaActiva.medalla',
                 'hitos' => fn ($q) => $q->latest(),
             ]);
         }
@@ -142,6 +143,8 @@ class MeController extends Controller
                 'arma_efectiva' => $character->armaEfectiva(),
                 'titulos' => $character->titulos,
                 'titulo_activo' => $character->tituloActivo,
+                'medallas' => $character->medallas,
+                'medalla_activa' => $character->medallaActiva,
                 'hitos' => $character->hitos,
                 'gold' => $character->gold,
                 'photo_url' => $character->photo
