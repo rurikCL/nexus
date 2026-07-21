@@ -18,18 +18,12 @@ export const EMOTES = [
    por señales útiles en un combate grupal. `desc` debe calzar en significado con
    RaidCombatController::EMOTES (whitelist autoritativa del servidor). */
 export const RAID_EMOTES = [
-  { id: 'saludar',       emoji: '👋',  label: 'Saludar',                desc: 'saluda al grupo' },
   { id: 'curacion',      emoji: '❤️‍🩹', label: 'Solicitar curación',     desc: 'solicita curación' },
   { id: 'escudo',        emoji: '🛡️',  label: 'Curar escudo',            desc: 'solicita curar escudo' },
   { id: 'buff',          emoji: '✨',  label: 'Solicitar buff',          desc: 'solicita un buff' },
   { id: 'foco',          emoji: '🎯',  label: 'Ataque concentrado',      desc: 'solicita ataque concentrado al jefe' },
-  { id: 'debuff',        emoji: '☠️',  label: 'Debuff al jefe',          desc: 'solicita debuff al jefe' },
-  { id: 'quitar_agro',   emoji: '🙋',  label: 'Quiten mi agro',          desc: 'solicita que le quiten el agro' },
-  { id: 'si',            emoji: '✅',  label: 'Sí',                      desc: 'responde que sí' },
-  { id: 'no',            emoji: '❌',  label: 'No',                      desc: 'responde que no' },
   { id: 'gracias',       emoji: '🙏',  label: 'Gracias',                 desc: 'agradece al equipo' },
   { id: 'felicitar',     emoji: '👏',  label: 'Felicitar',               desc: 'felicita al grupo' },
-  { id: 'sorprenderse',  emoji: '😲',  label: 'Sorprenderse',            desc: 'se sorprende' },
 ];
 
 /** Duración total del emoji central — debe calzar con emoji-expressions.css. */
@@ -76,6 +70,7 @@ export function EmojiRing({ anchorRef, stageRef, onSelect, onClose, emotes = EMO
           onClick={(e) => { e.stopPropagation(); onSelect(it); }}
         >
           {it.emoji}
+          <span className="nx-emoji-ring-label">{it.label}</span>
         </button>
       ))}
     </div>
