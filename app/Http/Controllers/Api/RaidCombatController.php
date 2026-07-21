@@ -847,18 +847,12 @@ class RaidCombatController extends Controller
             return;
         }
 
-        /* Confundido: el jefe puede golpearse a sí mismo en vez del objetivo elegido */
+        /* Confundido: 50% de que el jefe se golpee a sí mismo en vez del objetivo elegido
+         * (mismo criterio que el resto del combate — ver AplicaEstadosCombate::resolverConfundido). */
         $target = $activos->sortByDesc('dano_al_jefe')->first();
-        $targetEsNpc = false;
-        if (self::resolverConfundido($npcEstados)) {
-            $opciones = array_merge(['npc'], $activos->pluck('user_id')->all());
-            $elegido = $opciones[array_rand($opciones)];
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["¡{$npc->nombre} está confundido!"]];
-            if ($elegido === 'npc') {
-                $targetEsNpc = true;
-            } else {
-                $target = $activos->firstWhere('user_id', $elegido);
-            }
+        $targetEsNpc = self::resolverConfundido($npcEstados);
+        if ($targetEsNpc) {
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["¡{$npc->nombre} está confundido y ataca hacia sí mismo!"]];
         }
         $targetChar = $targetEsNpc ? null : $target->user->character;
 
