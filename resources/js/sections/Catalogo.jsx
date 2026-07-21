@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, Panel, Chip, toast } from '../components/ui.jsx';
 import { NX } from '../data/seed.js';
 import { mediaUrl } from '../utils/printableCard.js';
@@ -96,6 +97,131 @@ const groupStack = (stack) => {
   return [...counts.entries()].map(([stat, count]) => ({ stat, count }));
 };
 
+/* Tabla de efectividad entre formas de sable — misma tabla que la fuente de verdad
+   del servidor (RaidCombatController::BEATS/RESISTS y PvpCombatController::BEATS/RESISTS):
+   forma → forma que supera con ×1.5 / forma cuyos ataques resiste a ×0.5. Solo se usa
+   para pintar el diagrama de referencia; el cálculo real de daño vive en el backend. */
+const FORMA_BEATS = { 1: 6, 2: 1, 3: 4, 4: 5, 5: 3, 6: 7, 7: 2 };
+const FORMA_RESISTS = { 1: 5, 2: 4, 3: 1, 4: 7, 5: 3, 6: 6, 7: 2 };
+
+function FormaIconBadge({ num, size = 34 }) {
+  const cls = NX.CLASSES[num - 1];
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 7, overflow: 'hidden', flexShrink: 0,
+      background: 'rgba(255,255,255,0.05)', border: `1px solid ${cls?.accent ?? 'rgba(255,255,255,0.15)'}55`,
+      display: 'grid', placeItems: 'center',
+    }}>
+      {cls?.img
+        ? <img src={cls.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <Icon name={cls?.icon ?? 'sword'} size={size * 0.5} style={{ color: cls?.accent }} />}
+    </div>
+  );
+}
+
+function FormaNumChip({ num, size = 30 }) {
+  return (
+    <div className="nx-data" style={{
+      width: size, height: size, borderRadius: 7, display: 'grid', placeItems: 'center', flexShrink: 0,
+      background: 'rgba(56,205,240,0.12)', border: '1px solid rgba(56,205,240,0.45)',
+      color: '#7fd8f5', fontSize: size * 0.42, fontWeight: 700,
+    }}>{num}</div>
+  );
+}
+
+function FormaTargetCell({ num }) {
+  const cls = NX.CLASSES[num - 1];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <FormaNumChip num={num} />
+      <FormaIconBadge num={num} />
+      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+        {cls?.name?.toUpperCase()}
+      </span>
+    </div>
+  );
+}
+
+function FormaDiagramModal({ onClose }) {
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9500, display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 16,
+        background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(6px)',
+      }}
+    >
+      <div
+        className="nx-panel solid"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 920, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+      >
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          padding: '14px 18px', borderBottom: '1px solid rgba(56,205,240,0.14)', flexShrink: 0,
+        }}>
+          <div>
+            <div className="nx-kicker">Tradición del Sable</div>
+            <div className="nx-display" style={{ fontSize: 18, color: 'var(--txt)' }}>Diagrama de Formas</div>
+          </div>
+          <button className="nx-btn nx-btn-ghost" onClick={onClose} style={{ cursor: 'pointer' }}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+
+        <div style={{ overflow: 'auto', padding: '10px 14px 16px' }}>
+          <div style={{ minWidth: 620 }}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: '38px 1fr 1fr 1fr', gap: 12,
+              padding: '4px 10px 10px',
+            }}>
+              <span />
+              <span className="nx-data" style={{ fontSize: 10, letterSpacing: '0.14em', color: '#38cdf0' }}>FORMA</span>
+              <span className="nx-data" style={{ fontSize: 10, letterSpacing: '0.14em', color: '#10b981' }}>EFECTIVO CONTRA</span>
+              <span className="nx-data" style={{ fontSize: 10, letterSpacing: '0.14em', color: '#38cdf0' }}>RESISTENTE CONTRA</span>
+            </div>
+
+            {[1, 2, 3, 4, 5, 6, 7].map(num => {
+              const cls = NX.CLASSES[num - 1];
+              return (
+                <div key={num} style={{
+                  display: 'grid', gridTemplateColumns: '38px 1fr 1fr 1fr', gap: 12, alignItems: 'center',
+                  padding: '10px 10px', borderTop: '1px solid rgba(56,205,240,0.12)',
+                }}>
+                  <FormaNumChip num={num} size={34} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <FormaIconBadge num={num} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+                      {cls.name.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <Icon name="arrow" size={16} style={{ color: '#10b981', flexShrink: 0 }} />
+                    <FormaTargetCell num={FORMA_BEATS[num]} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <Icon name="shield" size={15} style={{ color: '#38cdf0', flexShrink: 0 }} />
+                    <FormaTargetCell num={FORMA_RESISTS[num]} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="nx-data" style={{
+          fontSize: 10, color: 'var(--txt-faint)', lineHeight: 1.5, padding: '10px 18px 14px',
+          borderTop: '1px solid rgba(56,205,240,0.1)', flexShrink: 0,
+        }}>
+          Efectivo contra: ×1.5 de daño. Resistente contra: ×0.5 de daño recibido. Ambos se combinan cuando aplican a la vez.
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function EntityGridCard({ item, category, onClick }) {
   const isReferencia = category.id === 'buffs_estados';
   const thumb = isReferencia ? null : mediaUrl(item.imagen ?? item.imagen_mini ?? item.icono_url ?? item.icono);
@@ -191,6 +317,7 @@ export function CatalogoView() {
   const [activeFilters, setActiveFilters] = useState({ tipo: 'todos', forma: 'todos', rareza: 'todos', kind: 'todos', categoria: 'todos' });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [showFormaDiagram, setShowFormaDiagram] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -249,12 +376,21 @@ export function CatalogoView() {
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
-      <section className="nx-panel" style={{ padding: isMobile ? 16 : 22 }}>
-        <div className="nx-kicker">Archivo de la Academia</div>
-        <h1 className="nx-display" style={{ fontSize: isMobile ? 20 : 26, margin: '4px 0 4px', color: 'var(--txt)' }}>Catálogo</h1>
-        <div className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
-          Habilidades, objetos, NPCs, jefes, enemigos y Buffs/Estados de combate — pulsa cualquier registro para ver su carta imprimible.
+      <section className="nx-panel" style={{ padding: isMobile ? 16 : 22, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <div className="nx-kicker">Archivo de la Academia</div>
+          <h1 className="nx-display" style={{ fontSize: isMobile ? 20 : 26, margin: '4px 0 4px', color: 'var(--txt)' }}>Catálogo</h1>
+          <div className="nx-data" style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+            Habilidades, objetos, NPCs, jefes, enemigos y Buffs/Estados de combate — pulsa cualquier registro para ver su carta imprimible.
+          </div>
         </div>
+        <button
+          className="nx-btn nx-btn-accent"
+          style={{ cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+          onClick={() => setShowFormaDiagram(true)}
+        >
+          <Icon name="sword" size={13} /> Diagrama de Formas
+        </button>
       </section>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -333,6 +469,9 @@ export function CatalogoView() {
 
       {selected && (
         <EntityCardModal kind={selected.kind} item={selected.item} onClose={() => setSelected(null)} />
+      )}
+      {showFormaDiagram && (
+        <FormaDiagramModal onClose={() => setShowFormaDiagram(false)} />
       )}
     </div>
   );
