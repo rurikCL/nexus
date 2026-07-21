@@ -316,7 +316,7 @@ export async function drawCharacterCard(character, user) {
   const photoTop = headerBottom + 14;
   const photoH = 400;
   if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}66`, 3, 'top');
+    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}66`, 3, 'top', 'cover');
   } else {
     ctx.save();
     ctx.beginPath();
