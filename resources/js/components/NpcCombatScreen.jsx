@@ -15,20 +15,41 @@ import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-/* Tabla de efectividad entre formas: forma atacante → formas que supera (igual que en PvP) */
+/* Tabla de efectividad entre formas: forma atacante → forma que supera con daño ×1.5 (igual que en PvP) */
 const FORMA_BEATS = {
-  1: [6],     // Shii-Cho    → Niman
-  6: [3],     // Niman       → Soresu
-  3: [4],     // Soresu      → Ataru
-  4: [1],     // Ataru       → Shii-Cho
-  2: [1, 5],  // Makashi     → Shii-Cho, Shien
-  5: [4],     // Shien/DjSo  → Ataru
-  7: [5, 6],  // Juyo/Vaapad → Shien, Niman
+  1: 6, // Shii-Cho    → Niman
+  2: 1, // Makashi     → Shii-Cho
+  3: 4, // Soresu      → Ataru
+  4: 5, // Ataru       → Shien/Djem So
+  5: 3, // Shien/DjSo  → Soresu
+  6: 7, // Niman       → Juyo/Vaapad
+  7: 2, // Juyo/Vaapad → Makashi
+};
+/* Tabla de resistencia: forma defensora → forma cuyos ataques recibe a mitad de daño (×0.5) */
+const FORMA_RESISTS = {
+  1: 5, // Shii-Cho    resiste a Shien/Djem So
+  2: 4, // Makashi     resiste a Ataru
+  3: 1, // Soresu      resiste a Shii-Cho
+  4: 7, // Ataru       resiste a Juyo/Vaapad
+  5: 3, // Shien/DjSo  resiste a Soresu
+  6: 6, // Niman       resiste a Niman
+  7: 2, // Juyo/Vaapad resiste a Makashi
 };
 /* Forma 0 = universal: nunca aplica bono ni penalización */
 const formaEsEfectiva = (atkForma, defForma) => {
   if (!atkForma || !defForma) return false;
-  return (FORMA_BEATS[atkForma] ?? []).includes(defForma);
+  return FORMA_BEATS[atkForma] === defForma;
+};
+const formaEsResistente = (atkForma, defForma) => {
+  if (!atkForma || !defForma) return false;
+  return FORMA_RESISTS[defForma] === atkForma;
+};
+/* Multiplicador combinado: ×1.5 si el atacante es efectivo, ×0.5 si el defensor resiste (se multiplican si ambos aplican) */
+const formaMultiplicador = (atkForma, defForma) => {
+  let mult = 1;
+  if (formaEsEfectiva(atkForma, defForma)) mult *= 1.5;
+  if (formaEsResistente(atkForma, defForma)) mult *= 0.5;
+  return mult;
 };
 
 /* ─── Estados de combate ───────────────────────────────────────────────
@@ -246,9 +267,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [emojiBurst, setEmojiBurst]   = useState(null);
 
   /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
-  const resultTextFor = (hit, ranged, crit, dmg) => {
+  const resultTextFor = (hit, ranged, crit, dmg, effective = false, resistant = false) => {
     if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
     if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
+    if (effective) return { variant: 'effective', text: `¡EFECTIVO! −${dmg}` };
+    if (resistant) return { variant: 'resistant', text: `RESISTIDO −${dmg}` };
     return { variant: 'hit', text: `HIT: ${dmg}` };
   };
 
@@ -283,7 +306,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   });
 
   /* Dispara el VFX de golpe (melee/a distancia) entre jugador y NPC */
-  const triggerStrike = ({ playerIsAttacker, ranged, hit, crit = false, dmg = 0 }) => {
+  const triggerStrike = ({ playerIsAttacker, ranged, hit, crit = false, effective = false, resistant = false, dmg = 0 }) => {
     if (!stageRef.current) return Promise.resolve();
     const attackerRef = playerIsAttacker ? playerHudRef : npcHudRef;
     const targetRef    = playerIsAttacker ? npcHudRef : playerHudRef;
@@ -299,7 +322,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         color, attackerRef, targetRef,
         from: getRelativeCenter(attackerRef.current, stageRef.current),
         to: getRelativeCenter(targetRef.current, stageRef.current),
-        result: resultTextFor(hit, ranged, crit, dmg),
+        result: resultTextFor(hit, ranged, crit, dmg, effective, resistant),
         onResolve: resolve,
       });
     });
@@ -637,6 +660,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
          que el jefe/jugador); si no, de dano/dano_escudo/dano_perforante del enemigo (esEnemigo)
          o, para un NPC regular sin esos campos, el viejo estimado a partir de su Ataque/Puntería. */
       const habEffective = hab ? formaEsEfectiva(hab.forma, currentForma) : false;
+      const habResistant = hab ? formaEsResistente(hab.forma, currentForma) : false;
       let dmg;
       let dmgEscudo = 0;
       let dmgPerforante = 0;
@@ -644,11 +668,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         dmg = Number(hab.damage ?? 0);
         dmgEscudo = Number(hab.damage_escudo ?? 0);
         dmgPerforante = Number(hab.damage_perforante ?? 0);
-        if (habEffective) {
-          dmg = Math.round(dmg * 1.5);
-          dmgEscudo = Math.round(dmgEscudo * 1.5);
-          dmgPerforante = Math.round(dmgPerforante * 1.5);
-        }
+        const mult = formaMultiplicador(hab.forma, currentForma);
+        dmg = Math.round(dmg * mult);
+        dmgEscudo = Math.round(dmgEscudo * mult);
+        dmgPerforante = Math.round(dmgPerforante * mult);
       } else if (esEnemigo) {
         dmg = Number(npc.dano ?? 0);
         dmgEscudo = Number(npc.dano_escudo ?? 0);
@@ -657,7 +680,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         dmg = (confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk)) + npcDanoNivel + (esCritico ? npcCritBonus : 0);
       }
       const dmgBase = mitigarDanoDebilitado(npcEstados, dmg);
-      await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, dmg: dmgBase });
+      await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, effective: habEffective, resistant: habResistant, dmg: dmgBase });
 
       const rollDesc = confundidoNpc
         ? `${npc.nombre} se ataca a sí mismo: 1d20(${aR})+${atkStatVal}=${aT} vs 1d20(${dR})+${defStatVal}=${dT}`
@@ -674,6 +697,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         ];
       if (hab && habEffective && hit) {
         entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'danger' });
+      } else if (hab && habResistant && hit) {
+        entries.push({ text: `Resistencia de forma ×0.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'success' });
       }
 
       /* Estados finales del jugador tras esta acción — arranca en `estadosObjetivo` (ya incluye
@@ -919,16 +944,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     let newNpcHp = { ...npcHp };
     let newPlayerHpSelf = { ...playerHp };
     let dmgAplicado = 0;
+    let effective = false;
+    let resistant = false;
     if (hit) {
       let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
       let dmgEscudo = hab.damage_escudo ?? 0;
       let dmgPerforante = hab.damage_perforante ?? 0;
-      const effective = !confundidoHab && formaEsEfectiva(hab.forma, npc.forma ?? 0);
-      if (effective) {
-        dmg = Math.round(dmg * 1.5);
-        dmgEscudo = Math.round(dmgEscudo * 1.5);
-        dmgPerforante = Math.round(dmgPerforante * 1.5);
-        entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
+      effective = !confundidoHab && formaEsEfectiva(hab.forma, npc.forma ?? 0);
+      resistant = !confundidoHab && formaEsResistente(hab.forma, npc.forma ?? 0);
+      if (!confundidoHab) {
+        const mult = formaMultiplicador(hab.forma, npc.forma ?? 0);
+        dmg = Math.round(dmg * mult);
+        dmgEscudo = Math.round(dmgEscudo * mult);
+        dmgPerforante = Math.round(dmgPerforante * mult);
+        if (effective) {
+          entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
+        } else if (resistant) {
+          entries.push({ text: `Resistencia de forma ×0.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'danger' });
+        }
       }
       dmg = mitigarDanoDebilitado(playerEstados, dmg);
 
@@ -954,7 +987,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    await triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit, dmg: dmgAplicado });
+    await triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit, effective, resistant, dmg: dmgAplicado });
 
     if (pendingBuffs.length > 0) {
       await playStatusFx(playerHudRef, 'buff');

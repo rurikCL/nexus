@@ -40,9 +40,11 @@ function classifyPvpAttack(entry, combat, myId) {
 
   const hit = msgs.some((m) => /¡Impacto!|¡CRÍTICO!/.test(m));
   const crit = msgs.some((m) => /¡CRÍTICO!/.test(m));
+  const effective = msgs.some((m) => /forma efectiva/i.test(m));
+  const resistant = msgs.some((m) => /resistencia de forma/i.test(m));
   // Un mismo mensaje puede reportar dos cifras de daño (p. ej. escudo perforado) — se suman todas.
   const dmg = [...msgs.join(' ').matchAll(/−(\d+) daño/g)].reduce((sum, m) => sum + Number(m[1]), 0);
-  return { actorIsMe, ranged, hit, crit, dmg };
+  return { actorIsMe, ranged, hit, crit, effective, resistant, dmg };
 }
 
 /* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
@@ -76,9 +78,11 @@ function extractRollGroups(entry, { myId, attackerId }) {
 }
 
 /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
-function resultTextFor(hit, ranged, crit, dmg) {
+function resultTextFor(hit, ranged, crit, dmg, effective = false, resistant = false) {
   if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
   if (crit) return { variant: 'crit', text: `¡CRÍTICO! −${dmg}` };
+  if (effective) return { variant: 'effective', text: `¡EFECTIVO! −${dmg}` };
+  if (resistant) return { variant: 'resistant', text: `RESISTIDO −${dmg}` };
   return { variant: 'hit', text: `HIT: ${dmg}` };
 }
 
@@ -149,14 +153,23 @@ const mediaUrl = (path) => {
   return `/storage${cleanPath}`;
 };
 
-/* Tabla de efectividad (forma atacante → formas que supera) */
-const BEATS = {
-  1: [6], 6: [3], 3: [4], 4: [1],
-  2: [1, 5], 5: [4], 7: [5, 6],
-};
+/* Tabla de efectividad (forma atacante → forma que supera con daño ×1.5) */
+const BEATS = { 1: 6, 2: 1, 3: 4, 4: 5, 5: 3, 6: 7, 7: 2 };
+/* Tabla de resistencia (forma defensora → forma cuyos ataques recibe a mitad de daño, ×0.5) */
+const RESISTS = { 1: 5, 2: 4, 3: 1, 4: 7, 5: 3, 6: 6, 7: 2 };
 const isEffective = (atkForma, defForma) => {
   if (!atkForma || !defForma) return false;
-  return (BEATS[atkForma] ?? []).includes(defForma);
+  return BEATS[atkForma] === defForma;
+};
+const isResistant = (atkForma, defForma) => {
+  if (!atkForma || !defForma) return false;
+  return RESISTS[defForma] === atkForma;
+};
+const formaMultiplier = (atkForma, defForma) => {
+  let mult = 1;
+  if (isEffective(atkForma, defForma)) mult *= 1.5;
+  if (isResistant(atkForma, defForma)) mult *= 0.5;
+  return mult;
 };
 
 const tipoIcon   = (tipo) => tipo === 'melee' ? '⚔' : '◎';
@@ -296,7 +309,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           targetRef,
           from: getRelativeCenter(attackerRef.current, stageRef.current),
           to: getRelativeCenter(targetRef.current, stageRef.current),
-          result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg),
+          result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg, lastAttack.effective, lastAttack.resistant),
           onResolve: resolve,
         });
       });
@@ -838,6 +851,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 const cdLeft   = myCooldowns[habId] ?? 0;
                 const noFuerza = myFuerza < hab.costo_fuerza;
                 const effective = isEffective(hab.forma, oppLastForma);
+                const resistant = isResistant(hab.forma, oppLastForma);
+                const dmgMult = formaMultiplier(hab.forma, oppLastForma);
                 const disabled = lockActions || busy || cdLeft > 0 || noFuerza;
                 const isSelf   = hab.objetivo === 'self';
 
@@ -850,14 +865,16 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                       cursor: disabled ? 'not-allowed' : 'pointer',
                       background: effective
                         ? 'rgba(16,185,129,0.12)'
-                        : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
-                      border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
+                        : resistant
+                          ? 'rgba(239,68,68,0.12)'
+                          : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)',
+                      border: `1px solid ${effective ? 'rgba(16,185,129,0.45)' : resistant ? 'rgba(239,68,68,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'}`,
                       display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left',
                       gap: 3, padding: 4, opacity: disabled ? 0.45 : 1,
                       position: 'relative', transition: 'all 0.13s',
                     }}
-                    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
-                    onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
+                    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.22)' : resistant ? 'rgba(239,68,68,0.22)' : 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.7)' : resistant ? 'rgba(239,68,68,0.7)' : 'rgba(56,205,240,0.48)'; } setHoveredHabId(hab.id); }}
+                    onMouseLeave={e => { e.currentTarget.style.background = effective ? 'rgba(16,185,129,0.12)' : resistant ? 'rgba(239,68,68,0.12)' : disabled ? 'rgba(56,205,240,0.03)' : 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = effective ? 'rgba(16,185,129,0.45)' : resistant ? 'rgba(239,68,68,0.45)' : disabled ? 'rgba(56,205,240,0.09)' : 'rgba(56,205,240,0.26)'; setHoveredHabId(null); }}
                   >
                     {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
                     {/* Overlay de cooldown */}
@@ -872,7 +889,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                     {/* Cabecera: nombre de la habilidad */}
                     <div style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
-                      borderBottom: `1px solid ${effective ? 'rgba(16,185,129,0.3)' : 'rgba(56,205,240,0.16)'}`, paddingBottom: 3,
+                      borderBottom: `1px solid ${effective ? 'rgba(16,185,129,0.3)' : resistant ? 'rgba(239,68,68,0.3)' : 'rgba(56,205,240,0.16)'}`, paddingBottom: 3,
                     }}>
                       <span style={{
                         fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', fontWeight: 700, letterSpacing: '0.02em',
@@ -880,6 +897,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                       }}>{hab.nombre}</span>
                       {effective && (
                         <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)', fontWeight: 700, flexShrink: 0 }}>EFF</span>
+                      )}
+                      {resistant && (
+                        <span style={{ fontSize: 7, color: '#ef4444', fontFamily: 'var(--font-data)', fontWeight: 700, flexShrink: 0 }}>RES</span>
                       )}
                     </div>
                     {/* Cuerpo: imagen a la izquierda, daño y demás a la derecha */}
@@ -899,11 +919,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                         </span>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                           {!isSelf && (
-                            <span style={{ fontSize: 7, color: effective ? '#10b981' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: effective ? 700 : 400 }}>
-                              DMG {effective ? `${Math.round(hab.damage * 1.5)}` : hab.damage}
+                            <span style={{ fontSize: 7, color: effective ? '#10b981' : resistant ? '#ef4444' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: (effective || resistant) ? 700 : 400 }}>
+                              DMG {Math.round(hab.damage * dmgMult)}
                               {!!hab.damage_perforante && (
                                 <span style={{ color: '#8aa0c0' }}>
-                                  {' '}+{effective ? Math.round(hab.damage_perforante * 1.5) : hab.damage_perforante}P
+                                  {' '}+{Math.round(hab.damage_perforante * dmgMult)}P
                                 </span>
                               )}
                             </span>

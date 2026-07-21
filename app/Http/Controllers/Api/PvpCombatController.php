@@ -37,13 +37,24 @@ class PvpCombatController extends Controller
 
     /* Tabla de efectividad: forma atacante → formas que supera */
     private const BEATS = [
-        1 => [6],     // Shii-Cho    → Niman
-        6 => [3],     // Niman       → Soresu
-        3 => [4],     // Soresu      → Ataru
-        4 => [1],     // Ataru       → Shii-Cho
-        2 => [1, 5],  // Makashi     → Shii-Cho, Shien
-        5 => [4],     // Shien/DjSo  → Ataru
-        7 => [5, 6],  // Juyo/Vaapad → Shien, Niman
+        1 => 6, // Shii-Cho    → Niman
+        2 => 1, // Makashi     → Shii-Cho
+        3 => 4, // Soresu      → Ataru
+        4 => 5, // Ataru       → Shien/Djem So
+        5 => 3, // Shien/DjSo  → Soresu
+        6 => 7, // Niman       → Juyo/Vaapad
+        7 => 2, // Juyo/Vaapad → Makashi
+    ];
+
+    /* Tabla de resistencia: forma defensora → forma cuyos ataques recibe a mitad de daño (×0.5) */
+    private const RESISTS = [
+        1 => 5, // Shii-Cho    resiste a Shien/Djem So
+        2 => 4, // Makashi     resiste a Ataru
+        3 => 1, // Soresu      resiste a Shii-Cho
+        4 => 7, // Ataru       resiste a Juyo/Vaapad
+        5 => 3, // Shien/DjSo  resiste a Soresu
+        6 => 6, // Niman       resiste a Niman
+        7 => 2, // Juyo/Vaapad resiste a Makashi
     ];
 
     private const TERMINAL_STATUSES = ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'];
@@ -710,12 +721,18 @@ class PvpCombatController extends Controller
 
                 if ($hitHab) {
                     $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $oppLastForma);
+                    $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $oppLastForma);
 
-                    if ($effective) {
-                        $dmg = (int) round($dmg * 1.5);
-                        $dmgEscudo = (int) round($dmgEscudo * 1.5);
-                        $dmgPerforante = (int) round($dmgPerforante * 1.5);
-                        $entry['messages'][] = "¡Forma efectiva! ×1.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                    if (! $confundidoHab) {
+                        $mult = self::formaMultiplier((int) $hab->forma, (int) $oppLastForma);
+                        $dmg = (int) round($dmg * $mult);
+                        $dmgEscudo = (int) round($dmgEscudo * $mult);
+                        $dmgPerforante = (int) round($dmgPerforante * $mult);
+                        if ($effective) {
+                            $entry['messages'][] = "¡Forma efectiva! ×1.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                        } elseif ($resistant) {
+                            $entry['messages'][] = "Resistencia de forma ×0.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                        }
                     }
                     $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
@@ -1184,7 +1201,31 @@ class PvpCombatController extends Controller
             return false;
         }
 
-        return in_array($defForma, self::BEATS[$atkForma] ?? [], true);
+        return (self::BEATS[$atkForma] ?? null) === $defForma;
+    }
+
+    /** ¿La forma del defensor resiste los ataques de la forma del atacante? */
+    private static function isResistant(int $atkForma, int $defForma): bool
+    {
+        if ($atkForma === 0 || $defForma === 0) {
+            return false;
+        }
+
+        return (self::RESISTS[$defForma] ?? null) === $atkForma;
+    }
+
+    /** Multiplicador de daño combinado: ×1.5 si el atacante es efectivo, ×0.5 si el defensor resiste (ambos se multiplican si aplican). */
+    private static function formaMultiplier(int $atkForma, int $defForma): float
+    {
+        $mult = 1.0;
+        if (self::isEffective($atkForma, $defForma)) {
+            $mult *= 1.5;
+        }
+        if (self::isResistant($atkForma, $defForma)) {
+            $mult *= 0.5;
+        }
+
+        return $mult;
     }
 
     private static function persistNaveDamage(?object $char, int $hp, int $escudo): void

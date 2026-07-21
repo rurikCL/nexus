@@ -321,6 +321,11 @@ const extractDice = (text) => {
   return out;
 };
 
+/* Detecta en el texto del log (mensaje construido por el backend) si el golpe fue
+   efectivo o resistido por forma, para dar feedback visual en el texto flotante. */
+const isFormaEffectiveMsg = (text) => /forma efectiva/i.test(text);
+const isFormaResistantMsg = (text) => /resistencia de forma/i.test(text);
+
 /* Contador regresivo del turno activo — sincronizado contra `turn_started_at` (servidor),
    se resincroniza en cada polling. Si llega a 0, el próximo show() del backend salta el turno. */
 const useCountdown = (startedAt, maxWait) => {
@@ -460,11 +465,12 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     });
   });
 
-  const triggerStrike = ({ attackerId, targetId, hit, crit, text }) => {
+  const triggerStrike = ({ attackerId, targetId, hit, crit, effective = false, resistant = false, text }) => {
     const attackerEl = elFor(attackerId);
     const targetEl = elFor(targetId);
     if (!stageRef.current || !attackerEl || !targetEl) return Promise.resolve();
     const color = attackerId === 'npc' ? '#ff2d45' : '#38cdf0';
+    const variant = !hit ? 'block' : crit ? 'crit' : effective ? 'effective' : resistant ? 'resistant' : 'hit';
     return new Promise(resolve => {
       setStrike({
         key: `${Date.now()}-${Math.random()}`,
@@ -472,7 +478,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         attackerRef: { current: attackerEl }, targetRef: { current: targetEl },
         from: getRelativeCenter(attackerEl, stageRef.current),
         to: getRelativeCenter(targetEl, stageRef.current),
-        result: { variant: crit ? 'crit' : hit ? 'hit' : 'block', text },
+        result: { variant, text },
         onResolve: resolve,
       });
     });
@@ -519,14 +525,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         const t = entry.targets[i];
         const msg = entry.messages[i + 1] ?? '';
         const label = msg.includes(':') ? msg.split(':').slice(1).join(':').trim() : '¡CRÍTICO!';
-        await triggerStrike({ attackerId: 'npc', targetId: t.user_id, hit: true, crit: true, text: label });
+        await triggerStrike({
+          attackerId: 'npc', targetId: t.user_id, hit: true, crit: true,
+          effective: isFormaEffectiveMsg(msg), resistant: isFormaResistantMsg(msg), text: label,
+        });
       }
       return;
     }
 
     const lastMsg = (entry.messages || [])[entry.messages.length - 1] || '';
     if (entry.hit === true) {
-      await triggerStrike({ attackerId: actorId, targetId: targetId ?? 'npc', hit: true, crit: !!entry.crit, text: lastMsg });
+      await triggerStrike({
+        attackerId: actorId, targetId: targetId ?? 'npc', hit: true, crit: !!entry.crit,
+        effective: isFormaEffectiveMsg(lastMsg), resistant: isFormaResistantMsg(lastMsg), text: lastMsg,
+      });
       for (const eff of statusEffects) {
         const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
         await playStatusFx(fxTarget, eff.type);

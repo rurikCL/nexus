@@ -38,15 +38,26 @@ class RaidCombatController extends Controller
 {
     use AplicaEstadosCombate;
 
-    /* Tabla de efectividad entre formas: forma atacante → formas que supera (igual que PvP/NPC) */
+    /* Tabla de efectividad entre formas: forma atacante → forma que supera con daño ×1.5 (igual que PvP/NPC) */
     private const BEATS = [
-        1 => [6],     // Shii-Cho    → Niman
-        6 => [3],     // Niman       → Soresu
-        3 => [4],     // Soresu      → Ataru
-        4 => [1],     // Ataru       → Shii-Cho
-        2 => [1, 5],  // Makashi     → Shii-Cho, Shien
-        5 => [4],     // Shien/DjSo  → Ataru
-        7 => [5, 6],  // Juyo/Vaapad → Shien, Niman
+        1 => 6, // Shii-Cho    → Niman
+        2 => 1, // Makashi     → Shii-Cho
+        3 => 4, // Soresu      → Ataru
+        4 => 5, // Ataru       → Shien/Djem So
+        5 => 3, // Shien/DjSo  → Soresu
+        6 => 7, // Niman       → Juyo/Vaapad
+        7 => 2, // Juyo/Vaapad → Makashi
+    ];
+
+    /* Tabla de resistencia: forma defensora → forma cuyos ataques recibe a mitad de daño (×0.5) */
+    private const RESISTS = [
+        1 => 5, // Shii-Cho    resiste a Shien/Djem So
+        2 => 4, // Makashi     resiste a Ataru
+        3 => 1, // Soresu      resiste a Shii-Cho
+        4 => 7, // Ataru       resiste a Juyo/Vaapad
+        5 => 3, // Shien/DjSo  resiste a Soresu
+        6 => 6, // Niman       resiste a Niman
+        7 => 2, // Juyo/Vaapad resiste a Makashi
     ];
 
     /** Mínimo de jugadores para poder iniciar el combate, sin importar los cupos configurados en el NPC. */
@@ -576,10 +587,12 @@ class RaidCombatController extends Controller
 
                 if ($hitHab) {
                     $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
-                    if ($effective) {
-                        $dmg = (int) round($dmg * 1.5);
-                        $dmgEscudo = (int) round($dmgEscudo * 1.5);
-                        $dmgPerforante = (int) round($dmgPerforante * 1.5);
+                    $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $raid->npc_forma);
+                    if (! $confundidoHab) {
+                        $mult = self::formaMultiplier((int) $hab->forma, (int) $raid->npc_forma);
+                        $dmg = (int) round($dmg * $mult);
+                        $dmgEscudo = (int) round($dmgEscudo * $mult);
+                        $dmgPerforante = (int) round($dmgPerforante * $mult);
                     }
                     $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
@@ -606,7 +619,8 @@ class RaidCombatController extends Controller
                     }
 
                     $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                    $entry['messages'][] = ($effective ? '¡Forma efectiva! ×1.5 — ' : '')."¡Impacto! {$desc}";
+                    $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
+                    $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
                 }
@@ -984,9 +998,11 @@ class RaidCombatController extends Controller
             foreach ($activos as $rp) {
                 $rpChar = $rp->user->character;
                 $rpEffective = self::isEffective($formaAtaque, (int) $rp->current_forma);
-                $d = self::mitigarDanoDebilitado($npcEstados, ($rpEffective ? (int) round($dmgBase * 1.5) : $dmgBase) + $critBonus);
-                $dE = $rpEffective ? (int) round($dmgEscudoBase * 1.5) : $dmgEscudoBase;
-                $dP = $rpEffective ? (int) round($dmgPerfBase * 1.5) : $dmgPerfBase;
+                $rpResistant = self::isResistant($formaAtaque, (int) $rp->current_forma);
+                $rpMult = self::formaMultiplier($formaAtaque, (int) $rp->current_forma);
+                $d = self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $rpMult) + $critBonus);
+                $dE = (int) round($dmgEscudoBase * $rpMult);
+                $dP = (int) round($dmgPerfBase * $rpMult);
                 $escudoAntes = $rp->escudo;
                 [$rp->hp, $rp->escudo] = self::applyDamage($rp->hp, $rp->escudo, $d, $dE, $dP);
                 if ($rp->hp <= 0) {
@@ -1010,15 +1026,17 @@ class RaidCombatController extends Controller
                 }
                 $rp->save();
                 $desc = self::describeDano($d, $dE, $dP, $escudoAntes);
-                $msgs[] = "{$rpChar->name}: {$desc}".($rpEffective ? ' (¡forma efectiva!)' : '');
-                $targets[] = ['user_id' => $rp->user_id, 'effective' => $rpEffective];
+                $msgs[] = "{$rpChar->name}: {$desc}".($rpEffective ? ' (¡forma efectiva!)' : ($rpResistant ? ' (resistencia de forma)' : ''));
+                $targets[] = ['user_id' => $rp->user_id, 'effective' => $rpEffective, 'resistant' => $rpResistant];
             }
             $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'crit' => true, 'hit' => true, 'aoe' => true, 'targets' => $targets, 'messages' => $msgs];
         } else {
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
-            $dmg = self::mitigarDanoDebilitado($npcEstados, $effective ? (int) round($dmgBase * 1.5) : $dmgBase);
-            $dmgEscudo = $effective ? (int) round($dmgEscudoBase * 1.5) : $dmgEscudoBase;
-            $dmgPerf = $effective ? (int) round($dmgPerfBase * 1.5) : $dmgPerfBase;
+            $resistant = self::isResistant($formaAtaque, (int) $target->current_forma);
+            $tgtMult = self::formaMultiplier($formaAtaque, (int) $target->current_forma);
+            $dmg = self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult));
+            $dmgEscudo = (int) round($dmgEscudoBase * $tgtMult);
+            $dmgPerf = (int) round($dmgPerfBase * $tgtMult);
             $escudoAntes = $target->escudo;
             [$target->hp, $target->escudo] = self::applyDamage($target->hp, $target->escudo, $dmg, $dmgEscudo, $dmgPerf);
             if ($target->hp <= 0) {
@@ -1044,10 +1062,11 @@ class RaidCombatController extends Controller
             $target->save();
 
             $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerf, $escudoAntes);
+            $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
             $log[] = [
                 'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'crit' => false,
-                'target_user_id' => $target->user_id, 'effective' => $effective,
-                'messages' => [($effective ? '¡Forma efectiva! ×1.5 — ' : '')."¡Impacto! {$desc}"],
+                'target_user_id' => $target->user_id, 'effective' => $effective, 'resistant' => $resistant,
+                'messages' => [$formaMsg."¡Impacto! {$desc}"],
             ];
         }
 
@@ -1337,7 +1356,30 @@ class RaidCombatController extends Controller
             return false;
         }
 
-        return in_array($defForma, self::BEATS[$atkForma] ?? [], true);
+        return (self::BEATS[$atkForma] ?? null) === $defForma;
+    }
+
+    private static function isResistant(int $atkForma, int $defForma): bool
+    {
+        if ($atkForma === 0 || $defForma === 0) {
+            return false;
+        }
+
+        return (self::RESISTS[$defForma] ?? null) === $atkForma;
+    }
+
+    /** Multiplicador de daño combinado: ×1.5 si el atacante es efectivo, ×0.5 si el defensor resiste (ambos se multiplican si aplican). */
+    private static function formaMultiplier(int $atkForma, int $defForma): float
+    {
+        $mult = 1.0;
+        if (self::isEffective($atkForma, $defForma)) {
+            $mult *= 1.5;
+        }
+        if (self::isResistant($atkForma, $defForma)) {
+            $mult *= 0.5;
+        }
+
+        return $mult;
     }
 
     /**
