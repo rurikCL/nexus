@@ -247,10 +247,10 @@ const ENTITY_CONFIG = {
       { key: 'dano_escudo',     label: 'Daño a Escudo',     type: 'number', min: 0, hint: 'Daño extra que solo afecta al escudo del objetivo, en un ataque normal.' },
       { key: 'dano_perforante', label: 'Daño Perforante',   type: 'number', min: 0, hint: 'Daño de un ataque normal que ignora el escudo y llega directo a la vida.' },
       { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del NPC, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
-      { key: 'habilidad_1',   label: 'Habilidad de Jefe — Slot 1', type: 'relatedSelect', related: 'rol_habilidades', span: 2, hint: 'Solo aplica si Tipo = jefe · usada en Combate RAID' },
-      { key: 'habilidad_2',   label: 'Habilidad de Jefe — Slot 2', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
-      { key: 'habilidad_3',   label: 'Habilidad de Jefe — Slot 3', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
-      { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
+      { key: 'habilidad_1',   label: 'Habilidad de Jefe — Slot 1', type: 'habilidadPicker', related: 'rol_habilidades', span: 2, hint: 'Solo aplica si Tipo = jefe · usada en Combate RAID' },
+      { key: 'habilidad_2',   label: 'Habilidad de Jefe — Slot 2', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
+      { key: 'habilidad_3',   label: 'Habilidad de Jefe — Slot 3', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
+      { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
       { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
     defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, raid_slots: 4 },
@@ -285,8 +285,8 @@ const ENTITY_CONFIG = {
       { key: 'dano_escudo',     label: 'Daño a Escudo',     type: 'number', min: 0, hint: 'Daño extra que solo afecta al escudo del objetivo, en un ataque normal.' },
       { key: 'dano_perforante', label: 'Daño Perforante',   type: 'number', min: 0, hint: 'Daño de un ataque normal que ignora el escudo y llega directo a la vida.' },
       { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del enemigo, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
-      { key: 'habilidad_1',   label: 'Habilidad — Slot 1', type: 'relatedSelect', related: 'rol_habilidades', span: 2, hint: 'Hasta 2 habilidades propias — en combate, 60% de probabilidad de usar una disponible (sin cooldown) en vez de su ataque normal, igual que un Jefe.' },
-      { key: 'habilidad_2',   label: 'Habilidad — Slot 2', type: 'relatedSelect', related: 'rol_habilidades', span: 2 },
+      { key: 'habilidad_1',   label: 'Habilidad — Slot 1', type: 'habilidadPicker', related: 'rol_habilidades', span: 2, hint: 'Hasta 2 habilidades propias — en combate, 60% de probabilidad de usar una disponible (sin cooldown) en vez de su ataque normal, igual que un Jefe.' },
+      { key: 'habilidad_2',   label: 'Habilidad — Slot 2', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
     ],
     defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1 },
   },
@@ -643,6 +643,10 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     );
   }
 
+  if (field.type === 'habilidadPicker') {
+    return <HabilidadPickerField field={field} value={value} onChange={onChange} relatedOptions={relatedOptions} />;
+  }
+
   if (field.type === 'toggle') {
     const on = value === true || value === 1 || value === '1';
     return (
@@ -835,6 +839,96 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
     <input type="text" {...base}
       value={value ?? ''} onChange={e => onChange(e.target.value)}
     />
+  );
+}
+
+/* ─── Habilidad — botón que abre un popup con las habilidades agrupadas por Forma
+   (mismo criterio de agrupación que el selector de habilidades de "Mi personaje") ── */
+function HabilidadPickerField({ field, value, onChange, relatedOptions }) {
+  const [open, setOpen] = useState(false);
+  const opts = relatedOptions?.[field.related] ?? [];
+  const selected = opts.find(o => o.id === value);
+
+  return (
+    <>
+      <button type="button" className="nx-select" onClick={() => setOpen(true)}
+        style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+      >
+        <span style={{ color: selected ? 'var(--txt)' : 'var(--txt-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected ? selected.label : '— Sin seleccionar —'}
+        </span>
+        <Icon name="chevron" size={12} style={{ flexShrink: 0, opacity: 0.5, transform: 'rotate(90deg)' }} />
+      </button>
+      {open && (
+        <HabilidadFormaPickerModal
+          options={opts}
+          value={value}
+          onSelect={(id) => { onChange(id); setOpen(false); }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function HabilidadFormaPickerModal({ options, value, onSelect, onClose }) {
+  const grouped = {};
+  for (const o of options) {
+    const key = o.forma ?? 0;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(o);
+  }
+  const formaKeys = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+
+  return (
+    <Modal open onClose={onClose} kicker="SELECCIONAR HABILIDAD" title="Habilidades agrupadas por Forma" width={480} zIndex={1100}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+        <button type="button" onClick={() => onSelect(null)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+            cursor: 'pointer', textAlign: 'left', fontSize: 12, fontFamily: 'var(--font-data)',
+            background: value == null ? 'color-mix(in srgb, var(--holo) 14%, transparent)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${value == null ? 'var(--holo)' : 'var(--holo-line)'}`,
+            color: value == null ? 'var(--holo)' : 'var(--txt-dim)',
+          }}
+        >— Sin seleccionar —</button>
+      </div>
+
+      <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {options.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 11, fontFamily: 'var(--font-data)' }}>
+            SIN HABILIDADES REGISTRADAS
+          </div>
+        ) : formaKeys.map(forma => (
+          <div key={forma}>
+            <div className="nx-kicker" style={{ marginBottom: 7, color: 'var(--holo)' }}>
+              {forma === 0 ? 'Universal' : `Forma ${forma} — ${FORMA_NOMBRES[forma]}`}
+              <span style={{ color: 'var(--txt-faint)', marginLeft: 8 }}>{grouped[forma].length}</span>
+            </div>
+            <div style={{ display: 'grid', gap: 5 }}>
+              {grouped[forma].map(o => {
+                const on = o.id === value;
+                return (
+                  <button key={o.id} type="button" onClick={() => onSelect(o.id)}
+                    style={{
+                      padding: '8px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left',
+                      fontSize: 12, color: on ? 'var(--holo)' : 'var(--txt)',
+                      background: on ? 'color-mix(in srgb, var(--holo) 14%, transparent)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${on ? 'var(--holo)' : 'var(--holo-line)'}`,
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { if (!on) e.currentTarget.style.borderColor = 'var(--holo)'; }}
+                    onMouseLeave={e => { if (!on) e.currentTarget.style.borderColor = 'var(--holo-line)'; }}
+                  >
+                    {on && <span style={{ marginRight: 6 }}>✓</span>}{o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
 
@@ -1937,7 +2031,7 @@ export default function AdminView() {
   useEffect(() => {
     const needed = new Set(
       (config?.fields ?? [])
-        .filter(f => f.type === 'relatedSelect' || f.type === 'multiCheckbox')
+        .filter(f => f.type === 'relatedSelect' || f.type === 'multiCheckbox' || f.type === 'habilidadPicker')
         .map(f => f.related)
     );
     needed.forEach(async (entity) => {
