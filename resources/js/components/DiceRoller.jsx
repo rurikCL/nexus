@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { playSound } from '../utils/sounds.js';
 
 const SPIN_MS = 650;
 const HOLD_MS = 500;
@@ -23,6 +24,7 @@ export function useDiceRoller() {
 
   const rollDice = useCallback((items) => new Promise((resolve) => {
     if (!items || items.length === 0) { resolve(); return; }
+    void playSound('lanzamiento_dado');
     const id = ++rollIdRef.current;
     setState({ id, spinning: true, items: items.map(it => ({ ...it, display: randDie() })) });
 
