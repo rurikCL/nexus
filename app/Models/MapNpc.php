@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MapNpc extends Model
@@ -153,5 +154,11 @@ class MapNpc extends Model
         return $this->belongsToMany(RolObjeto::class, 'map_npc_objetos', 'npc_id', 'rol_objeto_id')
             ->withPivot('interes')
             ->withTimestamps();
+    }
+
+    /** Recompensas configuradas para el sorteo de botín al ser derrotado (tipo jefe, vía Combate RAID). */
+    public function recompensas(): MorphMany
+    {
+        return $this->morphMany(MapRecompensa::class, 'dropable');
     }
 }

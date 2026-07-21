@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Configuracion;
 use App\Models\CharacterHito;
 use App\Services\MisionProgresoService;
+use App\Services\RecompensaRollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -296,6 +297,17 @@ class CharacterController extends Controller
         $enemigo = \App\Models\MapEnemigo::withTrashed()->findOrFail($data['enemigo_id']);
         \App\Services\MisionProgresoService::registrar($request->user(), 'combate', 1);
 
-        return response()->json(['ok' => true, 'nombre' => $enemigo->nombre]);
+        $recompensas = RecompensaRollService::resolverYOtorgar(
+            $enemigo->recompensas()->with(['objeto', 'habilidad', 'medalla'])->get(),
+            $request->user(),
+            $character
+        );
+
+        return response()->json([
+            'ok' => true,
+            'nombre' => $enemigo->nombre,
+            'recompensas' => $recompensas,
+            'credits' => $character->credits,
+        ]);
     }
 }

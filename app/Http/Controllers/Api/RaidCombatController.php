@@ -12,6 +12,7 @@ use App\Models\RaidCombat;
 use App\Models\RaidCombatPlayer;
 use App\Models\RolHabilidad;
 use App\Services\MisionProgresoService;
+use App\Services\RecompensaRollService;
 use App\Support\Combat\AplicaEstadosCombate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -622,7 +623,9 @@ class RaidCombatController extends Controller
         if ($raid->npc_hp <= 0 && $raid->status === 'activo') {
             $raid->status = 'ganado';
             $entry['messages'][] = "¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo.";
-            $this->grantVictoryRewards($raid);
+            foreach ($this->grantVictoryRewards($raid) as $mensaje) {
+                $entry['messages'][] = $mensaje;
+            }
         } elseif ($raid->status === 'activo' && $raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count() === 0) {
             /* Puede pasar si la confusión hizo que el último jugador activo se golpeara a sí mismo. */
             $raid->status = 'perdido';
@@ -741,8 +744,8 @@ class RaidCombatController extends Controller
             /* El sangrado/envenenado del tick puede haber matado al jefe o a los jugadores restantes */
             if ($raid->npc_hp <= 0) {
                 $raid->status = 'ganado';
-                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo."]];
-                $this->grantVictoryRewards($raid);
+                $mensajes = ["¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo.", ...$this->grantVictoryRewards($raid)];
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => $mensajes];
 
                 return;
             }
@@ -1060,9 +1063,12 @@ class RaidCombatController extends Controller
         }
     }
 
-    /** Hito + progreso de misión para todos los participantes que no huyeron. */
-    private function grantVictoryRewards(RaidCombat $raid): void
+    /** Hito + progreso de misión + sorteo de botín (recompensas del jefe) para todos los participantes que no huyeron. */
+    private function grantVictoryRewards(RaidCombat $raid): array
     {
+        $mensajes = [];
+        $recompensas = $raid->npc->recompensas()->with(['objeto', 'habilidad', 'medalla'])->get();
+
         foreach ($raid->jugadores as $rp) {
             if ($rp->status === 'huido') {
                 continue;
@@ -1076,8 +1082,16 @@ class RaidCombatController extends Controller
                 ]);
                 MisionProgresoService::registrarHito($rpUser, "{$raid->npc->nombre} derrotado");
                 MisionProgresoService::registrar($rpUser, 'combate', 1);
+
+                $otorgadas = RecompensaRollService::resolverYOtorgar($recompensas, $rpUser, $rpChar);
+                if ($otorgadas) {
+                    $desc = collect($otorgadas)->pluck('label')->implode(' y ');
+                    $mensajes[] = "🎁 {$rpChar->name} recibe: {$desc}";
+                }
             }
         }
+
+        return $mensajes;
     }
 
     // ─────────────────────────── formato de respuesta ──────────────────────

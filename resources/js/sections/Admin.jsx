@@ -253,7 +253,7 @@ const ENTITY_CONFIG = {
       { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
       { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, raid_slots: 4 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, raid_slots: 4, recompensas: [] },
   },
 
   enemigos: {
@@ -288,7 +288,7 @@ const ENTITY_CONFIG = {
       { key: 'habilidad_1',   label: 'Habilidad — Slot 1', type: 'habilidadPicker', related: 'rol_habilidades', span: 2, hint: 'Hasta 2 habilidades propias — en combate, 60% de probabilidad de usar una disponible (sin cooldown) en vez de su ataque normal, igual que un Jefe.' },
       { key: 'habilidad_2',   label: 'Habilidad — Slot 2', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1 },
+    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, recompensas: [] },
   },
 
   naves: {
@@ -1016,6 +1016,16 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
         ))}
       </div>
 
+      {entityKey === 'enemigos' && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+          <RecompensaDropEditor
+            recompensas={form.recompensas}
+            onChange={v => setField('recompensas', v)}
+            relatedOptions={relatedOptions}
+          />
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
         <Btn kind="ghost" onClick={onClose} disabled={saving}>Cancelar</Btn>
         <Btn kind="accent" icon="check" onClick={handleSave} disabled={saving}>
@@ -1185,6 +1195,123 @@ function EnemigoSpawnPicker({ label, catalog, selected, onChange }) {
   );
 }
 
+/* ─── NPC (tipo jefe) / Enemigo — recompensas de botín al ser derrotado ──
+   Toda recompensa "Créditos" se entrega siempre; si hay además otros tipos, se sortea
+   UNA sola entre ellos según su % relativo (ver RecompensaRollService en el backend). */
+const RECOMPENSA_TIPOS = [
+  { value: 'creditos',        label: 'Créditos' },
+  { value: 'objeto',          label: 'Objeto' },
+  { value: 'habilidad',       label: 'Habilidad' },
+  { value: 'punto_habilidad', label: 'Punto Habilidad' },
+  { value: 'titulo',          label: 'Título' },
+  { value: 'insignia',        label: 'Insignia' },
+];
+const EMPTY_NPC_RECOMPENSA = { tipo: 'creditos', porcentaje: 100, valor: 0, nombre: '', habilidad_id: null, objeto_id: null, medalla_id: null };
+
+function RecompensaDropEditor({ recompensas, onChange, relatedOptions }) {
+  const list       = recompensas ?? [];
+  const habilidades = relatedOptions?.rol_habilidades ?? [];
+  const objetos     = relatedOptions?.rol_objetos ?? [];
+  const medallas    = relatedOptions?.medallas ?? [];
+
+  const add    = () => onChange([...list, { ...EMPTY_NPC_RECOMPENSA }]);
+  const remove = (i) => onChange(list.filter((_, x) => x !== i));
+  const setAt  = (i, key, val) => onChange(list.map((r, x) => x === i ? { ...r, [key]: val } : r));
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <label className="nx-label" style={{ margin: 0 }}>Recompensas al derrotarlo</label>
+        <button type="button" onClick={add} style={{
+          background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)', color: '#E6B325',
+          borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5,
+        }}>
+          <Icon name="plus" size={11} /> Agregar recompensa
+        </button>
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 10, lineHeight: 1.5 }}>
+        Cada recompensa de tipo "Créditos" se entrega siempre. Si además hay otros tipos definidos, se sortea
+        UNA sola entre ellos según su % (relativo entre sí — con una sola definida, esa siempre sale).
+      </div>
+      {list.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '10px 0' }}>Sin recompensas definidas</div>
+      )}
+      <div style={{ display: 'grid', gap: 10 }}>
+        {list.map((r, i) => {
+          const tipo = r.tipo ?? 'creditos';
+          const esCreditos = tipo === 'creditos';
+          return (
+            <div key={i} style={{ padding: '12px 14px', background: 'rgba(230,179,37,0.04)', borderRadius: 8, border: '1px solid rgba(230,179,37,0.15)', position: 'relative' }}>
+              <button type="button" onClick={() => remove(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
+                <Icon name="x" size={12} />
+              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10, paddingRight: 28 }}>
+                <div>
+                  <label className="nx-label">Tipo</label>
+                  <select className="nx-select" value={tipo} onChange={e => setAt(i, 'tipo', e.target.value)}>
+                    {RECOMPENSA_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="nx-label">% de aparición</label>
+                  <input className="nx-input" type="number" min="1" max="100" disabled={esCreditos}
+                    value={esCreditos ? 100 : (r.porcentaje ?? 100)}
+                    onChange={e => setAt(i, 'porcentaje', Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                  />
+                  {esCreditos && <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 3 }}>Siempre se entrega</div>}
+                </div>
+              </div>
+
+              {(tipo === 'creditos' || tipo === 'punto_habilidad') && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="nx-label">{tipo === 'creditos' ? 'Monto de créditos' : 'Cantidad de puntos'}</label>
+                  <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setAt(i, 'valor', Number(e.target.value))} />
+                </div>
+              )}
+              {tipo === 'titulo' && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="nx-label">Texto del título *</label>
+                  <input className="nx-input" value={r.nombre ?? ''} onChange={e => setAt(i, 'nombre', e.target.value)} placeholder="Ej: Cazador de Sith" />
+                </div>
+              )}
+              {tipo === 'objeto' && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="nx-label">Objeto a otorgar *</label>
+                  <select className="nx-select" value={r.objeto_id ?? ''} onChange={e => setAt(i, 'objeto_id', e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">— Seleccionar objeto —</option>
+                    {objetos.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                  {objetos.length === 0 && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando objetos...</div>}
+                </div>
+              )}
+              {tipo === 'habilidad' && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="nx-label">Habilidad a otorgar *</label>
+                  <select className="nx-select" value={r.habilidad_id ?? ''} onChange={e => setAt(i, 'habilidad_id', e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">— Seleccionar habilidad —</option>
+                    {habilidades.map(h => <option key={h.id} value={h.id}>{habilidadLabel(h)}</option>)}
+                  </select>
+                  {habilidades.length === 0 && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando habilidades...</div>}
+                </div>
+              )}
+              {tipo === 'insignia' && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="nx-label">Medalla a otorgar *</label>
+                  <select className="nx-select" value={r.medalla_id ?? ''} onChange={e => setAt(i, 'medalla_id', e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">— Seleccionar medalla —</option>
+                    {medallas.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                  {medallas.length === 0 && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando medallas...</div>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Lugar — modal con campos estándar + asignación de enemigos (tasa de aparición y nivel) ── */
 function LugarCrudModal({ config, record, relatedOptions, onSave, onClose }) {
   const isEdit = !!record?.id;
@@ -1314,6 +1441,7 @@ function NpcCrudModal({ config, record, relatedOptions, onSave, onClose }) {
 
   const isVendedorNaves  = form.tipo === 'vendedor_naves';
   const isVendedorObjeto = form.tipo === 'vendedor';
+  const isJefe           = form.tipo === 'jefe';
 
   const handleSave = async () => {
     setSaving(true);
@@ -1415,6 +1543,16 @@ function NpcCrudModal({ config, record, relatedOptions, onSave, onClose }) {
             catalog={objetosCatalog}
             selected={form.objetos}
             onChange={v => setField('objetos', v)}
+          />
+        </div>
+      )}
+
+      {isJefe && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+          <RecompensaDropEditor
+            recompensas={form.recompensas}
+            onChange={v => setField('recompensas', v)}
+            relatedOptions={relatedOptions}
           />
         </div>
       )}
@@ -2034,6 +2172,12 @@ export default function AdminView() {
         .filter(f => f.type === 'relatedSelect' || f.type === 'multiCheckbox' || f.type === 'habilidadPicker')
         .map(f => f.related)
     );
+    // El editor de Recompensas (npcs/enemigos) necesita catálogo de objetos y medallas
+    // además de habilidades (esta ya se precarga por los campos habilidad_1..4).
+    if (activeEntity === 'npcs' || activeEntity === 'enemigos') {
+      needed.add('rol_objetos');
+      needed.add('medallas');
+    }
     needed.forEach(async (entity) => {
       if (relatedOptions[entity]) return;
       try {

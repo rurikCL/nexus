@@ -76,7 +76,8 @@ class AdminController extends Controller
             'planetas'   => ['sistema:id,nombre'],
             'zonas'      => ['planeta:id,nombre'],
             'lugares'    => ['zona:id,nombre', 'enemigos'],
-            'npcs'       => ['lugar:id,nombre', 'naves', 'objetos'],
+            'npcs'       => ['lugar:id,nombre', 'naves', 'objetos', 'recompensas'],
+            'enemigos'   => ['recompensas'],
             'usuarios'   => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
@@ -134,6 +135,51 @@ class AdminController extends Controller
                 'nivel'          => max(0, (int) ($item['nivel'] ?? 1)),
             ]]
         )->all();
+    }
+
+    /**
+     * Extrae del payload un array tipo [{id?, tipo, porcentaje, valor, nombre, habilidad_id, objeto_id, medalla_id}, ...]
+     * (o su versión JSON-string, como llega dentro de un FormData) para sincronizar como
+     * recompensas de botín de un NPC/Enemigo. Devuelve null si la clave no vino en el payload
+     * (no tocar las recompensas existentes).
+     */
+    private function extractRecompensas(array &$data, string $key = 'recompensas'): ?array
+    {
+        if (!array_key_exists($key, $data)) {
+            return null;
+        }
+
+        $raw = $data[$key];
+        unset($data[$key]);
+
+        return is_string($raw) ? (json_decode($raw, true) ?? []) : ($raw ?? []);
+    }
+
+    /** Crea/actualiza/elimina las recompensas de botín de un NPC/Enemigo según el array recibido. */
+    private function syncRecompensas($record, array $items): void
+    {
+        $keepIds = [];
+        foreach ($items as $item) {
+            $attrs = [
+                'tipo'         => $item['tipo'] ?? 'creditos',
+                'porcentaje'   => max(1, min(100, (int) ($item['porcentaje'] ?? 100))),
+                'valor'        => max(0, (int) ($item['valor'] ?? 0)),
+                'nombre'       => $item['nombre'] ?? null,
+                'habilidad_id' => $item['habilidad_id'] ?? null,
+                'objeto_id'    => $item['objeto_id'] ?? null,
+                'medalla_id'   => $item['medalla_id'] ?? null,
+            ];
+
+            $existing = !empty($item['id']) ? $record->recompensas()->whereKey($item['id'])->first() : null;
+            if ($existing) {
+                $existing->update($attrs);
+                $keepIds[] = $existing->id;
+            } else {
+                $keepIds[] = $record->recompensas()->create($attrs)->id;
+            }
+        }
+
+        $record->recompensas()->whereNotIn('id', $keepIds)->delete();
     }
 
     /** Guarda un archivo subido: las imágenes se convierten a WebP; el resto (ej. audio) se guarda tal cual. */
@@ -213,6 +259,7 @@ class AdminController extends Controller
         $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
         $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
         $enemigos = $entity === 'lugares' ? $this->extractSpawnPivot($data, 'enemigos')   : null;
+        $recompensas = ($entity === 'npcs' || $entity === 'enemigos') ? $this->extractRecompensas($data) : null;
 
         $record = $model::create($data);
 
@@ -227,6 +274,9 @@ class AdminController extends Controller
         }
         if ($enemigos !== null) {
             $record->enemigos()->sync($enemigos);
+        }
+        if ($recompensas !== null) {
+            $this->syncRecompensas($record, $recompensas);
         }
 
         $fresh = $record->fresh();
@@ -258,6 +308,7 @@ class AdminController extends Controller
         $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
         $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
         $enemigos = $entity === 'lugares' ? $this->extractSpawnPivot($data, 'enemigos')   : null;
+        $recompensas = ($entity === 'npcs' || $entity === 'enemigos') ? $this->extractRecompensas($data) : null;
 
         $record->update($data);
 
@@ -272,6 +323,9 @@ class AdminController extends Controller
         }
         if ($enemigos !== null) {
             $record->enemigos()->sync($enemigos);
+        }
+        if ($recompensas !== null) {
+            $this->syncRecompensas($record, $recompensas);
         }
 
         $fresh = $record->fresh();

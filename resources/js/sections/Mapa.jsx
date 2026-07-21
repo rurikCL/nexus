@@ -2035,7 +2035,9 @@ function postEnemigoVictory(enemigoId) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'application/json' },
     body: JSON.stringify({ enemigo_id: enemigoId }),
-  }).catch(() => {});
+  })
+    .then(r => r.ok ? r.json() : null)
+    .catch(() => null);
 }
 
 /* Persiste el HP/escudo restante de la nave equipada tras un encuentro naval contra
@@ -4721,7 +4723,13 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
               postReputation(-50); toast('−50 reputación adicional', { tone: 'error', icon: 'shield' });
             }
             if (activeNpcCombat.esEnemigoAmbush) {
-              if (activeNpcCombat.npc?.id) await postEnemigoVictory(activeNpcCombat.npc.id);
+              if (activeNpcCombat.npc?.id) {
+                const d = await postEnemigoVictory(activeNpcCombat.npc.id);
+                if (d?.credits !== undefined) syncCredits(d.credits);
+                if (d?.recompensas?.length) {
+                  toast(`🎁 Recompensa: ${d.recompensas.map(r => r.label).join(' y ')}`, { tone: 'success', icon: 'box' });
+                }
+              }
             } else if (activeNpcCombat.npc?.id) {
               await postNpcVictory(activeNpcCombat.npc.id);
             }

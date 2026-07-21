@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MapEnemigo extends Model
@@ -137,5 +138,11 @@ class MapEnemigo extends Model
         return $this->belongsToMany(MapLugar::class, 'map_lugar_enemigos', 'enemigo_id', 'lugar_id')
             ->withPivot('tasa_aparicion', 'nivel')
             ->withTimestamps();
+    }
+
+    /** Recompensas configuradas para el sorteo de botín al ser derrotado. */
+    public function recompensas(): MorphMany
+    {
+        return $this->morphMany(MapRecompensa::class, 'dropable');
     }
 }
