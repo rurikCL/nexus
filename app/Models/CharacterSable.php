@@ -32,7 +32,7 @@ class CharacterSable extends Model
     protected $appends = ['dano', 'dano_perforante', 'critico', 'tipo_ataque', 'color_hoja', 'consumo_energia', 'energia_maxima'];
 
     /** Daño base del ataque cuerpo a cuerpo con un sable de luz armado. */
-    const DANO_BASE = 6;
+    const DANO_BASE = 3;
 
     /**
      * Mapa slot => tipo de rol_objeto esperado en ese slot.
