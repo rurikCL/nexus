@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
-import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { useDiceRoller, useDragToThrow, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
@@ -233,6 +233,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const isMobile = useIsMobile();
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
   const { diceOverlay, rollDice } = useDiceRoller();
+  const { throwHandle, armThrow, armed } = useDragToThrow();
   const [hoveredHabId, setHoveredHabId] = useState(null);
   useEffect(() => { if (!combat.is_my_turn || busy) setHoveredHabId(null); }, [combat.is_my_turn, busy]);
 
@@ -389,8 +390,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     } catch { /* toast shown by apiPost */ setBusy(false); }
   };
 
-  const doAction = async (skillId) => {
-    if (busy || !combat.is_my_turn || combat.status !== 'active') return;
+  const doAction = async (skillId, { needsRoll = false } = {}) => {
+    if (busy || armed || !combat.is_my_turn || combat.status !== 'active') return;
+    if (needsRoll) await armThrow(myAvatarRef.current);
     setBusy(true);
     try {
       const d = await apiPost(`/pvp/${combat.id}/action`, { skill: String(skillId) });
@@ -421,14 +423,15 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     } catch { /* ignore */ }
   };
 
-  const clickSkill = (skillId) => {
+  const clickSkill = (hab) => {
     void playClickHabilidad();
-    void doAction(skillId);
+    const needsRoll = !(hab.objetivo === 'self' || (hab.objetivo === 'target' && (hab.damage ?? 0) < 0));
+    void doAction(hab.id, { needsRoll });
   };
 
   const clickOption = (skillId) => {
     void playClickOpcion();
-    void doAction(skillId);
+    void doAction(skillId, { needsRoll: skillId === 'unarmed' });
   };
 
   const openStancePicker = () => {
@@ -652,7 +655,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   };
 
   const myHabilidades = me.habilidades ?? [];
-  const lockActions = combat.status !== 'active' || !combat.is_my_turn;
+  const lockActions = combat.status !== 'active' || !combat.is_my_turn || armed;
 
   /* Agrupa el log del servidor (una entrada por turno) en tarjetas de ronda → tarjetas de turno */
   const logRounds = useMemo(() => {
@@ -840,7 +843,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
                 return (
                   <button key={hab.id}
-                    onClick={() => !disabled && clickSkill(hab.id)}
+                    onClick={() => !disabled && clickSkill(hab)}
                     disabled={disabled}
                     style={{
                       minWidth: 0, borderRadius: 8,
@@ -1079,6 +1082,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         <div ref={stageRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
 
         {diceOverlay}
+        {throwHandle}
 
         {isMobile ? (
           /* Layout mobile: oponente arriba (full width) → registro/resumen al medio → yo abajo (full width) → barra de acciones */

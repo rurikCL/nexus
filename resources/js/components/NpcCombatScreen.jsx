@@ -7,7 +7,7 @@ import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
-import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { useDiceRoller, useDragToThrow, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { NpcCombatCardModal } from './CombatCard.jsx';
 import StatusBurstEffect from './StatusBurstEffect.jsx';
@@ -328,6 +328,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [stancePicker,  setStancePicker]  = useState(false);
   const isMobile = useIsMobile();
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
+  const { throwHandle, armThrow, armed } = useDragToThrow();
   const [hoveredHabId, setHoveredHabId] = useState(null);
 
   const FORMA_LABELS_SHORT = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
@@ -761,7 +762,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Ejecutar habilidad del jugador */
   const doPlayerSkill = async (hab) => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
     const habId = String(hab.id);
     if ((cooldowns[habId] ?? 0) > 0) return;
     if (playerFuerza < hab.costo_fuerza) return;
@@ -875,6 +876,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const useAtq  = hab.tipo === 'melee';
     const atkVal  = useAtq ? effPlayerAtk : effPlayerPnt;
     const defVal  = confundidoHab ? (useAtq ? effPlayerDef : effPlayerMov) : (useAtq ? effNpcDef : effNpcMov);
+
+    await armThrow(playerAvatarRef.current);
 
     const aR = mitigarTiradaAturdido(playerEstados, d20());
     const dR = mitigarTiradaAturdido(confundidoHab ? playerEstados : npcEstados, d20());
@@ -992,7 +995,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Intento de huida: requiere ganar tirada de iniciativa contra el rival */
   const doPlayerFlee = async () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
 
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
     const pR = mitigarTiradaAturdido(playerEstados, d20());
@@ -1027,7 +1030,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   /* Evadir (solo naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa por 3 rondas —
      sirve para naves sin habilidades o para no quedar sin nada que hacer en el turno. */
   const doPlayerEvadir = () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || !naveMode) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || !naveMode) return;
 
     setPlayerBuffs(prev => [...prev, ...['defensa', 'movimiento', 'iniciativa'].map(stat => ({ stat, turns: 3 }))]);
     setLog(prev => [...prev, {
@@ -1039,7 +1042,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Ataque básico: arma equipada o desarmado */
   const doPlayerBasicAttack = async () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
 
     const confundido = resolverConfundido(playerEstados);
     const entries = [];
@@ -1053,6 +1056,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const defVal       = confundido
       ? (esDistancia ? effPlayerMov : effPlayerDef)
       : (esDistancia ? effNpcMov : effNpcDef);
+
+    await armThrow(playerAvatarRef.current);
 
     const aR = mitigarTiradaAturdido(playerEstados, d20());
     const dR = mitigarTiradaAturdido(confundido ? playerEstados : npcEstados, d20());
@@ -1163,7 +1168,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     void doPlayerFlee();
   };
 
-  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling;
+  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling && !armed;
   useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
   /* Bloquea el scroll de la página mientras el combate está en pantalla */
@@ -1694,6 +1699,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.72)' }} />
 
         {diceOverlay}
+        {throwHandle}
 
         {isMobile ? (
           /* Layout mobile: enemigo arriba (full width) → registro/resumen al medio → jugador abajo (full width) → barra de acciones */

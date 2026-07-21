@@ -342,13 +342,13 @@ export async function drawCharacterCard(character, user) {
   }
   paintPhotoVignette(ctx, innerX, photoTop, innerW, photoH, 16);
 
-  /* ── medalla activa: esquina inferior derecha de la foto ── */
+  /* ── medalla activa: esquina inferior izquierda de la foto ── */
   if (medallaActiva) {
     const medallaSize = 56;
     const medallaMargin = 12;
     drawMedallaBadge(
       ctx, medallaImg, medallaActiva.rareza,
-      innerRight - medallaMargin - medallaSize / 2, photoTop + photoH - medallaMargin - medallaSize / 2,
+      innerX + medallaMargin + medallaSize / 2, photoTop + photoH - medallaMargin - medallaSize / 2,
       medallaSize,
     );
   }

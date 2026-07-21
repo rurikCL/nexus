@@ -3,6 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 const SPIN_MS = 650;
 const HOLD_MS = 500;
 const TICK_MS = 55;
+const THROW_THRESHOLD = 56; // px de arrastre mínimo para considerar el dado "lanzado"
 
 /* d20 → dado hexagonal (icosaedro estilizado en 2D) */
 const HEX_CLIP = 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)';
@@ -74,6 +75,91 @@ export function useDiceRoller() {
   );
 
   return { diceOverlay, rollDice, rolling: !!state };
+}
+
+/**
+ * Dado arrastrable (área del jugador). `armThrow(anchorEl)` planta el dado
+ * junto al elemento ancla y devuelve una Promise que solo se resuelve cuando
+ * el jugador lo arrastra al menos THROW_THRESHOLD px y lo suelta — recién ahí
+ * el llamador debe calcular el d20() real y reproducir `rollDice(...)` como
+ * de costumbre. Mientras está armado, `armed` permite bloquear el resto de
+ * los botones de acción (no se puede cancelar, solo lanzar).
+ */
+export function useDragToThrow() {
+  const [pending, setPending] = useState(null); // { x, y, dx, dy, dragging }
+  const resolveRef = useRef(null);
+  const startRef = useRef({ x: 0, y: 0 });
+
+  const armThrow = useCallback((anchorEl) => new Promise((resolve) => {
+    const rect = anchorEl?.getBoundingClientRect?.();
+    const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+    const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+    resolveRef.current = resolve;
+    setPending({ x, y, dx: 0, dy: 0, dragging: false });
+  }), []);
+
+  const onPointerDown = useCallback((e) => {
+    e.preventDefault();
+    startRef.current = { x: e.clientX, y: e.clientY };
+    setPending(p => p && { ...p, dragging: true });
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startRef.current.x;
+      const dy = ev.clientY - startRef.current.y;
+      setPending(p => p && { ...p, dx, dy });
+    };
+    const onUp = (ev) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      const dx = ev.clientX - startRef.current.x;
+      const dy = ev.clientY - startRef.current.y;
+      if (Math.hypot(dx, dy) >= THROW_THRESHOLD) {
+        setPending(null);
+        const resolve = resolveRef.current;
+        resolveRef.current = null;
+        resolve?.();
+      } else {
+        setPending(p => p && { ...p, dragging: false, dx: 0, dy: 0 });
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, []);
+
+  const throwHandle = pending && (
+    <div
+      onPointerDown={onPointerDown}
+      style={{
+        position: 'fixed', left: pending.x, top: pending.y, zIndex: 60,
+        transform: `translate(-50%, -50%) translate(${pending.dx}px, ${pending.dy}px)`,
+        transition: pending.dragging ? 'none' : 'transform 0.28s cubic-bezier(.2,.8,.3,1.4)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        cursor: pending.dragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none',
+      }}
+    >
+      <div style={{
+        position: 'relative', width: 54, height: 54,
+        filter: `drop-shadow(0 0 10px #38cdf0cc)`,
+        animation: pending.dragging ? 'none' : 'nx-dice-pulse 1.1s ease-in-out infinite',
+      }}>
+        <div style={{ position: 'absolute', inset: 0, clipPath: HEX_CLIP, background: '#38cdf0' }} />
+        <div style={{
+          position: 'absolute', inset: 2.5, clipPath: HEX_CLIP, background: 'rgba(6,12,26,0.96)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ fontSize: 19, fontWeight: 800, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>D20</span>
+        </div>
+      </div>
+      {!pending.dragging && (
+        <span style={{
+          fontSize: 8.5, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.1em',
+          textShadow: '0 0 6px #38cdf0cc', whiteSpace: 'nowrap',
+        }}>ARRASTRA PARA LANZAR</span>
+      )}
+    </div>
+  );
+
+  return { throwHandle, armThrow, armed: !!pending };
 }
 
 /* Dado hexagonal pequeño e inline, para incrustar el resultado de una tirada dentro del texto del log */

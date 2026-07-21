@@ -6,7 +6,7 @@ import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
-import { useDiceRoller, renderDiceText } from './DiceRoller.jsx';
+import { useDiceRoller, useDragToThrow, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { EmojiRing, EmojiBurst, RAID_EMOTES } from './EmojiExpressions.jsx';
 import { RaidCombatCardModal } from './CombatCard.jsx';
@@ -404,6 +404,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const loadInFlightRef = useRef(false);
   const revealRaidRef = useRef(null);
   const { diceOverlay, rollDice, rolling } = useDiceRoller();
+  const { throwHandle, armThrow, armed } = useDragToThrow();
 
   const load = useCallback(async () => {
     if (loadInFlightRef.current) return;
@@ -605,7 +606,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
   const me = raid.jugadores.find(j => j.es_yo);
   const isMyTurn = !!me?.es_mi_turno && raid.status === 'activo';
-  const canAct = isMyTurn && !busy && !rolling && !animBusy;
+  const canAct = isMyTurn && !busy && !rolling && !animBusy && !armed;
   const finished = raid.status === 'ganado' || raid.status === 'perdido';
   const showEndScreen = finished && !animBusy;
 
@@ -619,8 +620,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       ? <img src={turnPlayer.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       : <Icon name="user" size={12} style={{ color: 'var(--holo)' }} />);
 
-  const doAction = async (payload) => {
-    if (busy) return;
+  const doAction = async (payload, { needsRoll = false } = {}) => {
+    if (busy || armed) return;
+    if (needsRoll) await armThrow(myAvatarRef.current);
     setBusy(true);
     setError('');
     try {
@@ -651,13 +653,13 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     if (hab.objetivo === 'self') {
       setPendingSelfHab(hab);
     } else {
-      void doAction({ skill: String(hab.id) });
+      void doAction({ skill: String(hab.id) }, { needsRoll: true });
     }
   };
 
   const clickAction = (payload) => {
     void playClickOpcion();
-    void doAction(payload);
+    void doAction(payload, { needsRoll: payload.skill === 'unarmed' });
   };
 
   const openStancePicker = () => {
@@ -1017,6 +1019,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         </div>
 
         {diceOverlay}
+        {throwHandle}
 
         {emojiPicker && (
           <EmojiRing
