@@ -210,6 +210,10 @@ const ENTITY_CONFIG = {
 
   npcs: {
     label: 'NPCs', icon: 'user', group: 'MAPA GALÁCTICO',
+    filters: [
+      { key: 'tipo',    label: 'Tipo',  options: TIPO_NPC_OPTS },
+      { key: 'LugarID', label: 'Lugar', related: 'lugares' },
+    ],
     columns: [
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
@@ -1866,8 +1870,41 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
   const total      = data?.total ?? 0;
   const lastPage   = data?.last_page ?? 1;
 
+  const isUsuarios = entityKey === 'usuarios';
+  const sedeTabs   = isUsuarios ? (relatedOptions?.sedes ?? []) : [];
+  const activeSedeId = activeFilters.sede_id ?? '';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+
+      {/* pestañas por sede (solo Usuarios) */}
+      {isUsuarios && sedeTabs.length > 0 && (
+        <div style={{
+          display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 16px 0',
+          borderBottom: '1px solid var(--holo-line)', flexShrink: 0,
+        }}>
+          {[{ id: '', label: 'Todas' }, ...sedeTabs.map(s => ({ id: s.id, label: s.label }))].map(t => {
+            const active = String(activeSedeId) === String(t.id);
+            return (
+              <button key={t.id || 'all'}
+                onClick={() => { setActiveFilters(prev => ({ ...prev, sede_id: t.id })); setPage(1); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 12px', borderRadius: '6px 6px 0 0', cursor: 'pointer',
+                  fontSize: 11, fontFamily: 'var(--font-data)', letterSpacing: '0.04em',
+                  background: active ? 'color-mix(in srgb, var(--holo) 15%, transparent)' : 'transparent',
+                  border: '1px solid var(--holo-line)', borderBottom: 'none',
+                  borderColor: active ? 'var(--holo)' : 'var(--holo-line)',
+                  color: active ? 'var(--holo)' : 'var(--txt-dim)',
+                  marginBottom: -1, transition: 'all 0.14s',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* toolbar */}
       <div style={{
@@ -1895,7 +1932,11 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
         </form>
 
         {/* Filtros específicos de entidad */}
-        {(config.filters ?? []).map(f => (
+        {(config.filters ?? []).map(f => {
+          const opts = f.related
+            ? (relatedOptions?.[f.related] ?? []).map(o => ({ value: o.id, label: o.label }))
+            : (f.options ?? []).map(o => typeof o === 'object' ? o : { value: o, label: o });
+          return (
           <select
             key={f.key}
             className="nx-select"
@@ -1904,11 +1945,12 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
             style={{ fontSize: 11, minWidth: 110, height: 32, padding: '0 8px' }}
           >
             <option value="">— {f.label} —</option>
-            {f.options.map(o => (
+            {opts.map(o => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-        ))}
+          );
+        })}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           {Object.values(activeFilters).some(v => v !== '') && (
