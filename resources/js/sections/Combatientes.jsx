@@ -20,11 +20,22 @@ import { ChallengeModal } from './Combates.jsx';
 export function CombatientesView({ S }) {
   const [q, setQ] = useState('');
   const [tierF, setTierF] = useState('todos');
+  const [sedeF, setSedeF] = useState('todas');
   const [profile, setProfile] = useState(null);
   const [challengeTarget, setChallengeTarget] = useState(null);
 
+  const sedeTabs = [...new Map(
+    S.combatants.filter(c => c.sedeId != null).map(c => [c.sedeId, c.sedeNombre])
+  ).entries()]
+    .map(([id, nombre]) => ({ id, nombre: nombre || `Sede ${id}` }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const sinSedeCount = S.combatants.filter(c => c.sedeId == null).length;
+
   const list = S.combatants.filter(c => {
     if (tierF !== 'todos' && c.tier !== tierF) return false;
+    if (sedeF === 'sin_sede') {
+      if (c.sedeId != null) return false;
+    } else if (sedeF !== 'todas' && String(c.sedeId) !== String(sedeF)) return false;
     if (q && !(`${c.name} ${c.handle} ${c.sector || ''}`.toLowerCase().includes(q.toLowerCase()))) return false;
     return true;
   });
@@ -33,6 +44,31 @@ export function CombatientesView({ S }) {
     <div className="nx-fade" style={{ display: 'grid', gap: 18 }}>
       <Panel kicker="Registros de usuarios" title="Directorio de usuarios de la fuerza" icon="roster"
         right={<Chip tone="dim" icon="roster">{S.combatants.length} registrados</Chip>}>
+        {/* Pestañas por sede */}
+        {sedeTabs.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--holo-line)' }}>
+            <button onClick={() => setSedeF('todas')} className={`nx-chip ${sedeF === 'todas' ? '' : 'dim'}`}
+              style={{ cursor: 'pointer', borderColor: sedeF === 'todas' ? 'var(--holo)' : undefined }}>
+              Todas las sedes ({S.combatants.length})
+            </button>
+            {sedeTabs.map(s => {
+              const count = S.combatants.filter(c => String(c.sedeId) === String(s.id)).length;
+              return (
+                <button key={s.id} onClick={() => setSedeF(s.id)} className={`nx-chip ${sedeF === s.id ? '' : 'dim'}`}
+                  style={{ cursor: 'pointer', borderColor: sedeF === s.id ? 'var(--holo)' : undefined }}>
+                  {s.nombre} ({count})
+                </button>
+              );
+            })}
+            {sinSedeCount > 0 && (
+              <button onClick={() => setSedeF('sin_sede')} className={`nx-chip ${sedeF === 'sin_sede' ? '' : 'dim'}`}
+                style={{ cursor: 'pointer', borderColor: sedeF === 'sin_sede' ? 'var(--holo)' : undefined }}>
+                Sin sede ({sinSedeCount})
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Filtros */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
