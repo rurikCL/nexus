@@ -296,5 +296,8 @@ class DatabaseSeeder extends Seeder
 
         // ─── Habilidades aprendidas (inicial) ─────────────────────────
         $this->call(RolHabilidadesAprendidasSeeder::class);
+
+        // ─── Mapa galáctico (sistemas, planetas, zonas, lugares, NPCs) ─
+        $this->call(MapaGalacticoSeeder::class);
     }
 }
