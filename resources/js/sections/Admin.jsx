@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Icon, Panel, Btn, Chip, Modal, toast, CropImageField } from '../components/ui.jsx';
 
 function useWindowWidth() {
@@ -3047,6 +3047,43 @@ function MisionesAdmin() {
   const TIPOS = [{ v: '', l: 'Todas' }, { v: 'temporada', l: 'Temporada' }, { v: 'comunidad', l: 'Comunidad' }, { v: 'individual', l: 'Individual' }, { v: 'global', l: 'Global' }];
   const tipoC = { temporada: '#E6B325', comunidad: '#10b981', individual: '#38cdf0', global: '#8b5cf6' };
 
+  /* Cadenas de misiones: una misión es "hija" de otra cuando su hito_requerimiento
+     coincide con un hito que la otra entrega (entregar_hito). Se listan anidadas,
+     indentadas bajo la misión que las desbloquea. */
+  const misionesTree = useMemo(() => {
+    const norm = (s) => (s || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+    const childrenMap = new Map();
+    const hasParent = new Set();
+
+    misiones.forEach(m => {
+      const reqs = norm(m.hito_requerimiento);
+      if (!reqs.length) return;
+      const parent = misiones.find(p => p.id !== m.id && norm(p.entregar_hito).some(h => reqs.includes(h)));
+      if (parent) {
+        hasParent.add(m.id);
+        if (!childrenMap.has(parent.id)) childrenMap.set(parent.id, []);
+        childrenMap.get(parent.id).push(m);
+      }
+    });
+
+    const roots = misiones.filter(m => !hasParent.has(m.id));
+    const flat = [];
+    const visited = new Set();
+    const walk = (list, depth) => {
+      list.forEach(m => {
+        if (visited.has(m.id)) return; // corta ciclos si dos misiones se requieren hitos entre sí
+        visited.add(m.id);
+        flat.push({ m, depth });
+        const kids = childrenMap.get(m.id);
+        if (kids?.length) walk(kids, depth + 1);
+      });
+    };
+    walk(roots, 0);
+    // Salvaguarda: cualquier misión no visitada (p.ej. ciclo de hitos) igual se muestra, al nivel raíz.
+    misiones.forEach(m => { if (!visited.has(m.id)) { visited.add(m.id); flat.push({ m, depth: 0 }); } });
+    return flat;
+  }, [misiones]);
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
@@ -3079,16 +3116,28 @@ function MisionesAdmin() {
           </div>
         )}
         <div style={{ display: 'grid', gap: 10 }}>
-          {misiones.map(m => {
+          {misionesTree.map(({ m, depth }) => {
             const c = tipoC[m.tipo_mision] ?? '#38cdf0';
             return (
               <div key={m.id} style={{
                 padding: '12px 14px', borderRadius: 8, border: '1px solid var(--holo-line)',
                 background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'flex-start', gap: 12,
                 borderLeft: `3px solid ${c}`,
+                marginLeft: depth * 28,
+                ...(depth > 0 ? { borderLeftStyle: 'dashed', background: 'rgba(255,255,255,0.035)' } : {}),
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 3 }}>
+                    {depth > 0 && (
+                      <span title="Parte de una cadena de misiones" style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9,
+                        fontFamily: 'var(--font-data)', letterSpacing: '0.06em', padding: '2px 7px',
+                        borderRadius: 3, background: 'color-mix(in srgb, var(--holo) 14%, transparent)',
+                        color: 'var(--holo)', border: '1px solid var(--holo-line)', flexShrink: 0,
+                      }}>
+                        <Icon name="link" size={9} /> CADENA
+                      </span>
+                    )}
                     <span style={{ fontWeight: 700, fontSize: 13 }}>{m.nombre}</span>
                     <span style={{ fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 7px', borderRadius: 3, background: `${c}18`, color: c, border: `1px solid ${c}40` }}>
                       {m.tipo_mision?.toUpperCase()}
