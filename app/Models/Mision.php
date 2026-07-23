@@ -19,6 +19,7 @@ class Mision extends Model
         'tipo_mision',
         'temporada_id',
         'npc_id',
+        'npc_termina_id',
         'puntos_requeridos',
         'activa',
         'notificar',
@@ -68,6 +69,11 @@ class Mision extends Model
     public function npc(): BelongsTo
     {
         return $this->belongsTo(MapNpc::class, 'npc_id');
+    }
+
+    public function npcTermina(): BelongsTo
+    {
+        return $this->belongsTo(MapNpc::class, 'npc_termina_id');
     }
 
     // Legacy single-FK relations kept for backwards compat

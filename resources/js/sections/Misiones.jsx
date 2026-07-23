@@ -669,6 +669,11 @@ function IndividualCard({ mision, completed, onOpen }) {
             <Icon name="user" size={10} /> {npc.nombre} · {npc.lugar ?? ''}
           </div>
         )}
+        {mision.npc_termina && mision.npc_termina.id !== npc?.id && (
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 4 }}>
+            <Icon name="target" size={10} /> Entregar a: {mision.npc_termina.nombre} · {mision.npc_termina.lugar ?? ''}
+          </div>
+        )}
         <div style={{ fontSize: 13, color: 'var(--txt-dim)' }}>{mision.mision}</div>
       </div>
       {mision.fecha_termino && (
@@ -699,6 +704,11 @@ function IndividualMisionPopup({ mision, onClose }) {
         {npc && (
           <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
             <Icon name="user" size={11} /> {npc.nombre} · {npc.lugar ?? ''}
+          </div>
+        )}
+        {mision.npc_termina && mision.npc_termina.id !== npc?.id && (
+          <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
+            <Icon name="target" size={11} /> Entregar a: {mision.npc_termina.nombre} · {mision.npc_termina.lugar ?? ''}
           </div>
         )}
 

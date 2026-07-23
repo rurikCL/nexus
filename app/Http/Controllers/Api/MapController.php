@@ -258,32 +258,41 @@ class MapController extends Controller
     }
 
     /**
-     * Adjunta a cada NPC la misión individual activa que ofrece (misiones.npc_id),
-     * junto con el estado de esa misión para el usuario autenticado.
+     * Adjunta a cada NPC la misión individual activa relevante para él, junto con el
+     * estado de esa misión para el usuario autenticado. Un NPC puede estar involucrado
+     * de dos formas: como quien la ofrece (misiones.npc_id) o como quien la recibe una
+     * vez cumplida (misiones.npc_termina_id) — este segundo caso solo se muestra si el
+     * usuario ya la aceptó, para no permitir "entregarla" antes de haberla pedido.
      */
     private function attachMisionInfo(Collection $npcs, ?User $user): Collection
     {
         $npcIds = $npcs->pluck('id');
 
-        $misionesPorNpc = Mision::whereIn('npc_id', $npcIds)
-            ->where('activa', true)
+        $misiones = Mision::where('activa', true)
+            ->where(function ($q) use ($npcIds) {
+                $q->whereIn('npc_id', $npcIds)->orWhereIn('npc_termina_id', $npcIds);
+            })
             ->with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto'])
             ->orderBy('orden')
-            ->get()
-            ->groupBy('npc_id');
+            ->get();
 
-        $misionIds = $misionesPorNpc->flatten()->pluck('id');
+        $misionIds = $misiones->pluck('id');
 
         $pivots = ($user && $misionIds->isNotEmpty())
             ? \DB::table('mision_user')->where('user_id', $user->id)->whereIn('mision_id', $misionIds)->get()->keyBy('mision_id')
             : collect();
 
+        $misionesComoOferente = $misiones->filter(fn ($m) => $npcIds->contains($m->npc_id))->groupBy('npc_id');
+        $misionesComoReceptor = $misiones
+            ->filter(fn ($m) => $npcIds->contains($m->npc_termina_id) && $pivots->has($m->id))
+            ->groupBy('npc_termina_id');
+
         $characterHitos = $user?->character
             ? $user->character->hitos()->pluck('hito')->all()
             : [];
 
-        return $npcs->map(function (MapNpc $npc) use ($misionesPorNpc, $pivots, $characterHitos) {
-            $mision = $misionesPorNpc->get($npc->id)?->first();
+        return $npcs->map(function (MapNpc $npc) use ($misionesComoOferente, $misionesComoReceptor, $pivots, $characterHitos) {
+            $mision = $misionesComoOferente->get($npc->id)?->first() ?? $misionesComoReceptor->get($npc->id)?->first();
 
             if (! $mision) {
                 $npc->setAttribute('mision_disponible', null);

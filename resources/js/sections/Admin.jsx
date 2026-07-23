@@ -235,6 +235,7 @@ const ENTITY_CONFIG = {
       { key: 'nivel',         label: 'Nivel (★)',        type: 'number', min: 0, hint: 'Nivel de dificultad, representado con estrellas. Afecta combates contra este NPC y (si es jefe) contra RAID: +1 a todos sus atributos por nivel, +nivel de daño/curación adicional sobre el daño base (ver Daño/Daño a Escudo/Daño Perforante más abajo), +floor(nivel/2) extra en críticos, y crítico con dado ≥ 21-nivel (ej. nivel 4 → crítico con 17-20).' },
       { key: 'fecha_inicio',  label: 'Disponible desde', type: 'date', hint: 'Opcional. El NPC solo aparece a partir de esta fecha.' },
       { key: 'fecha_fin',     label: 'Disponible hasta', type: 'date', hint: 'Opcional. El NPC deja de aparecer después de esta fecha.' },
+      { key: 'hito_requerimiento', label: 'Hitos para que aparezca', type: 'tags', span: 2, hint: 'El personaje debe tener todos estos hitos para que el NPC aparezca en su ubicación.' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
       { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
       { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Si se rellena, el NPC usará IA en lugar del diálogo estático. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
@@ -687,6 +688,10 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
         onChange={e => onChange(e.target.value || null)}
       />
     );
+  }
+
+  if (field.type === 'tags') {
+    return <TagInput value={value ?? ''} onChange={onChange} placeholder={field.hint ?? 'Escribe y presiona Enter o coma...'} />;
   }
 
   if (field.type === 'color') {
@@ -2371,7 +2376,7 @@ const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unida
 const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null, medalla_id: null };
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
-  tipo_mision: 'individual', temporada_id: '', npc_id: '',
+  tipo_mision: 'individual', temporada_id: '', npc_id: '', npc_termina_id: '',
   puntos_requeridos: 100, activa: true, notificar: false, orden: 0,
   fecha_inicio: '', fecha_termino: '',
   hito_requerimiento: '', entregar_hito: '',
@@ -2387,6 +2392,7 @@ function misionFromApi(m) {
     tipo_mision:        m.tipo_mision       ?? 'individual',
     temporada_id:       m.temporada_id      ?? '',
     npc_id:             m.npc_id            ?? '',
+    npc_termina_id:     m.npc_termina_id    ?? '',
     puntos_requeridos:  m.puntos_requeridos ?? 100,
     activa:             m.activa            ?? true,
     notificar:          m.notificar         ?? false,
@@ -2466,7 +2472,9 @@ function TagInput({ value, onChange, placeholder = 'Escribe y presiona Enter o c
 
 function NpcPicker({ npcs, value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const ref = useRef(null);
+  const searchRef = useRef(null);
   const selected = npcs.find(n => n.id === value) ?? null;
 
   useEffect(() => {
@@ -2475,6 +2483,16 @@ function NpcPicker({ npcs, value, onChange }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  useEffect(() => {
+    if (open) { setSearch(''); setTimeout(() => searchRef.current?.focus(), 0); }
+  }, [open]);
+
+  const filteredNpcs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return npcs;
+    return npcs.filter(n => n.nombre?.toLowerCase().includes(q) || n.lugar?.toLowerCase().includes(q));
+  }, [npcs, search]);
 
   const imgUrl = (n) => n.imagen_mini ? `/storage/${n.imagen_mini}` : null;
 
@@ -2521,40 +2539,57 @@ function NpcPicker({ npcs, value, onChange }) {
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
           background: 'var(--bg-card, #0e1729)', border: '1px solid rgba(56,205,240,0.25)',
           borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-          maxHeight: 260, overflowY: 'auto',
-          padding: 4,
+          display: 'flex', flexDirection: 'column',
+          maxHeight: 320,
         }}>
-          {/* Clear option */}
-          <div
-            onClick={() => { onChange(null); setOpen(false); }}
-            style={{ ...rowStyle(value === null), color: 'var(--txt-faint)', fontSize: 12, fontStyle: 'italic' }}
-          >
-            Sin NPC asignado
+          <div style={{ padding: 6, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onClick={e => e.stopPropagation()}
+              placeholder="Buscar NPC por nombre o lugar..."
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 6,
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
+                color: 'var(--txt)', fontSize: 12, outline: 'none',
+              }}
+            />
           </div>
 
-          {npcs.length === 0 && (
-            <div style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: 'var(--txt-faint)' }}>
-              No hay NPCs de tipo misión
-            </div>
-          )}
-
-          {npcs.map(n => (
+          <div style={{ overflowY: 'auto', padding: 4 }}>
+            {/* Clear option */}
             <div
-              key={n.id}
-              onClick={() => { onChange(n.id); setOpen(false); }}
-              style={rowStyle(n.id === value)}
+              onClick={() => { onChange(null); setOpen(false); }}
+              style={{ ...rowStyle(value === null), color: 'var(--txt-faint)', fontSize: 12, fontStyle: 'italic' }}
             >
-              {imgUrl(n)
-                ? <img src={imgUrl(n)} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: n.id === value ? '2px solid var(--holo)' : '2px solid transparent' }} />
-                : <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(56,205,240,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
-              }
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: n.id === value ? 'var(--holo)' : 'var(--txt)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.nombre}</div>
-                {n.lugar && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 1 }}>{n.lugar}</div>}
-              </div>
-              {n.id === value && <span style={{ fontSize: 12, color: 'var(--holo)' }}>✓</span>}
+              Sin NPC asignado
             </div>
-          ))}
+
+            {filteredNpcs.length === 0 && (
+              <div style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: 'var(--txt-faint)' }}>
+                {npcs.length === 0 ? 'No hay NPCs de tipo misión' : 'Sin resultados'}
+              </div>
+            )}
+
+            {filteredNpcs.map(n => (
+              <div
+                key={n.id}
+                onClick={() => { onChange(n.id); setOpen(false); }}
+                style={rowStyle(n.id === value)}
+              >
+                {imgUrl(n)
+                  ? <img src={imgUrl(n)} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: n.id === value ? '2px solid var(--holo)' : '2px solid transparent' }} />
+                  : <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(56,205,240,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>👤</div>
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: n.id === value ? 'var(--holo)' : 'var(--txt)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.nombre}</div>
+                  {n.lugar && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 1 }}>{n.lugar}</div>}
+                </div>
+                {n.id === value && <span style={{ fontSize: 12, color: 'var(--holo)' }}>✓</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -2638,6 +2673,7 @@ function MisionesAdmin() {
         ...form,
         temporada_id:        form.temporada_id        || null,
         npc_id:              form.npc_id              || null,
+        npc_termina_id:      form.npc_termina_id      || null,
         fecha_inicio:        form.fecha_inicio        || null,
         fecha_termino:       form.fecha_termino       || null,
         puntos_requeridos:   Number(form.puntos_requeridos),
@@ -2830,13 +2866,26 @@ function MisionesAdmin() {
             </div>
           )}
           {form.tipo_mision === 'individual' && (
-            <div>
-              <label className="nx-label">NPC que da la misión</label>
-              <NpcPicker
-                npcs={npcsOptions}
-                value={form.npc_id ? +form.npc_id : null}
-                onChange={id => set('npc_id', id)}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label className="nx-label">NPC que da la misión</label>
+                <NpcPicker
+                  npcs={npcsOptions}
+                  value={form.npc_id ? +form.npc_id : null}
+                  onChange={id => set('npc_id', id)}
+                />
+              </div>
+              <div>
+                <label className="nx-label">NPC que termina la misión</label>
+                <NpcPicker
+                  npcs={npcsOptions}
+                  value={form.npc_termina_id ? +form.npc_termina_id : null}
+                  onChange={id => set('npc_termina_id', id)}
+                />
+                <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>
+                  Opcional. Si se deja vacío, la misión se entrega con el mismo NPC que la da.
+                </div>
+              </div>
             </div>
           )}
           {form.tipo_mision === 'global' && (
@@ -3156,11 +3205,16 @@ function MisionesAdmin() {
                       </span>
                     )}
                   </div>
-                  {m.tipo_mision === 'individual' && (m.npc || m.hito_requerimiento || m.entregar_hito) && (
+                  {m.tipo_mision === 'individual' && (m.npc || m.npc_termina || m.hito_requerimiento || m.entregar_hito) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 5 }}>
                       {m.npc && (
                         <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
-                          <Icon name="user" size={9} /> {m.npc.nombre}
+                          <Icon name="user" size={9} /> Da: {m.npc.nombre}
+                        </span>
+                      )}
+                      {m.npc_termina && (
+                        <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>
+                          <Icon name="user" size={9} /> Termina: {m.npc_termina.nombre}
                         </span>
                       )}
                       {m.hito_requerimiento && (

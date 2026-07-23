@@ -99,7 +99,7 @@ class MisionController extends Controller
             return response()->json(['misiones' => []]);
         }
 
-        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users', 'npc']);
+        $query = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'users', 'npc', 'npcTermina']);
 
         if ($request->filled('tipo')) {
             $query->where('tipo_mision', $request->tipo);
@@ -177,7 +177,7 @@ class MisionController extends Controller
 
         // Solo misiones individuales que el usuario ya pidió al NPC (tiene registro en mision_user),
         // sin importar el estado (pendiente, en-curso o completada).
-        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'npc.lugar'])
+        $misiones = Mision::with(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla', 'npc.lugar', 'npcTermina.lugar'])
             ->where('tipo_mision', 'individual')
             ->where('activa', true)
             ->whereIn('id', $userMisionIds)
@@ -201,6 +201,12 @@ class MisionController extends Controller
                         'nombre' => $m->npc->nombre,
                         'imagen_mini' => $m->npc->imagen_mini,
                         'lugar' => $m->npc->lugar?->nombre,
+                    ] : null,
+                    'npc_termina' => $m->npcTermina ? [
+                        'id' => $m->npcTermina->id,
+                        'nombre' => $m->npcTermina->nombre,
+                        'imagen_mini' => $m->npcTermina->imagen_mini,
+                        'lugar' => $m->npcTermina->lugar?->nombre,
                     ] : null,
                 ]);
             });
@@ -314,6 +320,7 @@ class MisionController extends Controller
             'tipo_mision' => 'sometimes|in:temporada,comunidad,individual,global',
             'temporada_id' => 'nullable|integer|exists:temporadas,id',
             'npc_id' => 'nullable|integer|exists:map_npcs,id',
+            'npc_termina_id' => 'nullable|integer|exists:map_npcs,id',
             'puntos_requeridos' => 'sometimes|integer|min:0',
             'activa' => 'sometimes|boolean',
             'notificar' => 'sometimes|boolean',
@@ -380,6 +387,7 @@ class MisionController extends Controller
             'tipo_mision' => 'sometimes|in:temporada,comunidad,individual,global',
             'temporada_id' => 'nullable|integer|exists:temporadas,id',
             'npc_id' => 'nullable|integer|exists:map_npcs,id',
+            'npc_termina_id' => 'nullable|integer|exists:map_npcs,id',
             'puntos_requeridos' => 'sometimes|integer|min:0',
             'activa' => 'sometimes|boolean',
             'notificar' => 'sometimes|boolean',
@@ -758,6 +766,7 @@ class MisionController extends Controller
             'tipo_mision' => $mision->tipo_mision ?? 'individual',
             'temporada_id' => $mision->temporada_id,
             'npc_id' => $mision->npc_id,
+            'npc_termina_id' => $mision->npc_termina_id,
             'puntos_requeridos' => $mision->puntos_requeridos,
             'activa' => (bool) $mision->activa,
             'notificar' => (bool) $mision->notificar,
@@ -768,6 +777,9 @@ class MisionController extends Controller
             'entregar_hito' => $mision->entregar_hito,
             'npc' => $mision->relationLoaded('npc') && $mision->npc
                 ? ['id' => $mision->npc->id, 'nombre' => $mision->npc->nombre, 'imagen_mini' => $mision->npc->imagen_mini]
+                : null,
+            'npc_termina' => $mision->relationLoaded('npcTermina') && $mision->npcTermina
+                ? ['id' => $mision->npcTermina->id, 'nombre' => $mision->npcTermina->nombre, 'imagen_mini' => $mision->npcTermina->imagen_mini]
                 : null,
             'objetivos' => [],
             'recompensas' => $mision->relationLoaded('recompensas')
