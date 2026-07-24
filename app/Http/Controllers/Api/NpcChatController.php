@@ -240,7 +240,7 @@ class NpcChatController extends Controller
                         'properties' => [
                             'nombre' => [
                                 'type'        => 'string',
-                                'description' => 'Nombre completo o handle/identificador del personaje (ej: "Valentina Soto", "V-SOTO").',
+                                'description' => 'Nombre completo o tag/identificador del personaje (ej: "Valentina Soto", "V-SOTO").',
                             ],
                         ],
                         'required' => ['nombre'],
@@ -291,7 +291,7 @@ class NpcChatController extends Controller
                         'properties' => [
                             'nombre' => [
                                 'type'        => 'string',
-                                'description' => 'Nombre completo o handle del personaje (ej: "Valentina Soto", "V-SOTO").',
+                                'description' => 'Nombre completo o tag del personaje (ej: "Valentina Soto", "V-SOTO").',
                             ],
                         ],
                         'required' => ['nombre'],
@@ -358,7 +358,7 @@ class NpcChatController extends Controller
 
     private function buscarPersonaje(string $nombre): array
     {
-        if (! $nombre) return ['error' => 'Se requiere un nombre o handle.'];
+        if (! $nombre) return ['error' => 'Se requiere un nombre o tag.'];
 
         $character = Character::with(['mapLugar', 'mapPlaneta', 'mapSistema'])
             ->where('name', 'like', "%{$nombre}%")
@@ -366,7 +366,7 @@ class NpcChatController extends Controller
             ->first();
 
         if (! $character) {
-            return ['error' => "No se encontró ningún personaje con el nombre o handle '{$nombre}'."];
+            return ['error' => "No se encontró ningún personaje con el nombre o tag '{$nombre}'."];
         }
 
         return array_filter([
@@ -387,7 +387,7 @@ class NpcChatController extends Controller
 
     private function fichaCompletaPersonaje(string $nombre): array
     {
-        if (! $nombre) return ['error' => 'Se requiere un nombre o handle.'];
+        if (! $nombre) return ['error' => 'Se requiere un nombre o tag.'];
 
         $character = Character::with(['user', 'mapLugar', 'mapPlaneta', 'mapZona', 'mapSistema'])
             ->where('name', 'like', "%{$nombre}%")
@@ -395,7 +395,7 @@ class NpcChatController extends Controller
             ->first();
 
         if (! $character) {
-            return ['error' => "No se encontró ningún personaje con el nombre o handle '{$nombre}'."];
+            return ['error' => "No se encontró ningún personaje con el nombre o tag '{$nombre}'."];
         }
 
         // Últimos 5 combates resueltos

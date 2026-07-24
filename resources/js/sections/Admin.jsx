@@ -502,7 +502,7 @@ const ENTITY_CONFIG = {
     label: 'Personajes', icon: 'ghost', group: 'SISTEMA',
     columns: [
       { key: 'id', label: 'ID', w: 52 },
-      { key: 'handle', label: 'Handle', bold: true },
+      { key: 'handle', label: 'Tag', bold: true },
       { key: 'name', label: 'Nombre' },
       { key: 'cls', label: 'Clase', dim: true },
       { key: 'saber_color', label: 'Sable', dim: true },
@@ -511,7 +511,7 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'name',           label: 'Nombre',         type: 'text' },
-      { key: 'handle',         label: 'Handle',         type: 'text' },
+      { key: 'handle',         label: 'Tag',            type: 'text' },
       { key: 'cls',            label: 'Clase',          type: 'select',  options: CLASE_OPTS },
       { key: 'saber_color',    label: 'Sable',          type: 'select',  options: SABER_OPTS },
       { key: 'side',           label: 'Lado',           type: 'select',  options: LADO_OPTS },

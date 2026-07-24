@@ -143,6 +143,12 @@ const fmtHitoDate = (d) => d
   ? new Date(d).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
   : '';
 
+const fmtHitoLabel = (s) => (s ?? '')
+  .split(/[_-]+/)
+  .filter(Boolean)
+  .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+  .join(' ');
+
 function HitoRow({ hito }) {
   return (
     <div style={{
@@ -151,7 +157,7 @@ function HitoRow({ hito }) {
     }}>
       <span style={{ color: 'var(--holocron-oro)', flexShrink: 0 }}><Icon name="star" size={16} /></span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)' }}>{hito.hito}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)' }}>{fmtHitoLabel(hito.hito)}</div>
         <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{fmtHitoDate(hito.created_at)}</div>
       </div>
     </div>
@@ -867,7 +873,7 @@ export function CharacterCreation({ user, S, onCharacterCreated }) {
     e.preventDefault();
     setError('');
     if (!form.name.trim()) { setError('El nombre de combate es requerido.'); return; }
-    if (!form.handle.trim()) { setError('El alias (handle) es requerido.'); return; }
+    if (!form.handle.trim()) { setError('El alias (tag) es requerido.'); return; }
     setSaving(true);
     try {
       const token = localStorage.getItem('nx-token');
@@ -921,7 +927,7 @@ export function CharacterCreation({ user, S, onCharacterCreated }) {
                 <input className="nx-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="Tu nombre en la Arena" required />
               </div>
               <div>
-                <label className="nx-label">Alias (handle) *</label>
+                <label className="nx-label">Alias (tag) *</label>
                 <input className="nx-input" value={form.handle} onChange={e => set('handle', e.target.value.toUpperCase())} placeholder="ALIAS" required maxLength={20} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
@@ -2372,7 +2378,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
               <input className="nx-input" value={ch.name} onChange={(e) => S.setCharacter({ ...ch, name: e.target.value })} />
             </div>
             <div>
-              <label className="nx-label">Alias (handle) *</label>
+              <label className="nx-label">Alias (tag) *</label>
               <input className="nx-input" value={ch.handle} onChange={(e) => S.setCharacter({ ...ch, handle: e.target.value.toUpperCase() })} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
