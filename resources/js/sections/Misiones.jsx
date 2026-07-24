@@ -213,7 +213,8 @@ function GlobalCard({ mision, completed, onOpen }) {
 
 export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onTransmision }) {
   const [busy, setBusy] = useState(false);
-  const done = mision.status === 'completada';
+  const [justCompleted, setJustCompleted] = useState(false);
+  const done = mision.status === 'completada' || justCompleted;
   const hitosReq = mision.hito_requerimiento
     ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)
     : [];
@@ -265,10 +266,11 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           .then(d => { if (d) onUserUpdate(d); })
           .catch(() => {});
       }
-      onClose();
       window.dispatchEvent(new CustomEvent('nx-mision-updated', {
         detail: { missionId: mision.id, status: 'completada' },
       }));
+      setJustCompleted(true);
+      setTimeout(() => onClose(), 1600);
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
@@ -290,7 +292,25 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           <p style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, margin: 0 }}>{mision.mision}</p>
         )}
         {mision.descripcion && (
-          <p style={{ fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{mision.descripcion}</p>
+          <div style={{ position: 'relative' }}>
+            <p style={{
+              fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0,
+              filter: justCompleted ? 'blur(4px)' : 'none', transition: 'filter 0.3s ease',
+            }}>{mision.descripcion}</p>
+            {justCompleted && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+                background: 'rgba(4,7,15,0.25)', borderRadius: 'var(--radius-md)',
+              }}>
+                <span className="nx-display" style={{
+                  fontSize: 15, color: '#10b981', letterSpacing: '0.05em',
+                  textShadow: '0 0 12px rgba(16,185,129,0.6)',
+                }}>
+                  ¡Misión Cumplida!
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {!mision.aceptada && !done && (
