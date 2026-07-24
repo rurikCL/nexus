@@ -266,11 +266,13 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           .then(d => { if (d) onUserUpdate(d); })
           .catch(() => {});
       }
-      window.dispatchEvent(new CustomEvent('nx-mision-updated', {
-        detail: { missionId: mision.id, status: 'completada' },
-      }));
       setJustCompleted(true);
-      setTimeout(() => onClose(), 1600);
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+          detail: { missionId: mision.id, status: 'completada' },
+        }));
+        onClose();
+      }, 1600);
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
