@@ -1976,14 +1976,9 @@ function NpcCard({ npc, onClick }) {
    Ver DungeonController (app/Http/Controllers/Api/DungeonController.php):
    unirse (lobby, idempotente — retoma lobby o sala si ya se participaba) ->
    listo (arranca el run al completar el equipo) -> mover/enemigo-victory
-   por sala (1v1 independiente por jugador) -> sala jefe, donde el equipo
-   converge vía RaidQueueModal/RaidCombatScreen con dungeon_run_id. */
-const DUNGEON_DIRS = [
-  { key: 'norte', label: 'Norte', icon: '↑' },
-  { key: 'sur',   label: 'Sur',   icon: '↓' },
-  { key: 'este',  label: 'Este',  icon: '→' },
-  { key: 'oeste', label: 'Oeste', icon: '←' },
-];
+   por sala (1v1 independiente por jugador, navegado por clic en el mapa,
+   ver DungeonMinimap) -> sala jefe, donde el equipo converge vía
+   RaidQueueModal/RaidCombatScreen con dungeon_run_id. */
 
 /* Fondo con la foto del lugar-portal (lobby/sala/terminal) — mismo tratamiento que el
    header de LugarView: imagen atenuada + degradado oscuro, contenido encima. */
@@ -2031,11 +2026,14 @@ function EnemigoPortrait({ enemigo, size = 96 }) {
 /* Minimapa del grafo generado — usa pos_x/pos_y persistidos por DungeonGeneratorService (los
    mismos que calculó DungeonGraphBuilder) en vez de reconstruir el layout desde las conexiones.
    "tiene_enemigo"/"tiene_cofre" ya vienen resueltos por-jugador desde el backend (formatMapa). */
-function DungeonMinimap({ mapa, equipo = [], myUserId }) {
+/* Mapa central: ahora ES la navegación (clic en una sala adyacente = mover ahí) — los
+   botones norte/sur/este/oeste se eliminaron. `onNavigate(direccion)` dispara el mismo
+   mover() que antes usaban esos botones. */
+function DungeonMinimap({ mapa, equipo = [], myUserId, onNavigate, busy }) {
   if (!mapa || mapa.length === 0) return null;
 
-  const CELL = 34;
-  const GAP = 8;
+  const CELL = 56;
+  const GAP = 16;
   const STEP = CELL + GAP;
 
   const xs = mapa.map((s) => s.pos_x);
@@ -2061,6 +2059,14 @@ function DungeonMinimap({ mapa, equipo = [], myUserId }) {
     actual ? [actual.norte_id, actual.sur_id, actual.este_id, actual.oeste_id].filter(Boolean) : []
   );
   const esVisible = (s) => s.es_actual || s.visitada || adyacentesIds.has(s.id);
+
+  /* Qué dirección hay que mandarle a mover() para llegar a cada sala adyacente a la actual —
+     solo esas salas son clicables. */
+  const direccionPorId = {};
+  if (actual?.norte_id) direccionPorId[actual.norte_id] = 'norte';
+  if (actual?.sur_id) direccionPorId[actual.sur_id] = 'sur';
+  if (actual?.este_id) direccionPorId[actual.este_id] = 'este';
+  if (actual?.oeste_id) direccionPorId[actual.oeste_id] = 'oeste';
 
   /* Puntito de posición de cada jugador — visible aunque la sala esté en niebla de guerra
      (saber dónde está parado un compañero no revela el contenido de esa sala). Se refresca
@@ -2091,9 +2097,24 @@ function DungeonMinimap({ mapa, equipo = [], myUserId }) {
   };
 
   return (
-    <div className="nx-panel solid" style={{ padding: 16 }}>
-      <div className="nx-kicker" style={{ marginBottom: 12 }}>MAPA</div>
-      <div style={{ position: 'relative', width, height, margin: '0 auto' }}>
+    <div className="nx-panel solid" style={{
+      padding: 24, position: 'relative', overflow: 'hidden', minHeight: 380,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    }}>
+      {/* fondo cuadriculado transparente con degradé — mismo lenguaje visual que ZonaView */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: [
+          'radial-gradient(ellipse at 50% 40%, rgba(56,205,240,0.10) 0%, rgba(4,10,30,0.5) 70%)',
+          'linear-gradient(rgba(56,205,240,0.07) 1px, transparent 1px)',
+          'linear-gradient(90deg, rgba(56,205,240,0.07) 1px, transparent 1px)',
+        ].join(', '),
+        backgroundSize: 'auto, 32px 32px, 32px 32px',
+      }} />
+
+      <div className="nx-kicker" style={{ marginBottom: 18, position: 'relative', zIndex: 1 }}>MAPA DEL DUNGEON</div>
+
+      <div style={{ position: 'relative', width, height, zIndex: 1 }}>
         {mapa.flatMap((s) => {
           const { left, top } = coordOf(s);
           const conectores = [];
@@ -2119,22 +2140,32 @@ function DungeonMinimap({ mapa, equipo = [], myUserId }) {
           const { left, top } = coordOf(s);
           const c = colorFor(s);
           const jugadoresAqui = porSala[s.id] ?? [];
+          const navegable = !!direccionPorId[s.id] && !busy;
           return (
-            <div key={s.id} title={esVisible(s) ? s.tipo : 'Sala desconocida'} style={{
-              position: 'absolute', left, top, width: CELL, height: CELL, borderRadius: 6,
-              background: c.bg, border: `1.5px solid ${c.border}`,
-              display: 'grid', placeItems: 'center', fontSize: 13, lineHeight: 1,
-              boxShadow: s.es_actual ? '0 0 10px 2px rgba(56,205,240,0.5)' : 'none',
-              transition: 'all 0.3s ease',
-            }}>
+            <div key={s.id}
+              title={esVisible(s) ? s.tipo : 'Sala desconocida'}
+              onClick={() => navegable && onNavigate(direccionPorId[s.id])}
+              style={{
+                position: 'absolute', left, top, width: CELL, height: CELL, borderRadius: 8,
+                background: c.bg, border: `2px solid ${c.border}`,
+                display: 'grid', placeItems: 'center', fontSize: 20, lineHeight: 1,
+                boxShadow: s.es_actual
+                  ? '0 0 14px 3px rgba(56,205,240,0.5)'
+                  : navegable ? '0 0 10px 1px rgba(56,205,240,0.25)' : 'none',
+                transition: 'transform 0.15s ease, box-shadow 0.3s ease',
+                cursor: navegable ? 'pointer' : 'default',
+              }}
+              onMouseEnter={(e) => { if (navegable) e.currentTarget.style.transform = 'scale(1.08)'; }}
+              onMouseLeave={(e) => { if (navegable) e.currentTarget.style.transform = 'scale(1)'; }}
+            >
               {iconFor(s)}
               {jugadoresAqui.length > 0 && (
-                <div style={{ position: 'absolute', bottom: 1, right: 1, display: 'flex', gap: 1 }}>
+                <div style={{ position: 'absolute', bottom: 2, right: 2, display: 'flex', gap: 2 }}>
                   {jugadoresAqui.map((j) => (
                     <div key={j.user_id} title={j.user_id === myUserId ? `${j.name} (vos)` : j.name} style={{
-                      width: 7, height: 7, borderRadius: '50%',
+                      width: 10, height: 10, borderRadius: '50%',
                       background: SABER_COLORS[j.saber_color] ?? '#38cdf0',
-                      border: '1px solid rgba(4,7,15,0.85)',
+                      border: '1.5px solid rgba(4,7,15,0.85)',
                     }} />
                   ))}
                 </div>
@@ -2143,7 +2174,10 @@ function DungeonMinimap({ mapa, equipo = [], myUserId }) {
           );
         })}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 20, justifyContent: 'center',
+        fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', position: 'relative', zIndex: 1,
+      }}>
         <span>🔵 vos</span>
         <span>⚔ enemigo</span>
         <span>🎁 cofre</span>
@@ -2163,9 +2197,58 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
   const [activeCombat, setActiveCombat] = useState(null); // { enemigo }
   const [raidQueueOpen, setRaidQueueOpen] = useState(false);
   const [activeRaidId, setActiveRaidId]   = useState(null);
-  const [objetivoPorObjeto, setObjetivoPorObjeto] = useState({}); // { [objetoId]: user_id } — a quién curar
   const isMobile = useIsMobile();
   const pollRef = useRef(null);
+
+  /* Arrastrar un objeto sobre la tarjeta de un compañero (en EQUIPO) para usarlo en él —
+     reemplaza el selector de objetivo. `teamRefs` guarda el DOM de cada tarjeta para hit-test
+     al soltar; `arrastreRef` guarda el objeto sin disparar renders (solo ghostPos/hoverTargetId
+     necesitan re-render en cada movimiento del puntero). */
+  const teamRefs = useRef({});
+  const arrastreRef = useRef(null);
+  const [draggingObjeto, setDraggingObjeto] = useState(null);
+  const [ghostPos, setGhostPos] = useState(null);
+  const [hoverTargetId, setHoverTargetId] = useState(null);
+
+  const iniciarArrastre = (e, objeto) => {
+    e.preventDefault();
+    arrastreRef.current = objeto;
+    setDraggingObjeto(objeto);
+    setGhostPos({ x: e.clientX, y: e.clientY });
+  };
+
+  const hitTestJugador = (x, y) => {
+    for (const [uid, el] of Object.entries(teamRefs.current)) {
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return Number(uid);
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (!draggingObjeto) return;
+    const onMove = (e) => {
+      setGhostPos({ x: e.clientX, y: e.clientY });
+      setHoverTargetId(hitTestJugador(e.clientX, e.clientY));
+    };
+    const onUp = (e) => {
+      const objeto = arrastreRef.current;
+      const objetivoId = hitTestJugador(e.clientX, e.clientY);
+      arrastreRef.current = null;
+      setDraggingObjeto(null);
+      setGhostPos(null);
+      setHoverTargetId(null);
+      if (objeto && objetivoId) usarObjetoEnMapa(objeto, objetivoId);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingObjeto]);
 
   /* Inventario de objetos 'utilizable' (Kits Médicos, Generadores de Escudo): se mantiene en
      estado local -sembrado de userCharacter, que no se refresca automáticamente al consumir-
@@ -2401,7 +2484,6 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
   const sala = data.sala;
   if (!sala) return <LoadingHUD text="CARGANDO SALA..." />;
 
-  const salidas = DUNGEON_DIRS.filter((d) => sala.salidas?.[d.key]);
   const bloqueado = !!sala.enemigo;
   const equipo = data.equipo ?? [];
 
@@ -2426,27 +2508,70 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr 260px', gap: 16, alignItems: 'start' }}>
-        {/* equipo — vida/escudo + foto de cada jugador, visible mientras se recorre el dungeon */}
-        {equipo.length > 0 && (
-          <div className="nx-panel solid" style={{ padding: 16 }}>
-            <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
-            <div style={{ display: 'grid', gap: 16 }}>
-              {equipo.map((j) => (
-                <CombatHPBar
-                  key={j.user_id}
-                  vida={j.hp_actual} maxVida={j.hp_max}
-                  escudo={j.escudo_actual} maxEscudo={j.escudo_max}
-                  nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}`}
-                  photoUrl={mediaUrl(j.photo)}
-                />
-              ))}
+        {/* IZQUIERDA: equipo (tarjetas = blanco de arrastre) + objetos (se arrastran sobre esas tarjetas) */}
+        <div style={{ display: 'grid', gap: 16 }}>
+          {equipo.length > 0 && (
+            <div className="nx-panel solid" style={{ padding: 16 }}>
+              <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {equipo.map((j) => (
+                  <div key={j.user_id}
+                    ref={(el) => { teamRefs.current[j.user_id] = el; }}
+                    style={{
+                      borderRadius: 10, padding: 6,
+                      border: `1.5px dashed ${hoverTargetId === j.user_id ? '#10b981' : 'transparent'}`,
+                      background: hoverTargetId === j.user_id ? 'rgba(16,185,129,0.10)' : 'transparent',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <CombatHPBar
+                      vida={j.hp_actual} maxVida={j.hp_max}
+                      escudo={j.escudo_actual} maxEscudo={j.escudo_max}
+                      nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}`}
+                      photoUrl={mediaUrl(j.photo)}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
+          {utilizables.length > 0 && (
+            <div className="nx-panel solid" style={{ padding: 16 }}>
+              <div className="nx-kicker" style={{ marginBottom: 4 }}>OBJETOS</div>
+              <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginBottom: 10, lineHeight: 1.5 }}>
+                Arrastrá un objeto sobre la tarjeta de un compañero (arriba) para usarlo en él.
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {utilizables.map((objeto) => (
+                  <div key={objeto.id}
+                    onPointerDown={(e) => iniciarArrastre(e, objeto)}
+                    style={{
+                      padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
+                      background: 'rgba(16,185,129,0.06)', textAlign: 'left',
+                      cursor: draggingObjeto ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none',
+                      opacity: draggingObjeto?.id === objeto.id ? 0.35 : 1,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
+                    <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                      {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
+                      {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CENTRO: mapa del dungeon — clic en una sala adyacente para moverse ahí */}
+        <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} onNavigate={mover} busy={busy} />
+
+        {/* DERECHA: qué hay en la sala actual (encuentro / cofre / jefe) */}
         <DungeonBackdrop imagen={lugar.imagen}>
-          <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
-            <div className="nx-display" style={{ fontSize: 18, marginBottom: 10 }}>
+          <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center' }}>
+            <div className="nx-display" style={{ fontSize: 16, marginBottom: 10 }}>
               {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
             </div>
 
@@ -2469,19 +2594,9 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
                 </div>
               </>
             ) : (
-              <>
-                <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>Sala despejada.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10 }}>
-                  {salidas.map((d) => (
-                    <Btn key={d.key} kind="ghost" onClick={() => mover(d.key)} disabled={busy}>
-                      {d.icon} {d.label}
-                    </Btn>
-                  ))}
-                  {salidas.length === 0 && (
-                    <span style={{ color: 'var(--txt-faint)', fontSize: 12 }}>Sin salidas — vuelve por donde llegaste.</span>
-                  )}
-                </div>
-              </>
+              <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
+                Sala despejada. Hacé clic en una sala adyacente del mapa para avanzar.
+              </p>
             )}
 
             {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador */}
@@ -2491,52 +2606,23 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
                 <Btn kind="gold" onClick={abrirCofre} disabled={busy}>Abrir Cofre</Btn>
               </div>
             )}
-
-            {/* objetos utilizables — curarse en el mapa (o a un aliado, en cualquier sala), entre salas */}
-            {utilizables.length > 0 && (
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
-                <div className="nx-kicker" style={{ marginBottom: 10 }}>OBJETOS</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {utilizables.map((objeto) => {
-                    const objetivo = objetivoPorObjeto[objeto.id] ?? myUserId;
-                    return (
-                      <div key={objeto.id} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
-                        padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
-                        background: 'rgba(16,185,129,0.06)',
-                      }}>
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
-                          <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
-                            {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
-                            {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {equipo.length > 1 && (
-                            <select className="nx-select" style={{ fontSize: 10, padding: '4px 6px' }}
-                              value={objetivo}
-                              onChange={(e) => setObjetivoPorObjeto((prev) => ({ ...prev, [objeto.id]: Number(e.target.value) }))}
-                            >
-                              {equipo.map((j) => (
-                                <option key={j.user_id} value={j.user_id}>{j.user_id === myUserId ? 'Vos' : j.name}</option>
-                              ))}
-                            </select>
-                          )}
-                          <Btn kind="ghost" sm disabled={busy} onClick={() => usarObjetoEnMapa(objeto, objetivo)}>Usar</Btn>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </DungeonBackdrop>
-
-        {/* minimapa — forma del dungeon generado, ver DungeonMinimap */}
-        <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} />
       </div>
+
+      {/* ghost del objeto mientras se arrastra */}
+      {draggingObjeto && ghostPos && createPortal(
+        <div style={{
+          position: 'fixed', left: ghostPos.x, top: ghostPos.y, zIndex: 9999,
+          transform: 'translate(-50%, -50%)', pointerEvents: 'none',
+          padding: '8px 14px', borderRadius: 8, background: 'rgba(16,185,129,0.92)',
+          border: '1px solid #10b981', color: '#fff', fontSize: 12, fontWeight: 700,
+          fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        }}>
+          🧪 {draggingObjeto.nombre}
+        </div>,
+        document.body
+      )}
 
       {/* combate 1v1 contra el enemigo de la sala */}
       {activeCombat && (
