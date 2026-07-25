@@ -17,6 +17,7 @@ class DungeonRunPlayer extends Model
         'user_id',
         'listo',
         'sala_actual_id',
+        'sala_anterior_id',
         'estado',
         'hp_actual',
         'escudo_actual',
@@ -41,6 +42,11 @@ class DungeonRunPlayer extends Model
     public function salaActual(): BelongsTo
     {
         return $this->belongsTo(DungeonSala::class, 'sala_actual_id');
+    }
+
+    public function salaAnterior(): BelongsTo
+    {
+        return $this->belongsTo(DungeonSala::class, 'sala_anterior_id');
     }
 
     public function progresos(): HasMany

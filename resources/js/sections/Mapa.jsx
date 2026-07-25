@@ -2031,7 +2031,7 @@ function EnemigoPortrait({ enemigo, size = 96 }) {
 /* Minimapa del grafo generado — usa pos_x/pos_y persistidos por DungeonGeneratorService (los
    mismos que calculó DungeonGraphBuilder) en vez de reconstruir el layout desde las conexiones.
    "tiene_enemigo"/"tiene_cofre" ya vienen resueltos por-jugador desde el backend (formatMapa). */
-function DungeonMinimap({ mapa }) {
+function DungeonMinimap({ mapa, equipo = [], myUserId }) {
   if (!mapa || mapa.length === 0) return null;
 
   const CELL = 34;
@@ -2061,6 +2061,15 @@ function DungeonMinimap({ mapa }) {
     actual ? [actual.norte_id, actual.sur_id, actual.este_id, actual.oeste_id].filter(Boolean) : []
   );
   const esVisible = (s) => s.es_actual || s.visitada || adyacentesIds.has(s.id);
+
+  /* Puntito de posición de cada jugador — visible aunque la sala esté en niebla de guerra
+     (saber dónde está parado un compañero no revela el contenido de esa sala). Se refresca
+     solo (ver el polling de en_curso en DungeonPortal) a medida que el equipo avanza. */
+  const porSala = {};
+  equipo.forEach((j) => {
+    if (!j.sala_actual_id) return;
+    (porSala[j.sala_actual_id] ??= []).push(j);
+  });
 
   const colorFor = (s) => {
     if (!esVisible(s)) return { bg: 'rgba(255,255,255,0.015)', border: 'rgba(255,255,255,0.06)' };
@@ -2109,6 +2118,7 @@ function DungeonMinimap({ mapa }) {
         {mapa.map((s) => {
           const { left, top } = coordOf(s);
           const c = colorFor(s);
+          const jugadoresAqui = porSala[s.id] ?? [];
           return (
             <div key={s.id} title={esVisible(s) ? s.tipo : 'Sala desconocida'} style={{
               position: 'absolute', left, top, width: CELL, height: CELL, borderRadius: 6,
@@ -2118,6 +2128,17 @@ function DungeonMinimap({ mapa }) {
               transition: 'all 0.3s ease',
             }}>
               {iconFor(s)}
+              {jugadoresAqui.length > 0 && (
+                <div style={{ position: 'absolute', bottom: 1, right: 1, display: 'flex', gap: 1 }}>
+                  {jugadoresAqui.map((j) => (
+                    <div key={j.user_id} title={j.user_id === myUserId ? `${j.name} (vos)` : j.name} style={{
+                      width: 7, height: 7, borderRadius: '50%',
+                      background: SABER_COLORS[j.saber_color] ?? '#38cdf0',
+                      border: '1px solid rgba(4,7,15,0.85)',
+                    }} />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -2128,6 +2149,7 @@ function DungeonMinimap({ mapa }) {
         <span>🎁 cofre</span>
         <span>👑 jefe</span>
         <span>❓ sin explorar</span>
+        <span>● compañero</span>
       </div>
     </div>
   );
@@ -2141,6 +2163,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
   const [activeCombat, setActiveCombat] = useState(null); // { enemigo }
   const [raidQueueOpen, setRaidQueueOpen] = useState(false);
   const [activeRaidId, setActiveRaidId]   = useState(null);
+  const [objetivoPorObjeto, setObjetivoPorObjeto] = useState({}); // { [objetoId]: user_id } — a quién curar
   const isMobile = useIsMobile();
   const pollRef = useRef(null);
 
@@ -2183,6 +2206,14 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
     return () => clearInterval(pollRef.current);
   }, [estado, runId, refresh]);
 
+  /* Ya en curso, refresca en segundo plano para reflejar en vivo el avance del resto del
+     equipo (posición en el minimapa, vida/escudo) — cada jugador se mueve a su propio ritmo. */
+  useEffect(() => {
+    if (estado !== 'en_curso' || !runId) return;
+    pollRef.current = setInterval(refresh, 4000);
+    return () => clearInterval(pollRef.current);
+  }, [estado, runId, refresh]);
+
   const toggleListo = async () => {
     if (!runId || busy) return;
     setBusy(true);
@@ -2216,6 +2247,21 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
     }
   };
 
+  /* Retirarse de una sala bloqueada por un enemigo SIN combatir — vuelve un paso atrás,
+     a diferencia de huir en medio de un combate ya iniciado (eso lo resuelve NpcCombatScreen). */
+  const huirSala = async () => {
+    if (!runId || busy) return;
+    setBusy(true);
+    try {
+      const d = await apiPost(`/map/dungeons/runs/${runId}/huir`, {});
+      setData((prev) => ({ ...prev, sala: d.sala }));
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo huir.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /* Persiste la vida/escudo final de un encuentro 1v1 (victoria, derrota o huida) — la
      dificultad del dungeon depende de que el daño no se resetee entre salas, mismo criterio
      que persistNaveDano() para el combate naval. */
@@ -2229,22 +2275,40 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
 
   /* Consume un objeto 'utilizable' del inventario — el servidor solo valida/descuenta
      inventario (no conoce el daño de un combate en curso, que es 100% cliente-side); el
-     resultado de vida/escudo que devuelve solo es fiable fuera de combate. */
-  const consumirObjeto = useCallback(async (objetoId) => {
-    const res = await apiPost(`/map/dungeons/runs/${runId}/usar-objeto`, { rol_objeto_id: objetoId });
+     resultado de vida/escudo que devuelve solo es fiable fuera de combate. `targetUserId`
+     es opcional (default: uno mismo) y permite usarlo en cualquier compañero de equipo. */
+  const consumirObjeto = useCallback(async (objetoId, targetUserId) => {
+    const body = targetUserId && targetUserId !== myUserId
+      ? { rol_objeto_id: objetoId, target_user_id: targetUserId }
+      : { rol_objeto_id: objetoId };
+    const res = await apiPost(`/map/dungeons/runs/${runId}/usar-objeto`, body);
     setUtilizables((prev) => prev
       .map((o) => (o.id === objetoId ? { ...o, cantidad: o.cantidad - 1 } : o))
       .filter((o) => o.cantidad > 0));
     return res;
-  }, [runId]);
+  }, [runId, myUserId]);
 
-  const usarObjetoEnMapa = async (objeto) => {
+  const usarObjetoEnMapa = async (objeto, targetUserId) => {
     if (busy) return;
     setBusy(true);
     try {
-      const res = await consumirObjeto(objeto.id);
-      setData((prev) => (prev ? { ...prev, mi_estado: { ...prev.mi_estado, hp_actual: res.hp_actual, escudo_actual: res.escudo_actual } } : prev));
-      toast(`${res.nombre} usado`, { tone: 'success', icon: 'box' });
+      const res = await consumirObjeto(objeto.id, targetUserId);
+      setData((prev) => {
+        if (!prev) return prev;
+        if (res.target_user_id === myUserId) {
+          return { ...prev, mi_estado: { ...prev.mi_estado, hp_actual: res.hp_actual, escudo_actual: res.escudo_actual } };
+        }
+        return {
+          ...prev,
+          equipo: (prev.equipo ?? []).map((j) => (
+            j.user_id === res.target_user_id ? { ...j, hp_actual: res.hp_actual, escudo_actual: res.escudo_actual } : j
+          )),
+        };
+      });
+      const nombreObjetivo = res.target_user_id === myUserId
+        ? 'vos'
+        : (equipo.find((j) => j.user_id === res.target_user_id)?.name ?? 'un aliado');
+      toast(`${res.nombre} usado en ${nombreObjetivo}`, { tone: 'success', icon: 'box' });
     } catch (e) {
       toast(e?.body?.error || e?.message || 'No se pudo usar el objeto.', { tone: 'error', icon: 'x' });
     } finally {
@@ -2399,7 +2463,10 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
                 <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
                   {sala.enemigo.nombre} bloquea el paso.
                 </p>
-                <Btn kind="accent" icon="swords" onClick={() => setActiveCombat({ enemigo: sala.enemigo })}>Combatir</Btn>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <Btn kind="accent" icon="swords" onClick={() => setActiveCombat({ enemigo: sala.enemigo })}>Combatir</Btn>
+                  <Btn kind="ghost" onClick={huirSala} disabled={busy}>Huir</Btn>
+                </div>
               </>
             ) : (
               <>
@@ -2425,27 +2492,42 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
               </div>
             )}
 
-            {/* objetos utilizables — curarse en el mapa, entre salas */}
+            {/* objetos utilizables — curarse en el mapa (o a un aliado, en cualquier sala), entre salas */}
             {utilizables.length > 0 && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
                 <div className="nx-kicker" style={{ marginBottom: 10 }}>OBJETOS</div>
                 <div style={{ display: 'grid', gap: 8 }}>
-                  {utilizables.map((objeto) => (
-                    <div key={objeto.id} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-                      padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
-                      background: 'rgba(16,185,129,0.06)',
-                    }}>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
-                        <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
-                          {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
-                          {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
+                  {utilizables.map((objeto) => {
+                    const objetivo = objetivoPorObjeto[objeto.id] ?? myUserId;
+                    return (
+                      <div key={objeto.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap',
+                        padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
+                        background: 'rgba(16,185,129,0.06)',
+                      }}>
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
+                          <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                            {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
+                            {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {equipo.length > 1 && (
+                            <select className="nx-select" style={{ fontSize: 10, padding: '4px 6px' }}
+                              value={objetivo}
+                              onChange={(e) => setObjetivoPorObjeto((prev) => ({ ...prev, [objeto.id]: Number(e.target.value) }))}
+                            >
+                              {equipo.map((j) => (
+                                <option key={j.user_id} value={j.user_id}>{j.user_id === myUserId ? 'Vos' : j.name}</option>
+                              ))}
+                            </select>
+                          )}
+                          <Btn kind="ghost" sm disabled={busy} onClick={() => usarObjetoEnMapa(objeto, objetivo)}>Usar</Btn>
                         </div>
                       </div>
-                      <Btn kind="ghost" sm disabled={busy} onClick={() => usarObjetoEnMapa(objeto)}>Usar</Btn>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2453,7 +2535,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
         </DungeonBackdrop>
 
         {/* minimapa — forma del dungeon generado, ver DungeonMinimap */}
-        <DungeonMinimap mapa={data.mapa} />
+        <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} />
       </div>
 
       {/* combate 1v1 contra el enemigo de la sala */}

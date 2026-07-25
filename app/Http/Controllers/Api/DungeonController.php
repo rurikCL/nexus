@@ -200,7 +200,7 @@ class DungeonController extends Controller
         }
 
         $destino = DungeonSala::findOrFail($destinoId);
-        $jugador->update(['sala_actual_id' => $destino->id]);
+        $jugador->update(['sala_actual_id' => $destino->id, 'sala_anterior_id' => $salaActual->id]);
 
         $progresoDestino = DungeonSalaProgreso::firstOrCreate(
             ['dungeon_run_player_id' => $jugador->id, 'dungeon_sala_id' => $destino->id],
@@ -209,6 +209,49 @@ class DungeonController extends Controller
 
         return response()->json([
             'sala' => $this->formatSala($destino, $jugador, $progresoDestino),
+        ]);
+    }
+
+    /**
+     * POST /map/dungeons/runs/{run}/huir — se retira de la sala bloqueada por un enemigo SIN
+     * combatir, volviendo un paso atrás a la sala desde la que llegó (sin tirada, a diferencia
+     * de huir en medio de un combate real ya iniciado). Solo aplica si la sala actual tiene un
+     * enemigo sin resolver — si no hay nada que temer, no hay de qué huir.
+     */
+    public function huir(Request $request, int $runId): JsonResponse
+    {
+        $user = $request->user();
+        $run = DungeonRun::findOrFail($runId);
+
+        if (! $run->enCurso()) {
+            return response()->json(['error' => 'Este dungeon no está en curso.'], 422);
+        }
+
+        $jugador = DungeonRunPlayer::where('dungeon_run_id', $run->id)->where('user_id', $user->id)->first();
+        if (! $jugador || ! $jugador->activo()) {
+            return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+
+        $salaActual = $jugador->salaActual;
+        if (! $salaActual || ! $salaActual->enemigo_id) {
+            return response()->json(['error' => 'No hay nada de qué huir en esta sala.'], 422);
+        }
+
+        $progresoActual = DungeonSalaProgreso::where('dungeon_run_player_id', $jugador->id)
+            ->where('dungeon_sala_id', $salaActual->id)->first();
+        if ($progresoActual?->resuelta) {
+            return response()->json(['error' => 'Ya no hay ningún enemigo del cual huir aquí.'], 422);
+        }
+
+        if (! $jugador->sala_anterior_id) {
+            return response()->json(['error' => 'No hay una sala anterior a la cual retroceder.'], 422);
+        }
+
+        $anterior = DungeonSala::findOrFail($jugador->sala_anterior_id);
+        $jugador->update(['sala_actual_id' => $anterior->id, 'sala_anterior_id' => $salaActual->id]);
+
+        return response()->json([
+            'sala' => $this->formatSala($anterior, $jugador),
         ]);
     }
 
@@ -334,13 +377,19 @@ class DungeonController extends Controller
     }
 
     /**
-     * POST /map/dungeons/runs/{run}/usar-objeto {rol_objeto_id} — consume un objeto tipo
-     * 'utilizable' del inventario del personaje para restaurar vida/escudo dentro del run
-     * (en el mapa, entre salas, o en medio de un encuentro 1v1 — ver NpcCombatScreen).
+     * POST /map/dungeons/runs/{run}/usar-objeto {rol_objeto_id, target_user_id?} — consume un
+     * objeto tipo 'utilizable' del inventario del personaje para restaurar vida/escudo dentro
+     * del run (en el mapa, entre salas, o en medio de un encuentro 1v1 — ver NpcCombatScreen).
+     * `target_user_id` es opcional (default: uno mismo) y permite usarlo en cualquier
+     * compañero de equipo ACTIVO del mismo run, sin importar en qué sala esté parado — el
+     * objeto siempre se descuenta del inventario de quien lo usa, no del objetivo.
      */
     public function usarObjeto(Request $request, int $runId): JsonResponse
     {
-        $data = $request->validate(['rol_objeto_id' => 'required|integer|exists:rol_objetos,id']);
+        $data = $request->validate([
+            'rol_objeto_id' => 'required|integer|exists:rol_objetos,id',
+            'target_user_id' => 'nullable|integer',
+        ]);
 
         $user = $request->user();
         $character = $user->character;
@@ -354,6 +403,26 @@ class DungeonController extends Controller
             return response()->json(['error' => 'Este dungeon no está en curso.'], 422);
         }
 
+        $targetUserId = $data['target_user_id'] ?? $user->id;
+        $objetivoJugador = $jugador;
+        $objetivoCharacter = $character;
+
+        if ($targetUserId !== $user->id) {
+            $objetivoJugador = DungeonRunPlayer::where('dungeon_run_id', $run->id)
+                ->where('user_id', $targetUserId)
+                ->where('estado', 'activo')
+                ->first();
+
+            if (! $objetivoJugador) {
+                return response()->json(['error' => 'Ese jugador no está activo en este dungeon.'], 422);
+            }
+
+            $objetivoCharacter = $objetivoJugador->user->character;
+            if (! $objetivoCharacter) {
+                return response()->json(['error' => 'Ese jugador no tiene personaje.'], 422);
+            }
+        }
+
         $owned = $character->rolObjetos()->where('rol_objetos.id', $data['rol_objeto_id'])->first();
         if (! $owned || (int) $owned->pivot->cantidad < 1) {
             return response()->json(['error' => 'No tienes ese objeto en tu inventario.'], 422);
@@ -362,10 +431,10 @@ class DungeonController extends Controller
             return response()->json(['error' => 'Este objeto no se puede usar.'], 422);
         }
 
-        $stats = $character->combatStats();
-        $jugador->update([
-            'hp_actual' => min($stats['vida'], ($jugador->hp_actual ?? $stats['vida']) + (int) ($owned->cura_vida ?? 0)),
-            'escudo_actual' => min($stats['escudo'], ($jugador->escudo_actual ?? $stats['escudo']) + (int) ($owned->cura_escudo ?? 0)),
+        $stats = $objetivoCharacter->combatStats();
+        $objetivoJugador->update([
+            'hp_actual' => min($stats['vida'], ($objetivoJugador->hp_actual ?? $stats['vida']) + (int) ($owned->cura_vida ?? 0)),
+            'escudo_actual' => min($stats['escudo'], ($objetivoJugador->escudo_actual ?? $stats['escudo']) + (int) ($owned->cura_escudo ?? 0)),
         ]);
 
         if ((int) $owned->pivot->cantidad <= 1) {
@@ -377,8 +446,9 @@ class DungeonController extends Controller
         return response()->json([
             'ok' => true,
             'nombre' => $owned->nombre,
-            'hp_actual' => $jugador->hp_actual,
-            'escudo_actual' => $jugador->escudo_actual,
+            'target_user_id' => $objetivoJugador->user_id,
+            'hp_actual' => $objetivoJugador->hp_actual,
+            'escudo_actual' => $objetivoJugador->escudo_actual,
         ]);
     }
 
@@ -438,7 +508,12 @@ class DungeonController extends Controller
         })->values()->all();
     }
 
-    /** Vida/escudo actuales y foto de cada jugador activo del equipo — para el panel lateral en la sala. */
+    /**
+     * Vida/escudo actuales, foto y posición de cada jugador activo del equipo — para el panel
+     * lateral en la sala y los puntitos de posición del minimapa (ver DungeonMinimap en el
+     * frontend). "sala_actual_id" se expone para TODO el equipo sin importar fog-of-war: saber
+     * dónde está parado un compañero no revela el contenido de esa sala.
+     */
     private function formatEquipo(DungeonRun $run): array
     {
         return $run->jugadores->where('estado', 'activo')->map(function (DungeonRunPlayer $jp) {
@@ -449,10 +524,12 @@ class DungeonController extends Controller
                 'user_id' => $jp->user_id,
                 'name' => $character->name ?? $jp->user->name,
                 'photo' => $character->photo ?? null,
+                'saber_color' => $character->saber_color ?? null,
                 'hp_actual' => $jp->hp_actual ?? $stats['vida'] ?? 0,
                 'hp_max' => $stats['vida'] ?? 0,
                 'escudo_actual' => $jp->escudo_actual ?? $stats['escudo'] ?? 0,
                 'escudo_max' => $stats['escudo'] ?? 0,
+                'sala_actual_id' => $jp->sala_actual_id,
                 'en_sala_jefe' => $jp->salaActual?->tipo === 'jefe',
             ];
         })->values()->all();
