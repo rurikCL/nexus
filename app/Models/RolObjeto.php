@@ -44,6 +44,8 @@ class RolObjeto extends Model
         'bono_costo_reparacion',
         'mejora_habilidad_id',
         'bono_cooldown',
+        'cura_vida',
+        'cura_escudo',
     ];
 
     protected $casts = [
@@ -68,6 +70,8 @@ class RolObjeto extends Model
         'bono_capacidad_salto' => 'integer',
         'bono_costo_reparacion' => 'integer',
         'bono_cooldown' => 'integer',
+        'cura_vida' => 'integer',
+        'cura_escudo' => 'integer',
     ];
 
     public function characters(): BelongsToMany

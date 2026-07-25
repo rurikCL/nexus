@@ -208,7 +208,7 @@ function SpaceBackground() {
   );
 }
 
-export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false, esEnemigo = false }) {
+export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false, esEnemigo = false, objetosUtilizables = [], onUsarObjeto }) {
   const d20 = () => Math.floor(Math.random() * 20) + 1;
 
   /* En combate naval, `player.vida`/`.escudo` es el HP/escudo ACTUAL (posiblemente
@@ -265,6 +265,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [showCombatCard, setShowCombatCard] = useState(false);
   const [emojiPicker, setEmojiPicker] = useState(false);
   const [emojiBurst, setEmojiBurst]   = useState(null);
+  const [objetoPicker, setObjetoPicker] = useState(false);
+  const [usingObjeto, setUsingObjeto]   = useState(false);
 
   /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
   const resultTextFor = (hit, ranged, crit, dmg, effective = false, resistant = false) => {
@@ -1060,6 +1062,42 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     }
   };
 
+  /**
+   * Usa un objeto tipo 'utilizable' (Kit Médico, Generador de Escudo) del inventario:
+   * consume el turno igual que cualquier otra acción. El servidor (onUsarObjeto) solo
+   * valida y descuenta el inventario -no conoce el daño recibido EN este combate, que es
+   * 100% cliente-side-, así que la curación se aplica acá con cura_vida/cura_escudo del
+   * propio objeto; el HP final de este combate recién se sincroniza al terminar (onVictory/
+   * onDefeat/onFlee ya persisten playerHp completo, sobreescribiendo cualquier valor
+   * intermedio que haya dejado este uso).
+   */
+  const doUsarObjeto = async (objeto) => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || usingObjeto || !onUsarObjeto) return;
+    setUsingObjeto(true);
+    try {
+      await onUsarObjeto(objeto.id);
+      const newHp = {
+        vida: Math.min(maxPlayer.vida, playerHp.vida + (objeto.cura_vida ?? 0)),
+        escudo: Math.min(maxPlayer.escudo, playerHp.escudo + (objeto.cura_escudo ?? 0)),
+      };
+      setObjetoPicker(false);
+      await playStatusFx(playerHudRef, 'heal');
+      if (objeto.cura_vida) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${objeto.cura_vida}` });
+      if (objeto.cura_escudo) showFloatText(playerHudRef, { variant: 'heal', text: `+${objeto.cura_escudo} escudo` });
+      setLog(prev => [...prev, {
+        text: `${player.nombre} usa ${objeto.nombre}`, type: 'success', id: prev.length, ronda, actor: 'player',
+      }]);
+      setPlayerHp(newHp);
+      endTurnAfter('player', { playerHp: newHp });
+    } catch (e) {
+      setLog(prev => [...prev, {
+        text: e?.message || 'No se pudo usar el objeto.', type: 'danger', id: prev.length, ronda, actor: 'player',
+      }]);
+    } finally {
+      setUsingObjeto(false);
+    }
+  };
+
   /* Evadir (solo naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa por 3 rondas —
      sirve para naves sin habilidades o para no quedar sin nada que hacer en el turno. */
   const doPlayerEvadir = () => {
@@ -1199,6 +1237,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const clickFlee = () => {
     void playClickOpcion();
     void doPlayerFlee();
+  };
+
+  const clickObjetoPicker = () => {
+    void playClickOpcion();
+    setObjetoPicker(true);
   };
 
   const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling && !armed;
@@ -1677,6 +1720,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 <span style={{ fontSize: 8, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
               </ActionBtn>
 
+              {objetosUtilizables.length > 0 && (
+                <ActionBtn onClick={() => isPlayerTurn && clickObjetoPicker()}
+                  disabled={!isPlayerTurn || usingObjeto}
+                  bg="rgba(16,185,129,0.07)" border="rgba(16,185,129,0.22)"
+                  hoverBg="rgba(16,185,129,0.18)" hoverBorder="rgba(16,185,129,0.5)" minW={0}
+                >
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>🧪</span>
+                  <span style={{ fontSize: 8, color: '#10b981', fontFamily: 'var(--font-data)' }}>OBJETO</span>
+                </ActionBtn>
+              )}
+
               <ActionBtn onClick={() => setEmojiPicker(v => !v)}
                 disabled={false}
                 bg="rgba(230,179,37,0.07)" border="rgba(230,179,37,0.22)"
@@ -1922,6 +1976,48 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                 })}
               </div>
               <button onClick={() => setStancePicker(false)} style={{
+                marginTop: 16, width: '100%', padding: '8px', borderRadius: 8, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                color: 'rgba(200,200,255,0.5)', fontSize: 10, fontFamily: 'var(--font-data)',
+              }}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {/* Picker de objetos utilizables (Kits Médicos, Generadores de Escudo, etc.) */}
+        {objetoPicker && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 20,
+            background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} onClick={() => !usingObjeto && setObjetoPicker(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'rgba(6,12,26,0.97)', border: '1px solid rgba(16,185,129,0.35)',
+              borderRadius: 16, padding: 24, width: 360, maxWidth: '90%',
+            }}>
+              <div style={{ fontSize: 11, color: '#10b981', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
+                🧪 USAR OBJETO — Acabará tu turno
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {objetosUtilizables.map((objeto) => (
+                  <button key={objeto.id} onClick={() => doUsarObjeto(objeto)} disabled={usingObjeto} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                    padding: '10px 12px', borderRadius: 8, cursor: usingObjeto ? 'not-allowed' : 'pointer', textAlign: 'left',
+                    background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.3)',
+                    opacity: usingObjeto ? 0.6 : 1,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{objeto.nombre}</div>
+                      <div style={{ fontSize: 9, color: 'rgba(150,220,190,0.7)', fontFamily: 'var(--font-data)' }}>
+                        {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
+                        {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: '#10b981', fontFamily: 'var(--font-data)' }}>×{objeto.cantidad}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setObjetoPicker(false)} disabled={usingObjeto} style={{
                 marginTop: 16, width: '100%', padding: '8px', borderRadius: 8, cursor: 'pointer',
                 background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
                 color: 'rgba(200,200,255,0.5)', fontSize: 10, fontFamily: 'var(--font-data)',

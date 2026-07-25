@@ -61,8 +61,16 @@ class DungeonGeneratorService
         }
 
         $entrada = $salas[0];
+        $run->loadMissing('jugadores.user.character');
         foreach ($run->jugadores as $jugador) {
-            $jugador->update(['sala_actual_id' => $entrada->id]);
+            $stats = $jugador->user->character?->combatStats();
+            $jugador->update([
+                'sala_actual_id' => $entrada->id,
+                // Vida/escudo con los que el equipo arranca el dungeon — se van gastando entre
+                // salas y solo se recuperan con objetos 'utilizable' (ver DungeonController::usarObjeto).
+                'hp_actual' => $stats['vida'] ?? null,
+                'escudo_actual' => $stats['escudo'] ?? null,
+            ]);
             DungeonSalaProgreso::create([
                 'dungeon_run_player_id' => $jugador->id,
                 'dungeon_sala_id' => $entrada->id,

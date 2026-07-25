@@ -2029,14 +2029,24 @@ function EnemigoPortrait({ enemigo, size = 96 }) {
 }
 
 function DungeonPortal({ lugar, userCharacter, myUserId }) {
-  const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala? }
+  const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala?, mi_estado?, equipo? }
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
   const [busy, setBusy]           = useState(false);
   const [activeCombat, setActiveCombat] = useState(null); // { enemigo }
   const [raidQueueOpen, setRaidQueueOpen] = useState(false);
   const [activeRaidId, setActiveRaidId]   = useState(null);
+  const isMobile = useIsMobile();
   const pollRef = useRef(null);
+
+  /* Inventario de objetos 'utilizable' (Kits Médicos, Generadores de Escudo): se mantiene en
+     estado local -sembrado de userCharacter, que no se refresca automáticamente al consumir-
+     y se decrementa acá mismo tras cada uso exitoso. */
+  const [utilizables, setUtilizables] = useState(() =>
+    (userCharacter?.rol_objetos ?? [])
+      .filter((o) => o.tipo === 'utilizable' && (o.pivot?.cantidad ?? 0) > 0)
+      .map((o) => ({ id: o.id, nombre: o.nombre, cura_vida: o.cura_vida ?? 0, cura_escudo: o.cura_escudo ?? 0, cantidad: o.pivot.cantidad }))
+  );
 
   const runId  = data?.run?.id;
   const estado = data?.run?.estado;
@@ -2096,6 +2106,42 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
       setData((prev) => ({ ...prev, sala: d.sala }));
     } catch (e) {
       toast(e?.body?.error || e?.message || 'No se pudo mover.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* Persiste la vida/escudo final de un encuentro 1v1 (victoria, derrota o huida) — la
+     dificultad del dungeon depende de que el daño no se resetee entre salas, mismo criterio
+     que persistNaveDano() para el combate naval. */
+  const registrarDano = useCallback(async (hp) => {
+    if (!runId || !hp) return;
+    try {
+      const d = await apiPost(`/map/dungeons/runs/${runId}/registrar-dano`, { vida: hp.vida, escudo: hp.escudo });
+      setData((prev) => (prev ? { ...prev, mi_estado: prev.mi_estado ? { ...prev.mi_estado, hp_actual: d.hp_actual, escudo_actual: d.escudo_actual } : prev.mi_estado } : prev));
+    } catch { /* ignore */ }
+  }, [runId]);
+
+  /* Consume un objeto 'utilizable' del inventario — el servidor solo valida/descuenta
+     inventario (no conoce el daño de un combate en curso, que es 100% cliente-side); el
+     resultado de vida/escudo que devuelve solo es fiable fuera de combate. */
+  const consumirObjeto = useCallback(async (objetoId) => {
+    const res = await apiPost(`/map/dungeons/runs/${runId}/usar-objeto`, { rol_objeto_id: objetoId });
+    setUtilizables((prev) => prev
+      .map((o) => (o.id === objetoId ? { ...o, cantidad: o.cantidad - 1 } : o))
+      .filter((o) => o.cantidad > 0));
+    return res;
+  }, [runId]);
+
+  const usarObjetoEnMapa = async (objeto) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await consumirObjeto(objeto.id);
+      setData((prev) => (prev ? { ...prev, mi_estado: { ...prev.mi_estado, hp_actual: res.hp_actual, escudo_actual: res.escudo_actual } } : prev));
+      toast(`${res.nombre} usado`, { tone: 'success', icon: 'box' });
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo usar el objeto.', { tone: 'error', icon: 'x' });
     } finally {
       setBusy(false);
     }
@@ -2170,6 +2216,20 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
 
   const salidas = DUNGEON_DIRS.filter((d) => sala.salidas?.[d.key]);
   const bloqueado = !!sala.enemigo;
+  const equipo = data.equipo ?? [];
+
+  /* Vida/escudo con los que arranca el próximo combate: los ACTUALES del dungeon (pueden venir
+     dañados de encuentros previos), no los máximos del personaje — mismo criterio que
+     getNaveCombatPlayerStats con vida_actual/vida_max. */
+  const playerStats = (() => {
+    const base = getPlayerCombatStats(userCharacter);
+    if (!data.mi_estado) return base;
+    return {
+      ...base,
+      vida: data.mi_estado.hp_actual, vida_max: data.mi_estado.hp_max,
+      escudo: data.mi_estado.escudo_actual, escudo_max: data.mi_estado.escudo_max,
+    };
+  })();
 
   return (
     <div>
@@ -2178,55 +2238,103 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
         <Btn kind="ghost" sm onClick={salirDungeon} disabled={busy}>Abandonar dungeon</Btn>
       </div>
 
-      <DungeonBackdrop imagen={lugar.imagen}>
-        <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
-          <div className="nx-display" style={{ fontSize: 18, marginBottom: 10 }}>
-            {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr', gap: 16, alignItems: 'start' }}>
+        {/* equipo — vida/escudo + foto de cada jugador, visible mientras se recorre el dungeon */}
+        {equipo.length > 0 && (
+          <div className="nx-panel solid" style={{ padding: 16 }}>
+            <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
+            <div style={{ display: 'grid', gap: 16 }}>
+              {equipo.map((j) => (
+                <CombatHPBar
+                  key={j.user_id}
+                  vida={j.hp_actual} maxVida={j.hp_max}
+                  escudo={j.escudo_actual} maxEscudo={j.escudo_max}
+                  nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}`}
+                  photoUrl={mediaUrl(j.photo)}
+                />
+              ))}
+            </div>
           </div>
+        )}
 
-          {sala.tipo === 'jefe' ? (
-            <>
-              <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
-                {data.run.template.jefe_nombre} espera al fondo de esta sala. Reúne a tu equipo para enfrentarlo.
-              </p>
-              <Btn kind="accent" icon="swords" onClick={() => setRaidQueueOpen(true)}>Enfrentar al Jefe</Btn>
-            </>
-          ) : bloqueado ? (
-            <>
-              <EnemigoPortrait enemigo={sala.enemigo} />
-              <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
-                {sala.enemigo.nombre} bloquea el paso.
-              </p>
-              <Btn kind="accent" icon="swords" onClick={() => setActiveCombat({ enemigo: sala.enemigo })}>Combatir</Btn>
-            </>
-          ) : (
-            <>
-              <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>Sala despejada.</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10 }}>
-                {salidas.map((d) => (
-                  <Btn key={d.key} kind="ghost" onClick={() => mover(d.key)} disabled={busy}>
-                    {d.icon} {d.label}
-                  </Btn>
-                ))}
-                {salidas.length === 0 && (
-                  <span style={{ color: 'var(--txt-faint)', fontSize: 12 }}>Sin salidas — vuelve por donde llegaste.</span>
-                )}
+        <DungeonBackdrop imagen={lugar.imagen}>
+          <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
+            <div className="nx-display" style={{ fontSize: 18, marginBottom: 10 }}>
+              {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
+            </div>
+
+            {sala.tipo === 'jefe' ? (
+              <>
+                <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                  {data.run.template.jefe_nombre} espera al fondo de esta sala. Reúne a tu equipo para enfrentarlo.
+                </p>
+                <Btn kind="accent" icon="swords" onClick={() => setRaidQueueOpen(true)}>Enfrentar al Jefe</Btn>
+              </>
+            ) : bloqueado ? (
+              <>
+                <EnemigoPortrait enemigo={sala.enemigo} />
+                <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                  {sala.enemigo.nombre} bloquea el paso.
+                </p>
+                <Btn kind="accent" icon="swords" onClick={() => setActiveCombat({ enemigo: sala.enemigo })}>Combatir</Btn>
+              </>
+            ) : (
+              <>
+                <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>Sala despejada.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10 }}>
+                  {salidas.map((d) => (
+                    <Btn key={d.key} kind="ghost" onClick={() => mover(d.key)} disabled={busy}>
+                      {d.icon} {d.label}
+                    </Btn>
+                  ))}
+                  {salidas.length === 0 && (
+                    <span style={{ color: 'var(--txt-faint)', fontSize: 12 }}>Sin salidas — vuelve por donde llegaste.</span>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* objetos utilizables — curarse en el mapa, entre salas */}
+            {utilizables.length > 0 && (
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+                <div className="nx-kicker" style={{ marginBottom: 10 }}>OBJETOS</div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {utilizables.map((objeto) => (
+                    <div key={objeto.id} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                      padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
+                      background: 'rgba(16,185,129,0.06)',
+                    }}>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
+                        <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                          {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
+                          {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
+                        </div>
+                      </div>
+                      <Btn kind="ghost" sm disabled={busy} onClick={() => usarObjetoEnMapa(objeto)}>Usar</Btn>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </>
-          )}
-        </div>
-      </DungeonBackdrop>
+            )}
+          </div>
+        </DungeonBackdrop>
+      </div>
 
       {/* combate 1v1 contra el enemigo de la sala */}
       {activeCombat && (
         <NpcCombatScreen
           npc={activeCombat.enemigo}
-          player={getPlayerCombatStats(userCharacter)}
+          player={playerStats}
           lugarImagen={mediaUrl(lugar.imagen)}
           planetaNombre={data.run.template.nombre}
           lugarNombre={sala.tipo === 'entrada' ? 'Entrada' : 'Sala'}
           esEnemigo
-          onVictory={async () => {
+          objetosUtilizables={utilizables}
+          onUsarObjeto={(objetoId) => consumirObjeto(objetoId)}
+          onVictory={async (hp) => {
+            await registrarDano(hp);
             try {
               const d = await apiPost(`/map/dungeons/runs/${runId}/enemigo-victory`, {});
               if (d?.recompensas?.length) {
@@ -2236,8 +2344,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
             setActiveCombat(null);
             refresh();
           }}
-          onDefeat={() => setActiveCombat(null)}
-          onFlee={() => setActiveCombat(null)}
+          onDefeat={async (hp) => { await registrarDano(hp); setActiveCombat(null); }}
+          onFlee={async (hp) => { await registrarDano(hp); setActiveCombat(null); }}
         />
       )}
 

@@ -257,6 +257,85 @@ class DungeonController extends Controller
         ]);
     }
 
+    /**
+     * POST /map/dungeons/runs/{run}/registrar-dano — persiste la vida/escudo con la que el
+     * jugador terminó un encuentro 1v1 (victoria, derrota o huida), igual criterio que
+     * NaveController::registrarDano: el cliente resuelve el combate y reporta el resultado
+     * final, el servidor solo lo acota al máximo del personaje.
+     */
+    public function registrarDano(Request $request, int $runId): JsonResponse
+    {
+        $data = $request->validate([
+            'vida' => 'required|integer|min:0',
+            'escudo' => 'required|integer|min:0',
+        ]);
+
+        $user = $request->user();
+        $character = $user->character;
+        $jugador = DungeonRunPlayer::where('dungeon_run_id', $runId)->where('user_id', $user->id)->first();
+
+        if (! $jugador || ! $jugador->activo() || ! $character) {
+            return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+
+        $stats = $character->combatStats();
+        $jugador->update([
+            'hp_actual' => min($data['vida'], $stats['vida']),
+            'escudo_actual' => min($data['escudo'], $stats['escudo']),
+        ]);
+
+        return response()->json(['ok' => true, 'hp_actual' => $jugador->hp_actual, 'escudo_actual' => $jugador->escudo_actual]);
+    }
+
+    /**
+     * POST /map/dungeons/runs/{run}/usar-objeto {rol_objeto_id} — consume un objeto tipo
+     * 'utilizable' del inventario del personaje para restaurar vida/escudo dentro del run
+     * (en el mapa, entre salas, o en medio de un encuentro 1v1 — ver NpcCombatScreen).
+     */
+    public function usarObjeto(Request $request, int $runId): JsonResponse
+    {
+        $data = $request->validate(['rol_objeto_id' => 'required|integer|exists:rol_objetos,id']);
+
+        $user = $request->user();
+        $character = $user->character;
+        $run = DungeonRun::findOrFail($runId);
+        $jugador = DungeonRunPlayer::where('dungeon_run_id', $run->id)->where('user_id', $user->id)->first();
+
+        if (! $jugador || ! $jugador->activo() || ! $character) {
+            return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+        if (! $run->enCurso()) {
+            return response()->json(['error' => 'Este dungeon no está en curso.'], 422);
+        }
+
+        $owned = $character->rolObjetos()->where('rol_objetos.id', $data['rol_objeto_id'])->first();
+        if (! $owned || (int) $owned->pivot->cantidad < 1) {
+            return response()->json(['error' => 'No tienes ese objeto en tu inventario.'], 422);
+        }
+        if ($owned->tipo !== 'utilizable') {
+            return response()->json(['error' => 'Este objeto no se puede usar.'], 422);
+        }
+
+        $stats = $character->combatStats();
+        $jugador->update([
+            'hp_actual' => min($stats['vida'], ($jugador->hp_actual ?? $stats['vida']) + (int) ($owned->cura_vida ?? 0)),
+            'escudo_actual' => min($stats['escudo'], ($jugador->escudo_actual ?? $stats['escudo']) + (int) ($owned->cura_escudo ?? 0)),
+        ]);
+
+        if ((int) $owned->pivot->cantidad <= 1) {
+            $character->rolObjetos()->detach($owned->id);
+        } else {
+            $character->rolObjetos()->updateExistingPivot($owned->id, ['cantidad' => $owned->pivot->cantidad - 1]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'nombre' => $owned->nombre,
+            'hp_actual' => $jugador->hp_actual,
+            'escudo_actual' => $jugador->escudo_actual,
+        ]);
+    }
+
     /** 'esperando' -> forma de lobby (jugadores/listo/cupos); 'en_curso' -> forma de sala (posición del jugador). */
     private function formatEstadoOLobby(DungeonRun $run, User $user): array
     {
@@ -266,11 +345,39 @@ class DungeonController extends Controller
 
         $run->loadMissing(['jugadores.user.character', 'jugadores.salaActual', 'template.jefe']);
         $jugador = $run->jugadores->firstWhere('user_id', $user->id);
+        $stats = $jugador?->user?->character?->combatStats();
 
         return [
             'run' => $this->formatRunResumen($run),
             'sala' => $jugador?->salaActual ? $this->formatSala($jugador->salaActual, $jugador) : null,
+            'mi_estado' => $stats ? [
+                'hp_actual' => $jugador->hp_actual ?? $stats['vida'],
+                'hp_max' => $stats['vida'],
+                'escudo_actual' => $jugador->escudo_actual ?? $stats['escudo'],
+                'escudo_max' => $stats['escudo'],
+            ] : null,
+            'equipo' => $this->formatEquipo($run),
         ];
+    }
+
+    /** Vida/escudo actuales y foto de cada jugador activo del equipo — para el panel lateral en la sala. */
+    private function formatEquipo(DungeonRun $run): array
+    {
+        return $run->jugadores->where('estado', 'activo')->map(function (DungeonRunPlayer $jp) {
+            $character = $jp->user->character;
+            $stats = $character?->combatStats();
+
+            return [
+                'user_id' => $jp->user_id,
+                'name' => $character->name ?? $jp->user->name,
+                'photo' => $character->photo ?? null,
+                'hp_actual' => $jp->hp_actual ?? $stats['vida'] ?? 0,
+                'hp_max' => $stats['vida'] ?? 0,
+                'escudo_actual' => $jp->escudo_actual ?? $stats['escudo'] ?? 0,
+                'escudo_max' => $stats['escudo'] ?? 0,
+                'en_sala_jefe' => $jp->salaActual?->tipo === 'jefe',
+            ];
+        })->values()->all();
     }
 
     private function formatLobby(DungeonRun $run, int $userId): array

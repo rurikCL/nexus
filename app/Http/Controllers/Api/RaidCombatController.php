@@ -159,13 +159,26 @@ class RaidCombatController extends Controller
         }
 
         $charStats = self::getCombatStats($user->character);
+        $hp = $charStats['vida'];
+        $escudo = $charStats['escudo'];
+
+        /* Si viene de un dungeon, arranca con la vida/escudo con la que llegó a la sala del
+         * jefe (puede estar dañado por los encuentros previos) en vez de a full — mismo
+         * criterio de dificultad que el resto del dungeon: hay que llegar preparado. */
+        if ($dungeonRunId !== null) {
+            $dungeonJugador = DungeonRunPlayer::where('dungeon_run_id', $dungeonRunId)->where('user_id', $user->id)->first();
+            if ($dungeonJugador) {
+                $hp = $dungeonJugador->hp_actual ?? $hp;
+                $escudo = $dungeonJugador->escudo_actual ?? $escudo;
+            }
+        }
 
         RaidCombatPlayer::create([
             'raid_combat_id' => $raid->id,
             'user_id' => $user->id,
             'slot' => $slot,
-            'hp' => $charStats['vida'],
-            'escudo' => $charStats['escudo'],
+            'hp' => $hp,
+            'escudo' => $escudo,
             'fuerza' => 0,
             'current_forma' => $user->character->formaEspecializacion(),
             'status' => 'activo',

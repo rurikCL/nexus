@@ -18,10 +18,14 @@ class DungeonRunPlayer extends Model
         'listo',
         'sala_actual_id',
         'estado',
+        'hp_actual',
+        'escudo_actual',
     ];
 
     protected $casts = [
         'listo' => 'boolean',
+        'hp_actual' => 'integer',
+        'escudo_actual' => 'integer',
     ];
 
     public function run(): BelongsTo
