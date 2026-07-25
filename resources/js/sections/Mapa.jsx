@@ -1390,7 +1390,9 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
 
   const hs = hostilidadStyle(zona.hostilidad);
   const lugares = zona.lugares ?? [];
-  const exteriores = lugares.filter((l) => !l.tipo || l.tipo === 'exterior');
+  /* portal_dungeon es un punto de entrada directo desde la zona, igual que exterior —
+     solo 'interior' se alcanza vía el grafo de 4 direcciones dentro de otro lugar. */
+  const exteriores = lugares.filter((l) => !l.tipo || l.tipo === 'exterior' || l.tipo === 'portal_dungeon');
   const zonaImagen = mediaUrl(zona.imagen);
 
   return (
@@ -1484,37 +1486,41 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
 
 /* ─── CARD LUGAR ────────────────────────────────────────── */
 function LugarCard({ lugar, presentes = [], onClick }) {
+  const esDungeon = lugar.tipo === 'portal_dungeon';
   const rc = rarezaColor(lugar.rareza);
   const lugarImagen = mediaUrl(lugar.imagen);
-  const tipoLabel = lugar.tipo === 'interior' ? 'Interior' : 'Exterior';
+  const tipoLabel = esDungeon ? 'Portal de Dungeon' : lugar.tipo === 'interior' ? 'Interior' : 'Exterior';
   return (
     <button onClick={onClick}
       style={{
-        background: 'rgba(12,30,64,0.55)', border: `1px solid var(--holo-line)`,
+        background: 'rgba(12,30,64,0.55)', border: `1px solid ${esDungeon ? 'rgba(255,107,0,0.4)' : 'var(--holo-line)'}`,
         borderRadius: 'var(--radius-lg)', cursor: 'pointer', textAlign: 'left',
         padding: 0, overflow: 'hidden', transition: 'all 0.2s',
         display: 'flex', flexDirection: 'column', color: 'var(--txt)',
+        boxShadow: esDungeon ? '0 0 16px -6px rgba(255,107,0,0.5)' : 'none',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.border = `1px solid var(--holo)`;
-        e.currentTarget.style.boxShadow = '0 0 20px -6px var(--holo)';
+        e.currentTarget.style.border = `1px solid ${esDungeon ? '#FF6B00' : 'var(--holo)'}`;
+        e.currentTarget.style.boxShadow = `0 0 20px -6px ${esDungeon ? '#FF6B00' : 'var(--holo)'}`;
         e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.border = `1px solid var(--holo-line)`;
-        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.border = `1px solid ${esDungeon ? 'rgba(255,107,0,0.4)' : 'var(--holo-line)'}`;
+        e.currentTarget.style.boxShadow = esDungeon ? '0 0 16px -6px rgba(255,107,0,0.5)' : 'none';
         e.currentTarget.style.transform = 'none';
       }}
     >
       <div style={{
         height: 120, background: lugarImagen
           ? `url(${lugarImagen}) center/cover`
-          : 'linear-gradient(135deg, rgba(56,205,240,0.08), rgba(4,7,15,0.8))',
+          : esDungeon
+            ? 'linear-gradient(135deg, rgba(255,107,0,0.14), rgba(4,7,15,0.8))'
+            : 'linear-gradient(135deg, rgba(56,205,240,0.08), rgba(4,7,15,0.8))',
         position: 'relative',
       }}>
         {!lugarImagen && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.3 }}>
-            <Icon name="target" size={40} style={{ color: 'var(--holo)' }} />
+            <Icon name={esDungeon ? 'flame' : 'target'} size={40} style={{ color: esDungeon ? '#FF6B00' : 'var(--holo)' }} />
           </div>
         )}
         {lugar.rareza && (
@@ -1532,7 +1538,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
       <div style={{ padding: '12px 14px', flex: 1 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)', marginBottom: 6 }}>{lugar.nombre}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: lugar.historia ? 8 : 0 }}>
-          <Chip tone="dim">{tipoLabel}</Chip>
+          <Chip tone={esDungeon ? 'orange' : 'dim'}>{tipoLabel}</Chip>
           {lugar.pase ? <Chip tone="warning">Requiere pase</Chip> : null}
         </div>
         {lugar.historia && (
@@ -1561,7 +1567,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId, refreshToken, onNpcsUpdated }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId, refreshToken, onNpcsUpdated, userCharacter }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1732,6 +1738,11 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         </div>
       </div>
 
+      {/* portal de dungeon: reemplaza presentes/accesos/NPCs — ver DungeonPortal */}
+      {lugar.tipo === 'portal_dungeon' ? (
+        <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} />
+      ) : (
+        <>
       {/* presentes en este lugar */}
       {(lugar.presentes_personajes ?? []).length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -1851,6 +1862,8 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
           <NpcCard key={npc.id} npc={npc} onClick={() => onSelectNpc(npc)} />
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1956,6 +1969,297 @@ function NpcCard({ npc, onClick }) {
         )}
       </div>
     </button>
+  );
+}
+
+/* ─── DUNGEON — portal de mazmorra rogue-like en equipo ──────────────────
+   Ver DungeonController (app/Http/Controllers/Api/DungeonController.php):
+   unirse (lobby, idempotente — retoma lobby o sala si ya se participaba) ->
+   listo (arranca el run al completar el equipo) -> mover/enemigo-victory
+   por sala (1v1 independiente por jugador) -> sala jefe, donde el equipo
+   converge vía RaidQueueModal/RaidCombatScreen con dungeon_run_id. */
+const DUNGEON_DIRS = [
+  { key: 'norte', label: 'Norte', icon: '↑' },
+  { key: 'sur',   label: 'Sur',   icon: '↓' },
+  { key: 'este',  label: 'Este',  icon: '→' },
+  { key: 'oeste', label: 'Oeste', icon: '←' },
+];
+
+/* Fondo con la foto del lugar-portal (lobby/sala/terminal) — mismo tratamiento que el
+   header de LugarView: imagen atenuada + degradado oscuro, contenido encima. */
+function DungeonBackdrop({ imagen, children }) {
+  const bg = mediaUrl(imagen);
+  return (
+    <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+      {bg && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: `url(${bg})`,
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          opacity: 0.28,
+        }} />
+      )}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(180deg, rgba(4,7,15,0.35) 0%, rgba(4,7,15,0.90) 100%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{ position: 'relative', zIndex: 1, padding: 24 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* Retrato del enemigo de la sala — mismo criterio que NpcCard/CombatHPBar: imagen_mini
+   primero, luego imagen, y un ícono de respaldo si el catálogo no tiene ninguna cargada. */
+function EnemigoPortrait({ enemigo, size = 96 }) {
+  const foto = mediaUrl(enemigo.imagen_mini || enemigo.imagen);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 12, margin: '0 auto 14px', overflow: 'hidden',
+      border: '1px solid rgba(255,45,69,0.4)', background: 'rgba(255,45,69,0.08)',
+      display: 'grid', placeItems: 'center', flexShrink: 0,
+    }}>
+      {foto
+        ? <img src={foto} alt={enemigo.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <Icon name="swords" size={size * 0.4} style={{ color: '#ff6b6b' }} />}
+    </div>
+  );
+}
+
+function DungeonPortal({ lugar, userCharacter, myUserId }) {
+  const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala? }
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [busy, setBusy]           = useState(false);
+  const [activeCombat, setActiveCombat] = useState(null); // { enemigo }
+  const [raidQueueOpen, setRaidQueueOpen] = useState(false);
+  const [activeRaidId, setActiveRaidId]   = useState(null);
+  const pollRef = useRef(null);
+
+  const runId  = data?.run?.id;
+  const estado = data?.run?.estado;
+
+  const refresh = useCallback(async () => {
+    if (!runId) return;
+    try {
+      const d = await apiFetch(`/map/dungeons/runs/${runId}`);
+      setData(d);
+    } catch { /* poll silencioso */ }
+  }, [runId]);
+
+  const unirse = useCallback(() => {
+    setLoading(true);
+    setError('');
+    return apiPost(`/map/dungeons/${lugar.id}/unirse`, {})
+      .then((d) => setData(d))
+      .catch((e) => setError(e?.body?.error || e?.message || 'No se pudo entrar al dungeon.'))
+      .finally(() => setLoading(false));
+  }, [lugar.id]);
+
+  /* Al entrar al portal: unirse es idempotente — retoma el lobby o la sala donde ya estabas. */
+  useEffect(() => { unirse(); }, [unirse]);
+
+  /* Mientras se arma el equipo, refresca para ver quién se une / marca listo. */
+  useEffect(() => {
+    if (estado !== 'esperando' || !runId) return;
+    pollRef.current = setInterval(refresh, 2500);
+    return () => clearInterval(pollRef.current);
+  }, [estado, runId, refresh]);
+
+  const toggleListo = async () => {
+    if (!runId || busy) return;
+    setBusy(true);
+    try {
+      setData(await apiPost(`/map/dungeons/runs/${runId}/listo`, {}));
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo actualizar tu estado.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const salirDungeon = async () => {
+    if (!runId) return;
+    setBusy(true);
+    try { await apiPost(`/map/dungeons/runs/${runId}/salir`, {}); } catch { /* ignore */ }
+    setBusy(false);
+    unirse();
+  };
+
+  const mover = async (direccion) => {
+    if (!runId || busy) return;
+    setBusy(true);
+    try {
+      const d = await apiPost(`/map/dungeons/runs/${runId}/mover`, { direccion });
+      setData((prev) => ({ ...prev, sala: d.sala }));
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo mover.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) return <LoadingHUD text="ENTRANDO AL DUNGEON..." />;
+
+  if (error) return (
+    <div style={{ textAlign: 'center', padding: 40, color: '#ff6b6b', fontSize: 13 }}>{error}</div>
+  );
+
+  if (!data?.run) return null;
+
+  /* ── LOBBY: equipo armándose ── */
+  if (estado === 'esperando') {
+    const jugadores = data.jugadores ?? [];
+    const me = jugadores.find((j) => j.soy_yo);
+    return (
+      <DungeonBackdrop imagen={lugar.imagen}>
+        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
+          <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
+          <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
+          <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
+            Mínimo {data.min_jugadores} jugadores · hasta {data.cupos_equipo} cupos. El equipo arranca cuando todos marquen "Listo".
+          </div>
+          <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
+            {jugadores.map((j) => (
+              <div key={j.user_id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px', borderRadius: 8,
+                border: `1px solid ${j.listo ? 'rgba(16,185,129,0.5)' : 'var(--holo-line)'}`,
+                background: j.listo ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)',
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{j.name}{j.soy_yo ? ' (tú)' : ''}</span>
+                <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <Btn kind="ghost" onClick={salirDungeon} disabled={busy}>Abandonar</Btn>
+            <Btn kind="accent" icon="check" onClick={toggleListo} disabled={busy}>
+              {me?.listo ? 'Listo (cancelar)' : 'Estoy listo'}
+            </Btn>
+          </div>
+        </div>
+      </DungeonBackdrop>
+    );
+  }
+
+  /* ── TERMINAL: completado o abandonado ── */
+  if (estado === 'completado' || estado === 'abandonado') {
+    return (
+      <DungeonBackdrop imagen={lugar.imagen}>
+        <div className="nx-panel solid" style={{ padding: 32, textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
+          <div className="nx-display" style={{ fontSize: 20, marginBottom: 10 }}>
+            {estado === 'completado' ? '¡Dungeon completado!' : 'Dungeon abandonado'}
+          </div>
+          <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 20 }}>
+            {estado === 'completado'
+              ? 'El equipo derrotó al jefe y obtuvo su botín.'
+              : 'Puedes volver a entrar por este portal cuando quieras.'}
+          </p>
+          <Btn kind="accent" onClick={unirse}>Entrar de nuevo</Btn>
+        </div>
+      </DungeonBackdrop>
+    );
+  }
+
+  /* ── EN CURSO: sala actual del jugador ── */
+  const sala = data.sala;
+  if (!sala) return <LoadingHUD text="CARGANDO SALA..." />;
+
+  const salidas = DUNGEON_DIRS.filter((d) => sala.salidas?.[d.key]);
+  const bloqueado = !!sala.enemigo;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div className="nx-kicker">{data.run.template.nombre}</div>
+        <Btn kind="ghost" sm onClick={salirDungeon} disabled={busy}>Abandonar dungeon</Btn>
+      </div>
+
+      <DungeonBackdrop imagen={lugar.imagen}>
+        <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
+          <div className="nx-display" style={{ fontSize: 18, marginBottom: 10 }}>
+            {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
+          </div>
+
+          {sala.tipo === 'jefe' ? (
+            <>
+              <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                {data.run.template.jefe_nombre} espera al fondo de esta sala. Reúne a tu equipo para enfrentarlo.
+              </p>
+              <Btn kind="accent" icon="swords" onClick={() => setRaidQueueOpen(true)}>Enfrentar al Jefe</Btn>
+            </>
+          ) : bloqueado ? (
+            <>
+              <EnemigoPortrait enemigo={sala.enemigo} />
+              <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                {sala.enemigo.nombre} bloquea el paso.
+              </p>
+              <Btn kind="accent" icon="swords" onClick={() => setActiveCombat({ enemigo: sala.enemigo })}>Combatir</Btn>
+            </>
+          ) : (
+            <>
+              <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>Sala despejada.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10 }}>
+                {salidas.map((d) => (
+                  <Btn key={d.key} kind="ghost" onClick={() => mover(d.key)} disabled={busy}>
+                    {d.icon} {d.label}
+                  </Btn>
+                ))}
+                {salidas.length === 0 && (
+                  <span style={{ color: 'var(--txt-faint)', fontSize: 12 }}>Sin salidas — vuelve por donde llegaste.</span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </DungeonBackdrop>
+
+      {/* combate 1v1 contra el enemigo de la sala */}
+      {activeCombat && (
+        <NpcCombatScreen
+          npc={activeCombat.enemigo}
+          player={getPlayerCombatStats(userCharacter)}
+          lugarImagen={mediaUrl(lugar.imagen)}
+          planetaNombre={data.run.template.nombre}
+          lugarNombre={sala.tipo === 'entrada' ? 'Entrada' : 'Sala'}
+          esEnemigo
+          onVictory={async () => {
+            try {
+              const d = await apiPost(`/map/dungeons/runs/${runId}/enemigo-victory`, {});
+              if (d?.recompensas?.length) {
+                toast(`🎁 Recompensa: ${d.recompensas.map((r) => r.label).join(' y ')}`, { tone: 'success', icon: 'box' });
+              }
+            } catch { /* ignore */ }
+            setActiveCombat(null);
+            refresh();
+          }}
+          onDefeat={() => setActiveCombat(null)}
+          onFlee={() => setActiveCombat(null)}
+        />
+      )}
+
+      {/* cola del jefe — se une el equipo entero, cupos = raid_slots del jefe */}
+      {raidQueueOpen && (
+        <RaidQueueModal
+          npcId={data.run.template.jefe_npc_id}
+          dungeonRunId={runId}
+          onClose={() => setRaidQueueOpen(false)}
+          onStarted={(id) => { setRaidQueueOpen(false); setActiveRaidId(id); }}
+        />
+      )}
+
+      {/* combate RAID contra el jefe — al vencerlo, el servidor cierra el DungeonRun */}
+      {activeRaidId && (
+        <RaidCombatScreen
+          raidId={activeRaidId}
+          lugarImagen={mediaUrl(lugar.imagen)}
+          onClose={() => { setActiveRaidId(null); refresh(); }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -4639,6 +4943,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           myUserId={userId}
           refreshToken={lugarRefreshKey}
           onNpcsUpdated={handleNpcsUpdated}
+          userCharacter={userCharacter}
         />
       )}
 

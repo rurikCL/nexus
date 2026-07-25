@@ -22,6 +22,7 @@ class MapLugar extends Model
         'rareza',
         'tipo',
         'pase',
+        'dungeon_template_id',
         'lugarNorteID',
         'lugarSurID',
         'lugarEsteID',
@@ -77,5 +78,11 @@ class MapLugar extends Model
     public function presentesPersonajes(): HasMany
     {
         return $this->hasMany(Character::class, 'map_lugar_id');
+    }
+
+    /** Template de dungeon que se instancia al entrar, si tipo === 'portal_dungeon'. */
+    public function dungeonTemplate(): BelongsTo
+    {
+        return $this->belongsTo(DungeonTemplate::class, 'dungeon_template_id');
     }
 }

@@ -13,7 +13,7 @@ class RaidCombat extends Model
     protected $table = 'raid_combats';
 
     protected $fillable = [
-        'npc_id', 'status',
+        'npc_id', 'dungeon_run_id', 'status',
         'npc_hp', 'npc_escudo', 'npc_forma', 'npc_buffs', 'npc_debuffs', 'npc_cooldowns', 'npc_estados',
         'turn_order', 'turn_index', 'turn_started_at', 'ronda', 'log',
         'lugar_id', 'zona_id', 'planeta_id', 'sistema_id',
@@ -41,6 +41,12 @@ class RaidCombat extends Model
     public function npc(): BelongsTo
     {
         return $this->belongsTo(MapNpc::class, 'npc_id');
+    }
+
+    /** Presente solo si este RaidCombat es el jefe final de un dungeon (ver DungeonController). */
+    public function dungeonRun(): BelongsTo
+    {
+        return $this->belongsTo(DungeonRun::class, 'dungeon_run_id');
     }
 
     public function jugadores(): HasMany

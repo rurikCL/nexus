@@ -89,6 +89,7 @@ class MapController extends Controller
                 'sur:id,nombre,imagen',
                 'este:id,nombre,imagen',
                 'oeste:id,nombre,imagen',
+                'dungeonTemplate:id,nombre,salas_min,salas_max',
                 'presentesPersonajes' => $this->presentes('map_lugar_id'),
             ])
             ->findOrFail($id);

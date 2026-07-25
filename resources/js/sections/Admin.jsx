@@ -76,7 +76,7 @@ const TIPO_NPC_OPTS   = [
   { value: 'vendedor', label: 'Vendedor' },
   { value: 'vendedor_naves', label: 'Vendedor de Naves' },
 ];
-const TIPO_LUGAR_OPTS = ['exterior', 'interior'];
+const TIPO_LUGAR_OPTS = ['exterior', 'interior', { value: 'portal_dungeon', label: 'Portal de Dungeon' }];
 
 const H_COLOR = {
   seguro: '#10b981', bajo: '#38cdf0', medio: '#E6B325',
@@ -197,6 +197,7 @@ const ENTITY_CONFIG = {
       { key: 'tipo',          label: 'Tipo',             type: 'select', options: TIPO_LUGAR_OPTS },
       { key: 'rareza',        label: 'Rareza',           type: 'select', options: RAREZA_OPTS },
       { key: 'pase',          label: 'Pase requerido',   type: 'relatedSelect', related: 'rol_objetos' },
+      { key: 'dungeon_template_id', label: 'Dungeon (si Tipo = Portal de Dungeon)', type: 'relatedSelect', related: 'dungeon_templates', span: 2 },
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'lugarNorteID',  label: 'Norte →',          type: 'relatedSelect', related: 'lugares' },
       { key: 'lugarSurID',    label: 'Sur →',            type: 'relatedSelect', related: 'lugares' },
@@ -328,6 +329,28 @@ const ENTITY_CONFIG = {
       { key: 'imagen',           label: 'Imagen de la nave',    type: 'file', span: 2 },
     ],
     defaults: {},
+  },
+
+  dungeon_templates: {
+    label: 'Dungeons', icon: 'flame', group: 'MAPA GALÁCTICO',
+    columns: [
+      { key: 'id', label: 'ID', w: 52 },
+      { key: 'nombre', label: 'Nombre', bold: true },
+      { key: 'zona', label: 'Zona', resolve: r => r.zona?.nombre ?? '—', dim: true },
+      { key: 'jefe', label: 'Jefe', resolve: r => r.jefe?.nombre ?? '—', dim: true },
+      { key: 'salas', label: 'Salas', resolve: r => `${r.salas_min}–${r.salas_max}`, dim: true, w: 72 },
+      { key: 'enemigos', label: 'Enemigos', resolve: r => r.enemigos?.length ?? 0, dim: true, w: 72 },
+      { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
+    ],
+    fields: [
+      { key: 'nombre',      label: 'Nombre',           type: 'text', required: true, span: 2 },
+      { key: 'map_zona_id', label: 'Zona (portal)',    type: 'relatedSelect', related: 'zonas', hint: 'Referencial: dónde vive conceptualmente este dungeon. El portal real que lo instancia es un Lugar tipo "portal_dungeon" apuntando a este template.' },
+      { key: 'jefe_npc_id', label: 'Jefe (NPC tipo jefe)', type: 'relatedSelect', related: 'npcs_jefe', required: true, hint: 'Solo se listan NPCs con Tipo = jefe. Sus Cupos de Combate RAID definen también el tamaño del equipo que se arma al entrar al dungeon.' },
+      { key: 'salas_min',   label: 'Salas mínimas',    type: 'number', min: 2 },
+      { key: 'salas_max',   label: 'Salas máximas',    type: 'number', min: 2 },
+      { key: 'visible',     label: 'Visible',          type: 'toggle' },
+    ],
+    defaults: { visible: true, salas_min: 5, salas_max: 8 },
   },
 
   /* ── ROL ── */
@@ -1424,6 +1447,91 @@ function LugarCrudModal({ config, record, relatedOptions, onSave, onClose }) {
   );
 }
 
+/* ─── DUNGEON TEMPLATE — igual patrón que LugarCrudModal: campos + EnemigoSpawnPicker para el pool normal ── */
+function DungeonTemplateCrudModal({ config, record, relatedOptions, onSave, onClose }) {
+  const isEdit = !!record?.id;
+  const [form, setForm] = useState(() => {
+    const base = { ...(config.defaults ?? {}), ...(record ?? {}) };
+    base.enemigos = (record?.enemigos ?? []).map(e => ({
+      id: e.id,
+      tasa_aparicion: e.pivot?.tasa_aparicion ?? 1,
+      nivel: e.pivot?.nivel ?? 1,
+    }));
+    return base;
+  });
+  const [saving, setSaving] = useState(false);
+  const [enemigosCatalog, setEnemigosCatalog] = useState([]);
+
+  useEffect(() => {
+    api('GET', '/admin/enemigos?per_page=200').then(r => setEnemigosCatalog(r.data ?? [])).catch(() => {});
+  }, []);
+
+  const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const path = isEdit ? `/admin/dungeon_templates/${record.id}` : `/admin/dungeon_templates`;
+      const method = isEdit ? 'PATCH' : 'POST';
+      await api(method, path, form);
+      toast(isEdit ? 'Registro actualizado' : 'Registro creado', { tone: 'success', icon: 'check' });
+      onSave();
+    } catch (err) {
+      toast(err.message, { tone: 'error', icon: 'x' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      kicker={isEdit ? 'EDITAR · DUNGEON' : 'NUEVO · DUNGEON'}
+      title={isEdit ? `Editando #${record.id}` : 'Crear Dungeon'}
+      width={680}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', paddingTop: 4 }}>
+        {config.fields.map(field => (
+          <div key={field.key}
+            style={{ gridColumn: field.span === 2 ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}
+          >
+            <label className="nx-label">
+              {field.label}
+              {field.required && <span style={{ color: 'var(--holocron-naranja)', marginLeft: 2 }}>*</span>}
+            </label>
+            <FieldInput
+              field={field}
+              value={form[field.key]}
+              onChange={val => setField(field.key, val)}
+              relatedOptions={relatedOptions}
+            />
+            {field.hint && (
+              <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>{field.hint}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+        <EnemigoSpawnPicker
+          label={`Enemigos que pueden aparecer en las salas normales · ${(form.enemigos ?? []).length}`}
+          catalog={enemigosCatalog}
+          selected={form.enemigos}
+          onChange={v => setField('enemigos', v)}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+        <Btn kind="ghost" onClick={onClose} disabled={saving}>Cancelar</Btn>
+        <Btn kind="accent" icon="check" onClick={handleSave} disabled={saving}>
+          {saving ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear registro'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
+
 /* ─── NPC — modal ancho con panel lateral (imágenes + atributos) y tiendas ── */
 const NPC_SIDEBAR_KEYS = ['imagen_mini', 'imagen', 'nivel', 'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria'];
 
@@ -2167,6 +2275,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
           />
         ) : entityKey === 'lugares' ? (
           <LugarCrudModal
+            config={config}
+            record={editRecord?.id ? editRecord : null}
+            relatedOptions={relatedOptions}
+            onSave={handleSaved}
+            onClose={() => setEditRecord(null)}
+          />
+        ) : entityKey === 'dungeon_templates' ? (
+          <DungeonTemplateCrudModal
             config={config}
             record={editRecord?.id ? editRecord : null}
             relatedOptions={relatedOptions}

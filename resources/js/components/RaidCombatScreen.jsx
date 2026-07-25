@@ -116,8 +116,11 @@ function StatBar({ label, value, max, color }) {
   );
 }
 
-/* ── COLA DE ESPERA (cupos configurables por el NPC jefe) ─── */
-export function RaidQueueModal({ npcId, onClose, onStarted }) {
+/* ── COLA DE ESPERA (cupos configurables por el NPC jefe) ───
+   `dungeonRunId` (opcional): cuando el jefe cierra un dungeon (ver DungeonController),
+   agrupa la cola por (npc_id, dungeon_run_id) en vez de solo npc_id — así dos equipos
+   en dos dungeons distintos que compartan el mismo jefe de catálogo no se mezclan. */
+export function RaidQueueModal({ npcId, dungeonRunId, onClose, onStarted }) {
   const [raid, setRaid] = useState(null);
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
@@ -126,12 +129,12 @@ export function RaidQueueModal({ npcId, onClose, onStarted }) {
 
   const join = useCallback(async () => {
     try {
-      const d = await apiPost(`/raid/join/${npcId}`, {});
+      const d = await apiPost(`/raid/join/${npcId}`, dungeonRunId ? { dungeon_run_id: dungeonRunId } : {});
       setRaid(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo unir a la cola.');
     }
-  }, [npcId]);
+  }, [npcId, dungeonRunId]);
 
   useEffect(() => { join(); }, [join]);
 

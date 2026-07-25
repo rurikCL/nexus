@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CharacterMedallaController;
 use App\Http\Controllers\Api\CharacterPhotoController;
 use App\Http\Controllers\Api\CombatantController;
 use App\Http\Controllers\Api\CombatController;
+use App\Http\Controllers\Api\DungeonController;
 use App\Http\Controllers\Api\EmblemUploadController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\InstagramController;
@@ -207,6 +208,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/lugares/{lugarId}/enemigo-encuentro', [LugarEncuentroController::class, 'check']);
     Route::get('/map/location', [MapController::class, 'location']);
     Route::post('/map/location', [MapController::class, 'updateLocation']);
+
+    // Dungeons rogue-like (equipo)
+    Route::post('/map/dungeons/{lugarId}/unirse', [DungeonController::class, 'unirse']);
+    Route::get('/map/dungeons/runs/{runId}', [DungeonController::class, 'estado']);
+    Route::post('/map/dungeons/runs/{runId}/listo', [DungeonController::class, 'listo']);
+    Route::post('/map/dungeons/runs/{runId}/salir', [DungeonController::class, 'salir']);
+    Route::post('/map/dungeons/runs/{runId}/mover', [DungeonController::class, 'mover']);
+    Route::post('/map/dungeons/runs/{runId}/enemigo-victory', [DungeonController::class, 'enemigoVictory']);
 
     // Naves
     Route::get('/naves', [NaveController::class, 'catalogo']);
