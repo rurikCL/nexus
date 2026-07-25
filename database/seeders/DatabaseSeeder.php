@@ -299,5 +299,8 @@ class DatabaseSeeder extends Seeder
 
         // ─── Mapa galáctico (sistemas, planetas, zonas, lugares, NPCs) ─
         $this->call(MapaGalacticoSeeder::class);
+
+        // ─── Dungeon de ejemplo (portal, pool de enemigos y jefe) ──────
+        $this->call(DungeonTemplateSeeder::class);
     }
 }

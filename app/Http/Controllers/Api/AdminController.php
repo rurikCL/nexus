@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Traits\ConvertsToWebp;
 use App\Models\Character;
 use App\Models\Configuracion;
+use App\Models\DungeonTemplate;
 use App\Models\MapEnemigo;
 use App\Models\MapLugar;
 use App\Models\MapNave;
@@ -42,6 +43,10 @@ class AdminController extends Controller
             'npcs'        => MapNpc::class,
             'enemigos'    => MapEnemigo::class,
             'naves'       => MapNave::class,
+            'dungeon_templates' => DungeonTemplate::class,
+            // Alias interno: mismo modelo que 'npcs', pre-filtrado a tipo=jefe.
+            // Usado solo por options() para el selector de jefe de dungeon_templates.
+            'npcs_jefe'   => MapNpc::class,
             'usuarios'    => User::class,
             'personajes'  => Character::class,
             'roles'       => Role::class,
@@ -78,6 +83,7 @@ class AdminController extends Controller
             'lugares'    => ['zona:id,nombre', 'enemigos'],
             'npcs'       => ['lugar:id,nombre', 'naves', 'objetos', 'recompensas'],
             'enemigos'   => ['recompensas'],
+            'dungeon_templates' => ['zona:id,nombre', 'jefe:id,nombre', 'enemigos'],
             'usuarios'   => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
@@ -206,6 +212,10 @@ class AdminController extends Controller
             $query->where('tipo', 'nave');
         }
 
+        if ($entity === 'npcs_jefe') {
+            $query->where('tipo', 'jefe');
+        }
+
         return $query;
     }
 
@@ -260,7 +270,7 @@ class AdminController extends Controller
 
         $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
         $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
-        $enemigos = $entity === 'lugares' ? $this->extractSpawnPivot($data, 'enemigos')   : null;
+        $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
         $recompensas = ($entity === 'npcs' || $entity === 'enemigos') ? $this->extractRecompensas($data) : null;
 
         $record = $model::create($data);
@@ -309,7 +319,7 @@ class AdminController extends Controller
 
         $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
         $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
-        $enemigos = $entity === 'lugares' ? $this->extractSpawnPivot($data, 'enemigos')   : null;
+        $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
         $recompensas = ($entity === 'npcs' || $entity === 'enemigos') ? $this->extractRecompensas($data) : null;
 
         $record->update($data);

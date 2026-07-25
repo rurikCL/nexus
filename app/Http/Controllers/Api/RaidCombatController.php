@@ -7,6 +7,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CharacterHito;
 use App\Models\Configuracion;
+use App\Models\DungeonRun;
+use App\Models\DungeonRunPlayer;
 use App\Models\MapNpc;
 use App\Models\RaidCombat;
 use App\Models\RaidCombatPlayer;
@@ -88,10 +90,18 @@ class RaidCombatController extends Controller
     }
 
     /** POST /raid/join/{npcId} — se une a la cola de un jefe (o la crea); arranca el combate al llegar a 4. */
+    /**
+     * $dungeonRunId (opcional): cuando el jefe se pelea como cierre de un dungeon
+     * (ver DungeonController), agrupa la cola por (npc_id, dungeon_run_id) en vez de
+     * solo npc_id -de lo contrario dos equipos en dos dungeons distintos que compartan
+     * el mismo jefe de catálogo se mezclarían en la misma cola-. Fuera de ese caso el
+     * comportamiento es idéntico al de un jefe de mapa normal.
+     */
     public function join(Request $request, int $npcId): JsonResponse
     {
         $user = $request->user();
         $npc = MapNpc::findOrFail($npcId);
+        $dungeonRunId = $request->integer('dungeon_run_id') ?: null;
 
         if (($npc->tipo ?? '') !== 'jefe') {
             return response()->json(['error' => 'Este NPC no es un jefe de asalto.'], 422);
@@ -100,24 +110,37 @@ class RaidCombatController extends Controller
             return response()->json(['error' => 'Necesitas un personaje para combatir.'], 422);
         }
 
+        if ($dungeonRunId !== null) {
+            $enSalaJefe = DungeonRunPlayer::where('dungeon_run_id', $dungeonRunId)
+                ->where('user_id', $user->id)
+                ->where('estado', 'activo')
+                ->whereHas('salaActual', fn ($q) => $q->where('tipo', 'jefe'))
+                ->exists();
+
+            if (! $enSalaJefe) {
+                return response()->json(['error' => 'Debes llegar a la sala del jefe de tu equipo para unirte a este combate.'], 422);
+            }
+        }
+
         $existing = RaidCombatPlayer::where('user_id', $user->id)->where('status', 'activo')
             ->whereHas('raidCombat', fn ($q) => $q->whereIn('status', ['esperando', 'activo']))
             ->with('raidCombat')->first();
 
         if ($existing) {
-            if ($existing->raidCombat->npc_id !== $npc->id) {
+            if ($existing->raidCombat->npc_id !== $npc->id || $existing->raidCombat->dungeon_run_id !== $dungeonRunId) {
                 return response()->json(['error' => 'Ya tienes un combate RAID en curso con otro jefe. Resuélvelo primero.'], 422);
             }
 
             return response()->json(['raid' => $this->formatRaid($existing->raidCombat->load(['npc', 'jugadores.user.character']), $user->id)]);
         }
 
-        $raid = RaidCombat::where('npc_id', $npc->id)->where('status', 'esperando')->first();
+        $raid = RaidCombat::where('npc_id', $npc->id)->where('dungeon_run_id', $dungeonRunId)->where('status', 'esperando')->first();
 
         if (! $raid) {
             $stats = self::getNpcStats($npc);
             $raid = RaidCombat::create([
                 'npc_id' => $npc->id,
+                'dungeon_run_id' => $dungeonRunId,
                 'status' => 'esperando',
                 'npc_hp' => $stats['vida'],
                 'npc_escudo' => $stats['escudo'],
@@ -1104,7 +1127,25 @@ class RaidCombatController extends Controller
             }
         }
 
+        if ($raid->dungeon_run_id) {
+            $this->completarDungeonRun($raid->dungeon_run_id);
+        }
+
         return $mensajes;
+    }
+
+    /** Cierra el DungeonRun al vencer al jefe: marca completado y limpia sus salas (ver DungeonController). */
+    private function completarDungeonRun(int $dungeonRunId): void
+    {
+        $run = DungeonRun::find($dungeonRunId);
+        if (! $run || $run->estado !== 'en_curso') {
+            return;
+        }
+
+        // El nullOnDelete de dungeon_run_players.sala_actual_id y dungeon_sala_progresos
+        // (cascade) limpian solos las referencias al borrar las salas.
+        $run->salas()->delete();
+        $run->update(['estado' => 'completado', 'completado_at' => now()]);
     }
 
     // ─────────────────────────── formato de respuesta ──────────────────────
