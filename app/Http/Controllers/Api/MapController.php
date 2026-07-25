@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\MapSistema;
-use App\Models\MapPlaneta;
-use App\Models\MapZona;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
 use App\Models\MapNpcEspacio;
+use App\Models\MapPlaneta;
+use App\Models\MapSistema;
+use App\Models\MapZona;
 use App\Models\Mision;
 use App\Models\PvpCombat;
 use App\Models\User;
+use App\Services\NpcInteraccionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -22,7 +23,7 @@ class MapController extends Controller
 {
     private function presentes(string $fk): \Closure
     {
-        return fn($q) => $q->select('id', $fk, 'user_id', 'handle', 'photo', 'saber_color');
+        return fn ($q) => $q->select('id', $fk, 'user_id', 'handle', 'photo', 'saber_color');
     }
 
     public function sistemas(): JsonResponse
@@ -41,9 +42,9 @@ class MapController extends Controller
         $sistema = MapSistema::where('visible', true)
             ->with([
                 'presentesPersonajes' => $this->presentes('map_sistema_id'),
-                'planetas' => fn($q) => $q->where('visible', true)
+                'planetas' => fn ($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_planeta_id')]),
-                'npcsEspacio' => fn($q) => $q->where('visible', true)->with(['nave', 'npc']),
+                'npcsEspacio' => fn ($q) => $q->where('visible', true)->with(['nave', 'npc']),
             ])
             ->findOrFail($id);
 
@@ -56,7 +57,7 @@ class MapController extends Controller
             ->with([
                 'sistema',
                 'presentesPersonajes' => $this->presentes('map_planeta_id'),
-                'zonas' => fn($q) => $q->where('visible', true)
+                'zonas' => fn ($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_zona_id')]),
             ])
             ->findOrFail($id);
@@ -70,7 +71,7 @@ class MapController extends Controller
             ->with([
                 'planeta.sistema',
                 'presentesPersonajes' => $this->presentes('map_zona_id'),
-                'lugares' => fn($q) => $q->where('visible', true)
+                'lugares' => fn ($q) => $q->where('visible', true)
                     ->with(['presentesPersonajes' => $this->presentes('map_lugar_id')]),
             ])
             ->findOrFail($id);
@@ -78,12 +79,12 @@ class MapController extends Controller
         return response()->json(['zona' => $zona]);
     }
 
-    public function lugar(Request $request, int $id): JsonResponse
+    public function lugar(Request $request, int $id, NpcInteraccionService $interaccionService): JsonResponse
     {
         $lugar = MapLugar::where('visible', true)
             ->with([
                 'zona.planeta.sistema',
-                'npcs'                => fn($q) => $q->where('visible', true),
+                'npcs' => fn ($q) => $q->where('visible', true),
                 'norte:id,nombre,imagen',
                 'sur:id,nombre,imagen',
                 'este:id,nombre,imagen',
@@ -97,6 +98,7 @@ class MapController extends Controller
             : [];
 
         $npcsDisponibles = $lugar->npcs->filter(fn (MapNpc $npc) => $this->npcCumpleRequisitos($npc, $characterHitos))->values();
+        $npcsDisponibles->each(fn (MapNpc $npc) => $interaccionService->ensureFresh($npc));
         $lugar->setRelation('npcs', $this->attachMisionInfo($npcsDisponibles, $request->user()));
 
         $character = $request->user()?->character;
@@ -149,12 +151,12 @@ class MapController extends Controller
         }
 
         $activeCombat = PvpCombat::where('status', 'active')
-            ->where(fn($q) => $q->where('attacker_id', $user->id)->orWhere('defender_id', $user->id))
+            ->where(fn ($q) => $q->where('attacker_id', $user->id)->orWhere('defender_id', $user->id))
             ->exists();
 
         if ($activeCombat) {
             return response()->json([
-                'ok'      => false,
+                'ok' => false,
                 'blocked' => true,
                 'message' => 'No puedes moverte mientras tienes un combate activo.',
             ], 422);
@@ -169,7 +171,7 @@ class MapController extends Controller
             if ($naveEquipada) {
                 if ($naveEquipada->combustible_actual <= 0) {
                     return response()->json([
-                        'ok'      => false,
+                        'ok' => false,
                         'blocked' => true,
                         'message' => 'Tu nave no tiene combustible suficiente para saltar. Debes reabastecerla.',
                     ], 422);
@@ -182,7 +184,7 @@ class MapController extends Controller
                 if ($costoViaje > 0) {
                     if ($character->credits < $costoViaje) {
                         return response()->json([
-                            'ok'      => false,
+                            'ok' => false,
                             'blocked' => true,
                             'message' => 'Créditos insuficientes para pagar el transporte a este sistema.',
                         ], 422);
@@ -196,8 +198,8 @@ class MapController extends Controller
         $character->update([
             'map_sistema_id' => $sistemaDestinoId,
             'map_planeta_id' => $request->input('planeta_id'),
-            'map_zona_id'    => $request->input('zona_id'),
-            'map_lugar_id'   => $request->input('lugar_id'),
+            'map_zona_id' => $request->input('zona_id'),
+            'map_lugar_id' => $request->input('lugar_id'),
         ]);
 
         return response()->json(['ok' => true, 'credits' => $character->fresh()->credits]);
@@ -212,7 +214,7 @@ class MapController extends Controller
         return response()->json(['npc_espacio' => $npcEspacio]);
     }
 
-    public function npc(Request $request, int $id): JsonResponse
+    public function npc(Request $request, int $id, NpcInteraccionService $interaccionService): JsonResponse
     {
         $npc = MapNpc::where('visible', true)
             ->with('lugar.zona.planeta.sistema')
@@ -225,6 +227,8 @@ class MapController extends Controller
         if (! $this->npcCumpleRequisitos($npc, $characterHitos)) {
             abort(404);
         }
+
+        $interaccionService->ensureFresh($npc);
 
         $npc = $this->attachMisionInfo(collect([$npc]), $request->user())->first();
 
@@ -296,6 +300,7 @@ class MapController extends Controller
 
             if (! $mision) {
                 $npc->setAttribute('mision_disponible', null);
+
                 return $npc;
             }
 
@@ -317,38 +322,38 @@ class MapController extends Controller
             );
 
             $npc->setAttribute('mision_disponible', [
-                'id'                 => $mision->id,
-                'nombre'             => $mision->nombre,
-                'mision'             => $mision->mision,
-                'descripcion'        => $mision->descripcion,
-                'foto_mision'        => $mision->foto_mision,
+                'id' => $mision->id,
+                'nombre' => $mision->nombre,
+                'mision' => $mision->mision,
+                'descripcion' => $mision->descripcion,
+                'foto_mision' => $mision->foto_mision,
                 'hito_requerimiento' => $mision->hito_requerimiento,
-                'entregar_hito'      => $mision->entregar_hito,
-                'objetivos'          => $mision->objetivos->map(fn ($o) => [
-                    'id'              => $o->id,
-                    'nombre'          => $o->nombre,
-                    'descripcion'     => $o->descripcion,
-                    'tipo'            => $o->tipo,
-                    'meta'            => $o->meta,
-                    'unidad'          => $o->unidad,
-                    'unidad_label'    => $o->tipo === 'npc'
+                'entregar_hito' => $mision->entregar_hito,
+                'objetivos' => $mision->objetivos->map(fn ($o) => [
+                    'id' => $o->id,
+                    'nombre' => $o->nombre,
+                    'descripcion' => $o->descripcion,
+                    'tipo' => $o->tipo,
+                    'meta' => $o->meta,
+                    'unidad' => $o->unidad,
+                    'unidad_label' => $o->tipo === 'npc'
                         ? ($npcLabels[(int) $o->unidad] ?? $o->unidad)
                         : null,
                     'progreso_actual' => min($o->meta, $progresoJson[(string) $o->id] ?? 0),
-                    'completado'      => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
+                    'completado' => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta,
                 ])->values(),
-                'recompensas'        => $mision->recompensas->map(fn ($r) => [
-                    'id'          => $r->id,
-                    'nombre'      => $r->nombre,
+                'recompensas' => $mision->recompensas->map(fn ($r) => [
+                    'id' => $r->id,
+                    'nombre' => $r->nombre,
                     'descripcion' => $r->descripcion,
-                    'tipo'        => $r->tipo,
-                    'valor'       => $r->valor,
-                    'imagen'      => $r->imagen,
-                    'habilidad'   => $r->habilidad ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre] : null,
-                    'objeto'      => $r->objeto ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen] : null,
+                    'tipo' => $r->tipo,
+                    'valor' => $r->valor,
+                    'imagen' => $r->imagen,
+                    'habilidad' => $r->habilidad ? ['id' => $r->habilidad->id, 'nombre' => $r->habilidad->nombre] : null,
+                    'objeto' => $r->objeto ? ['id' => $r->objeto->id, 'nombre' => $r->objeto->nombre, 'imagen' => $r->objeto->imagen] : null,
                 ])->values(),
-                'estado'             => $pivot->status ?? null,
-                'puede_completar'    => (bool) ($pivot && $pivot->status !== 'completada' && $cumpleHitos && $objetivosCompletos),
+                'estado' => $pivot->status ?? null,
+                'puede_completar' => (bool) ($pivot && $pivot->status !== 'completada' && $cumpleHitos && $objetivosCompletos),
             ]);
 
             return $npc;

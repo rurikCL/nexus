@@ -239,6 +239,7 @@ const ENTITY_CONFIG = {
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
       { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
       { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Si se rellena, el NPC usará IA en lugar del diálogo estático. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
+      { key: 'prompt_respuestas', label: 'Prompt Interacción IA', type: 'textarea', span: 2, hint: 'Describe la personalidad del NPC, cómo responde y qué preguntas atiende. La IA genera automáticamente 3-5 interacciones (formato "- palabra_clave: respuesta") y las guarda en el campo Interacción de arriba. Se regenera cada "tiempo_npc_interaccion" minutos (configuraciones).' },
       { key: 'urlInteraccion',label: 'URL interacción',  type: 'text', span: 2 },
       { key: 'MisionID',      label: 'ID de misión',     type: 'number', min: 0 },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
