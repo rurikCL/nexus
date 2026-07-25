@@ -113,7 +113,7 @@ class CharacterController extends Controller
             $handleQuery->where('id', '!=', $user->character->id);
         }
         if ($handleQuery->exists()) {
-            return response()->json(['message' => 'El handle ya está en uso.'], 422);
+            return response()->json(['message' => 'El tag ya está en uso.'], 422);
         }
 
         $character = $user->character()->updateOrCreate(

@@ -195,7 +195,8 @@ const NAV = [
   { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
   { id: 'catalogo', label: 'Catálogo', icon: 'box' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
-  { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
+  // Oculto: aún no se utiliza.
+  // { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
 ];
 const MENU_SLUGS = new Set([
   ...NAV.map(n => n.id),
@@ -555,12 +556,12 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       .catch(() => {});
   }, []);
 
-  // Sincroniza créditos desde el servidor al iniciar
+  // Sincroniza créditos desde el servidor al iniciar y cada vez que cambian (ej: recompensa de misión)
   useEffect(() => {
     if (user?.character?.credits !== undefined) {
       S.setCredits(user.character.credits);
     }
-  }, [user?.id]);
+  }, [user?.id, user?.character?.credits]);
 
   // Carga combatientes, combates y apuestas reales
   useEffect(() => {

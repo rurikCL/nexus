@@ -254,10 +254,6 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
         toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
       });
       onUpdate(mision.id, { status: 'completada', progreso: 100, puede_completar: false });
-      const transmision = buildMissionCompletionTransmision(data);
-      if (transmision) {
-        onTransmision?.(transmision);
-      }
 
       if (onUserUpdate) {
         fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
@@ -265,10 +261,14 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           .then(d => { if (d) onUserUpdate(d); })
           .catch(() => {});
       }
-      onClose();
       window.dispatchEvent(new CustomEvent('nx-mision-updated', {
         detail: { missionId: mision.id, status: 'completada' },
       }));
+      onClose();
+      const transmision = buildMissionCompletionTransmision(data);
+      if (transmision) {
+        onTransmision?.(transmision);
+      }
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
@@ -290,7 +290,25 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           <p style={{ fontSize: 13, color: 'var(--txt)', fontWeight: 600, margin: 0 }}>{mision.mision}</p>
         )}
         {mision.descripcion && (
-          <p style={{ fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0 }}>{mision.descripcion}</p>
+          <div style={{ position: 'relative' }}>
+            <p style={{
+              fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0,
+              filter: mision.puede_completar ? 'blur(4px)' : 'none', transition: 'filter 0.3s ease',
+            }}>{mision.descripcion}</p>
+            {mision.puede_completar && (
+              <div style={{
+                position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+                background: 'rgba(4,7,15,0.3)', borderRadius: 'var(--radius-md)',
+              }}>
+                <span className="nx-mision-cumplida" style={{
+                  fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '0.03em',
+                  textShadow: '0 0 16px rgba(16,185,129,0.75)',
+                }}>
+                  ¡Misión Cumplida!
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {!mision.aceptada && !done && (

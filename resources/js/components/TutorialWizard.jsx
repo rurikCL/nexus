@@ -204,7 +204,7 @@ export default function TutorialWizard({ user, onComplete }) {
           {step === 4 && <StepClase form={form} set={set} />}
           {step === 5 && <StepSable form={form} set={set} />}
           {step === 6 && <StepTutor form={form} set={set} token={localStorage.getItem('nx-token')} />}
-          {step === 7 && <StepListo form={form} error={error} />}
+          {step === 7 && <StepListo form={form} error={error} user={user} />}
         </div>
       </div>
 
@@ -290,8 +290,8 @@ function StepBienvenida({ user }) {
           <span style={{ color: 'var(--holo)' }}>{firstName}</span>
         </h1>
         <p style={{ fontSize: 15, color: 'var(--txt-dim)', lineHeight: 1.75, maxWidth: 480, margin: '0 auto' }}>
-          El Holocrón de Combate NÉXUS registra a los guerreros de élite del Sistema Holocrón.
-          Antes de ingresar, debes forjar tu identidad como combatiente.
+          El Holocrón NÉXUS registra a los guerreros de Esgrima Jedi.
+          Antes de ingresar, debes forjar tu identidad como usuario de la fuerza.
         </p>
       </div>
 
@@ -332,8 +332,8 @@ function StepIdentidad({ form, set }) {
         </div>
         <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>¿Cómo te llaman?</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
-          Tu nombre de combate y handle son tu identidad pública en el sistema.
-          El handle debe ser único y solo puede contener letras, números, guiones y guiones bajos.
+          Tu nombre de usuario y tag son tu identidad pública en el sistema.
+          El tag debe ser único y solo puede contener letras, números, guiones y guiones bajos.
         </p>
       </div>
 
@@ -351,7 +351,7 @@ function StepIdentidad({ form, set }) {
           />
         </Field>
 
-        <Field label="HANDLE (@ ÚNICO) *">
+        <Field label="TAG (@ ÚNICO) *">
           <div style={{ position: 'relative' }}>
             <span style={{
               position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
@@ -418,7 +418,7 @@ function StepSede({ form, set, token }) {
         </div>
         <h2 className="nx-display" style={{ fontSize: 26, marginBottom: 10 }}>¿A qué sede perteneces?</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.65 }}>
-          Clasifica a los combatientes por ubicación física real — solo podrás retar en combate
+          Clasifica a los usuarios de la fuerza por ubicación física real — solo podrás retar en combate
           a rivales de tu misma sede.
         </p>
       </div>
@@ -506,7 +506,7 @@ const SIDES = [
     label: 'Lado Oscuro',
     desc: 'Pasión, ambición y poder',
     color: '#ff2d45',
-    subtext: 'La ira como combustible, la victoria como propósito.',
+    subtext: 'La pasión como combustible, la victoria como propósito.',
   },
 ];
 
@@ -820,11 +820,12 @@ function StepTutor({ form, set, token }) {
 }
 
 /* ─── Step 7: Listo ─── */
-function StepListo({ form, error }) {
+function StepListo({ form, error, user }) {
   const cls        = NX.CLASSES.find(c => c.id === form.cls);
   const side       = SIDES.find(s => s.id === form.side);
   const saberEntry = SABERS_LIST.find(s => s.id === form.saber_color);
   const initials   = form.name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+  const regCode    = `EJ${String(user?.id ?? 0).padStart(3, '0')}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
@@ -832,7 +833,7 @@ function StepListo({ form, error }) {
         <div className="nx-kicker" style={{ fontSize: 10, marginBottom: 10, letterSpacing: '0.25em' }}>
           REVISIÓN FINAL
         </div>
-        <h2 className="nx-display" style={{ fontSize: 28, marginBottom: 10 }}>Tu ficha de combatiente</h2>
+        <h2 className="nx-display" style={{ fontSize: 28, marginBottom: 10 }}>Tu ficha de registro</h2>
         <p style={{ fontSize: 13, color: 'var(--txt-dim)' }}>
           Confirma tu identidad antes de ingresar al sistema.
         </p>
@@ -871,7 +872,7 @@ function StepListo({ form, error }) {
             { label: 'LADO',          value: side?.label ?? '—',             color: side?.color },
             { label: 'FORMA',         value: cls ? `${cls.num} · ${cls.name}` : '—', color: cls?.accent },
             { label: 'CRISTAL KYBER', value: saberEntry?.label ?? '—',       color: saberEntry?.color },
-            { label: 'TIER INICIAL',  value: 'Iniciado',                     color: 'var(--txt-dim)' },
+            { label: 'CÓDIGO DE REGISTRO', value: regCode,                   color: 'var(--txt-dim)' },
           ].map((item, i) => (
             <div key={i} style={{
               padding: '14px 20px',
