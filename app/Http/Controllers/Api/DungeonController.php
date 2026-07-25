@@ -10,6 +10,7 @@ use App\Models\DungeonRunPlayer;
 use App\Models\DungeonSala;
 use App\Models\DungeonSalaProgreso;
 use App\Models\MapLugar;
+use App\Models\MapRecompensa;
 use App\Models\PvpCombat;
 use App\Models\User;
 use App\Services\DungeonGeneratorService;
@@ -17,6 +18,7 @@ use App\Services\MisionProgresoService;
 use App\Services\RecompensaRollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Dungeon rogue-like en equipo: se arma un lobby al entrar por un
@@ -537,7 +539,21 @@ class DungeonController extends Controller
 
     private function formatLobby(DungeonRun $run, int $userId): array
     {
-        $run->loadMissing(['jugadores.user.character', 'template.jefe']);
+        $run->loadMissing([
+            'jugadores.user.character',
+            'template.jefe.recompensas.objeto',
+            'template.jefe.recompensas.habilidad',
+            'template.jefe.recompensas.medalla',
+            'template.enemigos.recompensas.objeto',
+            'template.enemigos.recompensas.habilidad',
+            'template.enemigos.recompensas.medalla',
+            'template.recompensas.objeto',
+            'template.recompensas.habilidad',
+            'template.recompensas.medalla',
+        ]);
+
+        $template = $run->template;
+        $jefe = $template->jefe;
 
         return [
             'run' => $this->formatRunResumen($run),
@@ -553,7 +569,36 @@ class DungeonController extends Controller
             ])->values(),
             'cupos_equipo' => $run->template->cuposEquipo(),
             'min_jugadores' => self::MIN_JUGADORES,
+            'loot' => [
+                'cofres' => $this->formatRecompensasPreview($template->recompensas),
+                'enemigos' => $template->enemigos->map(fn ($e) => [
+                    'id' => $e->id,
+                    'nombre' => $e->nombre,
+                    'imagen' => $e->imagen_mini ?: $e->imagen,
+                    'nivel' => $e->pivot->nivel ?? $e->nivel,
+                    'recompensas' => $this->formatRecompensasPreview($e->recompensas),
+                ])->values(),
+                'jefe' => $jefe ? [
+                    'nombre' => $jefe->nombre,
+                    'imagen' => $jefe->imagen_mini ?: $jefe->imagen,
+                    'recompensas' => $this->formatRecompensasPreview($jefe->recompensas),
+                ] : null,
+            ],
         ];
+    }
+
+    /** Vista previa (sin otorgar) del botín configurado — ver RecompensaRollService::aplicar para el equivalente que sí lo entrega. */
+    private function formatRecompensasPreview(Collection $recompensas): array
+    {
+        return $recompensas->map(fn (MapRecompensa $r) => match ($r->tipo) {
+            'creditos' => ['tipo' => 'creditos', 'label' => "{$r->valor} créditos"],
+            'objeto' => ['tipo' => 'objeto', 'label' => $r->objeto->nombre ?? 'Objeto'],
+            'habilidad' => ['tipo' => 'habilidad', 'label' => $r->habilidad->nombre ?? 'Habilidad'],
+            'punto_habilidad' => ['tipo' => 'punto_habilidad', 'label' => "{$r->valor} punto" . ((int) $r->valor === 1 ? '' : 's') . ' de habilidad'],
+            'titulo' => ['tipo' => 'titulo', 'label' => $r->nombre ?? 'Título'],
+            'insignia' => ['tipo' => 'insignia', 'label' => $r->medalla->nombre ?? 'Insignia'],
+            default => ['tipo' => $r->tipo, 'label' => $r->nombre ?? $r->tipo],
+        })->values()->all();
     }
 
     private function formatRunResumen(DungeonRun $run): array

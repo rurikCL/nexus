@@ -2282,6 +2282,126 @@ function DungeonMinimap({ mapa, equipo = [], myUserId, onNavigate, busy }) {
   );
 }
 
+/* Ícono por tipo de recompensa — mismo criterio que MisionOfrecidaPopup.recIcon. */
+function recompensaIcon(tipo) {
+  return tipo === 'creditos' ? '💰'
+    : tipo === 'titulo' ? '🏷️'
+    : tipo === 'insignia' ? '🏅'
+    : tipo === 'habilidad' ? '⚡'
+    : tipo === 'punto_habilidad' ? '⭐'
+    : '📦';
+}
+
+function RecompensaChip({ recompensa }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      background: 'rgba(255,255,255,0.03)', border: '1px solid var(--holo-line)',
+      borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--txt-dim)',
+    }}>
+      <span>{recompensaIcon(recompensa.tipo)}</span>
+      <span>{recompensa.label}</span>
+    </div>
+  );
+}
+
+/* Cuadro a la derecha del lobby: botín posible del template (cofres), de cada tipo
+   de enemigo común del pool, y del jefe — vista previa de solo lectura, sin otorgar nada
+   (ver DungeonController::formatRecompensasPreview). */
+function DungeonLootPreview({ loot }) {
+  if (!loot) return null;
+  const cofres = loot.cofres ?? [];
+  const enemigos = loot.enemigos ?? [];
+  const jefe = loot.jefe;
+
+  return (
+    <div className="nx-panel solid nx-panel-glow" style={{
+      padding: 20, textAlign: 'left', width: '100%', maxWidth: 360,
+      maxHeight: 520, overflowY: 'auto',
+    }}>
+      <div className="nx-kicker" style={{ marginBottom: 14 }}>BOTÍN POSIBLE</div>
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 11, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', marginBottom: 8 }}>
+          COFRES DEL DUNGEON
+        </div>
+        {cofres.length === 0 ? (
+          <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin botín configurado</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {cofres.map((r, i) => <RecompensaChip key={i} recompensa={r} />)}
+          </div>
+        )}
+      </div>
+
+      {enemigos.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 11, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', marginBottom: 8 }}>
+            ENEMIGOS
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {enemigos.map((e) => {
+              const foto = mediaUrl(e.imagen);
+              return (
+                <div key={e.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+                    border: '1px solid rgba(255,45,69,0.35)', background: 'rgba(255,45,69,0.08)',
+                    display: 'grid', placeItems: 'center',
+                  }}>
+                    {foto
+                      ? <img src={foto} alt={e.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Icon name="swords" size={16} style={{ color: '#ff6b6b' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{e.nombre}</div>
+                    {(e.recompensas ?? []).length === 0 ? (
+                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2 }}>Sin botín configurado</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                        {e.recompensas.map((r, i) => <RecompensaChip key={i} recompensa={r} />)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {jefe && (
+        <div>
+          <div style={{ fontSize: 11, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', marginBottom: 8 }}>
+            JEFE
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+              border: '2px solid rgba(255,45,69,0.5)', background: 'rgba(255,45,69,0.1)',
+              display: 'grid', placeItems: 'center',
+            }}>
+              {mediaUrl(jefe.imagen)
+                ? <img src={mediaUrl(jefe.imagen)} alt={jefe.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <Icon name="user" size={22} style={{ color: '#ff6b6b' }} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>{jefe.nombre}</div>
+              {(jefe.recompensas ?? []).length === 0 ? (
+                <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>Sin botín configurado</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  {jefe.recompensas.map((r, i) => <RecompensaChip key={i} recompensa={r} />)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DungeonPortal({ lugar, userCharacter, myUserId }) {
   const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala?, mi_estado?, equipo? }
   const [loading, setLoading]     = useState(true);
@@ -2524,7 +2644,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
     const me = jugadores.find((j) => j.soy_yo);
     return (
       <DungeonBackdrop imagen={lugar.imagen}>
-        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'center', alignItems: 'flex-start' }}>
+        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', width: '100%', maxWidth: 560 }}>
           <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
           <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
@@ -2570,6 +2691,9 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
               {me?.listo ? 'Listo (cancelar)' : 'Estoy listo'}
             </Btn>
           </div>
+        </div>
+
+        <DungeonLootPreview loot={data.loot} />
         </div>
       </DungeonBackdrop>
     );
