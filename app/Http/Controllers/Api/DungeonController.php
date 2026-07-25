@@ -544,6 +544,9 @@ class DungeonController extends Controller
             'jugadores' => $run->jugadores->map(fn (DungeonRunPlayer $jp) => [
                 'user_id' => $jp->user_id,
                 'name' => $jp->user->character->name ?? $jp->user->name,
+                'handle' => $jp->user->character->handle ?? null,
+                'photo' => $jp->user->character->photo ?? null,
+                'saber_color' => $jp->user->character->saber_color ?? null,
                 'listo' => $jp->listo,
                 'estado' => $jp->estado,
                 'soy_yo' => $jp->user_id === $userId,

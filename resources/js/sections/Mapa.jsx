@@ -1961,7 +1961,7 @@ function NpcCard({ npc, onClick }) {
 }
 
 /* ─── CARD JUGADOR (mismo formato de NpcCard, con badge de JUGADOR) ────── */
-function PlayerCard({ jugador, onClick, isMe }) {
+function PlayerCard({ jugador, onClick, isMe, subtitle, footer }) {
   const color = SABER_COLORS[jugador.saber_color] ?? '#38cdf0';
   const photoUrl = mediaUrl(jugador.photo);
   return (
@@ -2010,7 +2010,7 @@ function PlayerCard({ jugador, onClick, isMe }) {
           padding: '20px 12px 10px',
         }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>
-            @{jugador.handle}{isMe && <span style={{ color: 'var(--holo)' }}> (tú)</span>}
+            @{jugador.handle ?? jugador.name}{isMe && <span style={{ color: 'var(--holo)' }}> (tú)</span>}
           </div>
         </div>
       </div>
@@ -2019,7 +2019,7 @@ function PlayerCard({ jugador, onClick, isMe }) {
         <p style={{
           fontSize: 11, color: 'var(--txt-dim)', lineHeight: 1.5, margin: 0, fontStyle: 'italic',
         }}>
-          Otro jugador presente en este lugar
+          {subtitle ?? 'Otro jugador presente en este lugar'}
         </p>
       </div>
 
@@ -2027,10 +2027,14 @@ function PlayerCard({ jugador, onClick, isMe }) {
         padding: '8px 12px', borderTop: '1px solid var(--holo-line)',
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
-        <Icon name="message" size={12} style={{ color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)' }} />
-        <span style={{ fontSize: 10, color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
-          {isMe ? 'ERES TÚ' : 'HABLAR'}
-        </span>
+        {footer ?? (
+          <>
+            <Icon name="message" size={12} style={{ color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)' }} />
+            <span style={{ fontSize: 10, color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+              {isMe ? 'ERES TÚ' : 'HABLAR'}
+            </span>
+          </>
+        )}
       </div>
     </button>
   );
@@ -2495,23 +2499,31 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
     const me = jugadores.find((j) => j.soy_yo);
     return (
       <DungeonBackdrop imagen={lugar.imagen}>
-        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
+        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', maxWidth: 720, margin: '0 auto' }}>
           <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
           <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
             Mínimo {data.min_jugadores} jugadores · hasta {data.cupos_equipo} cupos. El equipo arranca cuando todos marquen "Listo".
           </div>
-          <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14,
+            marginBottom: 20, textAlign: 'left',
+          }}>
             {jugadores.map((j) => (
-              <div key={j.user_id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 12px', borderRadius: 8,
-                border: `1px solid ${j.listo ? 'rgba(16,185,129,0.5)' : 'var(--holo-line)'}`,
-                background: j.listo ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)',
-              }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{j.name}{j.soy_yo ? ' (tú)' : ''}</span>
-                <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
-              </div>
+              <PlayerCard
+                key={j.user_id}
+                jugador={j}
+                isMe={j.soy_yo}
+                subtitle={`En la cola del equipo · ${data.run.template.nombre}`}
+                footer={
+                  <>
+                    <Icon name={j.listo ? 'check' : 'clock'} size={12} style={{ color: j.listo ? '#10b981' : 'var(--txt-faint)' }} />
+                    <span style={{ fontSize: 10, color: j.listo ? '#10b981' : 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+                      {j.listo ? 'LISTO' : 'ESPERANDO'}
+                    </span>
+                  </>
+                }
+              />
             ))}
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
