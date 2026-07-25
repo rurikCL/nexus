@@ -349,9 +349,10 @@ const ENTITY_CONFIG = {
       { key: 'jefe_npc_id', label: 'Jefe (NPC tipo jefe)', type: 'relatedSelect', related: 'npcs_jefe', required: true, hint: 'Solo se listan NPCs con Tipo = jefe. Sus Cupos de Combate RAID definen también el tamaño del equipo que se arma al entrar al dungeon.' },
       { key: 'salas_min',   label: 'Salas mínimas',    type: 'number', min: 2 },
       { key: 'salas_max',   label: 'Salas máximas',    type: 'number', min: 2 },
+      { key: 'cofre_probabilidad', label: 'Probabilidad de cofre (%)', type: 'number', min: 0, max: 100, hint: 'Chance de que cada sala normal (nunca la entrada ni la del jefe) tenga un cofre con una recompensa del pool de abajo.' },
       { key: 'visible',     label: 'Visible',          type: 'toggle' },
     ],
-    defaults: { visible: true, salas_min: 5, salas_max: 8 },
+    defaults: { visible: true, salas_min: 5, salas_max: 8, cofre_probabilidad: 30 },
   },
 
   /* ── ROL ── */
@@ -1460,6 +1461,7 @@ function DungeonTemplateCrudModal({ config, record, relatedOptions, onSave, onCl
       tasa_aparicion: e.pivot?.tasa_aparicion ?? 1,
       nivel: e.pivot?.nivel ?? 1,
     }));
+    base.recompensas = record?.recompensas ?? [];
     return base;
   });
   const [saving, setSaving] = useState(false);
@@ -1522,6 +1524,18 @@ function DungeonTemplateCrudModal({ config, record, relatedOptions, onSave, onCl
           catalog={enemigosCatalog}
           selected={form.enemigos}
           onChange={v => setField('enemigos', v)}
+        />
+      </div>
+
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+        <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 10 }}>
+          Pool de recompensas de los cofres que aparecen en las salas normales (ver "Probabilidad de cofre" arriba).
+          Las recompensas del jefe se configuran aparte, en su propia ficha de NPC.
+        </div>
+        <RecompensaDropEditor
+          recompensas={form.recompensas}
+          onChange={v => setField('recompensas', v)}
+          relatedOptions={relatedOptions}
         />
       </div>
 
@@ -2344,6 +2358,13 @@ export default function AdminView() {
     if (activeEntity === 'npcs' || activeEntity === 'enemigos') {
       needed.add('rol_objetos');
       needed.add('medallas');
+    }
+    // dungeon_templates no tiene campos habilidad_1..4, así que rol_habilidades no se
+    // precarga solo — su editor de Recompensas (cofres) también necesita las 3 catálogos.
+    if (activeEntity === 'dungeon_templates') {
+      needed.add('rol_objetos');
+      needed.add('medallas');
+      needed.add('rol_habilidades');
     }
     needed.forEach(async (entity) => {
       if (relatedOptions[entity]) return;

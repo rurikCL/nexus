@@ -16,11 +16,13 @@ class DungeonSalaProgreso extends Model
         'dungeon_sala_id',
         'visitada',
         'resuelta',
+        'cofre_abierto',
     ];
 
     protected $casts = [
         'visitada' => 'boolean',
         'resuelta' => 'boolean',
+        'cofre_abierto' => 'boolean',
     ];
 
     public function jugador(): BelongsTo

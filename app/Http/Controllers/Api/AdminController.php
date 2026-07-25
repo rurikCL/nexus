@@ -83,7 +83,7 @@ class AdminController extends Controller
             'lugares'    => ['zona:id,nombre', 'enemigos'],
             'npcs'       => ['lugar:id,nombre', 'naves', 'objetos', 'recompensas'],
             'enemigos'   => ['recompensas'],
-            'dungeon_templates' => ['zona:id,nombre', 'jefe:id,nombre', 'enemigos'],
+            'dungeon_templates' => ['zona:id,nombre', 'jefe:id,nombre', 'enemigos', 'recompensas'],
             'usuarios'   => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
@@ -271,7 +271,7 @@ class AdminController extends Controller
         $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
         $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
         $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
-        $recompensas = ($entity === 'npcs' || $entity === 'enemigos') ? $this->extractRecompensas($data) : null;
+        $recompensas = in_array($entity, ['npcs', 'enemigos', 'dungeon_templates'], true) ? $this->extractRecompensas($data) : null;
 
         $record = $model::create($data);
 
@@ -320,7 +320,7 @@ class AdminController extends Controller
         $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
         $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
         $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
-        $recompensas = ($entity === 'npcs' || $entity === 'enemigos') ? $this->extractRecompensas($data) : null;
+        $recompensas = in_array($entity, ['npcs', 'enemigos', 'dungeon_templates'], true) ? $this->extractRecompensas($data) : null;
 
         $record->update($data);
 

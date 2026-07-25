@@ -258,6 +258,52 @@ class DungeonController extends Controller
     }
 
     /**
+     * POST /map/dungeons/runs/{run}/abrir-cofre — abre el cofre de la sala actual del jugador
+     * autenticado y sortea recompensas del pool configurado en el DungeonTemplate (Admin →
+     * Dungeons → Recompensas). El cofre solo se abre una vez POR JUGADOR (progreso individual,
+     * igual que los enemigos) aunque la sala sea compartida por todo el equipo.
+     */
+    public function abrirCofre(Request $request, int $runId): JsonResponse
+    {
+        $user = $request->user();
+        $character = $user->character;
+        $run = DungeonRun::findOrFail($runId);
+        $jugador = DungeonRunPlayer::where('dungeon_run_id', $run->id)->where('user_id', $user->id)->first();
+
+        if (! $jugador || ! $jugador->activo() || ! $character) {
+            return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+
+        $sala = $jugador->salaActual;
+        if (! $sala || ! $sala->tiene_cofre) {
+            return response()->json(['error' => 'Esta sala no tiene un cofre.'], 422);
+        }
+
+        $progreso = DungeonSalaProgreso::firstOrCreate(
+            ['dungeon_run_player_id' => $jugador->id, 'dungeon_sala_id' => $sala->id],
+            ['visitada' => true, 'resuelta' => ! $sala->enemigo_id]
+        );
+
+        if ($progreso->cofre_abierto) {
+            return response()->json(['ok' => true, 'ya_abierto' => true, 'recompensas' => []]);
+        }
+
+        $progreso->update(['cofre_abierto' => true]);
+
+        $recompensas = RecompensaRollService::resolverYOtorgar(
+            $run->template->recompensas()->with(['objeto', 'habilidad', 'medalla'])->get(),
+            $user,
+            $character
+        );
+
+        return response()->json([
+            'ok' => true,
+            'recompensas' => $recompensas,
+            'credits' => $character->fresh()->credits,
+        ]);
+    }
+
+    /**
      * POST /map/dungeons/runs/{run}/registrar-dano — persiste la vida/escudo con la que el
      * jugador terminó un encuentro 1v1 (victoria, derrota o huida), igual criterio que
      * NaveController::registrarDano: el cliente resuelve el combate y reporta el resultado
@@ -343,7 +389,7 @@ class DungeonController extends Controller
             return $this->formatLobby($run, $user->id);
         }
 
-        $run->loadMissing(['jugadores.user.character', 'jugadores.salaActual', 'template.jefe']);
+        $run->loadMissing(['jugadores.user.character', 'jugadores.salaActual', 'template.jefe', 'salas']);
         $jugador = $run->jugadores->firstWhere('user_id', $user->id);
         $stats = $jugador?->user?->character?->combatStats();
 
@@ -357,7 +403,39 @@ class DungeonController extends Controller
                 'escudo_max' => $stats['escudo'],
             ] : null,
             'equipo' => $this->formatEquipo($run),
+            'mapa' => $jugador ? $this->formatMapa($run, $jugador) : [],
         ];
+    }
+
+    /**
+     * Grafo completo del run (todas las salas, posiciones y conexiones) para el minimapa del
+     * frontend. "tiene_enemigo"/"tiene_cofre" son siempre relativos AL JUGADOR consultado -el
+     * progreso es individual, aunque la sala sea compartida por todo el equipo-.
+     */
+    private function formatMapa(DungeonRun $run, DungeonRunPlayer $jugador): array
+    {
+        $progresos = DungeonSalaProgreso::where('dungeon_run_player_id', $jugador->id)
+            ->get()
+            ->keyBy('dungeon_sala_id');
+
+        return $run->salas->map(function (DungeonSala $sala) use ($progresos, $jugador) {
+            $progreso = $progresos->get($sala->id);
+
+            return [
+                'id' => $sala->id,
+                'tipo' => $sala->tipo,
+                'pos_x' => $sala->pos_x,
+                'pos_y' => $sala->pos_y,
+                'norte_id' => $sala->norte_id,
+                'sur_id' => $sala->sur_id,
+                'este_id' => $sala->este_id,
+                'oeste_id' => $sala->oeste_id,
+                'tiene_enemigo' => (bool) ($sala->enemigo_id && ! $progreso?->resuelta),
+                'tiene_cofre' => (bool) ($sala->tiene_cofre && ! $progreso?->cofre_abierto),
+                'visitada' => (bool) $progreso?->visitada,
+                'es_actual' => $jugador->sala_actual_id === $sala->id,
+            ];
+        })->values()->all();
     }
 
     /** Vida/escudo actuales y foto de cada jugador activo del equipo — para el panel lateral en la sala. */
@@ -436,6 +514,8 @@ class DungeonController extends Controller
             'tipo' => $sala->tipo,
             'resuelta' => (bool) ($progreso?->resuelta),
             'enemigo' => $enemigo,
+            'tiene_cofre' => (bool) $sala->tiene_cofre,
+            'cofre_abierto' => (bool) ($progreso?->cofre_abierto),
             'jefe_npc_id' => $sala->tipo === 'jefe' ? $jugador->run->template->jefe_npc_id : null,
             'salidas' => [
                 'norte' => $sala->norte?->only(['id', 'tipo']),

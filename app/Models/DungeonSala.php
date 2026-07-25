@@ -21,10 +21,16 @@ class DungeonSala extends Model
         'oeste_id',
         'enemigo_id',
         'nivel_enemigo',
+        'pos_x',
+        'pos_y',
+        'tiene_cofre',
     ];
 
     protected $casts = [
         'nivel_enemigo' => 'integer',
+        'pos_x' => 'integer',
+        'pos_y' => 'integer',
+        'tiene_cofre' => 'boolean',
     ];
 
     public function run(): BelongsTo

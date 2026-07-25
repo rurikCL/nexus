@@ -2028,6 +2028,99 @@ function EnemigoPortrait({ enemigo, size = 96 }) {
   );
 }
 
+/* Minimapa del grafo generado — usa pos_x/pos_y persistidos por DungeonGeneratorService (los
+   mismos que calculó DungeonGraphBuilder) en vez de reconstruir el layout desde las conexiones.
+   "tiene_enemigo"/"tiene_cofre" ya vienen resueltos por-jugador desde el backend (formatMapa). */
+function DungeonMinimap({ mapa }) {
+  if (!mapa || mapa.length === 0) return null;
+
+  const CELL = 34;
+  const GAP = 8;
+  const STEP = CELL + GAP;
+
+  const xs = mapa.map((s) => s.pos_x);
+  const ys = mapa.map((s) => s.pos_y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const width = (maxX - minX + 1) * STEP - GAP;
+  const height = (maxY - minY + 1) * STEP - GAP;
+
+  const byId = Object.fromEntries(mapa.map((s) => [s.id, s]));
+  const coordOf = (s) => ({
+    left: (s.pos_x - minX) * STEP,
+    top: (maxY - s.pos_y) * STEP, // pos_y mayor = más al norte = más arriba en pantalla
+  });
+
+  const colorFor = (s) => {
+    if (s.es_actual) return { bg: 'rgba(56,205,240,0.35)', border: '#38cdf0' };
+    if (s.tipo === 'jefe') return { bg: 'rgba(230,179,37,0.22)', border: '#E6B325' };
+    if (s.tipo === 'entrada') return { bg: 'rgba(16,185,129,0.18)', border: '#10b981' };
+    if (s.tiene_enemigo) return { bg: 'rgba(220,38,38,0.28)', border: '#ff2d45' };
+    if (s.visitada) return { bg: 'rgba(255,255,255,0.07)', border: 'var(--holo-line)' };
+    return { bg: 'rgba(255,255,255,0.02)', border: 'rgba(255,255,255,0.10)' };
+  };
+
+  const iconFor = (s) => {
+    if (s.tipo === 'jefe') return '👑';
+    if (s.tipo === 'entrada') return '◈';
+    if (s.tiene_enemigo) return '⚔';
+    if (s.tiene_cofre) return '🎁';
+    return '';
+  };
+
+  return (
+    <div className="nx-panel solid" style={{ padding: 16 }}>
+      <div className="nx-kicker" style={{ marginBottom: 12 }}>MAPA</div>
+      <div style={{ position: 'relative', width, height, margin: '0 auto' }}>
+        {mapa.flatMap((s) => {
+          const { left, top } = coordOf(s);
+          const conectores = [];
+          if (s.este_id && byId[s.este_id]) {
+            conectores.push(
+              <div key={`e-${s.id}`} style={{
+                position: 'absolute', left: left + CELL, top: top + CELL / 2 - 2, width: GAP, height: 4,
+                background: 'rgba(255,255,255,0.18)',
+              }} />
+            );
+          }
+          if (s.norte_id && byId[s.norte_id]) {
+            conectores.push(
+              <div key={`n-${s.id}`} style={{
+                position: 'absolute', left: left + CELL / 2 - 2, top: top - GAP, width: 4, height: GAP,
+                background: 'rgba(255,255,255,0.18)',
+              }} />
+            );
+          }
+          return conectores;
+        })}
+        {mapa.map((s) => {
+          const { left, top } = coordOf(s);
+          const c = colorFor(s);
+          return (
+            <div key={s.id} title={s.tipo} style={{
+              position: 'absolute', left, top, width: CELL, height: CELL, borderRadius: 6,
+              background: c.bg, border: `1.5px solid ${c.border}`,
+              display: 'grid', placeItems: 'center', fontSize: 13, lineHeight: 1,
+              boxShadow: s.es_actual ? '0 0 10px 2px rgba(56,205,240,0.5)' : 'none',
+              transition: 'all 0.3s ease',
+            }}>
+              {iconFor(s)}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>
+        <span>🔵 vos</span>
+        <span>⚔ enemigo</span>
+        <span>🎁 cofre</span>
+        <span>👑 jefe</span>
+      </div>
+    </div>
+  );
+}
+
 function DungeonPortal({ lugar, userCharacter, myUserId }) {
   const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala?, mi_estado?, equipo? }
   const [loading, setLoading]     = useState(true);
@@ -2147,6 +2240,24 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
     }
   };
 
+  const abrirCofre = async () => {
+    if (!runId || busy) return;
+    setBusy(true);
+    try {
+      const d = await apiPost(`/map/dungeons/runs/${runId}/abrir-cofre`, {});
+      if (d?.recompensas?.length) {
+        toast(`🎁 Recompensa: ${d.recompensas.map((r) => r.label).join(' y ')}`, { tone: 'success', icon: 'box' });
+      } else if (!d?.ya_abierto) {
+        toast('El cofre estaba vacío.', { tone: 'dim', icon: 'box' });
+      }
+      refresh();
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo abrir el cofre.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) return <LoadingHUD text="ENTRANDO AL DUNGEON..." />;
 
   if (error) return (
@@ -2238,7 +2349,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
         <Btn kind="ghost" sm onClick={salirDungeon} disabled={busy}>Abandonar dungeon</Btn>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr 260px', gap: 16, alignItems: 'start' }}>
         {/* equipo — vida/escudo + foto de cada jugador, visible mientras se recorre el dungeon */}
         {equipo.length > 0 && (
           <div className="nx-panel solid" style={{ padding: 16 }}>
@@ -2294,6 +2405,14 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
               </>
             )}
 
+            {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador */}
+            {sala.tiene_cofre && !sala.cofre_abierto && (
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+                <p style={{ color: 'var(--holocron-oro)', fontSize: 13, marginBottom: 10 }}>🎁 Hay un cofre en esta sala.</p>
+                <Btn kind="gold" onClick={abrirCofre} disabled={busy}>Abrir Cofre</Btn>
+              </div>
+            )}
+
             {/* objetos utilizables — curarse en el mapa, entre salas */}
             {utilizables.length > 0 && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
@@ -2320,6 +2439,9 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
             )}
           </div>
         </DungeonBackdrop>
+
+        {/* minimapa — forma del dungeon generado, ver DungeonMinimap */}
+        <DungeonMinimap mapa={data.mapa} />
       </div>
 
       {/* combate 1v1 contra el enemigo de la sala */}

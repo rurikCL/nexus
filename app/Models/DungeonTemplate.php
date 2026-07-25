@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class DungeonTemplate extends Model
 {
@@ -19,12 +20,14 @@ class DungeonTemplate extends Model
         'jefe_npc_id',
         'salas_min',
         'salas_max',
+        'cofre_probabilidad',
         'visible',
     ];
 
     protected $casts = [
         'salas_min' => 'integer',
         'salas_max' => 'integer',
+        'cofre_probabilidad' => 'integer',
         'visible' => 'boolean',
     ];
 
@@ -49,6 +52,12 @@ class DungeonTemplate extends Model
     public function runs(): HasMany
     {
         return $this->hasMany(DungeonRun::class);
+    }
+
+    /** Recompensas del pool de cofres de este template (ver DungeonController::abrirCofre) — mismo modelo polimórfico que usan MapNpc/MapEnemigo. */
+    public function recompensas(): MorphMany
+    {
+        return $this->morphMany(MapRecompensa::class, 'dropable');
     }
 
     /** Número de salas a generar para un run de este template (entre salas_min y salas_max, inclusive). */

@@ -35,12 +35,17 @@ class DungeonGeneratorService
         foreach ($grafo['nodos'] as $index => $nodo) {
             $tipo = $index === 0 ? 'entrada' : ($index === $grafo['jefeIndex'] ? 'jefe' : 'normal');
             $encuentro = $tipo === 'normal' ? self::elegirEnemigo($pool, $rng) : null;
+            // Solo las salas normales pueden tener cofre (nunca la entrada ni la del jefe).
+            $tieneCofre = $tipo === 'normal' && $rng->getInt(1, 100) <= (int) $template->cofre_probabilidad;
 
             $salas[$index] = DungeonSala::create([
                 'dungeon_run_id' => $run->id,
                 'tipo' => $tipo,
                 'enemigo_id' => $encuentro['enemigo_id'] ?? null,
                 'nivel_enemigo' => $encuentro['nivel'] ?? null,
+                'pos_x' => $nodo['x'],
+                'pos_y' => $nodo['y'],
+                'tiene_cofre' => $tieneCofre,
             ]);
         }
 
