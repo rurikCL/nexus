@@ -1740,33 +1740,10 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
       </div>
 
       {/* portal de dungeon: reemplaza accesos/NPCs — ver DungeonPortal. Los jugadores
-          presentes en el lugar-portal (fuera del equipo del dungeon) se listan abajo. */}
+          presentes en el lugar-portal (fuera del equipo del dungeon) se listan dentro,
+          bajo el lobby, cuando el equipo está en estado 'esperando'. */}
       {lugar.tipo === 'portal_dungeon' ? (
-        <>
-          <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} />
-          {(() => {
-            const presentesZona = lugar.presentes_personajes ?? [];
-            if (presentesZona.length === 0) return null;
-            return (
-              <div style={{ marginTop: 24 }}>
-                <div className="nx-kicker" style={{ marginBottom: 12 }}>JUGADORES EN ESTA ZONA — {presentesZona.length}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-                  {presentesZona.map((p) => {
-                    const isMe = p.user_id === myUserId;
-                    return (
-                      <PlayerCard
-                        key={`jugador-${p.id}`}
-                        jugador={p}
-                        isMe={isMe}
-                        onClick={isMe ? undefined : () => setDialogPlayer(p)}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
-        </>
+        <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} onAttack={onAttack} onTrade={onTrade} />
       ) : (
         <>
       {/* accesos interiores — árbol de recorridos */}
@@ -2316,8 +2293,8 @@ function DungeonLootPreview({ loot }) {
 
   return (
     <div className="nx-panel solid nx-panel-glow" style={{
-      padding: 20, textAlign: 'left', width: '100%', maxWidth: 360,
-      maxHeight: 520, overflowY: 'auto',
+      padding: 20, textAlign: 'left', width: '100%',
+      maxHeight: 560, overflowY: 'auto',
     }}>
       <div className="nx-kicker" style={{ marginBottom: 14 }}>BOTÍN POSIBLE</div>
 
@@ -2402,7 +2379,7 @@ function DungeonLootPreview({ loot }) {
   );
 }
 
-function DungeonPortal({ lugar, userCharacter, myUserId }) {
+function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade }) {
   const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala?, mi_estado?, equipo? }
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
@@ -2410,6 +2387,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
   const [activeCombat, setActiveCombat] = useState(null); // { enemigo }
   const [raidQueueOpen, setRaidQueueOpen] = useState(false);
   const [activeRaidId, setActiveRaidId]   = useState(null);
+  const [dialogPlayer, setDialogPlayer]   = useState(null);
   const isMobile = useIsMobile();
   const pollRef = useRef(null);
 
@@ -2642,59 +2620,97 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
   if (estado === 'esperando') {
     const jugadores = data.jugadores ?? [];
     const me = jugadores.find((j) => j.soy_yo);
+    const presentesZona = lugar.presentes_personajes ?? [];
     return (
       <DungeonBackdrop imagen={lugar.imagen}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'center', alignItems: 'flex-start' }}>
-        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', width: '100%', maxWidth: 560 }}>
-          <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
-          <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
-          <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
-            Mínimo {data.min_jugadores} jugadores · hasta {data.cupos_equipo} cupos. El equipo arranca cuando todos marquen "Listo".
-          </div>
-          <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
-            {jugadores.map((j) => {
-              const color = SABER_COLORS[j.saber_color] ?? '#38cdf0';
-              const photoUrl = mediaUrl(j.photo);
-              return (
-                <div key={j.user_id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between',
-                  padding: '8px 12px', borderRadius: 8,
-                  border: `1px solid ${j.listo ? 'rgba(16,185,129,0.5)' : 'var(--holo-line)'}`,
-                  background: j.listo ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <div style={{
-                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                      backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
-                      backgroundSize: 'cover', backgroundPosition: 'center',
-                      background: photoUrl ? undefined : color,
-                      border: `2px solid ${color}55`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 11, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
-                      boxShadow: `0 0 8px ${color}44`,
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr',
+          gap: 20, alignItems: 'start',
+        }}>
+          {/* columna izquierda (2/3): lobby del equipo + jugadores presentes en la zona */}
+          <div>
+            <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center' }}>
+              <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
+              <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
+              <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
+                Mínimo {data.min_jugadores} jugadores · hasta {data.cupos_equipo} cupos. El equipo arranca cuando todos marquen "Listo".
+              </div>
+              <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
+                {jugadores.map((j) => {
+                  const color = SABER_COLORS[j.saber_color] ?? '#38cdf0';
+                  const photoUrl = mediaUrl(j.photo);
+                  return (
+                    <div key={j.user_id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between',
+                      padding: '8px 12px', borderRadius: 8,
+                      border: `1px solid ${j.listo ? 'rgba(16,185,129,0.5)' : 'var(--holo-line)'}`,
+                      background: j.listo ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)',
                     }}>
-                      {!photoUrl && (j.handle?.[0] ?? j.name?.[0] ?? '?')}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <div style={{
+                          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                          backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                          backgroundSize: 'cover', backgroundPosition: 'center',
+                          background: photoUrl ? undefined : color,
+                          border: `2px solid ${color}55`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 11, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+                          boxShadow: `0 0 8px ${color}44`,
+                        }}>
+                          {!photoUrl && (j.handle?.[0] ?? j.name?.[0] ?? '?')}
+                        </div>
+                        <span style={{
+                          fontSize: 12, fontWeight: 600, color: 'var(--txt)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{j.name}{j.soy_yo ? ' (tú)' : ''}</span>
+                      </div>
+                      <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
                     </div>
-                    <span style={{
-                      fontSize: 12, fontWeight: 600, color: 'var(--txt)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>{j.name}{j.soy_yo ? ' (tú)' : ''}</span>
-                  </div>
-                  <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <Btn kind="ghost" onClick={salirDungeon} disabled={busy}>Abandonar</Btn>
+                <Btn kind="accent" icon="check" onClick={toggleListo} disabled={busy}>
+                  {me?.listo ? 'Listo (cancelar)' : 'Estoy listo'}
+                </Btn>
+              </div>
+            </div>
+
+            {presentesZona.length > 0 && (
+              <div style={{ marginTop: 20, textAlign: 'left' }}>
+                <div className="nx-kicker" style={{ marginBottom: 12 }}>JUGADORES EN ESTA ZONA — {presentesZona.length}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
+                  {presentesZona.map((p) => {
+                    const isMe = p.user_id === myUserId;
+                    return (
+                      <PlayerCard
+                        key={`jugador-${p.id}`}
+                        jugador={p}
+                        isMe={isMe}
+                        onClick={isMe ? undefined : () => setDialogPlayer(p)}
+                      />
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <Btn kind="ghost" onClick={salirDungeon} disabled={busy}>Abandonar</Btn>
-            <Btn kind="accent" icon="check" onClick={toggleListo} disabled={busy}>
-              {me?.listo ? 'Listo (cancelar)' : 'Estoy listo'}
-            </Btn>
-          </div>
+
+          {/* columna derecha (1/3): botín posible */}
+          <DungeonLootPreview loot={data.loot} />
         </div>
 
-        <DungeonLootPreview loot={data.loot} />
-        </div>
+        {dialogPlayer && (
+          <PlayerDialogModal
+            jugador={dialogPlayer}
+            myUserId={myUserId}
+            onClose={() => setDialogPlayer(null)}
+            onAttack={onAttack}
+            onTrade={onTrade}
+          />
+        )}
       </DungeonBackdrop>
     );
   }
