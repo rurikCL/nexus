@@ -865,7 +865,12 @@ export function RankingView({ S, user }) {
       )}
 
       <Panel kicker="Temporada 3 · Liga Orbital" title="Escalera de Combate" icon="trophy"
-        right={<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{Object.keys(NX.TIERS).map(k => <TierBadge key={k} tier={k} sm />)}</div>}>
+        right={!isMobile ? <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{Object.keys(NX.TIERS).map(k => <TierBadge key={k} tier={k} sm />)}</div> : null}>
+        {isMobile && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+            {Object.keys(NX.TIERS).map(k => <TierBadge key={k} tier={k} sm />)}
+          </div>
+        )}
         {rk.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--txt-faint)', fontSize: 13 }}>
             Sin combatientes en esta sede todavía.
