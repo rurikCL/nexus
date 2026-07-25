@@ -213,8 +213,7 @@ function GlobalCard({ mision, completed, onOpen }) {
 
 export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onTransmision }) {
   const [busy, setBusy] = useState(false);
-  const [justCompleted, setJustCompleted] = useState(false);
-  const done = mision.status === 'completada' || justCompleted;
+  const done = mision.status === 'completada';
   const hitosReq = mision.hito_requerimiento
     ? mision.hito_requerimiento.split(',').map(h => h.trim()).filter(Boolean)
     : [];
@@ -255,10 +254,6 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
         toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
       });
       onUpdate(mision.id, { status: 'completada', progreso: 100, puede_completar: false });
-      const transmision = buildMissionCompletionTransmision(data);
-      if (transmision) {
-        onTransmision?.(transmision);
-      }
 
       if (onUserUpdate) {
         fetch('/api/me', { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } })
@@ -266,13 +261,14 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           .then(d => { if (d) onUserUpdate(d); })
           .catch(() => {});
       }
-      setJustCompleted(true);
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('nx-mision-updated', {
-          detail: { missionId: mision.id, status: 'completada' },
-        }));
-        onClose();
-      }, 1600);
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', {
+        detail: { missionId: mision.id, status: 'completada' },
+      }));
+      onClose();
+      const transmision = buildMissionCompletionTransmision(data);
+      if (transmision) {
+        onTransmision?.(transmision);
+      }
     } catch (e) {
       toast(e.message || 'Error al completar la misión', { tone: 'error', icon: 'x' });
     } finally {
@@ -297,16 +293,16 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
           <div style={{ position: 'relative' }}>
             <p style={{
               fontSize: 12.5, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0,
-              filter: justCompleted ? 'blur(4px)' : 'none', transition: 'filter 0.3s ease',
+              filter: mision.puede_completar ? 'blur(4px)' : 'none', transition: 'filter 0.3s ease',
             }}>{mision.descripcion}</p>
-            {justCompleted && (
+            {mision.puede_completar && (
               <div style={{
                 position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-                background: 'rgba(4,7,15,0.25)', borderRadius: 'var(--radius-md)',
+                background: 'rgba(4,7,15,0.3)', borderRadius: 'var(--radius-md)',
               }}>
-                <span className="nx-display" style={{
-                  fontSize: 15, color: '#10b981', letterSpacing: '0.05em',
-                  textShadow: '0 0 12px rgba(16,185,129,0.6)',
+                <span className="nx-mision-cumplida" style={{
+                  fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '0.03em',
+                  textShadow: '0 0 16px rgba(16,185,129,0.75)',
                 }}>
                   ¡Misión Cumplida!
                 </span>
