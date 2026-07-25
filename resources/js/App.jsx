@@ -195,7 +195,8 @@ const NAV = [
   { id: 'temporadas',    label: 'Temporadas',    icon: 'crown' },
   { id: 'catalogo', label: 'Catálogo', icon: 'box' },
   { id: 'mapa', label: 'Mapa Galáctico', icon: 'target' },
-  { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
+  // Oculto: aún no se utiliza.
+  // { id: 'instagram', label: 'Instagram', icon: 'instagram', guard: u => u?.roles?.includes('administrador') },
 ];
 const MENU_SLUGS = new Set([
   ...NAV.map(n => n.id),
