@@ -1567,12 +1567,13 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, myUserId, refreshToken, onNpcsUpdated, userCharacter }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, onTrade, myUserId, refreshToken, onNpcsUpdated, userCharacter }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
   const [loading, setLoading]       = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [dialogPlayer, setDialogPlayer] = useState(null);
   const isMobile = useIsMobile();
 
   const currentId = navStack[navStack.length - 1];
@@ -1743,48 +1744,6 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} />
       ) : (
         <>
-      {/* presentes en este lugar */}
-      {(lugar.presentes_personajes ?? []).length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div className="nx-kicker" style={{ marginBottom: 8 }}>PRESENTES AQUÍ</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {lugar.presentes_personajes.map((p) => {
-              const color = SABER_COLORS[p.saber_color] ?? '#38cdf0';
-              const photoUrl = mediaUrl(p.photo);
-              const isMe = p.user_id === myUserId;
-              return (
-                <div key={p.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: `${color}11`, border: `1px solid ${color}33`,
-                  borderRadius: 8, padding: '5px 10px',
-                }}>
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                    backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
-                    backgroundSize: 'cover', backgroundPosition: 'center',
-                    background: photoUrl ? undefined : color,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
-                  }}>
-                    {!photoUrl && (p.handle?.[0] ?? '?')}
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', flex: 1 }}>
-                    @{p.handle}
-                  </span>
-                  {!isMe && (
-                    <button onClick={() => onAttack?.(p)} style={{
-                      background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
-                      borderRadius: 5, padding: '3px 7px', cursor: 'pointer', color: '#ef4444',
-                      fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
-                    }}>ATK</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* accesos interiores — árbol de recorridos */}
       {DIRS.length > 0 && (
         <div style={{ marginBottom: 24 }}>
@@ -1848,21 +1807,50 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         </div>
       )}
 
-      {/* NPCs */}
-      <div className="nx-kicker" style={{ marginBottom: 12 }}>PERSONAJES EN ESTE LUGAR — {npcs.length}</div>
+      {/* NPCs + jugadores presentes */}
+      {(() => {
+        const presentes = lugar.presentes_personajes ?? [];
+        const total = npcs.length + presentes.length;
+        return (
+          <>
+            <div className="nx-kicker" style={{ marginBottom: 12 }}>PERSONAJES EN ESTE LUGAR — {total}</div>
 
-      {npcs.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
-          No hay personajes en esta ubicación
-        </div>
+            {total === 0 && (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--txt-faint)', fontSize: 13 }}>
+                No hay personajes en esta ubicación
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+              {presentes.map((p) => {
+                const isMe = p.user_id === myUserId;
+                return (
+                  <PlayerCard
+                    key={`jugador-${p.id}`}
+                    jugador={p}
+                    isMe={isMe}
+                    onClick={isMe ? undefined : () => setDialogPlayer(p)}
+                  />
+                );
+              })}
+              {npcs.map((npc) => (
+                <NpcCard key={npc.id} npc={npc} onClick={() => onSelectNpc(npc)} />
+              ))}
+            </div>
+          </>
+        );
+      })()}
+        </>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-        {npcs.map((npc) => (
-          <NpcCard key={npc.id} npc={npc} onClick={() => onSelectNpc(npc)} />
-        ))}
-      </div>
-        </>
+      {dialogPlayer && (
+        <PlayerDialogModal
+          jugador={dialogPlayer}
+          myUserId={myUserId}
+          onClose={() => setDialogPlayer(null)}
+          onAttack={onAttack}
+          onTrade={onTrade}
+        />
       )}
     </div>
   );
@@ -1967,6 +1955,82 @@ function NpcCard({ npc, onClick }) {
             <span style={{ fontSize: 9, color: 'var(--holocron-oro)', fontFamily: 'var(--font-data)' }}>MISIÓN</span>
           </>
         )}
+      </div>
+    </button>
+  );
+}
+
+/* ─── CARD JUGADOR (mismo formato de NpcCard, con badge de JUGADOR) ────── */
+function PlayerCard({ jugador, onClick, isMe }) {
+  const color = SABER_COLORS[jugador.saber_color] ?? '#38cdf0';
+  const photoUrl = mediaUrl(jugador.photo);
+  return (
+    <button onClick={onClick}
+      style={{
+        background: 'rgba(12,30,64,0.55)', border: '1px solid var(--holo-line)',
+        borderRadius: 'var(--radius-lg)', padding: 0, cursor: onClick ? 'pointer' : 'default',
+        textAlign: 'left', overflow: 'hidden', transition: 'all 0.2s',
+        display: 'flex', flexDirection: 'column', color: 'var(--txt)',
+        opacity: isMe ? 0.75 : 1,
+      }}
+      onMouseEnter={(e) => {
+        if (!onClick) return;
+        e.currentTarget.style.border = `1px solid ${color}`;
+        e.currentTarget.style.boxShadow = `0 0 20px -6px ${color}`;
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.border = '1px solid var(--holo-line)';
+        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.transform = 'none';
+      }}
+    >
+      {/* retrato */}
+      <div style={{
+        height: 140, position: 'relative',
+        background: photoUrl
+          ? `url(${photoUrl}) center/cover no-repeat`
+          : `linear-gradient(160deg, ${color}22, rgba(4,7,15,0.9))`,
+      }}>
+        {!photoUrl && (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.5 }}>
+            <Icon name="user" size={44} style={{ color }} />
+          </div>
+        )}
+        <div style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 2,
+          fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
+          padding: '3px 8px', borderRadius: 4,
+          background: 'rgba(56,205,240,0.20)', border: '1px solid rgba(56,205,240,0.45)',
+          color: 'var(--holo)', fontFamily: 'var(--font-data)',
+        }}>JUGADOR</div>
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'linear-gradient(transparent, rgba(4,7,15,0.95))',
+          padding: '20px 12px 10px',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>
+            @{jugador.handle}{isMe && <span style={{ color: 'var(--holo)' }}> (tú)</span>}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 12px', flex: 1 }}>
+        <p style={{
+          fontSize: 11, color: 'var(--txt-dim)', lineHeight: 1.5, margin: 0, fontStyle: 'italic',
+        }}>
+          Otro jugador presente en este lugar
+        </p>
+      </div>
+
+      <div style={{
+        padding: '8px 12px', borderTop: '1px solid var(--holo-line)',
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        <Icon name="message" size={12} style={{ color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)' }} />
+        <span style={{ fontSize: 10, color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+          {isMe ? 'ERES TÚ' : 'HABLAR'}
+        </span>
       </div>
     </button>
   );
@@ -4414,6 +4478,245 @@ function ChatModal({ target, myUserId, onClose }) {
   );
 }
 
+/* ─── MODAL DE DIÁLOGO CON JUGADOR ──────────────────────────
+   Mismo look&feel que DialogoRPG (retrato + opciones laterales), pero
+   funcionando como chat real entre usuarios (backed por /messages, igual
+   que ChatModal) y con las opciones adicionales de comercio y ataque. */
+function PlayerDialogModal({ jugador, myUserId, onClose, onAttack, onTrade }) {
+  const isMobile = useIsMobile();
+  const [messages, setMessages] = useState([]);
+  const [other, setOther]       = useState(null);
+  const [input, setInput]       = useState('');
+  const [sending, setSending]   = useState(false);
+  const bottomRef   = useRef(null);
+  const intervalRef = useRef(null);
+  const inputRef    = useRef(null);
+
+  const loadMessages = useCallback(() => {
+    if (!jugador?.user_id) return;
+    apiFetch(`/messages/${jugador.user_id}`)
+      .then((d) => { setMessages(d.messages ?? []); setOther(d.other); })
+      .catch(() => {});
+  }, [jugador?.user_id]);
+
+  useEffect(() => {
+    loadMessages();
+    intervalRef.current = setInterval(loadMessages, 5000);
+    return () => clearInterval(intervalRef.current);
+  }, [loadMessages]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  /* Bloquea el scroll de la página mientras el modal está en pantalla */
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
+  const send = useCallback(() => {
+    const body = input.trim();
+    if (!body || sending || !jugador?.user_id) return;
+    setSending(true);
+    apiPost('/messages', { receiver_id: jugador.user_id, body })
+      .then(() => { setInput(''); loadMessages(); })
+      .catch(() => toast('Error enviando mensaje', { tone: 'error', icon: 'x' }))
+      .finally(() => {
+        setSending(false);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      });
+  }, [input, sending, jugador?.user_id, loadMessages]);
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const color = SABER_COLORS[(other?.saber_color ?? jugador?.saber_color)] ?? '#38cdf0';
+  const photoUrl = mediaUrl(other?.photo ?? jugador?.photo);
+  const displayName = other?.handle ?? jugador?.handle ?? '?';
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1200,
+      background: 'rgba(2,5,12,0.88)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: isMobile ? 6 : 16,
+      animation: 'nx-fade-up 0.3s ease both',
+    }}>
+    <div className="nx-panel solid nx-panel-glow" style={{
+      width: '100%', maxWidth: 920,
+      height: '100%', maxHeight: 680,
+      borderRadius: 16, overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+    }}>
+      {/* barra superior — retrato del jugador */}
+      <div style={{
+        background: 'rgba(7,16,31,0.95)', borderBottom: '1px solid var(--holo-line)',
+        padding: isMobile ? '10px 12px' : '12px 20px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14,
+      }}>
+        <div style={{
+          width: isMobile ? 42 : 56, height: isMobile ? 42 : 56, borderRadius: 8, overflow: 'hidden',
+          border: `2px solid ${color}66`, flexShrink: 0,
+          background: photoUrl ? undefined : `${color}22`,
+          backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          display: 'grid', placeItems: 'center',
+        }}>
+          {!photoUrl && <Icon name="user" size={24} style={{ color, opacity: 0.7 }} />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="nx-display" style={{
+            fontSize: isMobile ? 14 : 16, color: 'var(--txt)', marginBottom: 2,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>@{displayName}</div>
+          <span style={{
+            fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.14em',
+            padding: '3px 8px', borderRadius: 4, fontWeight: 700,
+            background: 'rgba(56,205,240,0.14)', border: '1px solid rgba(56,205,240,0.35)', color: 'var(--holo)',
+          }}>◈ JUGADOR</span>
+        </div>
+
+        <button onClick={onClose} style={{
+          background: 'transparent', border: '1px solid var(--holo-line)',
+          borderRadius: 6, padding: 8, cursor: 'pointer', color: 'var(--txt-dim)',
+          transition: 'all 0.15s', flexShrink: 0,
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.color = 'var(--txt)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--holo-line)'; e.currentTarget.style.color = 'var(--txt-dim)'; }}
+        >
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+
+      {/* cuerpo: mensajes + opciones adicionales (mobile: apilados en columna) */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden' }}>
+
+        {/* mensajes + input de chat */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{
+            flex: 1, minHeight: 0, overflowY: 'auto', padding: isMobile ? '14px 14px' : '20px 24px',
+            display: 'flex', flexDirection: 'column', gap: 14,
+            backgroundImage: 'radial-gradient(ellipse at 60% 30%, rgba(0,71,186,0.08), transparent 60%)',
+          }}>
+            {messages.length === 0 && (
+              <div style={{
+                margin: 'auto', textAlign: 'center', color: 'var(--txt-faint)', fontSize: 12, lineHeight: 1.7,
+              }}>
+                Sin mensajes aún.<br />
+                <span style={{ fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>Inicia la transmisión.</span>
+              </div>
+            )}
+            {messages.map((m) => {
+              const isMe = m.sender_id === myUserId;
+              return (
+                <div key={m.id} style={{
+                  display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start',
+                  animation: 'nx-fade-up 0.25s ease both',
+                }}>
+                  <div style={{
+                    maxWidth: isMobile ? '86%' : '72%', padding: '11px 15px', borderRadius: 12,
+                    fontSize: 13, lineHeight: 1.55,
+                    ...(isMe ? {
+                      background: 'rgba(0,71,186,0.35)', border: '1px solid rgba(56,205,240,0.3)',
+                      color: 'var(--txt)', borderBottomRightRadius: 4,
+                    } : {
+                      background: 'rgba(12,30,64,0.7)', border: '1px solid var(--holo-line)',
+                      color: 'var(--txt)', borderBottomLeftRadius: 4,
+                    }),
+                  }}>
+                    {!isMe && (
+                      <div style={{ fontSize: 9, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 5 }}>
+                        {displayName.toUpperCase()}
+                      </div>
+                    )}
+                    {m.body}
+                    <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 4, textAlign: isMe ? 'right' : 'left', fontFamily: 'var(--font-data)' }}>
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {isMe && m.read_at && <span style={{ marginLeft: 4, color: 'var(--holo)' }}>✓</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+
+          <div style={{
+            padding: '10px 12px', borderTop: '1px solid var(--holo-line)',
+            display: 'flex', gap: 8, background: 'rgba(4,7,15,0.6)', flexShrink: 0,
+          }}>
+            <input
+              ref={inputRef}
+              className="nx-input"
+              style={{ flex: 1, fontSize: 12 }}
+              placeholder={`Transmitir a @${displayName}...`}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              disabled={sending}
+              autoFocus
+            />
+            <Btn kind="accent" icon="arrow" onClick={send} disabled={sending || !input.trim()} />
+          </div>
+        </div>
+
+        {/* panel lateral: opciones adicionales */}
+        <div style={{
+          width: isMobile ? '100%' : 210, flexShrink: 0,
+          borderLeft: isMobile ? 'none' : '1px solid var(--holo-line)',
+          borderTop: isMobile ? '1px solid var(--holo-line)' : 'none',
+          maxHeight: isMobile ? '45%' : undefined,
+          background: 'rgba(5,12,26,0.96)',
+          overflowY: 'auto',
+          display: 'flex', flexDirection: 'column',
+          padding: '16px 10px', gap: 6,
+        }}>
+          <div style={{
+            fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)',
+            letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6,
+            paddingBottom: 8, borderBottom: '1px solid var(--holo-line)',
+          }}>
+            OPCIONES ADICIONALES
+          </div>
+
+          <button onClick={() => { onTrade?.(jugador); onClose?.(); }} style={{
+            width: '100%', textAlign: 'left', background: 'rgba(230,179,37,0.10)',
+            border: '1px solid rgba(230,179,37,0.35)', borderRadius: 8, padding: '9px 11px',
+            cursor: 'pointer', fontSize: 12, color: 'var(--holocron-oro)',
+            display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.20)'; e.currentTarget.style.borderColor = '#E6B325'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
+          >
+            <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <Icon name="coin" size={11} />
+            </span>
+            <span>Solicitar comercio</span>
+          </button>
+
+          <button onClick={() => { onAttack?.(jugador); onClose?.(); }} style={{
+            width: '100%', textAlign: 'left', background: 'rgba(255,45,69,0.08)',
+            border: '1px solid rgba(255,45,69,0.28)', borderRadius: 8, padding: '9px 11px',
+            cursor: 'pointer', fontSize: 12, color: '#ff6b6b',
+            display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = '#ff2d45'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.28)'; }}
+          >
+            <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(255,45,69,0.2)', display: 'grid', placeItems: 'center', fontSize: 10, flexShrink: 0 }}>⚔</span>
+            <span>Atacar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── RETO DE COMBATE RECIBIDO ───────────────────────────── */
 function PvpChallengeReceived({ combat, onAccept, onDecline, lugarImagen }) {
   const [busy, setBusy] = useState(false);
@@ -5350,6 +5653,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           onLugarImagen={setLugarImagen}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
+          onTrade={setTradeTarget}
           myUserId={userId}
           refreshToken={lugarRefreshKey}
           onNpcsUpdated={handleNpcsUpdated}
