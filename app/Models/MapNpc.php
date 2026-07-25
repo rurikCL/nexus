@@ -28,6 +28,7 @@ class MapNpc extends Model
         'interaccion',
         'prompt',
         'prompt_respuestas',
+        'tipo_interaccion',
         'MisionID',
         'urlInteraccion',
         'visible',

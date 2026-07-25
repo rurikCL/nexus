@@ -101,7 +101,7 @@ class NpcChatController extends Controller
         $conf = $this->loadConfig();
         $npc = MapNpc::where('visible', true)->findOrFail($id);
 
-        if (! $npc->prompt) {
+        if ($npc->tipo_interaccion !== 'agente_ia' || ! $npc->prompt) {
             return response()->json(['error' => 'Este NPC no tiene modo conversación.'], 400);
         }
 
