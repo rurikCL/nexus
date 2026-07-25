@@ -2053,7 +2053,17 @@ function DungeonMinimap({ mapa }) {
     top: (maxY - s.pos_y) * STEP, // pos_y mayor = más al norte = más arriba en pantalla
   });
 
+  /* Niebla de guerra: una sala solo revela su contenido real si ya se visitó, o si es
+     adyacente a la sala actual (se "ve" la puerta, no lo que hay detrás). El resto se
+     muestra oscura con un "?" — sin importar si tiene enemigo/cofre/tipo. */
+  const actual = mapa.find((s) => s.es_actual);
+  const adyacentesIds = new Set(
+    actual ? [actual.norte_id, actual.sur_id, actual.este_id, actual.oeste_id].filter(Boolean) : []
+  );
+  const esVisible = (s) => s.es_actual || s.visitada || adyacentesIds.has(s.id);
+
   const colorFor = (s) => {
+    if (!esVisible(s)) return { bg: 'rgba(255,255,255,0.015)', border: 'rgba(255,255,255,0.06)' };
     if (s.es_actual) return { bg: 'rgba(56,205,240,0.35)', border: '#38cdf0' };
     if (s.tipo === 'jefe') return { bg: 'rgba(230,179,37,0.22)', border: '#E6B325' };
     if (s.tipo === 'entrada') return { bg: 'rgba(16,185,129,0.18)', border: '#10b981' };
@@ -2063,6 +2073,7 @@ function DungeonMinimap({ mapa }) {
   };
 
   const iconFor = (s) => {
+    if (!esVisible(s)) return '❓';
     if (s.tipo === 'jefe') return '👑';
     if (s.tipo === 'entrada') return '◈';
     if (s.tiene_enemigo) return '⚔';
@@ -2099,7 +2110,7 @@ function DungeonMinimap({ mapa }) {
           const { left, top } = coordOf(s);
           const c = colorFor(s);
           return (
-            <div key={s.id} title={s.tipo} style={{
+            <div key={s.id} title={esVisible(s) ? s.tipo : 'Sala desconocida'} style={{
               position: 'absolute', left, top, width: CELL, height: CELL, borderRadius: 6,
               background: c.bg, border: `1.5px solid ${c.border}`,
               display: 'grid', placeItems: 'center', fontSize: 13, lineHeight: 1,
@@ -2116,6 +2127,7 @@ function DungeonMinimap({ mapa }) {
         <span>⚔ enemigo</span>
         <span>🎁 cofre</span>
         <span>👑 jefe</span>
+        <span>❓ sin explorar</span>
       </div>
     </div>
   );

@@ -338,6 +338,7 @@ const ENTITY_CONFIG = {
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
       { key: 'zona', label: 'Zona', resolve: r => r.zona?.nombre ?? '—', dim: true },
+      { key: 'rareza', label: 'Rareza', type: 'rareza' },
       { key: 'jefe', label: 'Jefe', resolve: r => r.jefe?.nombre ?? '—', dim: true },
       { key: 'salas', label: 'Salas', resolve: r => `${r.salas_min}–${r.salas_max}`, dim: true, w: 72 },
       { key: 'enemigos', label: 'Enemigos', resolve: r => r.enemigos?.length ?? 0, dim: true, w: 72 },
@@ -347,12 +348,12 @@ const ENTITY_CONFIG = {
       { key: 'nombre',      label: 'Nombre',           type: 'text', required: true, span: 2 },
       { key: 'map_zona_id', label: 'Zona (portal)',    type: 'relatedSelect', related: 'zonas', hint: 'Referencial: dónde vive conceptualmente este dungeon. El portal real que lo instancia es un Lugar tipo "portal_dungeon" apuntando a este template.' },
       { key: 'jefe_npc_id', label: 'Jefe (NPC tipo jefe)', type: 'relatedSelect', related: 'npcs_jefe', required: true, hint: 'Solo se listan NPCs con Tipo = jefe. Sus Cupos de Combate RAID definen también el tamaño del equipo que se arma al entrar al dungeon.' },
+      { key: 'rareza',      label: 'Rareza',           type: 'select', options: RAREZA_OPTS, hint: 'Define cuántos cofres se reparten por run: común/poco común = 1 · raro/épico = 2 · legendario = 3.' },
       { key: 'salas_min',   label: 'Salas mínimas',    type: 'number', min: 2 },
-      { key: 'salas_max',   label: 'Salas máximas',    type: 'number', min: 2 },
-      { key: 'cofre_probabilidad', label: 'Probabilidad de cofre (%)', type: 'number', min: 0, max: 100, hint: 'Chance de que cada sala normal (nunca la entrada ni la del jefe) tenga un cofre con una recompensa del pool de abajo.' },
+      { key: 'salas_max',   label: 'Salas máximas',    type: 'number', min: 2, hint: 'La mitad de las salas del run (redondeado hacia abajo) tiene enemigo garantizado; el resto de las salas normales tira 50% de tenerlo.' },
       { key: 'visible',     label: 'Visible',          type: 'toggle' },
     ],
-    defaults: { visible: true, salas_min: 5, salas_max: 8, cofre_probabilidad: 30 },
+    defaults: { visible: true, rareza: 'comun', salas_min: 5, salas_max: 8 },
   },
 
   /* ── ROL ── */

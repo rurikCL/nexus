@@ -15,9 +15,9 @@ use Random\Randomizer;
 /**
  * Arranca un DungeonRun cuyo equipo ya confirmó "listo" en el lobby (ver
  * DungeonController::listo): construye el grafo con DungeonGraphBuilder,
- * pre-rola el enemigo de cada sala normal contra el pool del template (misma
- * selección ponderada por tasa_aparicion que LugarEncuentroController::check),
- * persiste run + salas conectadas, y ubica a todo el equipo en la entrada.
+ * decide qué salas normales tienen enemigo garantizado / al azar y cuáles
+ * tienen cofre (ver reparteEncuentros/reparteCofres), persiste run + salas
+ * conectadas, y ubica a todo el equipo en la entrada.
  */
 class DungeonGeneratorService
 {
@@ -31,12 +31,34 @@ class DungeonGeneratorService
         $rng = new Randomizer(new Mt19937($seed));
         $pool = $template->enemigos()->wherePivot('tasa_aparicion', '>', 0)->get();
 
+        // Índices de sala "normal" (ni entrada ni jefe) sobre los que se reparten enemigos/cofres.
+        $normales = collect($grafo['nodos'])->keys()
+            ->reject(fn ($i) => $i === 0 || $i === $grafo['jefeIndex'])
+            ->values();
+
+        /*
+         * Enemigos garantizados = mitad de las salas totales del dungeon (redondeado hacia
+         * abajo), acotado a la cantidad de salas normales disponibles. El resto de las salas
+         * normales tira 50% independiente de tener encuentro.
+         */
+        $cantidadGarantizados = min($normales->count(), intdiv($numSalas, 2));
+        $indicesGarantizados = self::elegirIndicesAlAzar($normales, $cantidadGarantizados, $rng);
+
+        // Cofres: cantidad fija según la rareza del template (ver DungeonTemplate::cofresTotal), repartidos al azar.
+        $cantidadCofres = min($normales->count(), $template->cofresTotal());
+        $indicesConCofre = self::elegirIndicesAlAzar($normales, $cantidadCofres, $rng);
+
         $salas = [];
         foreach ($grafo['nodos'] as $index => $nodo) {
             $tipo = $index === 0 ? 'entrada' : ($index === $grafo['jefeIndex'] ? 'jefe' : 'normal');
-            $encuentro = $tipo === 'normal' ? self::elegirEnemigo($pool, $rng) : null;
-            // Solo las salas normales pueden tener cofre (nunca la entrada ni la del jefe).
-            $tieneCofre = $tipo === 'normal' && $rng->getInt(1, 100) <= (int) $template->cofre_probabilidad;
+
+            $tieneEnemigo = $tipo === 'normal' && (
+                $indicesGarantizados->contains($index)
+                || $rng->getInt(1, 100) <= 50
+            );
+            $encuentro = $tieneEnemigo ? self::elegirEnemigo($pool, $rng) : null;
+
+            $tieneCofre = $tipo === 'normal' && $indicesConCofre->contains($index);
 
             $salas[$index] = DungeonSala::create([
                 'dungeon_run_id' => $run->id,
@@ -110,5 +132,26 @@ class DungeonGeneratorService
         $ultimo = $pool->last();
 
         return ['enemigo_id' => $ultimo->id, 'nivel' => (int) $ultimo->pivot->nivel];
+    }
+
+    /**
+     * Elige $cantidad índices distintos al azar de $indices (sin reemplazo), con el mismo
+     * generador seedeado que el resto de la generación — determinístico por seed.
+     *
+     * @param  Collection<int, int>  $indices
+     * @return Collection<int, int>
+     */
+    private static function elegirIndicesAlAzar(Collection $indices, int $cantidad, Randomizer $rng): Collection
+    {
+        $disponibles = $indices->values()->all();
+        $elegidos = [];
+
+        for ($i = 0; $i < $cantidad && count($disponibles) > 0; $i++) {
+            $pos = $rng->getInt(0, count($disponibles) - 1);
+            $elegidos[] = $disponibles[$pos];
+            array_splice($disponibles, $pos, 1);
+        }
+
+        return collect($elegidos);
     }
 }

@@ -18,16 +18,15 @@ class DungeonTemplate extends Model
         'nombre',
         'map_zona_id',
         'jefe_npc_id',
+        'rareza',
         'salas_min',
         'salas_max',
-        'cofre_probabilidad',
         'visible',
     ];
 
     protected $casts = [
         'salas_min' => 'integer',
         'salas_max' => 'integer',
-        'cofre_probabilidad' => 'integer',
         'visible' => 'boolean',
     ];
 
@@ -74,5 +73,18 @@ class DungeonTemplate extends Model
     public function cuposEquipo(): int
     {
         return $this->jefe->raidCupos();
+    }
+
+    /**
+     * Cantidad fija de cofres a repartir al azar entre las salas normales de un run,
+     * según la rareza del dungeon — ver DungeonGeneratorService.
+     */
+    public function cofresTotal(): int
+    {
+        return match ($this->rareza) {
+            'raro', 'epico' => 2,
+            'legendario' => 3,
+            default => 1, // comun, poco_comun, o sin rareza configurada
+        };
     }
 }
