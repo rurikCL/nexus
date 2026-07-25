@@ -24,13 +24,13 @@ class NpcInteraccionService
     private const MAX_LINEAS = 5;
 
     /**
-     * Si el NPC tiene `prompt_respuestas` y su `interaccion` está vencida o nunca se
+     * Si el NPC está en modo `interaccion_ia` y su `interaccion` está vencida o nunca se
      * generó, la regenera vía IA y la persiste. Si la IA falla, deja la `interaccion`
      * existente intacta (no interrumpe al llamador) y registra el error.
      */
     public function ensureFresh(MapNpc $npc): void
     {
-        if (! $npc->prompt_respuestas) {
+        if ($npc->tipo_interaccion !== 'interaccion_ia' || ! $npc->prompt_respuestas) {
             return;
         }
 

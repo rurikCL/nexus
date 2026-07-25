@@ -3028,7 +3028,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
 
 function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onRaidJoin, onMisionChange, onCreditsChange, onUserUpdate }) {
   const isMobile = useIsMobile();
-  const isAI = Boolean(npc.prompt);
+  const isAI = npc.tipo_interaccion === 'agente_ia' && Boolean(npc.prompt);
   const [showTienda, setShowTienda] = useState(false);
   const [messages, setMessages]   = useState([]);
   const [phase, setPhase]         = useState('greeting');

@@ -78,6 +78,11 @@ const TIPO_NPC_OPTS   = [
   { value: 'vendedor_naves', label: 'Vendedor de Naves' },
 ];
 const TIPO_LUGAR_OPTS = ['exterior', 'interior', { value: 'portal_dungeon', label: 'Portal de Dungeon' }];
+const TIPO_INTERACCION_NPC_OPTS = [
+  { value: 'interaccion', label: 'Interacción' },
+  { value: 'agente_ia', label: 'Agente IA' },
+  { value: 'interaccion_ia', label: 'Interacción IA' },
+];
 
 const H_COLOR = {
   seguro: '#10b981', bajo: '#38cdf0', medio: '#E6B325',
@@ -215,6 +220,7 @@ const ENTITY_CONFIG = {
     filters: [
       { key: 'tipo',    label: 'Tipo',  options: TIPO_NPC_OPTS },
       { key: 'LugarID', label: 'Lugar', related: 'lugares' },
+      { key: 'tipo_interaccion', label: 'Diálogo', options: TIPO_INTERACCION_NPC_OPTS },
     ],
     columns: [
       { key: 'id', label: 'ID', w: 52 },
@@ -223,6 +229,7 @@ const ENTITY_CONFIG = {
       { key: 'tipo', label: 'Tipo', dim: true },
       { key: 'profesion', label: 'Profesión', dim: true },
       { key: 'nivel', label: 'Nivel', dim: true, w: 56 },
+      { key: 'tipo_interaccion', label: 'Diálogo', dim: true },
       { key: 'visible', label: 'Vis', type: 'bool', w: 52 },
     ],
     fields: [
@@ -239,9 +246,10 @@ const ENTITY_CONFIG = {
       { key: 'fecha_fin',     label: 'Disponible hasta', type: 'date', hint: 'Opcional. El NPC deja de aparecer después de esta fecha.' },
       { key: 'hito_requerimiento', label: 'Hitos para que aparezca', type: 'tags', span: 2, hint: 'El personaje debe tener todos estos hitos para que el NPC aparezca en su ubicación.' },
       { key: 'saludo',        label: 'Saludo inicial',   type: 'textarea', span: 2, hint: 'Texto que el NPC dice al primer contacto. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
-      { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
-      { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Si se rellena, el NPC usará IA en lugar del diálogo estático. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.' },
-      { key: 'prompt_respuestas', label: 'Prompt Interacción IA', type: 'textarea', span: 2, hint: 'Describe la personalidad del NPC, cómo responde y qué preguntas atiende. La IA genera automáticamente 3-5 interacciones (formato "- palabra_clave: respuesta") y las guarda en el campo Interacción de arriba. Se regenera cada "tiempo_npc_interaccion" minutos (configuraciones).' },
+      { key: 'tipo_interaccion', label: 'Modo de diálogo', type: 'select', options: TIPO_INTERACCION_NPC_OPTS, span: 2, hint: 'Interacción: usa solo el campo Interacción (estático) · Agente IA: chat en vivo usando el Prompt IA · Interacción IA: genera automáticamente el campo Interacción a partir del Prompt Interacción IA.' },
+      { key: 'interaccion',   label: 'Interacción',      type: 'textarea', span: 2, hint: 'Formato: "- palabra_clave: respuesta" por línea. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos. En modo Interacción IA, la IA la sobrescribe automáticamente.', showIf: f => (f.tipo_interaccion ?? 'interaccion') !== 'agente_ia' },
+      { key: 'prompt',        label: 'Prompt IA',        type: 'textarea', span: 2, hint: 'Instrucciones de comportamiento para la IA. Usa [Nombre de Objeto] y @[Nombre de NPC] para referenciarlos.', showIf: f => (f.tipo_interaccion ?? 'interaccion') === 'agente_ia' },
+      { key: 'prompt_respuestas', label: 'Prompt Interacción IA', type: 'textarea', span: 2, hint: 'Describe la personalidad del NPC, cómo responde y qué preguntas atiende. La IA genera 3-5 interacciones (formato "- pregunta: respuesta") y las guarda en el campo Interacción. Se regenera cada "tiempo_npc_interaccion" minutos (configuraciones).', showIf: f => (f.tipo_interaccion ?? 'interaccion') === 'interaccion_ia' },
       { key: 'urlInteraccion',label: 'URL interacción',  type: 'text', span: 2 },
       { key: 'MisionID',      label: 'ID de misión',     type: 'number', min: 0 },
       { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
@@ -261,7 +269,7 @@ const ENTITY_CONFIG = {
       { key: 'habilidad_4',   label: 'Habilidad de Jefe — Slot 4', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
       { key: 'raid_slots',    label: 'Cupos de Combate RAID',      type: 'number', min: 2, hint: 'Solo aplica si Tipo = jefe · cantidad de jugadores requeridos para llenar la cola (mínimo 2, por defecto 4). No hace falta llenarlos todos: el combate arranca cuando todos los que se unieron marcan "Estoy listo".' },
     ],
-    defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, raid_slots: 4, recompensas: [] },
+    defaults: { visible: true, tipo_interaccion: 'interaccion', vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, raid_slots: 4, recompensas: [] },
   },
 
   enemigos: {
@@ -1572,7 +1580,7 @@ function NpcCrudModal({ config, record, relatedOptions, onSave, onClose }) {
 
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
-  const mainFields        = config.fields.filter(f => !NPC_SIDEBAR_KEYS.includes(f.key));
+  const mainFields        = config.fields.filter(f => !NPC_SIDEBAR_KEYS.includes(f.key) && (!f.showIf || f.showIf(form)));
   const sidebarStatFields = config.fields.filter(f => NPC_SIDEBAR_KEYS.includes(f.key) && f.type === 'number');
 
   const isVendedorNaves  = form.tipo === 'vendedor_naves';

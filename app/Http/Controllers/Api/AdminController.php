@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Traits\ConvertsToWebp;
 use App\Models\Character;
 use App\Models\Configuracion;
 use App\Models\DungeonTemplate;
@@ -17,13 +16,14 @@ use App\Models\MapPlaneta;
 use App\Models\MapSistema;
 use App\Models\MapZona;
 use App\Models\Medalla;
-use App\Models\Role;
 use App\Models\RolCharacterObjeto;
+use App\Models\Role;
 use App\Models\RolHabilidad;
 use App\Models\RolObjeto;
 use App\Models\RolSonido;
 use App\Models\Sede;
 use App\Models\User;
+use App\Traits\ConvertsToWebp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -36,58 +36,58 @@ class AdminController extends Controller
     private function model(string $entity): string
     {
         return match ($entity) {
-            'sistemas'    => MapSistema::class,
-            'planetas'    => MapPlaneta::class,
-            'zonas'       => MapZona::class,
-            'lugares'     => MapLugar::class,
-            'npcs'        => MapNpc::class,
-            'enemigos'    => MapEnemigo::class,
-            'naves'       => MapNave::class,
+            'sistemas' => MapSistema::class,
+            'planetas' => MapPlaneta::class,
+            'zonas' => MapZona::class,
+            'lugares' => MapLugar::class,
+            'npcs' => MapNpc::class,
+            'enemigos' => MapEnemigo::class,
+            'naves' => MapNave::class,
             'dungeon_templates' => DungeonTemplate::class,
             // Alias interno: mismo modelo que 'npcs', pre-filtrado a tipo=jefe.
             // Usado solo por options() para el selector de jefe de dungeon_templates.
-            'npcs_jefe'   => MapNpc::class,
-            'usuarios'    => User::class,
-            'personajes'  => Character::class,
-            'roles'       => Role::class,
-            'rol_objetos'        => RolObjeto::class,
+            'npcs_jefe' => MapNpc::class,
+            'usuarios' => User::class,
+            'personajes' => Character::class,
+            'roles' => Role::class,
+            'rol_objetos' => RolObjeto::class,
             'rol_character_objeto' => RolCharacterObjeto::class,
-            'rol_habilidades'    => RolHabilidad::class,
+            'rol_habilidades' => RolHabilidad::class,
             // Alias interno: mismo modelo que 'rol_habilidades', pre-filtrado a tipo=nave.
             // Usado solo por options() para los selectores de habilidad de las naves.
             'rol_habilidades_nave' => RolHabilidad::class,
-            'rol_sonidos'        => RolSonido::class,
-            'medallas'    => Medalla::class,
-            'configuraciones'    => Configuracion::class,
-            'sedes'       => Sede::class,
-            default            => abort(404, "Entidad no reconocida: {$entity}"),
+            'rol_sonidos' => RolSonido::class,
+            'medallas' => Medalla::class,
+            'configuraciones' => Configuracion::class,
+            'sedes' => Sede::class,
+            default => abort(404, "Entidad no reconocida: {$entity}"),
         };
     }
 
     private function labelField(string $entity): string
     {
         return match ($entity) {
-            'usuarios'   => 'name',
+            'usuarios' => 'name',
             'personajes' => 'name',
-            'roles'      => 'label',
+            'roles' => 'label',
             'rol_character_objeto' => 'id',
-            default      => 'nombre',
+            default => 'nombre',
         };
     }
 
     private function withs(string $entity): array
     {
         return match ($entity) {
-            'planetas'   => ['sistema:id,nombre'],
-            'zonas'      => ['planeta:id,nombre'],
-            'lugares'    => ['zona:id,nombre', 'enemigos'],
-            'npcs'       => ['lugar:id,nombre', 'naves', 'objetos', 'recompensas'],
-            'enemigos'   => ['recompensas'],
+            'planetas' => ['sistema:id,nombre'],
+            'zonas' => ['planeta:id,nombre'],
+            'lugares' => ['zona:id,nombre', 'enemigos'],
+            'npcs' => ['lugar:id,nombre', 'naves', 'objetos', 'recompensas'],
+            'enemigos' => ['recompensas'],
             'dungeon_templates' => ['zona:id,nombre', 'jefe:id,nombre', 'enemigos', 'recompensas'],
-            'usuarios'   => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
+            'usuarios' => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
             'rol_character_objeto' => ['character:id,name,handle', 'rolObjeto:id,nombre'],
-            default      => [],
+            default => [],
         };
     }
 
@@ -95,10 +95,10 @@ class AdminController extends Controller
     {
         return match ($entity) {
             'rol_habilidades' => ['tipo', 'forma'],
-            'rol_objetos'     => ['tipo', 'rareza'],
-            'usuarios'        => ['sede_id'],
-            'npcs'            => ['tipo', 'LugarID'],
-            default           => [],
+            'rol_objetos' => ['tipo', 'rareza'],
+            'usuarios' => ['sede_id'],
+            'npcs' => ['tipo', 'LugarID', 'tipo_interaccion'],
+            default => [],
         };
     }
 
@@ -109,16 +109,16 @@ class AdminController extends Controller
      */
     private function extractVentaPivot(array &$data, string $key): ?array
     {
-        if (!array_key_exists($key, $data)) {
+        if (! array_key_exists($key, $data)) {
             return null;
         }
 
-        $raw   = $data[$key];
+        $raw = $data[$key];
         $items = is_string($raw) ? (json_decode($raw, true) ?? []) : ($raw ?? []);
         unset($data[$key]);
 
         return collect($items)->mapWithKeys(
-            fn($item) => [(int) $item['id'] => ['interes' => (int) ($item['interes'] ?? 0)]]
+            fn ($item) => [(int) $item['id'] => ['interes' => (int) ($item['interes'] ?? 0)]]
         )->all();
     }
 
@@ -129,18 +129,18 @@ class AdminController extends Controller
      */
     private function extractSpawnPivot(array &$data, string $key): ?array
     {
-        if (!array_key_exists($key, $data)) {
+        if (! array_key_exists($key, $data)) {
             return null;
         }
 
-        $raw   = $data[$key];
+        $raw = $data[$key];
         $items = is_string($raw) ? (json_decode($raw, true) ?? []) : ($raw ?? []);
         unset($data[$key]);
 
         return collect($items)->mapWithKeys(
-            fn($item) => [(int) $item['id'] => [
+            fn ($item) => [(int) $item['id'] => [
                 'tasa_aparicion' => max(1, (int) ($item['tasa_aparicion'] ?? 1)),
-                'nivel'          => max(0, (int) ($item['nivel'] ?? 1)),
+                'nivel' => max(0, (int) ($item['nivel'] ?? 1)),
             ]]
         )->all();
     }
@@ -153,7 +153,7 @@ class AdminController extends Controller
      */
     private function extractRecompensas(array &$data, string $key = 'recompensas'): ?array
     {
-        if (!array_key_exists($key, $data)) {
+        if (! array_key_exists($key, $data)) {
             return null;
         }
 
@@ -169,16 +169,16 @@ class AdminController extends Controller
         $keepIds = [];
         foreach ($items as $item) {
             $attrs = [
-                'tipo'         => $item['tipo'] ?? 'creditos',
-                'porcentaje'   => max(1, min(100, (int) ($item['porcentaje'] ?? 100))),
-                'valor'        => max(0, (int) ($item['valor'] ?? 0)),
-                'nombre'       => $item['nombre'] ?? null,
+                'tipo' => $item['tipo'] ?? 'creditos',
+                'porcentaje' => max(1, min(100, (int) ($item['porcentaje'] ?? 100))),
+                'valor' => max(0, (int) ($item['valor'] ?? 0)),
+                'nombre' => $item['nombre'] ?? null,
                 'habilidad_id' => $item['habilidad_id'] ?? null,
-                'objeto_id'    => $item['objeto_id'] ?? null,
-                'medalla_id'   => $item['medalla_id'] ?? null,
+                'objeto_id' => $item['objeto_id'] ?? null,
+                'medalla_id' => $item['medalla_id'] ?? null,
             ];
 
-            $existing = !empty($item['id']) ? $record->recompensas()->whereKey($item['id'])->first() : null;
+            $existing = ! empty($item['id']) ? $record->recompensas()->whereKey($item['id'])->first() : null;
             if ($existing) {
                 $existing->update($attrs);
                 $keepIds[] = $existing->id;
@@ -252,7 +252,7 @@ class AdminController extends Controller
     public function store(Request $request, string $entity): JsonResponse
     {
         $model = $this->model($entity);
-        $data  = $request->all();
+        $data = $request->all();
 
         foreach ($request->allFiles() as $key => $file) {
             $data[$key] = $this->saveUpload($file, "admin/{$entity}");
@@ -268,8 +268,8 @@ class AdminController extends Controller
             unset($data['roles']);
         }
 
-        $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
-        $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
+        $naves = $entity === 'npcs' ? $this->extractVentaPivot($data, 'naves') : null;
+        $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
         $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
         $recompensas = in_array($entity, ['npcs', 'enemigos', 'dungeon_templates'], true) ? $this->extractRecompensas($data) : null;
 
@@ -295,14 +295,15 @@ class AdminController extends Controller
         if ($withs = $this->withs($entity)) {
             $fresh->load($withs);
         }
+
         return response()->json(['record' => $fresh], 201);
     }
 
     public function update(Request $request, string $entity, int $id): JsonResponse
     {
-        $model  = $this->model($entity);
+        $model = $this->model($entity);
         $record = $model::findOrFail($id);
-        $data   = $request->all();
+        $data = $request->all();
 
         foreach ($request->allFiles() as $key => $file) {
             if ($record->{$key}) {
@@ -317,8 +318,8 @@ class AdminController extends Controller
             unset($data['roles']);
         }
 
-        $naves    = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'naves')      : null;
-        $objetos  = $entity === 'npcs'    ? $this->extractVentaPivot($data, 'objetos')    : null;
+        $naves = $entity === 'npcs' ? $this->extractVentaPivot($data, 'naves') : null;
+        $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
         $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
         $recompensas = in_array($entity, ['npcs', 'enemigos', 'dungeon_templates'], true) ? $this->extractRecompensas($data) : null;
 
@@ -344,6 +345,7 @@ class AdminController extends Controller
         if ($withs = $this->withs($entity)) {
             $fresh->load($withs);
         }
+
         return response()->json(['record' => $fresh]);
     }
 
@@ -353,7 +355,7 @@ class AdminController extends Controller
             abort(403, 'Los usuarios no se pueden eliminar desde este panel.');
         }
 
-        $model  = $this->model($entity);
+        $model = $this->model($entity);
         $record = $model::findOrFail($id);
         $record->delete();
 
@@ -364,8 +366,8 @@ class AdminController extends Controller
     {
         return match ($entity) {
             'rol_habilidades' => ['forma'],
-            'medallas'        => ['imagen', 'rareza'],
-            default           => [],
+            'medallas' => ['imagen', 'rareza'],
+            default => [],
         };
     }
 
@@ -395,7 +397,7 @@ class AdminController extends Controller
         $habilidad = RolHabilidad::findOrFail($habilidadId);
         $character = Character::with('user')->findOrFail($data['character_id']);
 
-        if (!$character->user) {
+        if (! $character->user) {
             return response()->json(['error' => 'Ese personaje no tiene un usuario asociado'], 422);
         }
 
@@ -409,17 +411,17 @@ class AdminController extends Controller
     public function asignarObjeto(Request $request, int $objetoId): JsonResponse
     {
         $data = $request->validate([
-            'character_ids'   => 'required|array|min:1',
+            'character_ids' => 'required|array|min:1',
             'character_ids.*' => 'exists:characters,id',
-            'cantidad'        => 'nullable|integer|min:1',
+            'cantidad' => 'nullable|integer|min:1',
         ]);
 
-        $objeto   = RolObjeto::findOrFail($objetoId);
+        $objeto = RolObjeto::findOrFail($objetoId);
         $cantidad = $data['cantidad'] ?? 1;
 
         foreach ($data['character_ids'] as $characterId) {
             $character = Character::find($characterId);
-            if (!$character) {
+            if (! $character) {
                 continue;
             }
 
