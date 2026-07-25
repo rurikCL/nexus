@@ -1739,9 +1739,34 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
         </div>
       </div>
 
-      {/* portal de dungeon: reemplaza presentes/accesos/NPCs — ver DungeonPortal */}
+      {/* portal de dungeon: reemplaza accesos/NPCs — ver DungeonPortal. Los jugadores
+          presentes en el lugar-portal (fuera del equipo del dungeon) se listan abajo. */}
       {lugar.tipo === 'portal_dungeon' ? (
-        <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} />
+        <>
+          <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} />
+          {(() => {
+            const presentesZona = lugar.presentes_personajes ?? [];
+            if (presentesZona.length === 0) return null;
+            return (
+              <div style={{ marginTop: 24 }}>
+                <div className="nx-kicker" style={{ marginBottom: 12 }}>JUGADORES EN ESTA ZONA — {presentesZona.length}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+                  {presentesZona.map((p) => {
+                    const isMe = p.user_id === myUserId;
+                    return (
+                      <PlayerCard
+                        key={`jugador-${p.id}`}
+                        jugador={p}
+                        isMe={isMe}
+                        onClick={isMe ? undefined : () => setDialogPlayer(p)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </>
       ) : (
         <>
       {/* accesos interiores — árbol de recorridos */}
@@ -2499,32 +2524,45 @@ function DungeonPortal({ lugar, userCharacter, myUserId }) {
     const me = jugadores.find((j) => j.soy_yo);
     return (
       <DungeonBackdrop imagen={lugar.imagen}>
-        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', maxWidth: 720, margin: '0 auto' }}>
+        <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
           <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
           <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
           <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
             Mínimo {data.min_jugadores} jugadores · hasta {data.cupos_equipo} cupos. El equipo arranca cuando todos marquen "Listo".
           </div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14,
-            marginBottom: 20, textAlign: 'left',
-          }}>
-            {jugadores.map((j) => (
-              <PlayerCard
-                key={j.user_id}
-                jugador={j}
-                isMe={j.soy_yo}
-                subtitle={`En la cola del equipo · ${data.run.template.nombre}`}
-                footer={
-                  <>
-                    <Icon name={j.listo ? 'check' : 'clock'} size={12} style={{ color: j.listo ? '#10b981' : 'var(--txt-faint)' }} />
-                    <span style={{ fontSize: 10, color: j.listo ? '#10b981' : 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
-                      {j.listo ? 'LISTO' : 'ESPERANDO'}
-                    </span>
-                  </>
-                }
-              />
-            ))}
+          <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
+            {jugadores.map((j) => {
+              const color = SABER_COLORS[j.saber_color] ?? '#38cdf0';
+              const photoUrl = mediaUrl(j.photo);
+              return (
+                <div key={j.user_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between',
+                  padding: '8px 12px', borderRadius: 8,
+                  border: `1px solid ${j.listo ? 'rgba(16,185,129,0.5)' : 'var(--holo-line)'}`,
+                  background: j.listo ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                      backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                      backgroundSize: 'cover', backgroundPosition: 'center',
+                      background: photoUrl ? undefined : color,
+                      border: `2px solid ${color}55`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
+                      boxShadow: `0 0 8px ${color}44`,
+                    }}>
+                      {!photoUrl && (j.handle?.[0] ?? j.name?.[0] ?? '?')}
+                    </div>
+                    <span style={{
+                      fontSize: 12, fontWeight: 600, color: 'var(--txt)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{j.name}{j.soy_yo ? ' (tú)' : ''}</span>
+                  </div>
+                  <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
+                </div>
+              );
+            })}
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
             <Btn kind="ghost" onClick={salirDungeon} disabled={busy}>Abandonar</Btn>
@@ -4284,26 +4322,6 @@ function PresentesPanel({ presentes = [], onChat, onAttack, myUserId }) {
                 }}>
                   @{p.handle}{isMe && <span style={{ color: 'var(--holo)' }}> (tú)</span>}
                 </div>
-                {!isMe && (
-                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                    <button onClick={() => onChat?.(p)} style={{
-                      background: 'rgba(56,205,240,0.08)', border: '1px solid rgba(56,205,240,0.25)',
-                      borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: 'var(--holo)',
-                      fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.18)'; e.currentTarget.style.borderColor = 'var(--holo)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.08)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; }}
-                    >MSG</button>
-                    <button onClick={() => onAttack?.(p)} style={{
-                      background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
-                      borderRadius: 6, padding: '4px 7px', cursor: 'pointer', color: '#ef4444',
-                      fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em', transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.2)'; e.currentTarget.style.borderColor = '#ef4444'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220,38,38,0.08)'; e.currentTarget.style.borderColor = 'rgba(220,38,38,0.3)'; }}
-                    >ATK</button>
-                  </div>
-                )}
               </div>
             );
           })}
