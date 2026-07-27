@@ -1863,22 +1863,25 @@ function NpcCard({ npc, onClick }) {
   const npcImagen = mediaUrl(npc.imagen);
   const npcMiniImagen = mediaUrl(npc.imagen_mini);
   const tieneMision = Boolean(npc.mision_disponible) && npc.mision_disponible.estado !== 'completada';
+  const esJefe = (npc.tipo ?? '').toLowerCase() === 'jefe';
   return (
     <button onClick={onClick}
       style={{
-        background: 'rgba(12,30,64,0.55)', border: '1px solid var(--holo-line)',
+        background: 'rgba(12,30,64,0.55)',
+        border: esJefe ? '1px solid #E6B325' : '1px solid var(--holo-line)',
+        boxShadow: esJefe ? '0 0 16px -4px rgba(230,179,37,0.7)' : 'none',
         borderRadius: 'var(--radius-lg)', padding: 0, cursor: 'pointer',
         textAlign: 'left', overflow: 'hidden', transition: 'all 0.2s',
         display: 'flex', flexDirection: 'column', color: 'var(--txt)',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.border = '1px solid var(--holo)';
-        e.currentTarget.style.boxShadow = '0 0 20px -6px var(--holo)';
+        e.currentTarget.style.border = esJefe ? '1px solid #E6B325' : '1px solid var(--holo)';
+        e.currentTarget.style.boxShadow = esJefe ? '0 0 22px -4px #E6B325' : '0 0 20px -6px var(--holo)';
         e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.border = '1px solid var(--holo-line)';
-        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.border = esJefe ? '1px solid #E6B325' : '1px solid var(--holo-line)';
+        e.currentTarget.style.boxShadow = esJefe ? '0 0 16px -4px rgba(230,179,37,0.7)' : 'none';
         e.currentTarget.style.transform = 'none';
       }}
     >
@@ -1898,6 +1901,15 @@ function NpcCard({ npc, onClick }) {
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', opacity: 0.3 }}>
             <Icon name="user" size={44} style={{ color: 'var(--holo)' }} />
           </div>
+        )}
+        {esJefe && (
+          <div style={{
+            position: 'absolute', top: 8, left: 8, zIndex: 2,
+            width: 22, height: 22, borderRadius: '50%',
+            background: 'rgba(230,179,37,0.92)',
+            boxShadow: '0 0 10px 2px rgba(230,179,37,0.55)',
+            display: 'grid', placeItems: 'center', fontSize: 13,
+          }} title="Jefe">👑</div>
         )}
         {tieneMision && (
           <div style={{
