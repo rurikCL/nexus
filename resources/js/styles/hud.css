@@ -963,6 +963,7 @@ a { color: var(--holo); }
 @media (min-width: 769px) and (max-width: 1024px) {
   /* Tablet: sidebar más estrecho, main ajustado */
   .nx-sidebar { width: 200px !important; }
+  .nx-sidebar.collapsed { width: 52px !important; }
   .nx-main { padding: 20px 18px 60px !important; }
   .nx-grid-2 { grid-template-columns: 1fr 1fr !important; }
   .nx-personaje-grid { grid-template-columns: 300px 1fr !important; }

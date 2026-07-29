@@ -866,7 +866,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
 
       {/* Sidebar */}
       <aside
-        className={`nx-sidebar${sidebarOpen ? ' open' : ''}`}
+        className={`nx-sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' collapsed' : ''}`}
         style={{
           width: sidebarCollapsed ? 52 : 210, flexShrink: 0,
           borderRight: '1px solid var(--holo-line)',
