@@ -137,6 +137,11 @@ const ENTITY_CONFIG = {
 
   planetas: {
     label: 'Planetas', icon: 'target', group: 'MAPA GALÁCTICO',
+    filters: [
+      { key: 'SistemaID',  label: 'Sistema',     related: 'sistemas' },
+      { key: 'rareza',     label: 'Rareza',      options: RAREZA_OPTS },
+      { key: 'hostilidad', label: 'Hostilidad',  options: HOSTILIDAD_OPTS },
+    ],
     columns: [
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
@@ -162,6 +167,11 @@ const ENTITY_CONFIG = {
 
   zonas: {
     label: 'Zonas', icon: 'shield', group: 'MAPA GALÁCTICO',
+    filters: [
+      { key: 'PlanetaID', label: 'Planeta',    related: 'planetas' },
+      { key: 'rareza',    label: 'Rareza',     options: RAREZA_OPTS },
+      { key: 'hostilidad',label: 'Hostilidad', options: HOSTILIDAD_OPTS },
+    ],
     columns: [
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
@@ -188,6 +198,11 @@ const ENTITY_CONFIG = {
 
   lugares: {
     label: 'Lugares', icon: 'target', group: 'MAPA GALÁCTICO',
+    filters: [
+      { key: 'ZonaID', label: 'Zona',   related: 'zonas' },
+      { key: 'tipo',   label: 'Tipo',   options: TIPO_LUGAR_OPTS },
+      { key: 'rareza', label: 'Rareza', options: RAREZA_OPTS },
+    ],
     columns: [
       { key: 'id', label: 'ID', w: 52 },
       { key: 'nombre', label: 'Nombre', bold: true },
