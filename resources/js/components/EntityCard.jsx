@@ -85,29 +85,29 @@ function paintStatPills(ctx, entries, x, y, maxWidth, emptyText, emptyColor) {
 }
 
 /** Pinta el marco (fondo + borde) de la carta y devuelve las coordenadas internas útiles. */
-function paintFrame(ctx, frame) {
+function paintFrame(ctx, frame, cardH = CARD_H) {
   const pad = 22;
   ctx.fillStyle = frame.bg2;
   ctx.beginPath();
-  ctx.roundRect(0, 0, CARD_W, CARD_H, 34);
+  ctx.roundRect(0, 0, CARD_W, cardH, 34);
   ctx.fill();
 
-  const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
+  const bg = ctx.createLinearGradient(0, 0, 0, cardH);
   bg.addColorStop(0, frame.bg1);
   bg.addColorStop(1, frame.bg2);
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
+  ctx.roundRect(pad, pad, CARD_W - pad * 2, cardH - pad * 2, 22);
   ctx.clip();
   ctx.fillStyle = bg;
-  ctx.fillRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2);
+  ctx.fillRect(pad, pad, CARD_W - pad * 2, cardH - pad * 2);
   ctx.restore();
 
-  paintGridBackground(ctx, pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
+  paintGridBackground(ctx, pad, pad, CARD_W - pad * 2, cardH - pad * 2, 22);
 
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
+  ctx.roundRect(pad, pad, CARD_W - pad * 2, cardH - pad * 2, 22);
   ctx.lineWidth = 3;
   ctx.strokeStyle = `${frame.line}aa`;
   ctx.stroke();
@@ -212,11 +212,11 @@ function paintRows(ctx, rows, startY, innerX, innerRight, rowH = 47) {
   return startY + rows.length * rowH;
 }
 
-function paintColofon(ctx, text) {
+function paintColofon(ctx, text, cardH = CARD_H) {
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(120,150,190,0.55)';
   ctx.font = '400 12px "JetBrains Mono"';
-  ctx.fillText(text, CARD_W / 2, CARD_H - 22 - 8);
+  ctx.fillText(text, CARD_W / 2, cardH - 22 - 8);
 }
 
 /** Ícono de reloj de arena, dibujado centrado en (cx, cy) — usado en los marcadores de cooldown del borde. */
@@ -485,17 +485,97 @@ const NPC_TIPO_FRAME = { aliado: 'info', neutral: 'neutral', hostil: 'danger', e
 export const NPC_TIPO_LABEL = { aliado: 'Aliado', neutral: 'Neutral', hostil: 'Hostil', entrenador: 'Entrenador', mercader: 'Mercader', mision: 'Misión', jefe: 'Jefe de Asalto' };
 const NPC_TIPO_ICON  = { aliado: 'user', neutral: 'user', hostil: 'flame', entrenador: 'shield', mercader: 'coin', mision: 'star', jefe: 'crown' };
 
+/** Una celda de la grilla de habilidades del NPC/jefe: ícono cuadrado (imagen si existe, si no
+ * un ícono de respaldo según su tipo) con borde, igual criterio visual que `paintArt` pero a
+ * tamaño de miniatura. */
+async function paintHabilidadIconCell(ctx, hab, x, y, size, borderColor) {
+  const iconName = TIPO_HAB_ICON[hab?.tipo] ?? 'zap';
+  const iconColor = FRAME[TIPO_HAB_FRAME[hab?.tipo] ?? 'info']?.line ?? '#38cdf0';
+  const img = await loadImage(mediaUrl(hab?.icono_url ?? hab?.icono));
+
+  if (img) {
+    drawImageRounded(ctx, img, x, y, size, size, 14, `${borderColor}66`, 2.4, 'center', 'cover');
+    return;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, size, size, 14);
+  ctx.clip();
+  const g = ctx.createRadialGradient(x + size / 2, y + size / 2, size * 0.12, x + size / 2, y + size / 2, size * 0.75);
+  g.addColorStop(0, `${iconColor}22`);
+  g.addColorStop(1, '#04070f');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, size, size);
+  ctx.globalAlpha = 0.5;
+  drawIcon(ctx, iconName, x + size / 2, y + size / 2, size * 0.46, iconColor, 1.8);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  ctx.beginPath();
+  ctx.roundRect(x, y, size, size, 14);
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = `${borderColor}66`;
+  ctx.stroke();
+}
+
+/** Grilla 2×2 de las hasta 4 habilidades del NPC/jefe (habilidad1..4), imagen + nombre debajo
+ * de cada una — centrada en el ancho disponible. Los cupos sin habilidad quedan vacíos
+ * (recuadro punteado) para no romper la simetría 2×2. Devuelve el alto total ocupado. */
+async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor) {
+  const cellSize = 108;
+  const colGap = 22;
+  const rowGap = 20;
+  const labelH = 20;
+  const rowH = cellSize + labelH;
+  const gridW = cellSize * 2 + colGap;
+  const gridX = x + (w - gridW) / 2;
+
+  for (let i = 0; i < 4; i++) {
+    const hab = habilidades[i];
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const cx = gridX + col * (cellSize + colGap);
+    const cy = y + row * (rowH + rowGap);
+
+    if (!hab) {
+      ctx.save();
+      ctx.setLineDash([6, 6]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cellSize, cellSize, 14);
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+
+    await paintHabilidadIconCell(ctx, hab, cx, cy, cellSize, borderColor);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#eaf2ff';
+    const size = fitText(ctx, hab.nombre ?? '', cellSize + 10, '14px "JetBrains Mono"', 10);
+    ctx.font = `600 ${size}px "JetBrains Mono"`;
+    ctx.fillText(hab.nombre ?? '', cx + cellSize / 2, cy + cellSize + labelH - 5);
+  }
+
+  return rowH * 2 + rowGap;
+}
+
 async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   await ensureFonts();
   const frame = forcedFrameKey ? FRAME[forcedFrameKey] : (FRAME[NPC_TIPO_FRAME[entity.tipo]] ?? FRAME.danger);
   const nivel = entity.nivel ?? 1;
 
+  /* Carta más alta que el resto (habilidad/objeto/estado) para dejarle sitio a la grilla
+     2×2 de habilidades del NPC/jefe, debajo del cuadro de saludo/atributos. Margen generoso
+     porque el cuadro de vida/escudo puede crecer si los pips de stat envuelven a 2-3 filas. */
+  const cardH = CARD_H + 340;
+
   const canvas = document.createElement('canvas');
   canvas.width = CARD_W;
-  canvas.height = CARD_H;
+  canvas.height = cardH;
   const ctx = canvas.getContext('2d');
 
-  const { pad, innerX, innerRight } = paintFrame(ctx, frame);
+  const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH);
   const innerW = innerRight - innerX;
   paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
 
@@ -575,35 +655,30 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   ctx.stroke();
 
   const footY = statsTop + sectionH + 22;
-  const habilidades = [entity.habilidad1, entity.habilidad2, entity.habilidad3, entity.habilidad4]
-    .filter(Boolean).map(h => h.nombre).filter(Boolean);
-  ctx.textAlign = 'center';
-  if (habilidades.length) {
+  const habilidades = [entity.habilidad1, entity.habilidad2, entity.habilidad3, entity.habilidad4];
+  if (habilidades.some(Boolean)) {
+    ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(150,200,255,0.55)';
     ctx.font = '600 12px "JetBrains Mono"';
     ctx.fillText('HABILIDADES', CARD_W / 2, footY);
-    ctx.fillStyle = '#eaf2ff';
-    ctx.font = '600 15px "JetBrains Mono"';
-    const size = fitText(ctx, habilidades.join(' · '), innerW - 8, '15px "JetBrains Mono"', 11);
-    ctx.font = `${size}px "JetBrains Mono"`;
-    ctx.fillText(habilidades.join(' · '), CARD_W / 2, footY + 22);
+    await paintHabilidadesGrid(ctx, habilidades, innerX, innerW, footY + 20, frame.line);
   }
 
-  await paintCardLogo(ctx, innerRight, CARD_H - pad);
+  await paintCardLogo(ctx, innerRight, cardH - pad);
   return canvas;
 }
 
 export async function drawNpcCard(npc) {
   const canvas = await drawNpcLikeCard(npc);
   const ctx = canvas.getContext('2d');
-  paintColofon(ctx, npc.tipo === 'jefe' ? 'Jefes · Catálogo NÉXUS' : 'NPCs · Catálogo NÉXUS');
+  paintColofon(ctx, npc.tipo === 'jefe' ? 'Jefes · Catálogo NÉXUS' : 'NPCs · Catálogo NÉXUS', canvas.height);
   return canvas;
 }
 
 export async function drawEnemigoCard(enemigo) {
   const canvas = await drawNpcLikeCard(enemigo, { forcedFrameKey: 'danger', kicker: 'Encuentro Salvaje' });
   const ctx = canvas.getContext('2d');
-  paintColofon(ctx, 'Enemigos · Catálogo NÉXUS');
+  paintColofon(ctx, 'Enemigos · Catálogo NÉXUS', canvas.height);
   return canvas;
 }
 
@@ -914,6 +989,7 @@ const DRAW_BY_KIND = {
  */
 export default function EntityCardModal({ kind, item, onClose }) {
   const [dataUrl, setDataUrl] = useState(null);
+  const [dims, setDims] = useState(null); // { w, h } del canvas real — algunas cartas (npc/jefe) son más altas que el resto
   const [error, setError] = useState(false);
   const cancelledRef = useRef(false);
   const isToken = kind === 'estado' || kind === 'stat_combate';
@@ -923,7 +999,11 @@ export default function EntityCardModal({ kind, item, onClose }) {
     const draw = DRAW_BY_KIND[kind];
     if (!draw) { setError(true); return; }
     draw(item)
-      .then((canvas) => { if (!cancelledRef.current) setDataUrl(canvas.toDataURL('image/png')); })
+      .then((canvas) => {
+        if (cancelledRef.current) return;
+        setDataUrl(canvas.toDataURL('image/png'));
+        setDims({ w: canvas.width, h: canvas.height });
+      })
       .catch(() => { if (!cancelledRef.current) setError(true); });
     return () => { cancelledRef.current = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -945,7 +1025,9 @@ export default function EntityCardModal({ kind, item, onClose }) {
     if (isToken) {
       printTokenSheet(dataUrl, { mmW: TOKEN_W_MM, mmH: TOKEN_H_MM, copies: 8 }, onBlocked);
     } else {
-      printCardImage(dataUrl, onBlocked);
+      const mmW = 63;
+      const mmH = dims ? Math.round((mmW * dims.h / dims.w) * 10) / 10 : 88;
+      printCardImage(dataUrl, onBlocked, { mmW, mmH });
     }
   };
 
@@ -964,6 +1046,12 @@ export default function EntityCardModal({ kind, item, onClose }) {
 
   const canShareFiles = typeof navigator !== 'undefined' && !!navigator.share;
 
+  /* Ancho fijo (igual para todos los tipos) con alto derivado de la proporción real del
+     canvas — algunas cartas (npc/jefe, con la grilla de habilidades) son más altas que
+     el resto y no pueden asumir el 5:7 estándar. */
+  const previewW = isToken ? 180 : 252;
+  const previewH = dims ? Math.round(previewW * dims.h / dims.w) : (isToken ? 252 : 353);
+
   return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9500, display: 'flex',
@@ -977,14 +1065,14 @@ export default function EntityCardModal({ kind, item, onClose }) {
           </div>
         ) : !dataUrl ? (
           <div style={{
-            width: isToken ? 180 : 252, height: isToken ? 252 : 353, display: 'grid', placeItems: 'center',
+            width: previewW, height: previewH, display: 'grid', placeItems: 'center',
             color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 11, letterSpacing: '0.14em',
           }}>
             {isToken ? 'GENERANDO TOKEN…' : 'GENERANDO CARTA…'}
           </div>
         ) : (
           <img src={dataUrl} alt={item?.nombre ?? 'Carta'} style={{
-            width: isToken ? 180 : 252, height: isToken ? 252 : 353,
+            width: previewW, height: previewH,
             borderRadius: 14,
             boxShadow: '0 0 40px rgba(56,205,240,0.25)', display: 'block',
           }} />
