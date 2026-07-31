@@ -167,7 +167,10 @@ class MapController extends Controller
         $esSalto = $sistemaDestinoId && (int) $sistemaDestinoId !== (int) $character->map_sistema_id;
 
         if ($esSalto) {
-            $naveEquipada = $character->naveEquipada()->with('nave')->first();
+            /* Si el usuario elige explícitamente pagar el transporte (p.ej. nave equipada
+               sin combustible), se ignora la nave y se cobra como transbordador de pasajeros. */
+            $forzarTransbordador = $request->boolean('forzar_transbordador');
+            $naveEquipada = $forzarTransbordador ? null : $character->naveEquipada()->with('nave')->first();
 
             if ($naveEquipada) {
                 if ($naveEquipada->combustible_actual <= 0) {

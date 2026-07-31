@@ -361,9 +361,9 @@ function GalaxiaView({ onSelectSistema, side }) {
   }, []);
 
   /* ── Starfield CSS — posiciones determinísticas via hashf ── */
-  const handleTravel = (sistema) => {
+  const handleTravel = (sistema, opts) => {
     setTraveling(sistema.id);
-    setTimeout(() => { setTraveling(null); onSelectSistema(sistema); }, 1800);
+    setTimeout(() => { setTraveling(null); onSelectSistema(sistema, opts); }, 1800);
   };
 
   const openConfirm = (sistema) => {
@@ -383,6 +383,11 @@ function GalaxiaView({ onSelectSistema, side }) {
     const sistema = confirmSistema;
     closeConfirm();
     handleTravel(sistema);
+  };
+  const confirmarViajeTransbordador = () => {
+    const sistema = confirmSistema;
+    closeConfirm();
+    handleTravel(sistema, { forzarTransbordador: true });
   };
 
   if (loading) return <LoadingHUD text="ESCANEANDO GALAXIA..." />;
@@ -549,6 +554,8 @@ function GalaxiaView({ onSelectSistema, side }) {
             const credits = confirmData?.credits ?? 0;
             const costo = confirmSistema.costo_viaje ?? 0;
 
+            const sinCreditos = costo > 0 && credits < costo;
+
             if (nave) {
               const fuelActual = nave.combustible_actual ?? 0;
               const fuelMax    = nave.nave?.capacidad_salto ?? 0;
@@ -570,15 +577,31 @@ function GalaxiaView({ onSelectSistema, side }) {
                       {sinCombustible && ' — insuficiente para saltar. Debes reabastecer tu nave.'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                  {sinCombustible && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      background: sinCreditos ? 'rgba(255,45,69,0.1)' : 'rgba(230,179,37,0.08)',
+                      border: `1px solid ${sinCreditos ? 'rgba(255,45,69,0.35)' : 'rgba(230,179,37,0.25)'}`,
+                    }}>
+                      <Icon name="coin" size={16} style={{ color: sinCreditos ? '#ff6b6b' : 'var(--holocron-oro)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: sinCreditos ? '#ff6b6b' : 'var(--txt-dim)' }}>
+                        Alternativa: viajar en transbordador de pasajeros. {costo > 0 ? `Costo: ${costo} cr (tienes ${credits} cr)` : 'Es gratuito.'}
+                        {sinCreditos && ' — créditos insuficientes.'}
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                     <Btn kind="ghost" onClick={closeConfirm}>Cancelar</Btn>
+                    {sinCombustible && (
+                      <Btn kind="gold" onClick={confirmarViajeTransbordador} disabled={sinCreditos}>Pagar transporte</Btn>
+                    )}
                     <Btn kind="primary" onClick={confirmarViaje} disabled={sinCombustible}>Confirmar salto</Btn>
                   </div>
                 </>
               );
             }
 
-            const sinCreditos = costo > 0 && credits < costo;
             return (
               <>
                 <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
@@ -5730,11 +5753,16 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     updateLocation({ sistema_id: null, planeta_id: null, zona_id: null, lugar_id: null });
     setMapLocation?.(null);
   };
-  const goSistema = async (tgt) => {
+  const goSistema = async (tgt, opts) => {
     if (tgt?.id) {
       /* El salto entre sistemas puede cobrar créditos (transporte pagado) o
-         combustible de la nave equipada — solo avanzamos si el servidor lo permite. */
-      const result = await updateLocation({ sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null });
+         combustible de la nave equipada — solo avanzamos si el servidor lo permite.
+         forzarTransbordador: el usuario eligió pagar el transporte aunque tenga nave equipada
+         (p.ej. sin combustible). */
+      const result = await updateLocation({
+        sistema_id: tgt.id, planeta_id: null, zona_id: null, lugar_id: null,
+        ...(opts?.forzarTransbordador ? { forzar_transbordador: true } : {}),
+      });
       if (!result.ok) return;
       setSistema(tgt);
       setMapLocation?.({
@@ -5777,7 +5805,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     }
   };
 
-  const selectSistema = (s) => { goSistema(s); };
+  const selectSistema = (s, opts) => { goSistema(s, opts); };
   const selectPlaneta = (p) => { setPlaneta(p); goPlaneta(p); checkPirataAmbush(p.id); };
   const selectZona    = (z) => { setZona(z);    goZona(z);    };
   const selectLugar   = (l) => { setLugar(l);   setNivel('lugar'); };
