@@ -1622,7 +1622,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, onTrade, myUserId, refreshToken, onNpcsUpdated, userCharacter }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, onTrade, myUserId, refreshToken, onNpcsUpdated, userCharacter, onDungeonRunChange }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1800,7 +1800,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
           presentes en el lugar-portal (fuera del equipo del dungeon) se listan dentro,
           bajo el lobby, cuando el equipo está en estado 'esperando'. */}
       {lugar.tipo === 'portal_dungeon' ? (
-        <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} onAttack={onAttack} onTrade={onTrade} />
+        <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} onAttack={onAttack} onTrade={onTrade} onDungeonRunChange={onDungeonRunChange} />
       ) : (
         <>
       {/* accesos interiores — árbol de recorridos */}
@@ -2449,10 +2449,11 @@ function DungeonLootPreview({ loot }) {
   );
 }
 
-function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade }) {
+function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDungeonRunChange }) {
   const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala?, mi_estado?, equipo? }
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
+  const [otherRunId, setOtherRunId] = useState(null); // run_id de OTRO dungeon activo que bloquea unirse() a este
   const [busy, setBusy]           = useState(false);
   const [activeCombat, setActiveCombat] = useState(null); // { enemigo }
   const [raidQueueOpen, setRaidQueueOpen] = useState(false);
@@ -2523,6 +2524,12 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade }) {
   const runId  = data?.run?.id;
   const estado = data?.run?.estado;
 
+  /* Reporta al mapa el run activo (o su ausencia) para que pueda bloquear viajar por el mapa
+     mientras esté 'en_curso' — igual que con el combate PvP (ver triggerTravel en MapaView). */
+  useEffect(() => {
+    onDungeonRunChange?.(runId ? { id: runId, estado } : null);
+  }, [runId, estado, onDungeonRunChange]);
+
   const refresh = useCallback(async () => {
     if (!runId) return;
     try {
@@ -2534,11 +2541,32 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade }) {
   const unirse = useCallback(() => {
     setLoading(true);
     setError('');
+    setOtherRunId(null);
     return apiPost(`/map/dungeons/${lugar.id}/unirse`, {})
       .then((d) => setData(d))
-      .catch((e) => setError(e?.body?.error || e?.message || 'No se pudo entrar al dungeon.'))
+      .catch((e) => {
+        setError(e?.body?.error || e?.message || 'No se pudo entrar al dungeon.');
+        setOtherRunId(e?.body?.other_run_id ?? null);
+      })
       .finally(() => setLoading(false));
   }, [lugar.id]);
+
+  /* Rescate para quien quedó con OTRO dungeon en_curso/esperando bloqueando la entrada a este
+     (p.ej. tras salir del portal sin abandonarlo, o datos huérfanos previos a este bloqueo) —
+     abandona ese otro run sin necesidad de viajar hasta su portal y reintenta unirse a este. */
+  const abandonarOtroDungeon = async () => {
+    if (!otherRunId || busy) return;
+    setBusy(true);
+    try {
+      await apiPost(`/map/dungeons/runs/${otherRunId}/salir`, {});
+      toast('Dungeon anterior abandonado', { tone: 'success', icon: 'check' });
+      await unirse();
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo abandonar el dungeon anterior.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   /* Al entrar al portal: unirse es idempotente — retoma el lobby o la sala donde ya estabas. */
   useEffect(() => { unirse(); }, [unirse]);
@@ -2681,7 +2709,14 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade }) {
   if (loading) return <LoadingHUD text="ENTRANDO AL DUNGEON..." />;
 
   if (error) return (
-    <div style={{ textAlign: 'center', padding: 40, color: '#ff6b6b', fontSize: 13 }}>{error}</div>
+    <div style={{ textAlign: 'center', padding: 40, display: 'grid', gap: 16, justifyItems: 'center' }}>
+      <div style={{ color: '#ff6b6b', fontSize: 13 }}>{error}</div>
+      {otherRunId && (
+        <Btn kind="ghost" onClick={abandonarOtroDungeon} disabled={busy}>
+          {busy ? 'Abandonando...' : 'Abandonar dungeon anterior'}
+        </Btn>
+      )}
+    </div>
   );
 
   if (!data?.run) return null;
@@ -5515,6 +5550,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
   const [activePvpCombat, setActivePvpCombat] = useState(null);
+  const [activeDungeonRun, setActiveDungeonRun] = useState(null); // { id, estado } | null — ver DungeonPortal/onDungeonRunChange
   const [pvpAttackTarget, setPvpAttackTarget]  = useState(null);
   const [pvpChallenging, setPvpChallenging]    = useState(false);
   const [pendingChallenge, setPendingChallenge] = useState(null);
@@ -5564,6 +5600,15 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
         .catch(() => {});
     };
     checkCombat();
+  }, []);
+
+  // Restaura un dungeon run activo (p.ej. tras recargar la página estando en el Mapa) — mientras
+  // esté 'en_curso' bloquea viajar por el mapa, igual que con el PvP (ver triggerTravel). El
+  // mismo estado se actualiza en vivo desde DungeonPortal vía onDungeonRunChange mientras esté montado.
+  useEffect(() => {
+    apiFetch('/map/dungeons/active')
+      .then(d => setActiveDungeonRun(d?.run ?? null))
+      .catch(() => {});
   }, []);
 
   // Restaura un combate RAID en cola/activo (p.ej. tras recargar la página)
@@ -5697,8 +5742,12 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
       toast('Debes resolver tu combate PvP antes de viajar', { tone: 'error', icon: 'swords' });
       return;
     }
+    if (activeDungeonRun?.estado === 'en_curso') {
+      toast('Debes retirarte del dungeon antes de viajar', { tone: 'error', icon: 'target' });
+      return;
+    }
     setPendingTravel({ kind, fn });
-  }, [activePvpCombat]);
+  }, [activePvpCombat, activeDungeonRun]);
 
   const updateLocation = useCallback(async (loc) => {
     try {
@@ -5906,6 +5955,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           refreshToken={lugarRefreshKey}
           onNpcsUpdated={handleNpcsUpdated}
           userCharacter={userCharacter}
+          onDungeonRunChange={setActiveDungeonRun}
         />
       )}
 

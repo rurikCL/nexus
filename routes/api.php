@@ -214,6 +214,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/location', [MapController::class, 'updateLocation']);
 
     // Dungeons rogue-like (equipo)
+    Route::get('/map/dungeons/active', [DungeonController::class, 'activo']);
     Route::post('/map/dungeons/{lugarId}/unirse', [DungeonController::class, 'unirse']);
     Route::get('/map/dungeons/runs/{runId}', [DungeonController::class, 'estado']);
     Route::post('/map/dungeons/runs/{runId}/listo', [DungeonController::class, 'listo']);
