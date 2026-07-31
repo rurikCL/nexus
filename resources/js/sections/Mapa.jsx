@@ -345,7 +345,6 @@ function GalaxiaView({ onSelectSistema, side }) {
   const [sistemas, setSistemas]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [traveling, setTraveling]   = useState(null);
-  const [travelingNaveImg, setTravelingNaveImg] = useState(null);
   const [hovered, setHovered]       = useState(null);
   const isMobile = useIsMobile();
 
@@ -382,8 +381,6 @@ function GalaxiaView({ onSelectSistema, side }) {
   const closeConfirm = () => { setConfirmSistema(null); setConfirmData(null); };
   const confirmarViaje = () => {
     const sistema = confirmSistema;
-    const imagenNave = confirmData?.naveEquipada?.nave?.imagen ?? null;
-    setTravelingNaveImg(imagenNave ? mediaUrl(imagenNave) : null);
     closeConfirm();
     handleTravel(sistema);
   };
@@ -619,7 +616,7 @@ function GalaxiaView({ onSelectSistema, side }) {
         }}>
           <div style={{ textAlign: 'center' }}>
             <img
-              src={travelingNaveImg ?? NAVE_FALLBACK_BY_SIDE[side] ?? '/assets/naveJedi.png'}
+              src={NAVE_FALLBACK_BY_SIDE[side] ?? '/assets/naveJedi.png'}
               alt="Nave"
               style={{ width: 200, height: 'auto', objectFit: 'contain', margin: '0 auto 28px', display: 'block', filter: 'drop-shadow(0 0 24px rgba(56,205,240,0.85))', animation: 'nx-hover-bob 1.4s ease-in-out infinite' }}
             />
@@ -661,8 +658,8 @@ const NAVE_FALLBACK_BY_SIDE = {
   oscuro:   '/assets/naveSith.png',
 };
 
-function SpaceshipAnim({ naveImg, side }) {
-  const imgSrc = naveImg ?? NAVE_FALLBACK_BY_SIDE[side] ?? null;
+function SpaceshipAnim({ side }) {
+  const imgSrc = NAVE_FALLBACK_BY_SIDE[side] ?? null;
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
       {Array.from({ length: 26 }, (_, i) => {
@@ -767,7 +764,7 @@ function VehicleAnim({ side }) {
   );
 }
 
-function TravelOverlay({ kind, onDone, side, naveImg }) {
+function TravelOverlay({ kind, onDone, side }) {
   useEffect(() => {
     const t = setTimeout(onDone, 1750);
     return () => clearTimeout(t);
@@ -782,7 +779,7 @@ function TravelOverlay({ kind, onDone, side, naveImg }) {
       animation: 'nx-fade-up 0.25s ease both',
       overflow: 'hidden',
     }}>
-      {kind === 'espacio' ? <SpaceshipAnim naveImg={naveImg} side={side} /> : <VehicleAnim side={side} />}
+      {kind === 'espacio' ? <SpaceshipAnim side={side} /> : <VehicleAnim side={side} />}
     </div>
   );
 }
@@ -5492,7 +5489,6 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [lugarImagen,   setLugarImagen]   = useState(null);
   const [zonaImagen,    setZonaImagen]    = useState(null);
   const [planetaImagen, setPlanetaImagen] = useState(null);
-  const [naveEquipadaImg, setNaveEquipadaImg] = useState(null);
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
   const [activePvpCombat, setActivePvpCombat] = useState(null);
@@ -5500,15 +5496,6 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [pvpChallenging, setPvpChallenging]    = useState(false);
   const [pendingChallenge, setPendingChallenge] = useState(null);
   const pvpPollRef = useRef(null);
-
-  useEffect(() => {
-    apiFetch('/naves/mias')
-      .then((d) => {
-        const equipada = (d.naves ?? []).find((n) => n.id === d.nave_equipada_id);
-        setNaveEquipadaImg(equipada?.nave?.imagen ? mediaUrl(equipada.nave.imagen) : null);
-      })
-      .catch(() => setNaveEquipadaImg(null));
-  }, []);
 
   useEffect(() => {
     const handler = () => setLugarRefreshKey((k) => k + 1);
@@ -6078,7 +6065,6 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
         <TravelOverlay
           kind={pendingTravel.kind}
           side={userCharacter?.side}
-          naveImg={naveEquipadaImg}
           onDone={() => {
             const fn = pendingTravel.fn;
             setPendingTravel(null);
