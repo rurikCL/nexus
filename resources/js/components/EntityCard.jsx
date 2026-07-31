@@ -566,9 +566,9 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const nivel = entity.nivel ?? 1;
 
   /* Carta más alta que el resto (habilidad/objeto/estado) para dejarle sitio a la grilla
-     2×2 de habilidades del NPC/jefe, debajo del cuadro de saludo/atributos. Margen generoso
+     2×2 de habilidades del NPC/jefe, apilada dentro de la columna de saludo. Margen generoso
      porque el cuadro de vida/escudo puede crecer si los pips de stat envuelven a 2-3 filas. */
-  const cardH = CARD_H + 340;
+  const cardH = CARD_H + 230;
 
   const canvas = document.createElement('canvas');
   canvas.width = CARD_W;
@@ -613,7 +613,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   });
   statsY += 18;
 
-  /* ── dos columnas: saludo inicial (izquierda) + atributos de combate (derecha) ── */
+  /* ── dos columnas: izquierda = saludo inicial + habilidades (apiladas), derecha = atributos de combate ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
   const rows = ATTR_ORDER.map((key) => ({
     icon: COMBAT_STAT_META[key].icon,
@@ -623,11 +623,22 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   }));
   const statsTop = statsY;
   const rowH = 47;
-  const sectionH = rows.length * rowH;
+  const attrSectionH = rows.length * rowH;
   const colGap = 22;
   const saludoColW = innerW * 0.42;
   const attrColX = innerX + saludoColW + colGap;
   const attrColW = innerW - saludoColW - colGap;
+
+  const habilidades = [entity.habilidad1, entity.habilidad2, entity.habilidad3, entity.habilidad4];
+  const hasHabilidades = habilidades.some(Boolean);
+
+  const saludoLineH = 20;
+  const saludoMaxLines = 4;
+  const saludoBlockH = 20 + saludoMaxLines * saludoLineH;
+  const habGridH = (108 + 20) * 2 + 20; // grilla 2×2 de paintHabilidadesGrid (celda + etiqueta, ×2 filas + separación)
+  const habilidadesBlockH = hasHabilidades ? 22 + 20 + habGridH : 0;
+  const leftColH = saludoBlockH + habilidadesBlockH;
+  const sectionH = Math.max(attrSectionH, leftColH);
 
   const attrBoxPad = 6;
   const attrBoxTop = statsTop - 16 - attrBoxPad;
@@ -640,10 +651,17 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   ctx.fillText('SALUDO INICIAL', innerX + attrBoxPad, statsTop);
   ctx.fillStyle = 'rgba(220,230,255,0.78)';
   ctx.font = '400 15px "JetBrains Mono"';
-  const saludoLineH = 20;
-  const saludoMaxLines = Math.max(1, Math.floor((sectionH - 20) / saludoLineH));
   const saludoText = entity.saludo ? `“${entity.saludo}”` : 'Sin saludo registrado.';
   wrapText(ctx, saludoText, innerX + attrBoxPad, statsTop + 20, saludoColW - attrBoxPad, saludoLineH, saludoMaxLines);
+
+  if (hasHabilidades) {
+    const habLabelY = statsTop + saludoBlockH + 22;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(150,200,255,0.55)';
+    ctx.font = '600 12px "JetBrains Mono"';
+    ctx.fillText('HABILIDADES', innerX + saludoColW / 2, habLabelY);
+    await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line);
+  }
 
   paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
 
@@ -653,16 +671,6 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   ctx.moveTo(innerX + saludoColW + colGap / 2, attrBoxTop + 6);
   ctx.lineTo(innerX + saludoColW + colGap / 2, attrBoxBottom - 6);
   ctx.stroke();
-
-  const footY = statsTop + sectionH + 22;
-  const habilidades = [entity.habilidad1, entity.habilidad2, entity.habilidad3, entity.habilidad4];
-  if (habilidades.some(Boolean)) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(150,200,255,0.55)';
-    ctx.font = '600 12px "JetBrains Mono"';
-    ctx.fillText('HABILIDADES', CARD_W / 2, footY);
-    await paintHabilidadesGrid(ctx, habilidades, innerX, innerW, footY + 20, frame.line);
-  }
 
   await paintCardLogo(ctx, innerRight, cardH - pad);
   return canvas;
