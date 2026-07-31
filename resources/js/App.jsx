@@ -40,12 +40,13 @@ function mergeApiCombatants(apiList, currentUserId) {
     };
 
     return {
-      medals:    [],
+      medals:    api.medals ?? [],
       id:        isMe ? 'you' : `u${api.id}`,
       userId:    api.id,
       handle:    api.handle,
       name:      api.name,
       bio:       api.bio        ?? '',
+      lore:      api.lore       ?? '',
       cls:       api.cls        ?? 'forma1',
       side:      api.side       ?? 'luminoso',
       saberName: api.saber_color ?? 'azul',
@@ -66,6 +67,11 @@ function mergeApiCombatants(apiList, currentUserId) {
       titulo_activo: api.titulo_activo ?? null,
       sedeId:    api.sede_id     ?? null,
       sedeNombre: api.sede_nombre ?? null,
+      misiones_completadas: api.misiones_completadas ?? 0,
+      tareas_completadas: api.tareas_completadas ?? 0,
+      entrenamiento: api.entrenamiento ?? null,
+      ubicacion: api.ubicacion ?? null,
+      nave_equipada: api.nave_equipada ?? null,
       initials, color,
     };
   });
