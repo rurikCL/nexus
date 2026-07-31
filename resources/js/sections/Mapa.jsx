@@ -1924,10 +1924,11 @@ function NpcCard({ npc, onClick }) {
     >
       {/* retrato */}
       <div style={{
-        height: 140, position: 'relative',
-        background: npcImagen
-          ? `url(${npcImagen}) center/contain no-repeat`
+        height: 140, position: 'relative', background: '#000',
+        backgroundImage: npcImagen
+          ? `url(${npcImagen})`
           : 'linear-gradient(160deg, rgba(56,205,240,0.12), rgba(4,7,15,0.9))',
+        backgroundPosition: 'center', backgroundSize: 'contain', backgroundRepeat: 'no-repeat',
       }}>
         {!npcImagen && npcMiniImagen && (
           <img src={npcMiniImagen} alt={npc.nombre} style={{

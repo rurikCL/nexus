@@ -98,6 +98,9 @@ class AdminController extends Controller
             'rol_objetos' => ['tipo', 'rareza'],
             'usuarios' => ['sede_id'],
             'npcs' => ['tipo', 'LugarID', 'tipo_interaccion'],
+            'planetas' => ['SistemaID', 'rareza', 'hostilidad'],
+            'zonas' => ['PlanetaID', 'rareza', 'hostilidad'],
+            'lugares' => ['ZonaID', 'tipo', 'rareza'],
             default => [],
         };
     }
