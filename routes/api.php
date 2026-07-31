@@ -160,6 +160,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/misiones/{mision}/assign', [MisionController::class, 'assign']);
     Route::post('/misiones/{mision}/accept', [MisionController::class, 'accept']);
     Route::post('/misiones/{mision}/completar', [MisionController::class, 'completar']);
+    Route::post('/misiones/{mision}/reclamar-final', [MisionController::class, 'reclamarFinal']);
     Route::delete('/misiones/{mision}/users/{userId}', [MisionController::class, 'unassign']);
     Route::patch('/misiones/{mision}/progress', [MisionController::class, 'updateProgress']);
     Route::post('/misiones/menu-visit', [MisionController::class, 'menuVisit']);
