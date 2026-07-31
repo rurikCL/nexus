@@ -236,6 +236,13 @@ class MisionProgresoService
 
     public static function notificarSiListaParaCompletar(User $user, Mision $mision, array $progresoAntes, array $progresoDespues): void
     {
+        // Las misiones de comunidad no se completan por objetivo individual: se
+        // reclaman colectivamente (ver MisionController::reclamarFinal), así que
+        // este aviso de "lista para completar" no aplica a ese tipo.
+        if ($mision->tipo_mision === 'comunidad') {
+            return;
+        }
+
         $mision->loadMissing(['objetivos', 'recompensas.habilidad', 'recompensas.objeto']);
 
         if (! self::puedeCompletarCon($user, $mision, $progresoDespues)) {

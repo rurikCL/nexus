@@ -421,7 +421,7 @@ function ComunidadSection({ misiones, onReload, user }) {
       </div>
 
       {selected && (
-        <ComunidadMisionPopup mision={selected} userId={user?.id} onClose={() => setSelectedId(null)} />
+        <ComunidadMisionPopup mision={selected} userId={user?.id} onClose={() => setSelectedId(null)} onReload={onReload} />
       )}
     </Panel>
   );
@@ -432,8 +432,9 @@ function ComunidadCard({ mision, userId, onOpen }) {
   const totalPuntos = mision.total_progreso ?? 0;
   const requeridos  = mision.puntos_requeridos ?? 100;
   const progresoPct = pct(totalPuntos, requeridos);
-  const completada  = progresoPct >= 100;
-  const yoParticipo = mision.participantes?.some(p => p.id === userId);
+  const completada  = mision.barra_completa ?? (progresoPct >= 100);
+  const yoParticipo = mision.aceptada ?? mision.participantes?.some(p => p.id === userId);
+  const puedeReclamar = mision.puede_reclamar_final && !mision.recompensa_final_reclamada;
 
   return (
     <button onClick={onOpen} className="nx-panel solid" style={{
@@ -452,9 +453,10 @@ function ComunidadCard({ mision, userId, onOpen }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>{mision.nombre}</span>
-          <Chip tone={completada ? 'green' : ''}>{completada ? '✓ Completada' : 'En curso'}</Chip>
+          <Chip tone={completada ? 'green' : ''}>{completada ? '✓ Barra completa' : 'En curso'}</Chip>
           {mision.activa === false && <Chip tone="dim">Inactiva</Chip>}
           {yoParticipo && <Chip tone="dim">Participando</Chip>}
+          {puedeReclamar && <Chip tone="gold">¡Reclama tu recompensa!</Chip>}
         </div>
         <div style={{ fontSize: 13, color: 'var(--txt-dim)', marginBottom: 8 }}>{mision.mision}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -481,12 +483,72 @@ function ComunidadCard({ mision, userId, onOpen }) {
   );
 }
 
-function ComunidadMisionPopup({ mision, userId, onClose }) {
+function RecompensaChip({ r }) {
+  return (
+    <div style={{
+      padding: '5px 10px', borderRadius: 6,
+      background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)',
+      display: 'flex', alignItems: 'center', gap: 6,
+    }}>
+      <span style={{ fontSize: 13 }}>
+        {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : r.tipo === 'punto_habilidad' ? '⭐' : '📦'}
+      </span>
+      <span style={{ fontSize: 12, color: r.tipo === 'habilidad' ? '#a78bfa' : '#E6B325' }}>
+        {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
+        {r.tipo !== 'habilidad' && r.valor > 0 ? ` (${r.valor})` : ''}
+      </span>
+    </div>
+  );
+}
+
+function ComunidadMisionPopup({ mision, userId, onClose, onReload }) {
   const isMobile = useIsMobile();
+  const [busy, setBusy] = useState(false);
   const totalPuntos = mision.total_progreso ?? 0;
   const requeridos  = mision.puntos_requeridos ?? 100;
   const progresoPct = pct(totalPuntos, requeridos);
-  const completada  = progresoPct >= 100;
+  const barraCompleta = mision.barra_completa ?? (progresoPct >= 100);
+  const participando = mision.aceptada ?? false;
+  const recompensaParticipacionOtorgada = mision.recompensa_participacion_otorgada ?? false;
+  const recompensaFinalReclamada = mision.recompensa_final_reclamada ?? false;
+  const puedeReclamarFinal = mision.puede_reclamar_final ?? false;
+
+  const recompensasTodas = mision.recompensas ?? [];
+  const recompensasParticipacion = mision.recompensas_participacion ?? recompensasTodas.filter(r => r.momento === 'participacion');
+  const recompensasFinal = mision.recompensas_final ?? recompensasTodas.filter(r => (r.momento ?? 'final') === 'final');
+
+  const handleUnirse = async () => {
+    setBusy(true);
+    try {
+      await apiCall('POST', `/api/misiones/${mision.id}/accept`);
+      toast('Te uniste a la misión de comunidad', { tone: 'success', icon: 'check' });
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', { detail: { missionId: mision.id, status: 'aceptada' } }));
+      onReload?.();
+      onClose();
+    } catch (e) {
+      toast(e?.message || 'No se pudo unir a la misión', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReclamarFinal = async () => {
+    setBusy(true);
+    try {
+      const d = await apiCall('POST', `/api/misiones/${mision.id}/reclamar-final`);
+      toast('¡Recompensa final reclamada!', { tone: 'success', icon: 'check' });
+      (d?.hitos_otorgados ?? []).forEach((hito) => {
+        toast(`🏆 Hito obtenido: "${hito}"`, { tone: 'success', icon: 'star' });
+      });
+      window.dispatchEvent(new CustomEvent('nx-mision-updated', { detail: { missionId: mision.id, status: 'completada' } }));
+      onReload?.();
+      onClose();
+    } catch (e) {
+      toast(e?.message || 'No se pudo reclamar la recompensa final', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Modal open onClose={onClose} kicker="Misión de Comunidad" title={mision.nombre} zIndex={1100} lockScroll={false}>
@@ -507,14 +569,14 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
             <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>PROGRESO COMUNIDAD</span>
-            <span className="nx-num" style={{ fontSize: 11, color: completada ? '#10b981' : '#E6B325' }}>
+            <span className="nx-num" style={{ fontSize: 11, color: barraCompleta ? '#10b981' : '#E6B325' }}>
               {totalPuntos} / {requeridos} pts
             </span>
           </div>
           <div style={{ height: 8, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{
               height: '100%', width: `${progresoPct}%`,
-              background: completada ? '#10b981' : '#E6B325',
+              background: barraCompleta ? '#10b981' : '#E6B325',
               borderRadius: 4, transition: 'width 0.5s ease',
             }} />
           </div>
@@ -544,25 +606,26 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
           </div>
         )}
 
-        {(mision.recompensas ?? []).length > 0 && (
+        {recompensasParticipacion.length > 0 && (
           <div>
-            <div className="nx-kicker" style={{ marginBottom: 8 }}>RECOMPENSAS</div>
+            <div className="nx-kicker" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              RECOMPENSA POR PARTICIPAR
+              {recompensaParticipacionOtorgada && <Chip tone="green">✓ Obtenida</Chip>}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {mision.recompensas.map((r, i) => (
-                <div key={r.id ?? i} style={{
-                  padding: '5px 10px', borderRadius: 6,
-                  background: 'rgba(230,179,37,0.08)', border: '1px solid rgba(230,179,37,0.25)',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                }}>
-                  <span style={{ fontSize: 13 }}>
-                    {r.tipo === 'creditos' ? '💰' : r.tipo === 'titulo' ? '🏷️' : r.tipo === 'insignia' ? '🏅' : r.tipo === 'habilidad' ? '⚡' : r.tipo === 'punto_habilidad' ? '⭐' : '📦'}
-                  </span>
-                  <span style={{ fontSize: 12, color: r.tipo === 'habilidad' ? '#a78bfa' : '#E6B325' }}>
-                    {r.tipo === 'habilidad' && r.habilidad ? r.habilidad.nombre : r.nombre}
-                    {r.tipo !== 'habilidad' && r.valor > 0 ? ` (${r.valor})` : ''}
-                  </span>
-                </div>
-              ))}
+              {recompensasParticipacion.map((r, i) => <RecompensaChip key={r.id ?? i} r={r} />)}
+            </div>
+          </div>
+        )}
+
+        {recompensasFinal.length > 0 && (
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              RECOMPENSA FINAL
+              {recompensaFinalReclamada && <Chip tone="green">✓ Reclamada</Chip>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {recompensasFinal.map((r, i) => <RecompensaChip key={r.id ?? i} r={r} />)}
             </div>
           </div>
         )}
@@ -582,8 +645,11 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
               return (
                 <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Avatar c={av} size={26} />
-                  <span style={{ fontSize: 12, color: p.id === userId ? '#10b981' : 'var(--txt-dim)', width: isMobile ? 90 : 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontSize: 12, color: p.id === userId ? '#10b981' : 'var(--txt-dim)', width: isMobile ? 90 : 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 4 }}>
                     {p.name}
+                    {p.recompensa_final_reclamada && (
+                      <Icon name="check" size={11} style={{ color: '#10b981', flexShrink: 0 }} />
+                    )}
                   </span>
                   <div className="nx-bar" style={{ flex: 1 }}>
                     <i style={{ width: `${pp}%`, background: pp >= 100 ? '#10b981' : '#E6B325' }} />
@@ -598,6 +664,32 @@ function ComunidadMisionPopup({ mision, userId, onClose }) {
               <span style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Aún sin participantes</span>
             )}
           </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, paddingTop: 8, borderTop: '1px solid var(--holo-line)' }}>
+          {!participando && !barraCompleta && (
+            <Btn kind="accent" icon="check" onClick={handleUnirse} disabled={busy}>
+              {busy ? 'Uniéndote...' : 'Unirse a la misión'}
+            </Btn>
+          )}
+          {!participando && barraCompleta && (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+              Esta misión ya completó su barra de progreso — ya no acepta nuevos participantes.
+            </div>
+          )}
+          {participando && recompensaFinalReclamada && (
+            <div style={{ fontSize: 12, color: '#10b981' }}>✓ Ya reclamaste la recompensa final de esta misión.</div>
+          )}
+          {participando && !recompensaFinalReclamada && puedeReclamarFinal && (
+            <Btn kind="accent" icon="check" onClick={handleReclamarFinal} disabled={busy}>
+              {busy ? 'Reclamando...' : 'Reclamar recompensa final'}
+            </Btn>
+          )}
+          {participando && !recompensaFinalReclamada && !puedeReclamarFinal && (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+              Sigue aportando — cuando la comunidad complete la barra podrás reclamar la recompensa final.
+            </div>
+          )}
         </div>
       </div>
     </Modal>

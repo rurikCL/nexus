@@ -16,6 +16,7 @@ class Recompensa extends Model
         'nombre',
         'descripcion',
         'tipo',
+        'momento',
         'valor',
         'imagen',
         'habilidad_id',

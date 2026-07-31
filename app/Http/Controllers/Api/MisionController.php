@@ -137,9 +137,12 @@ class MisionController extends Controller
                         ? json_decode($u->pivot->progreso_json, true)
                         : null,
                     'status' => $u->pivot->status,
+                    'recompensa_participacion_otorgada' => $u->pivot->participacion_otorgada_at !== null,
+                    'recompensa_final_reclamada' => $u->pivot->final_reclamada_at !== null,
                 ])->values();
 
                 $totalProgreso = $m->users->sum(fn ($u) => $u->pivot->progreso);
+                $barraCompleta = $totalProgreso >= $m->puntos_requeridos;
 
                 $miPivot = $m->users->firstWhere('id', $user->id);
                 $miProgresoJson = $miPivot?->pivot->progreso_json ? json_decode($miPivot->pivot->progreso_json, true) : [];
@@ -149,11 +152,13 @@ class MisionController extends Controller
                     ? array_filter(array_map('trim', explode(',', $m->hito_requerimiento)))
                     : [];
                 $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
+                $recompensaFinalReclamada = $miPivot?->pivot->final_reclamada_at !== null;
 
                 return array_merge($base, [
                     'objetivos' => $objetivosConProgreso,
                     'participantes' => $participantes,
                     'total_progreso' => $totalProgreso,
+                    'barra_completa' => $barraCompleta,
                     'completada_por_mi' => $miPivot?->pivot->status === 'completada',
                     'status' => $miPivot?->pivot->status ?? null,
                     'progreso' => $miPivot?->pivot->progreso ?? 0,
@@ -161,7 +166,11 @@ class MisionController extends Controller
                     'aceptada' => $miPivot !== null,
                     'cumple_hitos' => $cumpleHitos,
                     'objetivos_completos' => $objetivosCompletos,
-                    'puede_completar' => $miPivot !== null && $miPivot?->pivot->status !== 'completada' && $cumpleHitos && $objetivosCompletos,
+                    'recompensa_participacion_otorgada' => $miPivot?->pivot->participacion_otorgada_at !== null,
+                    'recompensa_final_reclamada' => $recompensaFinalReclamada,
+                    'puede_reclamar_final' => $miPivot !== null && ! $recompensaFinalReclamada && $barraCompleta,
+                    'recompensas_participacion' => collect($base['recompensas'])->where('momento', 'participacion')->values(),
+                    'recompensas_final' => collect($base['recompensas'])->where('momento', 'final')->values(),
                 ]);
             });
 
@@ -338,6 +347,7 @@ class MisionController extends Controller
             'recompensas.*.nombre' => 'required|string|max:255',
             'recompensas.*.descripcion' => 'nullable|string',
             'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia,punto_habilidad',
+            'recompensas.*.momento' => 'sometimes|in:participacion,final',
             'recompensas.*.valor' => 'sometimes|numeric',
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
@@ -407,6 +417,7 @@ class MisionController extends Controller
             'recompensas.*.nombre' => 'required|string|max:255',
             'recompensas.*.descripcion' => 'nullable|string',
             'recompensas.*.tipo' => 'sometimes|in:habilidad,objeto,creditos,titulo,insignia,punto_habilidad',
+            'recompensas.*.momento' => 'sometimes|in:participacion,final',
             'recompensas.*.valor' => 'sometimes|numeric',
             'recompensas.*.imagen' => 'nullable|string|max:500',
             'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
@@ -516,11 +527,32 @@ class MisionController extends Controller
         $user = $request->user();
         $pivotAntes = $mision->users()->where('user_id', $user->id)->first()?->pivot;
         $progresoAntes = $pivotAntes?->progreso_json ? json_decode($pivotAntes->progreso_json, true) : [];
+        $esNuevoParticipante = $pivotAntes === null;
+
+        if ($esNuevoParticipante && $mision->tipo_mision === 'comunidad') {
+            $totalProgreso = $this->totalProgresoComunidad($mision);
+            if ($mision->puntos_requeridos > 0 && $totalProgreso >= $mision->puntos_requeridos) {
+                return response()->json([
+                    'message' => 'Esta misión de comunidad ya completó su barra de progreso y no acepta nuevos participantes.',
+                ], 403);
+            }
+        }
+
         $mision->users()->syncWithoutDetaching([
             $user->id => ['status' => 'pendiente', 'progreso' => 0],
         ]);
 
-        $mision->loadMissing('objetivos');
+        $mision->loadMissing(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla']);
+
+        $recompensaParticipacion = null;
+        if ($esNuevoParticipante && $mision->tipo_mision === 'comunidad') {
+            $recompensaParticipacion = $this->otorgarRecompensas(
+                $mision->recompensas->where('momento', 'participacion'),
+                $user,
+                $mision
+            );
+            $mision->users()->updateExistingPivot($user->id, ['participacion_otorgada_at' => now()]);
+        }
 
         $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
         $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
@@ -548,10 +580,10 @@ class MisionController extends Controller
         $progresoDespues = $pivotActual?->progreso_json ? json_decode($pivotActual->progreso_json, true) : [];
         MisionProgresoService::notificarSiListaParaCompletar($user, $mision, $progresoAntes, $progresoDespues);
 
-        return response()->json([
+        return response()->json(array_merge([
             'message' => 'Misión aceptada.',
             'mision' => $this->formatMisionConProgreso($mision, $user),
-        ]);
+        ], $recompensaParticipacion ? ['recompensa_participacion' => $recompensaParticipacion] : []));
     }
 
     // ── DELETE /api/misiones/{mision}/users/{userId} ──────────────────────────
@@ -631,11 +663,70 @@ class MisionController extends Controller
         return response()->json(['message' => 'NPC registrado.']);
     }
 
+    // ── POST /api/misiones/{mision}/reclamar-final ────────────────────────────
+    // Recompensa colectiva de una misión de comunidad: solo la puede reclamar
+    // quien ya participa (tiene fila en mision_user) una vez que la barra de
+    // progreso de TODA la comunidad alcanza puntos_requeridos.
+    public function reclamarFinal(Request $request, Mision $mision): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($mision->tipo_mision !== 'comunidad') {
+            return response()->json(['message' => 'Esta misión no tiene recompensa final de comunidad.'], 422);
+        }
+
+        $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        if (! $pivot) {
+            return response()->json(['message' => 'No participas en esta misión de comunidad.'], 403);
+        }
+
+        if ($pivot->final_reclamada_at) {
+            return response()->json(['message' => 'Ya reclamaste la recompensa final de esta misión.'], 403);
+        }
+
+        $totalProgreso = $this->totalProgresoComunidad($mision);
+        if ($totalProgreso < $mision->puntos_requeridos) {
+            return response()->json([
+                'message' => 'La comunidad aún no completa la barra de progreso.',
+                'total_progreso' => $totalProgreso,
+                'puntos_requeridos' => $mision->puntos_requeridos,
+            ], 403);
+        }
+
+        $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla']);
+
+        $otorgado = $this->otorgarRecompensas($mision->recompensas->where('momento', 'final'), $user, $mision);
+        $hitosOtorgados = $this->otorgarHitosMision($mision, $user);
+
+        $mision->users()->updateExistingPivot($user->id, [
+            'status' => 'completada',
+            'final_reclamada_at' => now(),
+        ]);
+
+        $pivotActual = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+
+        return response()->json(array_merge([
+            'message' => 'Recompensa final reclamada.',
+        ], $otorgado, [
+            'hitos_otorgados' => $hitosOtorgados,
+            'mision' => array_merge($this->formatMision($mision), [
+                'status' => $pivotActual?->status ?? 'completada',
+                'progreso' => $pivotActual?->progreso ?? 0,
+            ]),
+        ]));
+    }
+
     // ── POST /api/misiones/{mision}/completar ─────────────────────────────────
     public function completar(Request $request, Mision $mision): JsonResponse
     {
         $user = $request->user();
         $character = $user->character;
+
+        if ($mision->tipo_mision === 'comunidad') {
+            return response()->json([
+                'message' => 'Las misiones de comunidad se completan reclamando la recompensa final cuando la barra de progreso de la comunidad se completa.',
+            ], 422);
+        }
 
         // Verificar hitos requeridos
         if ($mision->hito_requerimiento) {
@@ -680,7 +771,28 @@ class MisionController extends Controller
 
         $mision->load(['objetivos', 'recompensas.habilidad', 'recompensas.objeto', 'recompensas.medalla']);
 
-        // Otorgar recompensas según su tipo
+        $otorgado = $this->otorgarRecompensas($mision->recompensas->where('momento', '!=', 'participacion'), $user, $mision);
+        $hitosOtorgados = $this->otorgarHitosMision($mision, $user);
+
+        $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+
+        return response()->json(array_merge([
+            'message' => 'Misión completada.',
+        ], $otorgado, [
+            'hitos_otorgados' => $hitosOtorgados,
+            'mision' => array_merge($this->formatMision($mision), [
+                'status' => $pivot?->status ?? 'completada',
+                'progreso' => $pivot?->progreso ?? 100,
+            ]),
+        ]));
+    }
+
+    // ── Reward-granting helpers (shared by completar / accept / reclamarFinal) ─
+
+    private function otorgarRecompensas(\Illuminate\Support\Collection $recompensas, User $user, Mision $mision): array
+    {
+        $character = $user->character;
+
         $habilidadesAprendidas = [];
         $objetosOtorgados = [];
         $objetosSinEspacio = [];
@@ -688,8 +800,8 @@ class MisionController extends Controller
         $puntosLibresOtorgados = 0;
         $titulosOtorgados = [];
         $medallasOtorgadas = [];
-        $hitosOtorgados = [];
-        foreach ($mision->recompensas as $recompensa) {
+
+        foreach ($recompensas as $recompensa) {
             if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
                 $user->habilidadesAprendidas()->syncWithoutDetaching([$recompensa->habilidad_id]);
                 $habilidadesAprendidas[] = $recompensa->habilidad_id;
@@ -722,7 +834,22 @@ class MisionController extends Controller
             }
         }
 
-        // Otorgar hitos de la misión
+        return [
+            'habilidades_aprendidas' => $habilidadesAprendidas,
+            'objetos_otorgados' => $objetosOtorgados,
+            'objetos_sin_espacio' => $objetosSinEspacio,
+            'creditos_otorgados' => $creditosOtorgados,
+            'puntos_libres_otorgados' => $puntosLibresOtorgados,
+            'titulos_otorgados' => $titulosOtorgados,
+            'medallas_otorgadas' => $medallasOtorgadas,
+        ];
+    }
+
+    private function otorgarHitosMision(Mision $mision, User $user): array
+    {
+        $character = $user->character;
+        $hitosOtorgados = [];
+
         if ($mision->entregar_hito && $character) {
             $hitos = array_filter(array_map('trim', explode(',', $mision->entregar_hito)));
             foreach ($hitos as $hito) {
@@ -734,23 +861,14 @@ class MisionController extends Controller
             }
         }
 
-        $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
+        return $hitosOtorgados;
+    }
 
-        return response()->json([
-            'message' => 'Misión completada.',
-            'habilidades_aprendidas' => $habilidadesAprendidas,
-            'objetos_otorgados' => $objetosOtorgados,
-            'objetos_sin_espacio' => $objetosSinEspacio,
-            'creditos_otorgados' => $creditosOtorgados,
-            'puntos_libres_otorgados' => $puntosLibresOtorgados,
-            'titulos_otorgados' => $titulosOtorgados,
-            'medallas_otorgadas' => $medallasOtorgadas,
-            'hitos_otorgados' => $hitosOtorgados,
-            'mision' => array_merge($this->formatMision($mision), [
-                'status' => $pivot?->status ?? 'completada',
-                'progreso' => $pivot?->progreso ?? 100,
-            ]),
-        ]);
+    private function totalProgresoComunidad(Mision $mision): int
+    {
+        $mision->loadMissing('users');
+
+        return (int) $mision->users->sum(fn ($u) => (int) $u->pivot->progreso);
     }
 
     // ── Shared formatter ──────────────────────────────────────────────────────
@@ -788,6 +906,7 @@ class MisionController extends Controller
                     'nombre' => $r->nombre,
                     'descripcion' => $r->descripcion,
                     'tipo' => $r->tipo,
+                    'momento' => $r->momento ?? 'final',
                     'valor' => $r->valor,
                     'imagen' => $r->imagen,
                     'habilidad_id' => $r->habilidad_id,

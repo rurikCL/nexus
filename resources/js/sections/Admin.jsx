@@ -2538,7 +2538,11 @@ const FORMA_NOMBRES = ['Sin forma', 'Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'S
 const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_NOMBRES[h.forma]}] ${h.label}` : h.label;
 
 const EMPTY_OBJ = { nombre: '', descripcion: '', tipo: 'general', meta: 1, unidad: '' };
-const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null, medalla_id: null };
+const EMPTY_REC = { nombre: '', descripcion: '', tipo: 'creditos', momento: 'final', valor: 0, habilidad_id: null, objeto_id: null, medalla_id: null };
+const MOMENTO_RECOMPENSA_OPTS = [
+  { v: 'final', l: 'Recompensa final (barra completa)' },
+  { v: 'participacion', l: 'Recompensa por participar' },
+];
 const EMPTY_MISION = {
   nombre: '', mision: '', descripcion: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '', npc_termina_id: '',
@@ -2567,7 +2571,7 @@ function misionFromApi(m) {
     hito_requerimiento:   m.hito_requerimiento    ?? '',
     entregar_hito:        m.entregar_hito         ?? '',
     objetivos:  (m.objetivos  ?? []).map(o => ({ ...o })),
-    recompensas:(m.recompensas ?? []).map(r => ({ ...r, habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null, medalla_id: r.medalla_id ?? null })),
+    recompensas:(m.recompensas ?? []).map(r => ({ ...r, momento: r.momento ?? 'final', habilidad_id: r.habilidad_id ?? null, objeto_id: r.objeto_id ?? null, medalla_id: r.medalla_id ?? null })),
   };
 }
 
@@ -3233,6 +3237,17 @@ function MisionesAdmin() {
                       </div>
                     )}
                   </div>
+                  {form.tipo_mision === 'comunidad' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label className="nx-label">Momento de entrega</label>
+                      <select className="nx-select" value={r.momento ?? 'final'} onChange={e => setRec(i, 'momento', e.target.value)}>
+                        {MOMENTO_RECOMPENSA_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                      </select>
+                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
+                        "Por participar" se entrega apenas el jugador se une a la misión. "Final" solo se puede reclamar cuando la barra de progreso de toda la comunidad llega a los puntos requeridos.
+                      </div>
+                    </div>
+                  )}
                   {r.tipo === 'habilidad' && (
                     <div style={{ marginTop: 10 }}>
                       <label className="nx-label">Habilidad a otorgar *</label>
