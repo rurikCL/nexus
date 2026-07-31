@@ -341,10 +341,11 @@ function Starfield() {
 }
 
 /* ─── VISTA GALAXIA ────────────────────────────────────── */
-function GalaxiaView({ onSelectSistema }) {
+function GalaxiaView({ onSelectSistema, side }) {
   const [sistemas, setSistemas]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [traveling, setTraveling]   = useState(null);
+  const [travelingNaveImg, setTravelingNaveImg] = useState(null);
   const [hovered, setHovered]       = useState(null);
   const isMobile = useIsMobile();
 
@@ -381,6 +382,8 @@ function GalaxiaView({ onSelectSistema }) {
   const closeConfirm = () => { setConfirmSistema(null); setConfirmData(null); };
   const confirmarViaje = () => {
     const sistema = confirmSistema;
+    const imagenNave = confirmData?.naveEquipada?.nave?.imagen ?? null;
+    setTravelingNaveImg(imagenNave ? mediaUrl(imagenNave) : null);
     closeConfirm();
     handleTravel(sistema);
   };
@@ -615,12 +618,11 @@ function GalaxiaView({ onSelectSistema }) {
           animation: 'nx-fade-up 0.3s ease both',
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: 88, height: 88, borderRadius: '50%', margin: '0 auto 28px',
-              background: 'radial-gradient(circle, rgba(56,205,240,0.9) 0%, rgba(56,205,240,0.3) 40%, transparent 70%)',
-              boxShadow: '0 0 70px 24px rgba(56,205,240,0.35)',
-              animation: 'nx-pulse 0.5s infinite',
-            }} />
+            <img
+              src={travelingNaveImg ?? NAVE_FALLBACK_BY_SIDE[side] ?? '/assets/naveJedi.png'}
+              alt="Nave"
+              style={{ width: 200, height: 'auto', objectFit: 'contain', margin: '0 auto 28px', display: 'block', filter: 'drop-shadow(0 0 24px rgba(56,205,240,0.85))', animation: 'nx-hover-bob 1.4s ease-in-out infinite' }}
+            />
             <div className="nx-display" style={{ fontSize: 20, color: 'var(--holo)', letterSpacing: '0.1em', marginBottom: 10 }}>
               INICIANDO SALTO HIPERESPACIAL
             </div>
@@ -654,7 +656,13 @@ function HyperspaceLines() {
 }
 
 /* ─── ANIMACIONES DE VIAJE ───────────────────────────────── */
-function SpaceshipAnim() {
+const NAVE_FALLBACK_BY_SIDE = {
+  luminoso: '/assets/naveJedi.png',
+  oscuro:   '/assets/naveSith.png',
+};
+
+function SpaceshipAnim({ naveImg, side }) {
+  const imgSrc = naveImg ?? NAVE_FALLBACK_BY_SIDE[side] ?? null;
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
       {Array.from({ length: 26 }, (_, i) => {
@@ -675,26 +683,34 @@ function SpaceshipAnim() {
           }} />
         );
       })}
-      <svg width="200" height="88" viewBox="0 0 200 88" style={{ position: 'relative', zIndex: 2, filter: 'drop-shadow(0 0 16px rgba(56,205,240,0.85))' }}>
-        <defs>
-          <radialGradient id="eng1" cx="0%" cy="50%" r="100%">
-            <stop offset="0%" stopColor="rgba(56,205,240,0.9)" />
-            <stop offset="100%" stopColor="transparent" />
-          </radialGradient>
-        </defs>
-        <ellipse cx="18" cy="46" rx="22" ry="7" fill="url(#eng1)" opacity="0.75" />
-        <path d="M38,46 L158,34 L182,46 L158,58 Z" fill="#0d2240" stroke="#38cdf0" strokeWidth="1.5" />
-        <path d="M80,34 L108,14 L118,26 L92,36 Z" fill="#0a1a30" stroke="#38cdf0" strokeWidth="1" />
-        <path d="M80,58 L108,74 L118,62 L92,54 Z" fill="#0a1a30" stroke="#38cdf0" strokeWidth="1" />
-        <ellipse cx="150" cy="46" rx="18" ry="10" fill="#091828" stroke="#38cdf0" strokeWidth="1.2" />
-        <ellipse cx="152" cy="45" rx="11" ry="6" fill="rgba(56,205,240,0.18)" />
-        <ellipse cx="154" cy="44" rx="5" ry="2.8" fill="rgba(56,205,240,0.38)" />
-        <path d="M178,42 L196,46 L178,50 Z" fill="rgba(56,205,240,0.75)" />
-        <circle cx="40" cy="42" r="5.5" fill="#152a50" stroke="rgba(56,205,240,0.55)" strokeWidth="1" />
-        <circle cx="40" cy="50" r="5.5" fill="#152a50" stroke="rgba(56,205,240,0.55)" strokeWidth="1" />
-        <circle cx="37" cy="42" r="3.5" fill="rgba(56,205,240,0.55)" style={{ animation: 'nx-pulse 0.35s infinite' }} />
-        <circle cx="37" cy="50" r="3.5" fill="rgba(120,230,255,0.65)" style={{ animation: 'nx-pulse 0.35s infinite', animationDelay: '0.17s' }} />
-      </svg>
+      {imgSrc ? (
+        <img
+          src={imgSrc}
+          alt="Nave"
+          style={{ position: 'relative', zIndex: 2, width: 220, height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 0 18px rgba(56,205,240,0.85))', animation: 'nx-hover-bob 1.4s ease-in-out infinite' }}
+        />
+      ) : (
+        <svg width="200" height="88" viewBox="0 0 200 88" style={{ position: 'relative', zIndex: 2, filter: 'drop-shadow(0 0 16px rgba(56,205,240,0.85))' }}>
+          <defs>
+            <radialGradient id="eng1" cx="0%" cy="50%" r="100%">
+              <stop offset="0%" stopColor="rgba(56,205,240,0.9)" />
+              <stop offset="100%" stopColor="transparent" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="18" cy="46" rx="22" ry="7" fill="url(#eng1)" opacity="0.75" />
+          <path d="M38,46 L158,34 L182,46 L158,58 Z" fill="#0d2240" stroke="#38cdf0" strokeWidth="1.5" />
+          <path d="M80,34 L108,14 L118,26 L92,36 Z" fill="#0a1a30" stroke="#38cdf0" strokeWidth="1" />
+          <path d="M80,58 L108,74 L118,62 L92,54 Z" fill="#0a1a30" stroke="#38cdf0" strokeWidth="1" />
+          <ellipse cx="150" cy="46" rx="18" ry="10" fill="#091828" stroke="#38cdf0" strokeWidth="1.2" />
+          <ellipse cx="152" cy="45" rx="11" ry="6" fill="rgba(56,205,240,0.18)" />
+          <ellipse cx="154" cy="44" rx="5" ry="2.8" fill="rgba(56,205,240,0.38)" />
+          <path d="M178,42 L196,46 L178,50 Z" fill="rgba(56,205,240,0.75)" />
+          <circle cx="40" cy="42" r="5.5" fill="#152a50" stroke="rgba(56,205,240,0.55)" strokeWidth="1" />
+          <circle cx="40" cy="50" r="5.5" fill="#152a50" stroke="rgba(56,205,240,0.55)" strokeWidth="1" />
+          <circle cx="37" cy="42" r="3.5" fill="rgba(56,205,240,0.55)" style={{ animation: 'nx-pulse 0.35s infinite' }} />
+          <circle cx="37" cy="50" r="3.5" fill="rgba(120,230,255,0.65)" style={{ animation: 'nx-pulse 0.35s infinite', animationDelay: '0.17s' }} />
+        </svg>
+      )}
       <div className="nx-display" style={{ marginTop: 40, fontSize: 17, color: 'var(--holo)', letterSpacing: '0.14em', animation: 'nx-pulse 1.3s ease-in-out infinite' }}>
         VIAJE ESPACIAL
       </div>
@@ -705,7 +721,14 @@ function SpaceshipAnim() {
   );
 }
 
-function VehicleAnim() {
+const VEHICLE_IMAGES_BY_SIDE = {
+  luminoso: ['/assets/transporteJedi.png', '/assets/motoJedi.png'],
+  oscuro:   ['/assets/transporteSith.png', '/assets/motoSith.png'],
+};
+
+function VehicleAnim({ side }) {
+  const opciones = VEHICLE_IMAGES_BY_SIDE[side] ?? VEHICLE_IMAGES_BY_SIDE.luminoso;
+  const [vehicleImg] = useState(() => opciones[Math.floor(Math.random() * opciones.length)]);
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
       {Array.from({ length: 20 }, (_, i) => {
@@ -726,24 +749,14 @@ function VehicleAnim() {
         );
       })}
       <div style={{ position: 'absolute', top: '57%', left: '5%', right: '5%', height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,160,50,0.35) 20%, rgba(255,180,60,0.55) 50%, rgba(255,160,50,0.35) 80%, transparent)' }} />
-      <svg width="240" height="82" viewBox="0 0 240 82" style={{ position: 'relative', zIndex: 2, filter: 'drop-shadow(0 0 14px rgba(255,160,50,0.75))', transform: 'translateY(10px)' }}>
-        <ellipse cx="120" cy="66" rx="72" ry="8" fill="rgba(255,140,20,0.10)" />
-        <ellipse cx="120" cy="64" rx="50" ry="4.5" fill="rgba(255,160,40,0.22)" style={{ animation: 'nx-pulse 0.7s infinite' }} />
-        <ellipse cx="120" cy="42" rx="82" ry="20" fill="#140e05" stroke="rgba(255,160,50,0.65)" strokeWidth="1.5" />
-        <path d="M74,42 Q90,22 118,24 Q148,22 166,42 Z" fill="#0c1620" stroke="rgba(56,205,240,0.45)" strokeWidth="1" />
-        <path d="M84,42 Q98,28 118,29 Q140,28 156,42 Z" fill="rgba(56,205,240,0.07)" />
-        <path d="M198,38 L226,42 L198,46 Z" fill="rgba(255,160,50,0.88)" />
-        <path d="M44,36 L16,26 L20,38 Z" fill="rgba(255,150,40,0.45)" />
-        <path d="M44,48 L16,58 L20,46 Z" fill="rgba(255,150,40,0.45)" />
-        <line x1="55" y1="39" x2="185" y2="37" stroke="rgba(255,155,45,0.28)" strokeWidth="0.8" />
-        <line x1="55" y1="45" x2="185" y2="47" stroke="rgba(255,155,45,0.28)" strokeWidth="0.8" />
-        <circle cx="216" cy="41" r="4.5" fill="rgba(255,235,160,0.92)" />
-        <circle cx="216" cy="41" r="8" fill="rgba(255,230,140,0.18)" />
-        <circle cx="47" cy="39" r="6.5" fill="#100a04" stroke="rgba(255,120,20,0.55)" strokeWidth="1" />
-        <circle cx="47" cy="47" r="6.5" fill="#100a04" stroke="rgba(255,120,20,0.55)" strokeWidth="1" />
-        <circle cx="44" cy="39" r="4" fill="rgba(255,120,20,0.55)" style={{ animation: 'nx-pulse 0.45s infinite' }} />
-        <circle cx="44" cy="47" r="4" fill="rgba(255,130,30,0.55)" style={{ animation: 'nx-pulse 0.45s infinite', animationDelay: '0.22s' }} />
-      </svg>
+      <div style={{ position: 'relative', zIndex: 2, width: 240, animation: 'nx-hover-bob 1.4s ease-in-out infinite' }}>
+        <div style={{ position: 'absolute', left: '50%', bottom: -10, transform: 'translateX(-50%)', width: 150, height: 16, borderRadius: '50%', background: 'rgba(255,160,40,0.28)', filter: 'blur(3px)', animation: 'nx-pulse 0.7s infinite' }} />
+        <img
+          src={vehicleImg}
+          alt="Transporte"
+          style={{ display: 'block', width: '100%', height: 'auto', filter: 'drop-shadow(0 0 14px rgba(255,160,50,0.75))' }}
+        />
+      </div>
       <div className="nx-display" style={{ marginTop: 30, fontSize: 17, color: '#ffb01f', letterSpacing: '0.14em', animation: 'nx-pulse 1.3s ease-in-out infinite' }}>
         EN RUTA
       </div>
@@ -754,7 +767,7 @@ function VehicleAnim() {
   );
 }
 
-function TravelOverlay({ kind, onDone }) {
+function TravelOverlay({ kind, onDone, side, naveImg }) {
   useEffect(() => {
     const t = setTimeout(onDone, 1750);
     return () => clearTimeout(t);
@@ -769,13 +782,13 @@ function TravelOverlay({ kind, onDone }) {
       animation: 'nx-fade-up 0.25s ease both',
       overflow: 'hidden',
     }}>
-      {kind === 'espacio' ? <SpaceshipAnim /> : <VehicleAnim />}
+      {kind === 'espacio' ? <SpaceshipAnim naveImg={naveImg} side={side} /> : <VehicleAnim side={side} />}
     </div>
   );
 }
 
 /* ─── CABECERA CON BOTÓN VOLVER ──────────────────────────── */
-function VolverHeader({ onVolver, crumbs }) {
+function VolverHeader({ onVolver, crumbs, onDespegar }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
       <button
@@ -796,6 +809,26 @@ function VolverHeader({ onVolver, crumbs }) {
         ← VOLVER
       </button>
       <BreadcrumbNav crumbs={crumbs} />
+      {onDespegar && (
+        <button
+          onClick={() => { void playAtras(); onDespegar(); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            marginLeft: 'auto',
+            background: 'rgba(56,205,240,0.07)',
+            border: '1px solid rgba(56,205,240,0.25)',
+            borderRadius: 8, padding: '6px 14px',
+            cursor: 'pointer', color: 'var(--holo)',
+            fontSize: 11, fontFamily: 'var(--font-data)',
+            letterSpacing: '0.1em', flexShrink: 0,
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.16)'; e.currentTarget.style.borderColor = 'var(--holo)'; e.currentTarget.style.boxShadow = '0 0 12px -3px var(--holo)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56,205,240,0.07)'; e.currentTarget.style.borderColor = 'rgba(56,205,240,0.25)'; e.currentTarget.style.boxShadow = 'none'; }}
+        >
+          <Icon name="ship" size={13} /> DESPEGAR
+        </button>
+      )}
     </div>
   );
 }
@@ -910,7 +943,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
                   <button
                     onMouseEnter={() => setActivePlaneta(p.id)}
                     onMouseLeave={() => setActivePlaneta(null)}
-                    onClick={() => onSelectPlaneta(p)}
+                    onClick={() => onTravel('espacio', () => onSelectPlaneta(p))}
                     style={{
                       position: 'absolute',
                       left: px, top: py,
@@ -961,7 +994,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
               {planetas.map((p) => {
                 const h = hostilidadStyle(p.hostilidad);
                 return (
-                  <button key={p.id} onClick={() => onSelectPlaneta(p)}
+                  <button key={p.id} onClick={() => onTravel('espacio', () => onSelectPlaneta(p))}
                     style={{
                       background: activePlaneta === p.id ? h.bg : 'rgba(255,255,255,0.02)',
                       border: `1px solid ${activePlaneta === p.id ? h.border : 'var(--holo-line)'}`,
@@ -1041,7 +1074,7 @@ function SistemaView({ sistemaId, onSelectPlaneta, onBack, onTravel, onChat, onA
 }
 
 /* ─── VISTA PLANETA ─────────────────────────────────────── */
-function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAttack, onTrade, onPlanetaImagen, myUserId }) {
+function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onDespegar, onChat, onAttack, onTrade, onPlanetaImagen, myUserId }) {
   const [planeta, setPlaneta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [shipPopup, setShipPopup] = useState(null);
@@ -1075,6 +1108,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
       <VolverHeader
         onVolver={() => onTravel('espacio', onBack)}
         crumbs={[{ label: 'Galaxia' }, { label: planeta.sistema?.nombre }, { label: planeta.nombre }]}
+        onDespegar={onDespegar && (() => onTravel('espacio', onDespegar))}
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: isMobile ? 14 : 20, marginTop: 0 }}>
@@ -1122,7 +1156,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
               return (
                 <button
                   key={z.id}
-                  onClick={() => onSelectZona(z)}
+                  onClick={() => onTravel('vehiculo', () => onSelectZona(z))}
                   style={{
                     position: 'absolute', left: pos.left, top: pos.top,
                     transform: 'translate(-50%, -50%)', zIndex: 1,
@@ -1231,7 +1265,7 @@ function PlanetaView({ planetaId, onSelectZona, onBack, onTravel, onChat, onAtta
                     key={z.id}
                     zona={z}
                     presentes={z.presentes_personajes ?? []}
-                    onClick={() => onSelectZona(z)}
+                    onClick={() => onTravel('vehiculo', () => onSelectZona(z))}
                     compact={isMobile}
                   />
                 ))}
@@ -1366,14 +1400,14 @@ function ZonaCard({ zona, presentes = [], onClick, compact = false }) {
 }
 
 /* ─── VISTA ZONA ────────────────────────────────────────── */
-function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat, onAttack, onZonaImagen, myUserId }) {
+function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, onDespegar, breadcrumbs, onChat, onAttack, onZonaImagen, myUserId }) {
   const [zona, setZona]     = useState(null);
   const [loading, setLoading] = useState(true);
   const isMobile = useIsMobile();
 
   const handleSelectLugar = useCallback((lugar) => {
-    onSelectLugar(lugar);
-  }, [onSelectLugar]);
+    onTravel('vehiculo', () => onSelectLugar(lugar));
+  }, [onSelectLugar, onTravel]);
 
   useEffect(() => {
     apiFetch(`/map/zonas/${zonaId}`)
@@ -1400,6 +1434,7 @@ function ZonaView({ zonaId, onSelectLugar, onBack, onTravel, breadcrumbs, onChat
       <VolverHeader
         onVolver={() => onTravel('vehiculo', onBack)}
         crumbs={[...breadcrumbs, { label: zona.nombre }]}
+        onDespegar={onDespegar && (() => onTravel('espacio', onDespegar))}
       />
 
       <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
@@ -1567,7 +1602,7 @@ function LugarCard({ lugar, presentes = [], onClick }) {
 }
 
 /* ─── VISTA LUGAR ────────────────────────────────────────── */
-function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, onTrade, myUserId, refreshToken, onNpcsUpdated, userCharacter }) {
+function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcrumbs, onLugarChange, onLugarImagen, onChat, onAttack, onTrade, myUserId, refreshToken, onNpcsUpdated, userCharacter }) {
   const [navStack, setNavStack]     = useState([lugarId]);
   const [navNames, setNavNames]     = useState({});
   const [lugar, setLugar]           = useState(null);
@@ -1646,6 +1681,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
       <VolverHeader
         onVolver={goBack}
         crumbs={[...breadcrumbs, ...stackCrumbs, { label: 'Acceso restringido' }]}
+        onDespegar={onDespegar && (() => onTravel('espacio', onDespegar))}
       />
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -1699,6 +1735,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, breadcrumbs, onLuga
       <VolverHeader
         onVolver={goBack}
         crumbs={[...breadcrumbs, ...stackCrumbs, { label: lugar.nombre }]}
+        onDespegar={onDespegar && (() => onTravel('espacio', onDespegar))}
       />
 
       {/* fondo imagen del lugar */}
@@ -5454,6 +5491,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [lugarImagen,   setLugarImagen]   = useState(null);
   const [zonaImagen,    setZonaImagen]    = useState(null);
   const [planetaImagen, setPlanetaImagen] = useState(null);
+  const [naveEquipadaImg, setNaveEquipadaImg] = useState(null);
   const [chatTarget, setChatTarget]     = useState(null);
   const [pendingTravel, setPendingTravel] = useState(null);
   const [activePvpCombat, setActivePvpCombat] = useState(null);
@@ -5461,6 +5499,15 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [pvpChallenging, setPvpChallenging]    = useState(false);
   const [pendingChallenge, setPendingChallenge] = useState(null);
   const pvpPollRef = useRef(null);
+
+  useEffect(() => {
+    apiFetch('/naves/mias')
+      .then((d) => {
+        const equipada = (d.naves ?? []).find((n) => n.id === d.nave_equipada_id);
+        setNaveEquipadaImg(equipada?.nave?.imagen ? mediaUrl(equipada.nave.imagen) : null);
+      })
+      .catch(() => setNaveEquipadaImg(null));
+  }, []);
 
   useEffect(() => {
     const handler = () => setLugarRefreshKey((k) => k + 1);
@@ -5785,7 +5832,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
 
   return (
     <div className="nx-fade" style={{ paddingBottom: 40 }}>
-      {nivel === 'galaxy'  && <GalaxiaView onSelectSistema={selectSistema} />}
+      {nivel === 'galaxy'  && <GalaxiaView onSelectSistema={selectSistema} side={userCharacter?.side} />}
       {nivel === 'sistema' && sistema && (
         <SistemaView
           sistemaId={sistema.id}
@@ -5804,6 +5851,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           onSelectZona={selectZona}
           onBack={() => goSistema(sistema)}
           onTravel={triggerTravel}
+          onDespegar={() => goSistema(sistema)}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
           onTrade={setTradeTarget}
@@ -5817,6 +5865,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           onSelectLugar={selectLugar}
           onBack={() => goPlaneta(planeta)}
           onTravel={triggerTravel}
+          onDespegar={() => goSistema(sistema)}
           breadcrumbs={crumbsZona}
           onChat={setChatTarget}
           onAttack={handleAttackUser}
@@ -5830,6 +5879,7 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           onSelectNpc={selectNpc}
           onBack={() => goZona(zona)}
           onTravel={triggerTravel}
+          onDespegar={() => goSistema(sistema)}
           breadcrumbs={crumbsLugar}
           onLugarChange={handleLugarChange}
           onLugarImagen={setLugarImagen}
@@ -6026,6 +6076,8 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
       {pendingTravel && (
         <TravelOverlay
           kind={pendingTravel.kind}
+          side={userCharacter?.side}
+          naveImg={naveEquipadaImg}
           onDone={() => {
             const fn = pendingTravel.fn;
             setPendingTravel(null);

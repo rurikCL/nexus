@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Task extends Model
 {
@@ -24,5 +25,10 @@ class Task extends Model
     public function pupil(): BelongsTo
     {
         return $this->belongsTo(User::class, 'pupil_id');
+    }
+
+    public function updates(): HasMany
+    {
+        return $this->hasMany(TaskUpdate::class)->latest();
     }
 }

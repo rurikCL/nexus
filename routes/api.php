@@ -105,9 +105,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/training/{day}', [TrainingController::class, 'update']);
 
     Route::get('/tasks', [TaskController::class, 'index']);
+    Route::get('/tasks/pupils', [TaskController::class, 'pupils']);
     Route::post('/tasks', [TaskController::class, 'store']);
     Route::patch('/tasks/{task}', [TaskController::class, 'update']);
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);
+    Route::get('/tasks/{task}/updates', [TaskController::class, 'updates']);
+    Route::post('/tasks/{task}/updates', [TaskController::class, 'addUpdate']);
 
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);
