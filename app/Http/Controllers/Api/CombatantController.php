@@ -11,9 +11,15 @@ use Illuminate\Support\Facades\Storage;
 
 class CombatantController extends Controller
 {
+    private const WITH = [
+        'user.tutor.character', 'user.sede', 'tituloActivo',
+        'medallas.medalla', 'naveEquipada.nave',
+        'mapSistema', 'mapPlaneta', 'mapZona', 'mapLugar',
+    ];
+
     public function index(Request $request): JsonResponse
     {
-        $characters = Character::with('user.tutor.character', 'user.sede', 'tituloActivo')
+        $characters = Character::with(self::WITH)
             ->get()
             ->map(fn ($c) => $this->formatCombatant($c))
             ->sortByDesc('wins')
@@ -24,7 +30,7 @@ class CombatantController extends Controller
 
     public function show(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user.tutor.character', 'user.sede', 'tituloActivo')
+        $character = Character::with(self::WITH)
             ->where('handle', $handle)
             ->firstOrFail();
 
@@ -33,25 +39,31 @@ class CombatantController extends Controller
 
     public function showPublic(Request $request, string $handle): JsonResponse
     {
-        $character = Character::with('user.tutor.character', 'user.sede', 'tituloActivo')
+        $character = Character::with(self::WITH)
             ->where('handle', $handle)
             ->firstOrFail();
 
-        $combatant = $this->formatCombatant($character);
-        unset($combatant['credits']);
-
-        return response()->json(['combatant' => $combatant]);
+        return response()->json(['combatant' => $this->formatCombatant($character)]);
     }
 
     private function formatCombatant(Character $character): array
     {
         $stats = StatsTemporada::totalsForUser($character->user_id);
+        $user = $character->user;
+
+        $trainingDays = $user->trainingDays()->where('type', 'personal');
+        $totalEntrenamientos = (clone $trainingDays)->count();
+        $totalBitacoras = (clone $trainingDays)->whereNotNull('note')->where('note', '!=', '')->count();
+        $ultimaFecha = (clone $trainingDays)->orderByDesc('date')->first()?->date?->format('Y-m-d');
+
+        $naveEquipada = $character->naveEquipada;
 
         return [
             'id' => $character->user_id,
             'handle' => $character->handle,
             'name' => $character->name,
             'bio' => $character->bio,
+            'lore' => $character->lore,
             'cls' => $character->cls,
             'saber_color' => $character->saber_color,
             'sector' => $character->sector,
@@ -65,21 +77,42 @@ class CombatantController extends Controller
             'combat_stats' => $character->combatStats(),
             'gold' => $character->gold,
             'side' => $character->side ?? 'luminoso',
-            'tier' => $character->user->tier ?? 'iniciado',
-            'sede_id' => $character->user->sede_id,
-            'sede_nombre' => $character->user->sede?->nombre,
+            'tier' => $user->tier ?? 'iniciado',
+            'sede_id' => $user->sede_id,
+            'sede_nombre' => $user->sede?->nombre,
             'titulo_activo' => $character->tituloActivo?->only(['id', 'nombre', 'tipo']),
             'photo_url' => $character->photo
                 ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                 : null,
-            'tutor' => $character->user->tutor
+            'tutor' => $user->tutor
                 ? [
-                    'id' => $character->user->tutor->id,
-                    'name' => $character->user->tutor->character?->name ?? $character->user->tutor->name,
-                    'handle' => $character->user->tutor->character?->handle,
-                    'tier' => $character->user->tutor->tier,
+                    'id' => $user->tutor->id,
+                    'name' => $user->tutor->character?->name ?? $user->tutor->name,
+                    'handle' => $user->tutor->character?->handle,
+                    'tier' => $user->tutor->tier,
                 ]
                 : null,
+            'medals' => $character->medallas->map(fn ($cm) => [
+                'id' => $cm->id,
+                'activo' => $cm->activo,
+                'medalla' => $cm->medalla ? [
+                    'nombre' => $cm->medalla->nombre,
+                    'imagen' => $cm->medalla->imagen,
+                    'rareza' => $cm->medalla->rareza,
+                ] : null,
+            ])->values(),
+            'misiones_completadas' => $user->misiones()->wherePivot('status', 'completada')->count(),
+            'tareas_completadas' => $user->tasksAsPupil()->where('status', 'completada')->count(),
+            'entrenamiento' => [
+                'ultima_fecha' => $ultimaFecha,
+                'total_entrenamientos' => $totalEntrenamientos,
+                'total_bitacoras' => $totalBitacoras,
+            ],
+            'ubicacion' => $character->mapLocationArray(),
+            'nave_equipada' => $naveEquipada?->nave ? [
+                'nombre' => $naveEquipada->nave->nombre,
+                'imagen' => $naveEquipada->nave->imagen,
+            ] : null,
         ];
     }
 }

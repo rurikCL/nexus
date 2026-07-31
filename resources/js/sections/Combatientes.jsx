@@ -11,7 +11,7 @@ function useWindowWidth() {
   return w;
 }
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedallaBadge, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { Empty, classIcon } from './Comando.jsx';
 import { ChallengeModal } from './Combates.jsx';
 
@@ -143,24 +143,86 @@ export function Mini({ label, value, tone }) {
   );
 }
 
+function fmtDate(d) {
+  return d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+}
+
+/* Atributos de combate en formato badge — ATQ/DEF/PNT/AGI/INI — mismos colores
+   que la ficha del jugador en NpcCombatScreen (BADGE_ICON / playerBadgesFull). */
+const COMBAT_BADGE_META = [
+  { key: 'ataque',     l: 'ATQ', c: '#ff7043' },
+  { key: 'defensa',    l: 'DEF', c: '#38cdf0' },
+  { key: 'punteria',   l: 'PNT', c: '#10b981' },
+  { key: 'movimiento', l: 'AGI', c: '#a78bfa' },
+  { key: 'iniciativa', l: 'INI', c: '#E6B325' },
+];
+
+/* Ficha de combate — mismo lenguaje visual que la ficha del jugador durante un
+   combate contra NPC: avatar + barras de escudo/vida + badges de atributos. */
+function CombatFormatCard({ c }) {
+  const cs = c.combat_stats ?? {};
+  const vida = Number(cs.vida ?? 0);
+  const escudo = Number(cs.escudo ?? 0);
+  return (
+    <div style={{
+      background: 'rgba(6,12,26,0.55)', border: '1px solid var(--holo-line)', borderRadius: 14,
+      padding: 14, display: 'flex', gap: 14, alignItems: 'flex-start',
+    }}>
+      <div style={{
+        width: 88, height: 88, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+        border: `2px solid ${c.saber}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
+      }}>
+        {c.photo_url
+          ? <img src={c.photo_url} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {escudo > 0 && (
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+              <span style={{ fontSize: 9, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>ESC</span>
+              <span style={{ fontSize: 9, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>{escudo}</span>
+            </div>
+            <div style={{ height: 5, background: 'rgba(56,205,240,0.12)', borderRadius: 3 }}>
+              <div style={{ height: '100%', width: '100%', background: '#38cdf0', borderRadius: 3 }} />
+            </div>
+          </div>
+        )}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+            <span style={{ fontSize: 9, color: '#10b981', fontFamily: 'var(--font-data)' }}>VID</span>
+            <span style={{ fontSize: 9, color: '#10b981', fontFamily: 'var(--font-data)' }}>{vida}</span>
+          </div>
+          <div style={{ height: 10, background: 'rgba(16,185,129,0.12)', borderRadius: 5 }}>
+            <div style={{ height: '100%', width: '100%', background: '#10b981', borderRadius: 5 }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {COMBAT_BADGE_META.map(b => (
+            <span key={b.key} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              fontSize: 10, fontFamily: 'var(--font-data)', padding: '3px 7px', borderRadius: 4,
+              background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c, fontWeight: 700,
+            }}>
+              {b.l} {Number(cs[b.key] ?? 0)}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Perfil público (vista externa compartible) ---- */
 export function PublicProfile({ c, S, onClose, onChallenge }) {
   const isMobile = useWindowWidth() < 640;
   const cls    = NX.CLASSES.find(x => x.id === c.cls);
   const tasks  = S.tasks.filter(t => (t.pupil === c.id || t.pupil_id === c.userId) && t.status !== 'completada');
   const recent = S.combats.filter(m => m.a === c.id || m.b === c.id || m._a?.userId === c.userId || m._b?.userId === c.userId);
-  const combatStats = c.combat_stats ?? {};
-  const STAT_LABEL = {
-    vida: 'Vida',
-    escudo: 'Escudo',
-    defensa: 'Defensa',
-    ataque: 'Ataque',
-    movimiento: 'Agilidad',
-    iniciativa: 'Iniciativa',
-    punteria: 'Puntería',
-  };
-  const STAT_KEYS = ['vida', 'escudo', 'ataque', 'defensa', 'movimiento', 'iniciativa', 'punteria'];
-  const combatStatMax = Math.max(10, ...STAT_KEYS.map(s => Number(combatStats[s] ?? 0)));
+  const medals = c.medals ?? [];
+  const entrenamiento = c.entrenamiento ?? {};
+  const ubicacionLabel = [c.ubicacion?.planeta_nombre, c.ubicacion?.zona_nombre, c.ubicacion?.lugar_nombre].filter(Boolean).join(' · ')
+    || c.ubicacion?.sistema_nombre || null;
 
   useEffect(() => {
     const h = (e) => e.key === 'Escape' && onClose();
@@ -208,7 +270,9 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
             {c.gold && <img src="/assets/isotipo.png" alt="" style={{ position: 'absolute', bottom: -6, right: -10, width: 40, height: 40, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }} />}
           </div>
           <div style={{ position: 'relative', zIndex: 1, flex: 1, minWidth: 220 }}>
-            <div className="nx-kicker">{c.sector || 'Academia Orbital'}{c.sponsor ? ` · ${c.sponsor}` : ''}</div>
+            {c.sector && (
+              <div className="nx-kicker">{c.sector}{c.sponsor ? ` · ${c.sponsor}` : ''}</div>
+            )}
             <h1 className="nx-display" style={{ fontSize: 28, margin: '4px 0 8px' }}>{c.name}</h1>
             {c.titulo_activo && (
               <div className="nx-data" style={{ fontSize: 12, color: 'var(--holocron-oro)', margin: '-4px 0 8px' }}>{c.titulo_activo.nombre}</div>
@@ -224,13 +288,18 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
         </div>
 
         <div className="nx-panel-body" style={{ display: 'grid', gap: 18 }}>
-          {/* Récord */}
+          {/* Lore */}
+          {c.lore && (
+            <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{c.lore}</p>
+          )}
+
+          {/* Widgets */}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12 }}>
             {[
+              { k: 'Créditos', v: c.credits ?? 0, t: 'var(--holocron-oro)', i: 'coin' },
+              { k: 'Misiones completadas', v: c.misiones_completadas ?? 0, t: 'var(--holo)', i: 'star' },
+              { k: 'Tareas completadas', v: c.tareas_completadas ?? 0, t: 'var(--green-500)', i: 'tasks' },
               { k: 'Victorias', v: c.wins, t: 'var(--holocron-naranja)', i: 'trophy' },
-              { k: 'Derrotas', v: c.losses, t: 'var(--txt-dim)', i: 'x' },
-              { k: 'Efectividad', v: `${c.winrate}%`, t: 'var(--holo)', i: 'trending' },
-              { k: 'Racha', v: `${c.streak}W`, t: 'var(--green-500)', i: 'flame' },
             ].map(s => (
               <div key={s.k} className="nx-panel" style={{ padding: 13, textAlign: 'center' }}>
                 <span style={{ color: s.t }}><Icon name={s.i} size={15} /></span>
@@ -258,36 +327,68 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
           )}
 
           <div className="nx-grid-2" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18 }}>
-            {/* Atributos */}
+            {/* Atributos — mismo formato que la ficha de combate contra NPC */}
             <div>
               <div className="nx-kicker" style={{ marginBottom: 12 }}>Atributos de combate</div>
-              <div style={{ display: 'grid', gap: 11 }}>
-                {STAT_KEYS.map(s => (
-                  <Stat
-                    key={s}
-                    label={STAT_LABEL[s]}
-                    value={Number(combatStats[s] ?? 0)}
-                    max={combatStatMax}
-                    color={cls.accent}
-                  />
-                ))}
-              </div>
+              <CombatFormatCard c={c} />
             </div>
             {/* Medallas */}
             <div>
-              <div className="nx-kicker" style={{ marginBottom: 12 }}>Medallas · {c.medals.length}</div>
-              {c.medals.length ? (
-                <div style={{ display: 'grid', gap: 9 }}>
-                  {c.medals.map(m => (
-                    <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <MedalIcon id={m} size={32} />
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{NX.MEDALS[m].name}</span>
+              <div className="nx-kicker" style={{ marginBottom: 12 }}>Medallas · {medals.length}</div>
+              {medals.length ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {medals.map(cm => (
+                    <div key={cm.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 74 }}>
+                      <MedallaBadge medalla={cm.medalla} size={48} active={cm.activo} />
+                      <span style={{ fontSize: 10, textAlign: 'center', color: 'var(--txt-dim)', lineHeight: 1.25 }}>{cm.medalla?.nombre}</span>
                     </div>
                   ))}
                 </div>
               ) : <Empty label="Sin medallas aún" />}
             </div>
           </div>
+
+          {/* Entrenamiento */}
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 12 }}>Entrenamiento</div>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(3,1fr)', gap: 12 }}>
+              {[
+                { k: 'Último entrenamiento', v: fmtDate(entrenamiento.ultima_fecha), i: 'calendar', sm: true },
+                { k: 'Entrenamientos', v: entrenamiento.total_entrenamientos ?? 0, i: 'shield' },
+                { k: 'Bitácoras', v: entrenamiento.total_bitacoras ?? 0, i: 'edit' },
+              ].map(s => (
+                <div key={s.k} className="nx-panel" style={{ padding: 13, textAlign: 'center' }}>
+                  <span style={{ color: 'var(--holo)' }}><Icon name={s.i} size={15} /></span>
+                  <div className="nx-num" style={{ fontSize: s.sm ? 15 : 24, color: 'var(--holo)', marginTop: 3 }}>{s.v}</div>
+                  <div className="nx-kicker" style={{ fontSize: 8 }}>{s.k}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ubicación actual + nave equipada */}
+          {(ubicacionLabel || c.nave_equipada) && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {ubicacionLabel && (
+                <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)', background: 'rgba(56,205,240,0.04)' }}>
+                  <span style={{ color: 'var(--holo)' }}><Icon name="target" size={17} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2 }}>Ubicación actual</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ubicacionLabel}</div>
+                  </div>
+                </div>
+              )}
+              {c.nave_equipada && (
+                <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)', background: 'rgba(56,205,240,0.04)' }}>
+                  <span style={{ color: 'var(--holo)' }}><Icon name="ship" size={17} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2 }}>Nave equipada</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.nave_equipada.nombre}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tareas en curso (públicas) */}
           <div>
