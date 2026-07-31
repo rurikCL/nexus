@@ -14,6 +14,7 @@ import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedallaBadge, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { Empty, classIcon } from './Comando.jsx';
 import { ChallengeModal } from './Combates.jsx';
+import { mediaUrl } from '../utils/printableCard.js';
 
 /* NÉXUS — Combatientes (roster) + perfil público compartible */
 
@@ -213,6 +214,33 @@ function CombatFormatCard({ c }) {
   );
 }
 
+/* Tarjeta con foto de fondo (lugar/planeta o nave equipada) + ícono y texto — usada
+   bajo Entrenamiento para mostrar dónde está el personaje y con qué nave viaja. */
+function LocationPhotoCard({ icon, label, text, imagen }) {
+  const img = mediaUrl(imagen);
+  return (
+    <div style={{
+      position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden',
+      border: '1px solid var(--holo-line)', minHeight: 92, display: 'flex', alignItems: 'flex-end',
+      background: img ? '#04070f' : 'rgba(56,205,240,0.04)',
+    }}>
+      {img && (
+        <img src={img} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      )}
+      {img && (
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,7,15,0.1) 0%, rgba(4,7,15,0.9) 100%)' }} />
+      )}
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', width: '100%' }}>
+        <span style={{ color: 'var(--holo)' }}><Icon name={icon} size={17} /></span>
+        <div style={{ minWidth: 0 }}>
+          <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2 }}>{label}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Perfil público (vista externa compartible) ---- */
 export function PublicProfile({ c, S, onClose, onChallenge }) {
   const isMobile = useWindowWidth() < 640;
@@ -368,24 +396,18 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
 
           {/* Ubicación actual + nave equipada */}
           {(ubicacionLabel || c.nave_equipada) && (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
               {ubicacionLabel && (
-                <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)', background: 'rgba(56,205,240,0.04)' }}>
-                  <span style={{ color: 'var(--holo)' }}><Icon name="target" size={17} /></span>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2 }}>Ubicación actual</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ubicacionLabel}</div>
-                  </div>
-                </div>
+                <LocationPhotoCard
+                  icon="target" label="Ubicación actual" text={ubicacionLabel}
+                  imagen={c.ubicacion?.imagen}
+                />
               )}
               {c.nave_equipada && (
-                <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--holo-line)', background: 'rgba(56,205,240,0.04)' }}>
-                  <span style={{ color: 'var(--holo)' }}><Icon name="ship" size={17} /></span>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 2 }}>Nave equipada</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.nave_equipada.nombre}</div>
-                  </div>
-                </div>
+                <LocationPhotoCard
+                  icon="ship" label="Nave equipada" text={c.nave_equipada.nombre}
+                  imagen={c.nave_equipada.imagen}
+                />
               )}
             </div>
           )}

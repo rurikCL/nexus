@@ -58,6 +58,12 @@ class CombatantController extends Controller
 
         $naveEquipada = $character->naveEquipada;
 
+        $ubicacion = $character->mapLocationArray();
+        $ubicacion['imagen'] = $character->mapLugar?->imagen
+            ?? $character->mapZona?->imagen
+            ?? $character->mapPlaneta?->imagen
+            ?? null;
+
         return [
             'id' => $character->user_id,
             'handle' => $character->handle,
@@ -108,7 +114,7 @@ class CombatantController extends Controller
                 'total_entrenamientos' => $totalEntrenamientos,
                 'total_bitacoras' => $totalBitacoras,
             ],
-            'ubicacion' => $character->mapLocationArray(),
+            'ubicacion' => $ubicacion,
             'nave_equipada' => $naveEquipada?->nave ? [
                 'nombre' => $naveEquipada->nave->nombre,
                 'imagen' => $naveEquipada->nave->imagen,
