@@ -1104,6 +1104,20 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         {diceOverlay}
         {throwHandle}
 
+        {/* Aviso grande de inicio de ronda — mismo criterio que NpcCombatScreen: separa
+            visualmente "empieza la ronda N" de a quién le toca actuar dentro de ella. */}
+        {!isPending && !isOver && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 45,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={combat.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
+              Turno {combat.ronda ?? 1}
+            </span>
+          </div>
+        )}
+
         {isMobile ? (
           /* Layout mobile: oponente arriba (full width) → registro/resumen al medio → yo abajo (full width) → barra de acciones */
           <div style={{ position: 'absolute', inset: 8, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
