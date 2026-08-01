@@ -26,6 +26,7 @@ class RolHabilidad extends Model
         'buff',
         'debuff',
         'duracion',
+        'sonido',
     ];
 
     protected $casts = [

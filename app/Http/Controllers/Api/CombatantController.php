@@ -13,7 +13,7 @@ class CombatantController extends Controller
 {
     private const WITH = [
         'user.tutor.character', 'user.sede', 'tituloActivo',
-        'medallas.medalla', 'naveEquipada.nave',
+        'medallas.medalla', 'naveEquipada.nave', 'sableActivo',
         'mapSistema', 'mapPlaneta', 'mapZona', 'mapLugar',
     ];
 
@@ -57,6 +57,7 @@ class CombatantController extends Controller
         $ultimaFecha = (clone $trainingDays)->orderByDesc('date')->first()?->date?->format('Y-m-d');
 
         $naveEquipada = $character->naveEquipada;
+        $sableActivo = $character->sableActivo;
 
         $ubicacion = $character->mapLocationArray();
         $ubicacion['imagen'] = $character->mapLugar?->imagen
@@ -119,6 +120,13 @@ class CombatantController extends Controller
                 'nombre' => $naveEquipada->nave->nombre,
                 'imagen' => $naveEquipada->nave->imagen,
             ] : null,
+            'sable_activo' => $sableActivo ? [
+                'nombre' => $sableActivo->nombre,
+                'dano' => $sableActivo->dano,
+                'dano_perforante' => $sableActivo->dano_perforante,
+                'color_hoja' => $sableActivo->color_hoja,
+            ] : null,
+            'sable_bonos' => $character->sableBonos(),
         ];
     }
 }

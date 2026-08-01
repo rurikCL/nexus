@@ -53,6 +53,8 @@ function mapPublicCombatant(p) {
     entrenamiento: p.entrenamiento ?? null,
     ubicacion: p.ubicacion ?? null,
     nave_equipada: p.nave_equipada ?? null,
+    sable_activo: p.sable_activo ?? null,
+    sable_bonos: p.sable_bonos ?? {},
     initials,
     color: hashColor(p.handle ?? p.name ?? 'x'),
   };

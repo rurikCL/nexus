@@ -415,6 +415,7 @@ const ENTITY_CONFIG = {
       { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic en un stat suma +1 (Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa). Los estados de abajo se auto-aplican al usuario (ej. Regeneración)' },
       { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se aplica al objetivo solo si el ataque conecta. Los estados de abajo (ej. Paralizado, Sangrado) se aplican al objetivo al impactar' },
       { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
+      { key: 'sonido',       label: 'Sonido al usar',        type: 'text', hint: 'Nombre del sonido en el catálogo de Sonidos (rol_sonidos) que se reproduce al usar esta habilidad. Vacío = sin sonido.' },
     ],
     defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
   },
@@ -2443,7 +2444,7 @@ export default function AdminView() {
               cursor: 'pointer', color: 'var(--txt-dim)',
             }}
           >
-            <span style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .2s', display: 'flex' }}>
+            <span style={{ transform: sidebarCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform .2s', display: 'flex' }}>
               <Icon name="chevron" size={13} />
             </span>
           </button>

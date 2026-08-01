@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { playClickHabilidad, playClickOpcion, playCombateNpc } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion, playCombateNpc, playSound } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -1217,6 +1217,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   const clickSkill = (hab) => {
     void playClickHabilidad();
+    if (hab.sonido) void playSound(hab.sonido);
     void doPlayerSkill(hab);
   };
 

@@ -72,6 +72,8 @@ function mergeApiCombatants(apiList, currentUserId) {
       entrenamiento: api.entrenamiento ?? null,
       ubicacion: api.ubicacion ?? null,
       nave_equipada: api.nave_equipada ?? null,
+      sable_activo: api.sable_activo ?? null,
+      sable_bonos: api.sable_bonos ?? {},
       initials, color,
     };
   });

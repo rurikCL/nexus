@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { playClickHabilidad, playClickOpcion, playCombateJefe } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion, playCombateJefe, playSound } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
@@ -666,6 +666,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
   const clickHabilidad = (hab) => {
     void playClickHabilidad();
+    if (hab.sonido) void playSound(hab.sonido);
     if (hab.objetivo === 'self') {
       setPendingSelfHab(hab);
     } else {

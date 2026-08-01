@@ -15,6 +15,7 @@ import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedallaBadge, Modal, toast, 
 import { Empty, classIcon } from './Comando.jsx';
 import { ChallengeModal } from './Combates.jsx';
 import { mediaUrl } from '../utils/printableCard.js';
+import { BONUS_FIELDS } from './ArmadoSable.jsx';
 
 /* NÉXUS — Combatientes (roster) + perfil público compartible */
 
@@ -214,6 +215,67 @@ function CombatFormatCard({ c }) {
   );
 }
 
+/* Sable de luz equipado — mismo formato que el panel «Sable de Luz» de Mi Personaje
+   (icono + nombre + daño + bonos de stats), en versión de solo lectura. */
+function SableEquipadoCard({ c }) {
+  const sable = c.sable_activo;
+  const colorHex = (sable?.color_hoja && NX.SABERS[sable.color_hoja]) || c.saber || NX.SABERS.azul;
+  const bonosMap = c.sable_bonos ?? {};
+  const bonosList = BONUS_FIELDS
+    .map((b) => ({ ...b, value: bonosMap[b.key.replace(/^bono_/, '')] ?? 0 }))
+    .filter((b) => b.value !== 0);
+
+  if (!sable) {
+    return (
+      <div className="nx-panel" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12, height: '100%' }}>
+        <span style={{ color: 'var(--txt-faint)' }}><Icon name="sword" size={20} /></span>
+        <span style={{ fontSize: 12, color: 'var(--txt-faint)' }}>Sin sable de luz armado</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="nx-panel" style={{ padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+          background: `color-mix(in srgb, ${colorHex} 18%, rgba(4,9,18,0.9))`,
+          border: `1px solid color-mix(in srgb, ${colorHex} 55%, transparent)`,
+        }}>
+          <Icon name="sword" size={22} style={{ color: colorHex, filter: `drop-shadow(0 0 6px ${colorHex})` }} />
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{sable.nombre}</div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+            <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+              <Icon name="flame" size={12} style={{ color: '#ff6b6b' }} /> {sable.dano} DMG melee
+            </span>
+            {sable.dano_perforante > 0 && (
+              <span className="nx-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--txt-dim)' }}>
+                <Icon name="fire" size={12} style={{ color: '#8aa0c0' }} /> +{sable.dano_perforante}P
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {bonosList.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
+          {bonosList.map((b) => (
+            <span key={b.key} style={{
+              fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+              padding: '2px 7px', borderRadius: 4,
+              background: `${b.color}18`, border: `1px solid ${b.color}40`,
+              color: b.color, whiteSpace: 'nowrap', lineHeight: 1.5,
+            }}>
+              {b.value > 0 ? '+' : ''}{b.value} {b.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* Tarjeta con foto de fondo (lugar/planeta o nave equipada) + ícono y texto — usada
    bajo Entrenamiento para mostrar dónde está el personaje y con qué nave viaja. */
 function LocationPhotoCard({ icon, label, text, imagen }) {
@@ -372,20 +434,26 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
               <div className="nx-kicker" style={{ marginBottom: 12 }}>Atributos de combate</div>
               <CombatFormatCard c={c} />
             </div>
-            {/* Medallas */}
+            {/* Sable equipado */}
             <div>
-              <div className="nx-kicker" style={{ marginBottom: 12 }}>Medallas · {medals.length}</div>
-              {medals.length ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {medals.map(cm => (
-                    <div key={cm.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 74 }}>
-                      <MedallaBadge medalla={cm.medalla} size={48} active={cm.activo} />
-                      <span style={{ fontSize: 10, textAlign: 'center', color: 'var(--txt-dim)', lineHeight: 1.25 }}>{cm.medalla?.nombre}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : <Empty label="Sin medallas aún" />}
+              <div className="nx-kicker" style={{ marginBottom: 12 }}>Sable equipado</div>
+              <SableEquipadoCard c={c} />
             </div>
+          </div>
+
+          {/* Medallas */}
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 12 }}>Medallas · {medals.length}</div>
+            {medals.length ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {medals.map(cm => (
+                  <div key={cm.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 74 }}>
+                    <MedallaBadge medalla={cm.medalla} size={48} active={cm.activo} />
+                    <span style={{ fontSize: 10, textAlign: 'center', color: 'var(--txt-dim)', lineHeight: 1.25 }}>{cm.medalla?.nombre}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <Empty label="Sin medallas aún" />}
           </div>
 
           {/* Entrenamiento */}
