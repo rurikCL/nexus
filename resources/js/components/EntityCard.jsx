@@ -262,6 +262,60 @@ function paintStatBoxes(ctx, entries, x, y, w, h, gap = 10) {
   return y + h;
 }
 
+/** Marca de agua tenue detrás de todo el contenido — una corona gigante, apenas visible, que se
+ * asoma por los huecos entre el arte y las cajas translúcidas. Exclusivo de las cartas de Jefe,
+ * para darles más presencia física como carta "final boss" frente a un NPC/enemigo normal. */
+function paintJefeWatermark(ctx, cardH, color) {
+  const size = CARD_W * 0.72;
+  ctx.save();
+  ctx.globalAlpha = 0.1;
+  drawIcon(ctx, 'crown', CARD_W / 2, cardH * 0.46, size, color, (4 * 24) / size);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Marco doble + esquinas ornamentadas (bracket en L + gema) — refuerzo visual exclusivo de
+ * las cartas de Jefe, para que se note físicamente como una carta distinta a un NPC/enemigo
+ * normal incluso antes de leer el texto. */
+function paintJefeAdornments(ctx, pad, cardH, color) {
+  const innerPad = pad + 6;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(innerPad, innerPad, CARD_W - innerPad * 2, cardH - innerPad * 2, 26);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = `${color}cc`;
+  ctx.stroke();
+  ctx.restore();
+
+  const inset = 14;
+  const armLen = 16;
+  const corners = [
+    { ax: pad + inset, ay: pad + inset, dx: 1, dy: 1 },
+    { ax: CARD_W - pad - inset, ay: pad + inset, dx: -1, dy: 1 },
+    { ax: CARD_W - pad - inset, ay: cardH - pad - inset, dx: -1, dy: -1 },
+    { ax: pad + inset, ay: cardH - pad - inset, dx: 1, dy: -1 },
+  ];
+  corners.forEach(({ ax, ay, dx, dy }) => {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ax + dx * armLen, ay);
+    ctx.lineTo(ax, ay);
+    ctx.lineTo(ax, ay + dy * armLen);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(ax, ay);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(-4, -4, 8, 8);
+    ctx.restore();
+  });
+}
+
 function paintColofon(ctx, text, cardH = CARD_H) {
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(120,150,190,0.55)';
@@ -565,7 +619,7 @@ export async function drawObjetoCard(objeto) {
 
 /* ═══════════════════════════ NPC / JEFE / ENEMIGO ═══════════════════════════ */
 
-const NPC_TIPO_FRAME = { aliado: 'info', neutral: 'neutral', hostil: 'danger', entrenador: 'ok', mercader: 'gold', mision: 'purple', jefe: 'orange' };
+const NPC_TIPO_FRAME = { aliado: 'info', neutral: 'neutral', hostil: 'danger', entrenador: 'ok', mercader: 'gold', mision: 'purple', jefe: 'gold' };
 export const NPC_TIPO_LABEL = { aliado: 'Aliado', neutral: 'Neutral', hostil: 'Hostil', entrenador: 'Entrenador', mercader: 'Mercader', mision: 'Misión', jefe: 'Jefe de Asalto' };
 const NPC_TIPO_ICON  = { aliado: 'user', neutral: 'user', hostil: 'flame', entrenador: 'shield', mercader: 'coin', mision: 'star', jefe: 'crown' };
 
@@ -632,7 +686,7 @@ async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor, cell
     await paintHabilidadIconCell(ctx, hab, cx, cy, cellSize, borderColor);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#eaf2ff';
-    const size = fitText(ctx, hab.nombre ?? '', cellSize + 10, '14px "JetBrains Mono"', 10);
+    const size = fitText(ctx, hab.nombre ?? '', cellSize + 10, '11px "JetBrains Mono"', 8);
     ctx.font = `600 ${size}px "JetBrains Mono"`;
     ctx.fillText(hab.nombre ?? '', cx + cellSize / 2, cy + cellSize + labelH - 5);
   }
@@ -654,6 +708,12 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH);
   const innerW = innerRight - innerX;
+
+  if (entity.tipo === 'jefe') {
+    paintJefeWatermark(ctx, cardH, frame.line);
+    paintJefeAdornments(ctx, pad, cardH, frame.line);
+  }
+
   paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
 
   ctx.textAlign = 'left';
@@ -672,7 +732,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   }
 
   const artY = pad + 118;
-  const artH = 280;
+  const artH = 260;
   const forma = Number(entity.forma) || 0;
   const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
   if (formaInfo?.img) {
@@ -732,14 +792,14 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const saludoBlockH = 20 + saludoMaxLines * saludoLineH;
   const habCellSize = 76;
   const habLabelH = 16;
-  const habRowGap = 12;
-  const habColGap = 14;
+  const habRowGap = 24;
+  const habColGap = 28;
   const habGridH = (habCellSize + habLabelH) * 2 + habRowGap; // grilla 2×2 de paintHabilidadesGrid (celda + etiqueta, ×2 filas + separación)
   const habilidadesBlockH = hasHabilidades ? 22 + 20 + habGridH : 0;
   const leftColH = saludoBlockH + habilidadesBlockH;
   const sectionH = Math.max(attrSectionH, leftColH);
 
-  const attrBoxPad = 6;
+  const attrBoxPad = 12;
   const attrBoxTop = statsTop - 16 - attrBoxPad;
   const attrBoxBottom = statsTop + sectionH + 10 + attrBoxPad;
   paintBoxBg(ctx, innerX, attrBoxTop, innerW, attrBoxBottom - attrBoxTop, 10);
@@ -762,8 +822,8 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line, habCellSize, habLabelH, habRowGap, habColGap);
   }
 
-  const attrRowsEndY = paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
-  paintStatBoxes(ctx, danoEntries, attrColX, attrRowsEndY + danoGap, attrColW, danoBoxH);
+  const attrRowsEndY = paintRows(ctx, rows, statsTop, attrColX + attrBoxPad, attrColX + attrColW - attrBoxPad, rowH);
+  paintStatBoxes(ctx, danoEntries, attrColX + attrBoxPad, attrRowsEndY + danoGap, attrColW - attrBoxPad * 2, danoBoxH);
 
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
@@ -774,6 +834,31 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   await paintCardLogo(ctx, innerRight, cardH - pad);
   return canvas;
+}
+
+/**
+ * Recalcula los atributos de un NPC/jefe/enemigo "como si se enfrentara" a `nivel` — misma
+ * fórmula que usa el combate real: +1 a todos los atributos por nivel (RaidCombatController::
+ * getNpcStats en el servidor para jefes en RAID; el mismo cálculo inline en NpcCombatScreen.jsx
+ * para enemigos/NPCs fuera de RAID). Solo los Jefes reciben el bono plano de nivel en `dano`
+ * (daño/curación base) — `dano_escudo`/`dano_perforante` nunca escalan por nivel en ningún caso.
+ * `punteria` en 0 es un flag de "sin ataque a distancia" y se mantiene en 0 aunque suba el nivel.
+ */
+export function applyNivelACombate(entity, nivel, esJefe) {
+  const n = Math.max(0, Number(nivel) || 0);
+  const danoBase = entity.dano ?? 0;
+  return {
+    ...entity,
+    nivel: n,
+    vida: Math.max(entity.vida ?? 1, 1) + n,
+    escudo: (entity.escudo ?? 0) + n,
+    ataque: Math.max(entity.ataque ?? 1, 1) + n,
+    defensa: Math.max(entity.defensa ?? 1, 1) + n,
+    movimiento: Math.max(entity.movimiento ?? 1, 1) + n,
+    iniciativa: Math.max(entity.iniciativa ?? 1, 1) + n,
+    punteria: (entity.punteria ?? 0) > 0 ? entity.punteria + n : 0,
+    dano: esJefe ? danoBase + (danoBase >= 0 ? n : -n) : danoBase,
+  };
 }
 
 export async function drawNpcCard(npc) {

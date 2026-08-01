@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Proyecto;
 use App\Models\ProyectoMensaje;
 use App\Models\User;
+use App\Traits\ConvertsToWebp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Storage;
  */
 class ProyectoController extends Controller
 {
+    use ConvertsToWebp;
+
     private function esGestor(User $user): bool
     {
         return $user->clase === 'Sentinela' || in_array($user->tier, ['maestro', 'granmaestro']);
@@ -75,12 +78,14 @@ class ProyectoController extends Controller
         $data = $request->validate([
             'titulo' => 'required|string|max:255',
             'descripcion' => 'required|string|max:5000',
+            'imagen' => 'nullable|file|image|max:5120',
         ]);
 
         $proyecto = Proyecto::create([
             'solicitante_id' => $request->user()->id,
             'titulo' => $data['titulo'],
             'descripcion' => $data['descripcion'],
+            'imagen' => $request->hasFile('imagen') ? $this->saveAsWebp($request->file('imagen'), 'proyectos') : null,
             'status' => 'pendiente',
         ]);
 
@@ -186,11 +191,15 @@ class ProyectoController extends Controller
             return response()->json(['message' => 'No autorizado.'], 403);
         }
 
-        $data = $request->validate(['mensaje' => 'required|string|max:2000']);
+        $data = $request->validate([
+            'mensaje' => 'required|string|max:2000',
+            'imagen' => 'nullable|file|image|max:5120',
+        ]);
 
         $mensaje = $proyecto->mensajes()->create([
             'user_id' => $user->id,
             'mensaje' => $data['mensaje'],
+            'imagen' => $request->hasFile('imagen') ? $this->saveAsWebp($request->file('imagen'), 'proyectos/bitacora') : null,
         ]);
 
         return response()->json(['mensaje' => $this->formatMensaje($mensaje->load('user.character'))], 201);
@@ -225,6 +234,7 @@ class ProyectoController extends Controller
             'id' => $proyecto->id,
             'titulo' => $proyecto->titulo,
             'descripcion' => $proyecto->descripcion,
+            'imagen_url' => $proyecto->imagen ? Storage::disk('public')->url($proyecto->imagen) : null,
             'status' => $proyecto->status,
             'eta' => $proyecto->eta?->format('Y-m-d'),
             'solicitante' => $this->formatUser($proyecto->solicitante),
@@ -241,6 +251,7 @@ class ProyectoController extends Controller
         return [
             'id' => $mensaje->id,
             'mensaje' => $mensaje->mensaje,
+            'imagen_url' => $mensaje->imagen ? Storage::disk('public')->url($mensaje->imagen) : null,
             'user' => $this->formatUser($mensaje->user),
             'created_at' => $mensaje->created_at?->format('Y-m-d H:i'),
         ];

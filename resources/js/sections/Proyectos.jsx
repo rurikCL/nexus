@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
-import { Empty } from './Comando.jsx';
+import { Empty, mediaUrl } from './Comando.jsx';
 
 function apiCall(method, path, body) {
   const token = localStorage.getItem('nx-token');
@@ -8,6 +8,15 @@ function apiCall(method, path, body) {
     method,
     headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
     ...(body ? { body: JSON.stringify(body) } : {}),
+  }).then(r => r.json().then(d => (r.ok ? d : Promise.reject(d))));
+}
+
+function apiCallForm(method, path, formData) {
+  const token = localStorage.getItem('nx-token');
+  return fetch(path, {
+    method,
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    body: formData,
   }).then(r => r.json().then(d => (r.ok ? d : Promise.reject(d))));
 }
 
@@ -140,6 +149,7 @@ function ProyectoRow({ proyecto, onOpen }) {
 function NuevaPeticionModal({ onClose, onCreated }) {
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
+  const [imagen, setImagen] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async () => {
@@ -149,7 +159,11 @@ function NuevaPeticionModal({ onClose, onCreated }) {
     }
     setBusy(true);
     try {
-      await apiCall('POST', '/api/proyectos', { titulo: titulo.trim(), descripcion: descripcion.trim() });
+      const fd = new FormData();
+      fd.append('titulo', titulo.trim());
+      fd.append('descripcion', descripcion.trim());
+      if (imagen) fd.append('imagen', imagen);
+      await apiCallForm('POST', '/api/proyectos', fd);
       toast('Petición enviada a los Sentinelas', { tone: 'success', icon: 'check' });
       onCreated();
     } catch (e) {
@@ -171,6 +185,16 @@ function NuevaPeticionModal({ onClose, onCreated }) {
           <textarea className="nx-input" style={{ minHeight: 120, resize: 'vertical' }} value={descripcion}
             onChange={e => setDescripcion(e.target.value)} placeholder="Explica en qué consiste el proyecto y por qué debería aprobarse..." />
         </div>
+        <div>
+          <label className="nx-label">Imagen (opcional)</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label className="nx-btn nx-btn-sm" style={{ cursor: 'pointer' }}>
+              <Icon name="camera" size={12} /> Adjuntar imagen
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setImagen(e.target.files?.[0] ?? null)} />
+            </label>
+            {imagen && <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>{imagen.name}</span>}
+          </div>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
           <Btn onClick={onClose}>Cancelar</Btn>
           <Btn kind="accent" icon="check" onClick={handleSubmit} disabled={busy}>
@@ -186,6 +210,7 @@ function ProyectoDetailModal({ proyecto, esGestor, myUserId, onClose, onChanged 
   const [mensajes, setMensajes] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(true);
   const [nuevoMensaje, setNuevoMensaje] = useState('');
+  const [imagenMensaje, setImagenMensaje] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showAprobar, setShowAprobar] = useState(false);
 
@@ -208,8 +233,12 @@ function ProyectoDetailModal({ proyecto, esGestor, myUserId, onClose, onChanged 
     if (!nuevoMensaje.trim() || busy) return;
     setBusy(true);
     try {
-      await apiCall('POST', `/api/proyectos/${proyecto.id}/mensajes`, { mensaje: nuevoMensaje.trim() });
+      const fd = new FormData();
+      fd.append('mensaje', nuevoMensaje.trim());
+      if (imagenMensaje) fd.append('imagen', imagenMensaje);
+      await apiCallForm('POST', `/api/proyectos/${proyecto.id}/mensajes`, fd);
       setNuevoMensaje('');
+      setImagenMensaje(null);
       loadMensajes();
     } catch (e) {
       toast(e?.message || 'No se pudo enviar el mensaje', { tone: 'error', icon: 'x' });
@@ -257,6 +286,12 @@ function ProyectoDetailModal({ proyecto, esGestor, myUserId, onClose, onChanged 
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{proyecto.descripcion}</p>
+
+        {proyecto.imagen_url && (
+          <a href={mediaUrl(proyecto.imagen_url)} target="_blank" rel="noreferrer">
+            <img src={mediaUrl(proyecto.imagen_url)} alt="" style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 8, border: '1px solid var(--holo-line)', display: 'block' }} />
+          </a>
+        )}
 
         {(proyecto.responsable || proyecto.eta) && (
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -319,16 +354,30 @@ function ProyectoDetailModal({ proyecto, esGestor, myUserId, onClose, onChanged 
                   <span className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)' }}>{m.created_at}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--txt-dim)', whiteSpace: 'pre-wrap' }}>{m.mensaje}</div>
+                {m.imagen_url && (
+                  <a href={mediaUrl(m.imagen_url)} target="_blank" rel="noreferrer">
+                    <img src={mediaUrl(m.imagen_url)} alt="" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 6, border: '1px solid var(--holo-line)', display: 'block', marginTop: 6 }} />
+                  </a>
+                )}
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              className="nx-input" style={{ flex: 1 }} placeholder="Agregar un mensaje a la bitácora..."
-              value={nuevoMensaje} onChange={e => setNuevoMensaje(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') enviarMensaje(); }}
-            />
-            <Btn kind="accent" icon="check" onClick={enviarMensaje} disabled={busy || !nuevoMensaje.trim()}>Enviar</Btn>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="nx-input" style={{ flex: 1 }} placeholder="Agregar un mensaje a la bitácora..."
+                value={nuevoMensaje} onChange={e => setNuevoMensaje(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') enviarMensaje(); }}
+              />
+              <Btn kind="accent" icon="check" onClick={enviarMensaje} disabled={busy || !nuevoMensaje.trim()}>Enviar</Btn>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label className="nx-btn nx-btn-sm" style={{ cursor: 'pointer' }}>
+                <Icon name="camera" size={12} /> Adjuntar imagen (opcional)
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setImagenMensaje(e.target.files?.[0] ?? null)} />
+              </label>
+              {imagenMensaje && <span style={{ fontSize: 12, color: 'var(--txt-dim)' }}>{imagenMensaje.name}</span>}
+            </div>
           </div>
         </div>
       </div>
