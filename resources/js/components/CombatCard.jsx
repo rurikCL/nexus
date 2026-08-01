@@ -903,7 +903,9 @@ function ResultCardModal({ generate, fileName, onClose, markdown, markdownFileNa
 
   const downloadMarkdown = () => {
     if (!markdown) return;
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    // BOM al inicio: sin él, editores que no autodetectan UTF-8 (ej. Notepad clásico)
+    // interpretan el archivo como ANSI/Windows-1252 y las tildes salen corruptas.
+    const blob = new Blob([String.fromCharCode(0xFEFF) + markdown], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -923,6 +925,9 @@ function ResultCardModal({ generate, fileName, onClose, markdown, markdownFileNa
       background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(6px)',
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxHeight: '94vh' }}>
+        {dataUrl && markdown && (
+          <button className="nx-btn nx-btn-ghost" onClick={downloadMarkdown}>📄 Descargar Markdown</button>
+        )}
         {error ? (
           <div style={{ color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 12 }}>
             No se pudo generar la tarjeta.
@@ -947,9 +952,6 @@ function ResultCardModal({ generate, fileName, onClose, markdown, markdownFileNa
           {dataUrl && (
             <>
               <button className="nx-btn nx-btn-accent" onClick={download}>⬇ Descargar</button>
-              {markdown && (
-                <button className="nx-btn nx-btn-ghost" onClick={downloadMarkdown}>📄 Descargar Markdown</button>
-              )}
               {canShareFiles && (
                 <button className="nx-btn nx-btn-accent" onClick={share}>📤 Compartir</button>
               )}
