@@ -792,14 +792,14 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const saludoBlockH = 20 + saludoMaxLines * saludoLineH;
   const habCellSize = 76;
   const habLabelH = 16;
-  const habRowGap = 12;
-  const habColGap = 14;
+  const habRowGap = 16;
+  const habColGap = 20;
   const habGridH = (habCellSize + habLabelH) * 2 + habRowGap; // grilla 2×2 de paintHabilidadesGrid (celda + etiqueta, ×2 filas + separación)
   const habilidadesBlockH = hasHabilidades ? 22 + 20 + habGridH : 0;
   const leftColH = saludoBlockH + habilidadesBlockH;
   const sectionH = Math.max(attrSectionH, leftColH);
 
-  const attrBoxPad = 6;
+  const attrBoxPad = 12;
   const attrBoxTop = statsTop - 16 - attrBoxPad;
   const attrBoxBottom = statsTop + sectionH + 10 + attrBoxPad;
   paintBoxBg(ctx, innerX, attrBoxTop, innerW, attrBoxBottom - attrBoxTop, 10);
@@ -822,8 +822,8 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line, habCellSize, habLabelH, habRowGap, habColGap);
   }
 
-  const attrRowsEndY = paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
-  paintStatBoxes(ctx, danoEntries, attrColX, attrRowsEndY + danoGap, attrColW, danoBoxH);
+  const attrRowsEndY = paintRows(ctx, rows, statsTop, attrColX + attrBoxPad, attrColX + attrColW - attrBoxPad, rowH);
+  paintStatBoxes(ctx, danoEntries, attrColX + attrBoxPad, attrRowsEndY + danoGap, attrColW - attrBoxPad * 2, danoBoxH);
 
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
@@ -834,6 +834,31 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   await paintCardLogo(ctx, innerRight, cardH - pad);
   return canvas;
+}
+
+/**
+ * Recalcula los atributos de un NPC/jefe/enemigo "como si se enfrentara" a `nivel` — misma
+ * fórmula que usa el combate real: +1 a todos los atributos por nivel (RaidCombatController::
+ * getNpcStats en el servidor para jefes en RAID; el mismo cálculo inline en NpcCombatScreen.jsx
+ * para enemigos/NPCs fuera de RAID). Solo los Jefes reciben el bono plano de nivel en `dano`
+ * (daño/curación base) — `dano_escudo`/`dano_perforante` nunca escalan por nivel en ningún caso.
+ * `punteria` en 0 es un flag de "sin ataque a distancia" y se mantiene en 0 aunque suba el nivel.
+ */
+export function applyNivelACombate(entity, nivel, esJefe) {
+  const n = Math.max(0, Number(nivel) || 0);
+  const danoBase = entity.dano ?? 0;
+  return {
+    ...entity,
+    nivel: n,
+    vida: Math.max(entity.vida ?? 1, 1) + n,
+    escudo: (entity.escudo ?? 0) + n,
+    ataque: Math.max(entity.ataque ?? 1, 1) + n,
+    defensa: Math.max(entity.defensa ?? 1, 1) + n,
+    movimiento: Math.max(entity.movimiento ?? 1, 1) + n,
+    iniciativa: Math.max(entity.iniciativa ?? 1, 1) + n,
+    punteria: (entity.punteria ?? 0) > 0 ? entity.punteria + n : 0,
+    dano: esJefe ? danoBase + (danoBase >= 0 ? n : -n) : danoBase,
+  };
 }
 
 export async function drawNpcCard(npc) {

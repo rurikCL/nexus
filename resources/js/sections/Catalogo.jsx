@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, Panel, Chip, toast } from '../components/ui.jsx';
+import { Icon, Panel, Chip, Modal, Btn, toast } from '../components/ui.jsx';
 import { NX } from '../data/seed.js';
 import { mediaUrl } from '../utils/printableCard.js';
-import EntityCardModal, { TIPO_HAB_LABEL, RAREZA_LABEL, NPC_TIPO_LABEL } from '../components/EntityCard.jsx';
+import EntityCardModal, { TIPO_HAB_LABEL, RAREZA_LABEL, NPC_TIPO_LABEL, applyNivelACombate } from '../components/EntityCard.jsx';
 import { ESTADOS_COMBATE, STATS_COMBATE, CATEGORIA_ESTADO_LABEL } from '../data/estadosCombate.js';
 import { Empty } from './Comando.jsx';
 
@@ -222,6 +222,35 @@ function FormaDiagramModal({ onClose }) {
   );
 }
 
+/** Pide el nivel de dificultad antes de generar la carta de un jefe/enemigo — sus atributos
+ * varían según el nivel al que se enfrenten en el Mapa Galáctico (nivel base del catálogo,
+ * o el sobrescrito por la sala del dungeon / la asignación a un Lugar). */
+function NivelPickerModal({ item, onClose, onConfirm }) {
+  const [nivel, setNivel] = useState(item.nivel ?? 1);
+
+  return (
+    <Modal open onClose={onClose} kicker="Vista previa de combate" title={`¿A qué nivel enfrentas a ${item.nombre}?`} zIndex={1400} width={380}>
+      <div style={{ display: 'grid', gap: 14 }}>
+        <p style={{ fontSize: 12, color: 'var(--txt-dim)', margin: 0 }}>
+          Los atributos de la carta se ajustan al nivel elegido, igual que en un combate real del Mapa Galáctico.
+        </p>
+        <div>
+          <label className="nx-label">Nivel (★)</label>
+          <input
+            className="nx-input" type="number" min={1} max={30}
+            value={nivel}
+            onChange={e => setNivel(Math.max(1, Number(e.target.value) || 1))}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <Btn onClick={onClose}>Cancelar</Btn>
+          <Btn kind="accent" icon="check" onClick={() => onConfirm(nivel)}>Generar carta</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function EntityGridCard({ item, category, onClick }) {
   const isReferencia = category.id === 'buffs_estados';
   const thumb = isReferencia ? null : mediaUrl(item.imagen ?? item.imagen_mini ?? item.icono_url ?? item.icono);
@@ -415,6 +444,7 @@ export function CatalogoView() {
   const [activeFilters, setActiveFilters] = useState({ tipo: 'todos', forma: 'todos', rareza: 'todos', kind: 'todos', categoria: 'todos' });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [nivelPickerFor, setNivelPickerFor] = useState(null); // { kind, item, esJefe } — jefes/enemigos piden nivel antes de generar la carta
   const [showFormaDiagram, setShowFormaDiagram] = useState(false);
   const [jefesTab, setJefesTab] = useState('jefes'); // 'jefes' | 'ranking'
 
@@ -583,7 +613,15 @@ export function CatalogoView() {
                     key={item.id}
                     item={item}
                     category={category}
-                    onClick={() => setSelected({ kind: item.kind ?? category.kind, item })}
+                    onClick={() => {
+                      const kind = item.kind ?? category.kind;
+                      const esJefe = kind === 'npc' && item.tipo === 'jefe';
+                      if (esJefe || kind === 'enemigo') {
+                        setNivelPickerFor({ kind, item, esJefe });
+                      } else {
+                        setSelected({ kind, item });
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -591,6 +629,18 @@ export function CatalogoView() {
           </>
         )}
       </Panel>
+
+      {nivelPickerFor && (
+        <NivelPickerModal
+          item={nivelPickerFor.item}
+          onClose={() => setNivelPickerFor(null)}
+          onConfirm={(nivel) => {
+            const item = applyNivelACombate(nivelPickerFor.item, nivel, nivelPickerFor.esJefe);
+            setSelected({ kind: nivelPickerFor.kind, item });
+            setNivelPickerFor(null);
+          }}
+        />
+      )}
 
       {selected && (
         <EntityCardModal kind={selected.kind} item={selected.item} onClose={() => setSelected(null)} />
