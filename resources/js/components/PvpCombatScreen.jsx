@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion, playCombatePvp } from '../utils/sounds.js';
 import { useDiceRoller, useDragToThrow, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
@@ -256,6 +256,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prevOverflow; };
   }, []);
+
+  useEffect(() => { void playCombatePvp(); }, []);
 
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);

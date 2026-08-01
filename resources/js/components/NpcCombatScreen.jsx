@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
-import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
+import { playClickHabilidad, playClickOpcion, playCombateNpc } from '../utils/sounds.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -454,6 +454,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   /* Iniciativa — solo si es combate nuevo (no restaurado) */
   useEffect(() => {
     if (initialState) return;
+    void playCombateNpc();
     const pR = d20(); const nR = d20();
     const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
     const first = pT >= nT ? 'player' : 'npc';

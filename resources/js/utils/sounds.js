@@ -129,3 +129,6 @@ export const playClickOpcion = (opts) => playConfiguredSound('sonido_click_opcio
 export const playMensajeUsuario = (opts) => playConfiguredSound('sonido_mensaje', 'mensaje_usuario', opts);
 export const playNotificacionDuelo = (opts) => playConfiguredSound('sonido_notificacion_duelo', 'notificacion', opts);
 export const playAtras = (opts) => playConfiguredSound('sonido_atras', 'atras_click', opts);
+export const playCombateNpc  = (opts) => playConfiguredSound('sonido_combate_npc', 'notificacion', opts);
+export const playCombateJefe = (opts) => playConfiguredSound('sonido_combate_jefe', 'notificacion', opts);
+export const playCombatePvp  = (opts) => playConfiguredSound('sonido_combate_pvp', 'notificacion', opts);
