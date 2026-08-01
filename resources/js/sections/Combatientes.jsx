@@ -322,7 +322,15 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
         <div className="nx-panel-body" style={{ display: 'grid', gap: 18 }}>
           {/* Lore */}
           {c.lore && (
-            <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line' }}>{c.lore}</p>
+            <div style={{
+              borderLeft: '3px solid var(--holo)',
+              boxShadow: 'inset 10px 0 16px -14px var(--holo)',
+              background: 'linear-gradient(90deg, color-mix(in srgb, var(--holo) 6%, transparent), transparent 65%)',
+              padding: '4px 8px 4px 14px',
+              borderRadius: '0 4px 4px 0',
+            }}>
+              <p style={{ fontSize: 13, color: 'var(--txt-dim)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-line', fontStyle: 'italic' }}>{c.lore}</p>
+            </div>
           )}
 
           {/* Widgets */}
