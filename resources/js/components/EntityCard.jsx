@@ -521,11 +521,7 @@ async function paintHabilidadIconCell(ctx, hab, x, y, size, borderColor) {
 /** Grilla 2×2 de las hasta 4 habilidades del NPC/jefe (habilidad1..4), imagen + nombre debajo
  * de cada una — centrada en el ancho disponible. Los cupos sin habilidad quedan vacíos
  * (recuadro punteado) para no romper la simetría 2×2. Devuelve el alto total ocupado. */
-async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor) {
-  const cellSize = 108;
-  const colGap = 22;
-  const rowGap = 20;
-  const labelH = 20;
+async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor, cellSize = 108, labelH = 20, rowGap = 20, colGap = 22) {
   const rowH = cellSize + labelH;
   const gridW = cellSize * 2 + colGap;
   const gridX = x + (w - gridW) / 2;
@@ -565,10 +561,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const frame = forcedFrameKey ? FRAME[forcedFrameKey] : (FRAME[NPC_TIPO_FRAME[entity.tipo]] ?? FRAME.danger);
   const nivel = entity.nivel ?? 1;
 
-  /* Carta más alta que el resto (habilidad/objeto/estado) para dejarle sitio a la grilla
-     2×2 de habilidades del NPC/jefe, apilada dentro de la columna de saludo. Margen generoso
-     porque el cuadro de vida/escudo puede crecer si los pips de stat envuelven a 2-3 filas. */
-  const cardH = CARD_H + 230;
+  const cardH = CARD_H;
 
   const canvas = document.createElement('canvas');
   canvas.width = CARD_W;
@@ -595,7 +588,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   }
 
   const artY = pad + 118;
-  const artH = 396;
+  const artH = 280;
   await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line);
 
   const typeY = artY + artH + 36;
@@ -633,9 +626,13 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const hasHabilidades = habilidades.some(Boolean);
 
   const saludoLineH = 20;
-  const saludoMaxLines = 4;
+  const saludoMaxLines = 3;
   const saludoBlockH = 20 + saludoMaxLines * saludoLineH;
-  const habGridH = (108 + 20) * 2 + 20; // grilla 2×2 de paintHabilidadesGrid (celda + etiqueta, ×2 filas + separación)
+  const habCellSize = 76;
+  const habLabelH = 16;
+  const habRowGap = 12;
+  const habColGap = 14;
+  const habGridH = (habCellSize + habLabelH) * 2 + habRowGap; // grilla 2×2 de paintHabilidadesGrid (celda + etiqueta, ×2 filas + separación)
   const habilidadesBlockH = hasHabilidades ? 22 + 20 + habGridH : 0;
   const leftColH = saludoBlockH + habilidadesBlockH;
   const sectionH = Math.max(attrSectionH, leftColH);
@@ -660,7 +657,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     ctx.fillStyle = 'rgba(150,200,255,0.55)';
     ctx.font = '600 12px "JetBrains Mono"';
     ctx.fillText('HABILIDADES', innerX + saludoColW / 2, habLabelY);
-    await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line);
+    await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line, habCellSize, habLabelH, habRowGap, habColGap);
   }
 
   paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
