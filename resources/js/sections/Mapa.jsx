@@ -2958,11 +2958,18 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               </p>
             )}
 
-            {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador */}
+            {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador.
+                Si además hay un enemigo sin derrotar, se bloquea hasta resolverlo (igual que mover/huir en el backend). */}
             {sala.tiene_cofre && !sala.cofre_abierto && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
-                <p style={{ color: 'var(--holocron-oro)', fontSize: 13, marginBottom: 10 }}>🎁 Hay un cofre en esta sala.</p>
-                <Btn kind="gold" onClick={abrirCofre} disabled={busy}>Abrir Cofre</Btn>
+                {bloqueado ? (
+                  <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>🔒 Derrota a {sala.enemigo.nombre} para abrir el cofre.</p>
+                ) : (
+                  <>
+                    <p style={{ color: 'var(--holocron-oro)', fontSize: 13, marginBottom: 10 }}>🎁 Hay un cofre en esta sala.</p>
+                    <Btn kind="gold" onClick={abrirCofre} disabled={busy}>Abrir Cofre</Btn>
+                  </>
+                )}
               </div>
             )}
           </div>

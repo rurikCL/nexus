@@ -350,6 +350,10 @@ class DungeonController extends Controller
             ['visitada' => true, 'resuelta' => ! $sala->enemigo_id]
         );
 
+        if ($sala->enemigo_id && ! $progreso->resuelta) {
+            return response()->json(['error' => 'Debes derrotar al enemigo de esta sala antes de abrir el cofre.'], 422);
+        }
+
         if ($progreso->cofre_abierto) {
             return response()->json(['ok' => true, 'ya_abierto' => true, 'recompensas' => []]);
         }
