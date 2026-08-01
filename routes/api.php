@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\NpcChatController;
 use App\Http\Controllers\Api\NpcVendedorController;
 use App\Http\Controllers\Api\PirataEncuentroController;
 use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\ProyectoController;
 use App\Http\Controllers\Api\PvpCombatController;
 use App\Http\Controllers\Api\RaidCombatController;
 use App\Http\Controllers\Api\RolHabilidadController;
@@ -114,6 +115,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);
     Route::get('/tasks/{task}/updates', [TaskController::class, 'updates']);
     Route::post('/tasks/{task}/updates', [TaskController::class, 'addUpdate']);
+
+    Route::get('/proyectos', [ProyectoController::class, 'index']);
+    Route::post('/proyectos', [ProyectoController::class, 'store']);
+    Route::get('/proyectos/usuarios', [ProyectoController::class, 'usuarios']);
+    Route::get('/proyectos/{proyecto}', [ProyectoController::class, 'show']);
+    Route::post('/proyectos/{proyecto}/aprobar', [ProyectoController::class, 'aprobar']);
+    Route::post('/proyectos/{proyecto}/rechazar', [ProyectoController::class, 'rechazar']);
+    Route::post('/proyectos/{proyecto}/completar', [ProyectoController::class, 'completar']);
+    Route::post('/proyectos/{proyecto}/cancelar', [ProyectoController::class, 'cancelar']);
+    Route::get('/proyectos/{proyecto}/mensajes', [ProyectoController::class, 'mensajes']);
+    Route::post('/proyectos/{proyecto}/mensajes', [ProyectoController::class, 'addMensaje']);
 
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);
