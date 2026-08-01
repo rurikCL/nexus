@@ -22,8 +22,8 @@ class WidgetLayoutController extends Controller
     {
         $data = $request->validate([
             'widgets'         => 'required|array',
-            'widgets.*.id'    => 'required|string',
-            'widgets.*.cols'  => 'required|integer|in:1,2',
+            'widgets.*.id'    => 'required',
+            'widgets.*.cols'  => 'nullable|integer|in:1,2',
         ]);
 
         WidgetLayout::updateOrCreate(

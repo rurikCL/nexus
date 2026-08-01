@@ -362,7 +362,7 @@ function StepIdentidad({ form, set }) {
               value={form.handle}
               onChange={e => set('handle', e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
               placeholder="tu_handle"
-              maxLength={20}
+              maxLength={10}
               style={{ ...inputStyle, paddingLeft: 30 }}
               onFocus={e => e.target.style.borderColor = 'var(--holo)'}
               onBlur={e => e.target.style.borderColor = 'var(--holo-line)'}

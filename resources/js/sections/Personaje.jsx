@@ -938,7 +938,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
               </div>
               <div>
                 <label className="nx-label">Alias (tag) *</label>
-                <input className="nx-input" value={ch.handle} onChange={(e) => S.setCharacter({ ...ch, handle: e.target.value.toUpperCase() })} />
+                <input className="nx-input" value={ch.handle} onChange={(e) => S.setCharacter({ ...ch, handle: e.target.value.toUpperCase() })} maxLength={10} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="nx-label">Grito de guerra</label>

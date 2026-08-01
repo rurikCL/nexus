@@ -43,7 +43,7 @@ class CharacterController extends Controller
     {
         $data = $request->validate([
             'name'        => 'required|string|max:255',
-            'handle'      => 'required|string|max:20',
+            'handle'      => 'required|string|max:10',
             'bio'         => 'nullable|string',
             'lore'        => 'nullable|string',
             'cls'         => 'required|in:forma1,forma2,forma3,forma4,forma5,forma6,forma7',
