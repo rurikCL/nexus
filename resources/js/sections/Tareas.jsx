@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Modal, toast, NumberInput } from '../components/ui.jsx';
-import { Empty, mediaUrl, useWindowWidth } from './Comando.jsx';
+import { Empty, mediaUrl } from './Comando.jsx';
 
 const TASK_STATUS = {
   pendiente:  { label: 'Pendiente',   tone: 'dim',    color: 'var(--txt-dim)' },
@@ -273,7 +273,6 @@ function PupilTaskCard({ t, onUpdateProgress, onSendToReview, onOpenDetail }) {
 
 // ---------- vista TUTOR ----------
 function TareasTutor({ tasks, setTasks, pupils, user, onReload, onOpenDetail }) {
-  const isMobile = useWindowWidth() < 640;
   const [assignOpen, setAssignOpen] = useState(false);
   const [preselectedIds, setPreselectedIds] = useState([]);
   const [reviewFor, setReviewFor] = useState(null);
@@ -311,7 +310,7 @@ function TareasTutor({ tasks, setTasks, pupils, user, onReload, onOpenDetail }) 
           </Btn>
         }>
         {pupils.length === 0 && <Empty label="Aún no tienes pupilos asignados" />}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           {pupils.map(p => {
             const ts = tasks.filter(t => t.pupilId === p.userId);
             const finalizadas = ts.filter(t => t.status === 'completada').length;
