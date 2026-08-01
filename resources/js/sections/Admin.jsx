@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, Panel, Btn, Chip, Modal, toast, CropImageField } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Modal, toast, CropImageField, NumberInput } from '../components/ui.jsx';
 
 function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
@@ -670,7 +670,7 @@ function FieldInput({ field, value, onChange, relatedOptions }) {
 
   if (field.type === 'number') {
     return (
-      <input type="number" {...base} min={field.min ?? 0} {...(field.max != null ? { max: field.max } : {})}
+      <NumberInput {...base} min={field.min ?? 0} {...(field.max != null ? { max: field.max } : {})}
         value={value ?? 0} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
       />
     );
@@ -1160,7 +1160,7 @@ function VentaPicker({ label, catalog, selected, onChange }) {
               {on && (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <input type="number" className="nx-input" min={0} style={{ width: 58, fontSize: 11, padding: '4px 6px' }}
+                    <NumberInput className="nx-input" min={0} style={{ width: 58, fontSize: 11, padding: '4px 6px' }}
                       value={interes}
                       onChange={e => setInteres(item.id, e.target.value === '' ? 0 : Number(e.target.value))}
                     />
@@ -1234,14 +1234,14 @@ function EnemigoSpawnPicker({ label, catalog, selected, onChange }) {
               {on && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input type="number" className="nx-input" min={1} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
+                    <NumberInput className="nx-input" min={1} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
                       value={cfg.tasa_aparicion}
                       onChange={e => setCfg(item.id, 'tasa_aparicion', e.target.value === '' ? 1 : Number(e.target.value))}
                     />
                     <span style={{ fontSize: 10, color: 'var(--txt-faint)' }}>prioridad</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input type="number" className="nx-input" min={0} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
+                    <NumberInput className="nx-input" min={0} style={{ width: 52, fontSize: 11, padding: '4px 6px' }}
                       value={cfg.nivel}
                       onChange={e => setCfg(item.id, 'nivel', e.target.value === '' ? 0 : Number(e.target.value))}
                     />
@@ -1316,7 +1316,7 @@ function RecompensaDropEditor({ recompensas, onChange, relatedOptions }) {
                 </div>
                 <div>
                   <label className="nx-label">% de aparición</label>
-                  <input className="nx-input" type="number" min="1" max="100" disabled={esCreditos}
+                  <NumberInput className="nx-input" min="1" max="100" disabled={esCreditos}
                     value={esCreditos ? 100 : (r.porcentaje ?? 100)}
                     onChange={e => setAt(i, 'porcentaje', Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
                   />
@@ -1327,7 +1327,7 @@ function RecompensaDropEditor({ recompensas, onChange, relatedOptions }) {
               {(tipo === 'creditos' || tipo === 'punto_habilidad') && (
                 <div style={{ marginTop: 10 }}>
                   <label className="nx-label">{tipo === 'creditos' ? 'Monto de créditos' : 'Cantidad de puntos'}</label>
-                  <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setAt(i, 'valor', Number(e.target.value))} />
+                  <NumberInput className="nx-input" min="0" value={r.valor ?? 0} onChange={e => setAt(i, 'valor', Number(e.target.value))} />
                 </div>
               )}
               {tipo === 'titulo' && (
@@ -1915,7 +1915,7 @@ function AssignObjetoModal({ objeto, onClose }) {
       </p>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
         <label className="nx-label" style={{ margin: 0, whiteSpace: 'nowrap' }}>Cantidad c/u</label>
-        <input type="number" min={1} className="nx-input" value={cantidad}
+        <NumberInput min={1} className="nx-input" value={cantidad}
           onChange={e => setCantidad(Math.max(1, Number(e.target.value) || 1))}
           style={{ width: 70, textAlign: 'center' }}
         />
@@ -3004,7 +3004,7 @@ function MisionesAdmin() {
             </div>
             <div>
               <label className="nx-label">Orden</label>
-              <input className="nx-input" type="number" min="0" value={form.orden} onChange={e => set('orden', +e.target.value)} />
+              <NumberInput className="nx-input" min="0" value={form.orden} onChange={e => set('orden', +e.target.value)} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               <label className="nx-label">Activa</label>
@@ -3036,7 +3036,7 @@ function MisionesAdmin() {
           {form.tipo_mision === 'comunidad' && (
             <div>
               <label className="nx-label">Puntos requeridos (meta global)</label>
-              <input className="nx-input" type="number" min="1" value={form.puntos_requeridos} onChange={e => set('puntos_requeridos', +e.target.value)} />
+              <NumberInput className="nx-input" min="1" value={form.puntos_requeridos} onChange={e => set('puntos_requeridos', +e.target.value)} />
             </div>
           )}
           {form.tipo_mision === 'individual' && (
@@ -3157,7 +3157,7 @@ function MisionesAdmin() {
                     </div>
                     <div>
                       <label className="nx-label">Meta</label>
-                      <input className="nx-input" type="number" min="1" value={o.meta ?? 1} onChange={e => setObj(i, 'meta', +e.target.value)} />
+                      <NumberInput className="nx-input" min="1" value={o.meta ?? 1} onChange={e => setObj(i, 'meta', +e.target.value)} />
                     </div>
                     <div>
                       <label className="nx-label">Unidad</label>
@@ -3238,7 +3238,7 @@ function MisionesAdmin() {
                     {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && r.tipo !== 'insignia' && (
                       <div>
                         <label className="nx-label">Valor</label>
-                        <input className="nx-input" type="number" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
+                        <NumberInput className="nx-input" min="0" value={r.valor ?? 0} onChange={e => setRec(i, 'valor', +e.target.value)} />
                       </div>
                     )}
                   </div>
@@ -3557,7 +3557,7 @@ function TorneosAdmin() {
             </div>
             <div>
               <label className="nx-label">Cupos *</label>
-              <input className="nx-input" type="number" min="2" value={form.cupos} onChange={e => set('cupos', e.target.value)} />
+              <NumberInput className="nx-input" min="2" value={form.cupos} onChange={e => set('cupos', e.target.value)} />
             </div>
           </div>
 

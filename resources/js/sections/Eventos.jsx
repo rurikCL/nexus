@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Modal, toast, NumberInput } from '../components/ui.jsx';
 import { Empty } from './Comando.jsx';
 
 const EVENT_TYPES = {
@@ -316,7 +316,7 @@ function CreateEventModal({ open, onClose, onCreated, sedes }) {
           </div>
           <div>
             <label className="nx-label">Cupos</label>
-            <input className="nx-input nx-data" type="number" value={f.capacity} onChange={e => setF({ ...f, capacity: e.target.value })} />
+            <NumberInput className="nx-input nx-data" value={f.capacity} onChange={e => setF({ ...f, capacity: e.target.value })} />
           </div>
         </div>
         <div>
@@ -329,7 +329,7 @@ function CreateEventModal({ open, onClose, onCreated, sedes }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div>
             <label className="nx-label">Recompensa (créditos)</label>
-            <input className="nx-input nx-data" type="number" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
+            <NumberInput className="nx-input nx-data" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
           </div>
           <div>
             <label className="nx-label">Insignia / medalla (opcional)</label>

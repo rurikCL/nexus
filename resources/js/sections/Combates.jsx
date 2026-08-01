@@ -11,7 +11,7 @@ function useWindowWidth() {
   return w;
 }
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, Modal, toast, ImageSlot, NumberInput } from '../components/ui.jsx';
 
 /* ===================== SCORING ===================== */
 
@@ -1170,7 +1170,7 @@ export function BetModal({ data, onClose, S }) {
         </div>
         <div>
           <label className="nx-label">Monto a apostar</label>
-          <input className="nx-input nx-data" type="number" value={amt} onChange={(e) => setAmt(+e.target.value)} style={{ fontSize: 18 }} />
+          <NumberInput className="nx-input nx-data" value={amt} onChange={(e) => setAmt(+e.target.value)} style={{ fontSize: 18 }} />
           <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
             {QUICK.map(q => <button key={q} className="nx-chip dim" style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }} onClick={() => setAmt(q)}>{q}</button>)}
             <button className="nx-chip dim" style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }} onClick={() => setAmt(S.credits)}>MAX</button>
@@ -1261,7 +1261,7 @@ export function ChallengeModal({ open, onClose, S, initialOppId }) {
 
           <div>
             <label className="nx-label">Apuesta del duelo (créditos)</label>
-            <input className="nx-input nx-data" type="number" value={stake} onChange={(e) => setStake(+e.target.value)} style={{ fontSize: 16 }} />
+            <NumberInput className="nx-input nx-data" value={stake} onChange={(e) => setStake(+e.target.value)} style={{ fontSize: 16 }} />
           </div>
           <div>
             <label className="nx-label">Fecha propuesta del combate</label>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Modal, toast } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Modal, toast, NumberInput } from '../components/ui.jsx';
 import { Empty, mediaUrl } from './Comando.jsx';
 
 const TASK_STATUS = {
@@ -757,7 +757,7 @@ function AssignModal({ open, pupils, preselectedIds, onClose, onCreated, user })
           </div>
           <div>
             <label className="nx-label">Recompensa (créditos)</label>
-            <input className="nx-input nx-data" type="number" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
+            <NumberInput className="nx-input nx-data" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
           </div>
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, color: 'var(--txt-dim)' }}>

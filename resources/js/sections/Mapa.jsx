@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon, Panel, Btn, Chip, Modal, toast } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Modal, toast, NumberInput } from '../components/ui.jsx';
 import { playAtras, playSound } from '../utils/sounds.js';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
@@ -3530,7 +3530,7 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
                   color: 'var(--txt)', cursor: 'pointer', fontSize: 16, lineHeight: 1,
                 }}
               >−</button>
-              <input type="number" className="nx-input" min={1} max={espacioDisponible ?? 99}
+              <NumberInput className="nx-input" min={1} max={espacioDisponible ?? 99}
                 value={cantidad}
                 onChange={(e) => {
                   const v = Math.max(1, Number(e.target.value) || 1);
@@ -5324,8 +5324,8 @@ function TradeOfferModal({ target, userCharacter, onClose, onSent }) {
           <div className="nx-kicker" style={{ marginBottom: 8 }}>TU OFERTA</div>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
             <span style={{ fontSize: 11, color: 'var(--txt-dim)' }}>Créditos a ofrecer (tienes {misCreditos})</span>
-            <input
-              type="number" min={0} max={misCreditos} className="nx-input"
+            <NumberInput
+              min={0} max={misCreditos} className="nx-input"
               value={offerCredits}
               onChange={(e) => setOfferCredits(Math.max(0, Math.min(misCreditos, Number(e.target.value) || 0)))}
             />
@@ -5354,8 +5354,8 @@ function TradeOfferModal({ target, userCharacter, onClose, onSent }) {
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt)' }}>{obj.nombre}</div>
                       <div style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>x{max} disponibles</div>
                     </div>
-                    <input
-                      type="number" min={0} max={max} className="nx-input"
+                    <NumberInput
+                      min={0} max={max} className="nx-input"
                       style={{ width: 56, fontSize: 11 }}
                       value={selected[obj.id] ?? 0}
                       onChange={(e) => setCantidad(obj.id, e.target.value, max)}
@@ -5371,8 +5371,8 @@ function TradeOfferModal({ target, userCharacter, onClose, onSent }) {
           <div className="nx-kicker" style={{ marginBottom: 8 }}>QUÉ PIDES A CAMBIO</div>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 11, color: 'var(--txt-dim)' }}>Créditos que solicitas</span>
-            <input
-              type="number" min={0} className="nx-input"
+            <NumberInput
+              min={0} className="nx-input"
               value={requestCredits}
               onChange={(e) => setRequestCredits(Math.max(0, Number(e.target.value) || 0))}
             />

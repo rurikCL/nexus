@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { NX } from '../data/seed.js';
-import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast } from '../components/ui.jsx';
+import { Icon, Panel, Btn, Chip, Avatar, TierBadge, MedalIcon, Modal, toast, NumberInput } from '../components/ui.jsx';
 import { buildMissionCompletionTransmision } from '../utils/missionTransmission.js';
 
 function mediaUrl(path) {
@@ -168,12 +168,12 @@ function RecompensaRow({ r, idx, onChange, onRemove }) {
         </div>
         <div>
           <label className="nx-label">Créditos</label>
-          <input className="nx-input" type="number" min="0" value={r.creditos}
+          <NumberInput className="nx-input" min="0" value={r.creditos}
             onChange={e => up('creditos', +e.target.value)} />
         </div>
         <div>
           <label className="nx-label">Experiencia</label>
-          <input className="nx-input" type="number" min="0" value={r.experiencia}
+          <NumberInput className="nx-input" min="0" value={r.experiencia}
             onChange={e => up('experiencia', +e.target.value)} />
         </div>
       </div>

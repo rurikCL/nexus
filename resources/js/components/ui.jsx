@@ -97,6 +97,37 @@ export function Btn({ kind = 'ghost', icon, iconRight, children, sm, className =
   );
 }
 
+/* ---- Number input ----
+   Un input de texto enmascarado a solo dígitos en vez de <input type="number">, cuyo
+   comportamiento nativo (reformateo del valor, salto del cursor al final) obliga a
+   seleccionar todo el contenido para poder reemplazarlo. Expone el mismo evento
+   `onChange(e)` con `e.target.value` ya saneado, así que reemplaza <input type="number">
+   sin tener que tocar la lógica de cada callsite. */
+export function NumberInput({ value, onChange, min, max, className = 'nx-input', ...rest }) {
+  const handleChange = (e) => {
+    let digits = e.target.value.replace(/[^0-9]/g, '');
+    if (digits !== '') {
+      let n = parseInt(digits, 10);
+      if (min !== undefined && min !== null && n < Number(min)) n = Number(min);
+      if (max !== undefined && max !== null && n > Number(max)) n = Number(max);
+      digits = String(n);
+    }
+    e.target.value = digits;
+    onChange(e);
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      className={className}
+      value={value}
+      onChange={handleChange}
+      {...rest}
+    />
+  );
+}
+
 /* ---- Chip ---- */
 export function Chip({ tone = '', icon, children, style }) {
   return (
