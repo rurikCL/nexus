@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Icon, Panel, Btn, Chip, Avatar, Modal, toast } from '../components/ui.jsx';
 import { Empty } from './Comando.jsx';
 import { buildMissionCompletionTransmision } from '../utils/missionTransmission.js';
@@ -56,6 +56,94 @@ function hashColor(str) {
   let h = 5381;
   for (const c of (str ?? '?')) h = ((h << 5) + h) ^ c.charCodeAt(0);
   return HASH_COLORS[Math.abs(h) % HASH_COLORS.length];
+}
+
+/* Orden de las misiones persistido por sección (comunidad/individual/global),
+   mismo mecanismo (y mismo endpoint /api/layout/{section}) que el drag & drop
+   de widgets en Comando. */
+function useCardOrder(sectionKey, misiones) {
+  const [order, setOrder] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const saveTimer = useRef(null);
+
+  useEffect(() => {
+    apiCall('GET', `/api/layout/${sectionKey}`)
+      .then((d) => {
+        const saved = (d?.widgets ?? []).map((w) => (typeof w === 'object' ? w.id : w));
+        setOrder(saved.length ? saved : []);
+      })
+      .catch(() => setOrder([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKey]);
+
+  const ordered = useMemo(() => {
+    if (!order) return misiones;
+    const byId = new Map(misiones.map((m) => [m.id, m]));
+    const known = order.filter((id) => byId.has(id)).map((id) => byId.get(id));
+    const knownIds = new Set(order);
+    const fresh = misiones.filter((m) => !knownIds.has(m.id));
+    return [...known, ...fresh];
+  }, [misiones, order]);
+
+  const saveOrder = (ids) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      apiCall('PUT', `/api/layout/${sectionKey}`, { widgets: ids.map((id) => ({ id })) }).catch(() => {});
+    }, 800);
+  };
+
+  const applyDrop = (toIdx) => {
+    const fromIdx = ordered.findIndex((m) => m.id === draggingId);
+    if (fromIdx < 0 || fromIdx === toIdx) return;
+    const ids = ordered.map((m) => m.id);
+    const [item] = ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, item);
+    setOrder(ids);
+    saveOrder(ids);
+  };
+
+  return { ordered, draggingId, setDraggingId, overIdx, setOverIdx, applyDrop };
+}
+
+/* Envoltorio arrastrable para una tarjeta de misión — mismo lenguaje visual
+   (resaltado de destino + grip) que los widgets reordenables de Comando. */
+function DraggableCard({ id, idx, draggingId, overIdx, setDraggingId, setOverIdx, applyDrop, children }) {
+  const isDragging = draggingId === id;
+  const isOver = overIdx === idx && !isDragging;
+  return (
+    <div
+      draggable
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(id)); setDraggingId(id); }}
+      onDragEnd={() => { setDraggingId(null); setOverIdx(null); }}
+      onDragOver={(e) => { e.preventDefault(); if (overIdx !== idx) setOverIdx(idx); }}
+      onDrop={(e) => { e.preventDefault(); applyDrop(idx); setOverIdx(null); }}
+      style={{
+        position: 'relative',
+        opacity: isDragging ? 0.4 : 1,
+        outline: isOver ? '2px dashed rgba(56,205,240,.45)' : '2px dashed transparent',
+        outlineOffset: 4,
+        borderRadius: 'var(--radius-lg)',
+        transition: 'opacity .15s',
+      }}
+    >
+      <div
+        title="Arrastrar para reposicionar"
+        style={{
+          position: 'absolute', top: 6, right: 6, zIndex: 2,
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 4px',
+          padding: '4px 6px', cursor: 'grab', opacity: 0.32,
+          background: 'rgba(4,9,18,0.55)', borderRadius: 6,
+          userSelect: 'none', pointerEvents: 'none',
+        }}
+      >
+        {Array.from({ length: 6 }, (_, i) => (
+          <span key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--txt)', display: 'block' }} />
+        ))}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function useIsMobile() {
@@ -117,9 +205,9 @@ export function MisionesView({ S, user, onUserUpdate, onTransmision }) {
 
   return (
     <div className="nx-fade" style={{ display: 'grid', gap: 24 }}>
-      <GlobalSection misiones={misiones.global} onUpdate={updateGlobalMision} onUserUpdate={onUserUpdate} onTransmision={onTransmision} />
       <ComunidadSection misiones={misiones.comunidad} onReload={reload} user={user} />
       <IndividualSection misiones={misiones.individual} onReload={reload} />
+      <GlobalSection misiones={misiones.global} onUpdate={updateGlobalMision} onUserUpdate={onUserUpdate} onTransmision={onTransmision} />
     </div>
   );
 }
@@ -135,17 +223,20 @@ function GlobalSection({ misiones, onUpdate, onUserUpdate, onTransmision }) {
   const completadas = visibles.filter(m => m.status === 'completada');
   const gridCols = isMobile ? '1fr' : 'repeat(2, 1fr)';
   const selected = visibles.find(m => m.id === selectedId) ?? null;
+  const { ordered, draggingId, setDraggingId, overIdx, setOverIdx, applyDrop } = useCardOrder('misiones-global', activas);
 
   return (
     <Panel kicker="Global" title="Misiones Globales" icon="target">
       {visibles.length === 0 && <Empty label="No hay misiones globales activas" />}
-      {activas.length > 0 && (
+      {ordered.length > 0 && (
         <div style={{
           display: 'grid', gridTemplateColumns: gridCols, gap: 14,
           marginBottom: completadas.length ? 18 : 0,
         }}>
-          {activas.map(m => (
-            <GlobalCard key={m.id} mision={m} onOpen={() => setSelectedId(m.id)} />
+          {ordered.map((m, idx) => (
+            <DraggableCard key={m.id} id={m.id} idx={idx} draggingId={draggingId} overIdx={overIdx} setDraggingId={setDraggingId} setOverIdx={setOverIdx} applyDrop={applyDrop}>
+              <GlobalCard mision={m} onOpen={() => setSelectedId(m.id)} />
+            </DraggableCard>
           ))}
         </div>
       )}
@@ -410,13 +501,16 @@ export function GlobalMisionPopup({ mision, onClose, onUpdate, onUserUpdate, onT
 function ComunidadSection({ misiones, onReload, user }) {
   const [selectedId, setSelectedId] = useState(null);
   const selected = misiones.find(m => m.id === selectedId) ?? null;
+  const { ordered, draggingId, setDraggingId, overIdx, setOverIdx, applyDrop } = useCardOrder('misiones-comunidad', misiones);
 
   return (
     <Panel kicker="Global" title="Misiones de Comunidad" icon="roster">
       {misiones.length === 0 && <Empty label="No hay misiones de comunidad activas" />}
       <div style={{ display: 'grid', gap: 14 }}>
-        {misiones.map(m => (
-          <ComunidadCard key={m.id} mision={m} userId={user?.id} onOpen={() => setSelectedId(m.id)} />
+        {ordered.map((m, idx) => (
+          <DraggableCard key={m.id} id={m.id} idx={idx} draggingId={draggingId} overIdx={overIdx} setDraggingId={setDraggingId} setOverIdx={setOverIdx} applyDrop={applyDrop}>
+            <ComunidadCard mision={m} userId={user?.id} onOpen={() => setSelectedId(m.id)} />
+          </DraggableCard>
         ))}
       </div>
 
@@ -707,19 +801,22 @@ function IndividualSection({ misiones, onReload }) {
   const completadas  = misionesNpc.filter(m => m.status === 'completada');
   const gridCols = isMobile ? '1fr' : 'repeat(3, 1fr)';
   const selected = misionesNpc.find(m => m.id === selectedId) ?? null;
+  const { ordered, draggingId, setDraggingId, overIdx, setOverIdx, applyDrop } = useCardOrder('misiones-individual', activas);
 
   return (
     <Panel kicker="NPC" title="Misiones Individuales" icon="target">
       {misionesNpc.length === 0 && (
         <Empty label="No tienes misiones individuales asignadas — habla con los NPC del mapa" />
       )}
-      {activas.length > 0 && (
+      {ordered.length > 0 && (
         <div style={{
           display: 'grid', gridTemplateColumns: gridCols, gap: 14,
           marginBottom: completadas.length ? 18 : 0,
         }}>
-          {activas.map(m => (
-            <IndividualCard key={m.id} mision={m} onOpen={() => setSelectedId(m.id)} />
+          {ordered.map((m, idx) => (
+            <DraggableCard key={m.id} id={m.id} idx={idx} draggingId={draggingId} overIdx={overIdx} setDraggingId={setDraggingId} setOverIdx={setOverIdx} applyDrop={applyDrop}>
+              <IndividualCard mision={m} onOpen={() => setSelectedId(m.id)} />
+            </DraggableCard>
           ))}
         </div>
       )}
