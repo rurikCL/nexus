@@ -91,6 +91,9 @@ class CombatantController extends Controller
             'photo_url' => $character->photo
                 ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                 : null,
+            'rpg_photo_url' => $character->imagenMapa()
+                ? Storage::disk('public')->url($character->imagenMapa()).'?v='.$character->updated_at->timestamp
+                : null,
             'tutor' => $user->tutor
                 ? [
                     'id' => $user->tutor->id,

@@ -165,6 +165,7 @@ function CombatFormatCard({ c }) {
   const cs = c.combat_stats ?? {};
   const vida = Number(cs.vida ?? 0);
   const escudo = Number(cs.escudo ?? 0);
+  const avatarImg = c.rpg_photo_url || c.photo_url;
   return (
     <div style={{
       background: 'rgba(6,12,26,0.55)', border: '1px solid var(--holo-line)', borderRadius: 14,
@@ -174,8 +175,8 @@ function CombatFormatCard({ c }) {
         width: 88, height: 88, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
         border: `2px solid ${c.saber}`, background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
       }}>
-        {c.photo_url
-          ? <img src={c.photo_url} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {avatarImg
+          ? <img src={avatarImg} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <Icon name="user" size={24} style={{ color: 'var(--holo)', opacity: 0.5 }} />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>

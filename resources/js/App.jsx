@@ -64,6 +64,7 @@ function mergeApiCombatants(apiList, currentUserId) {
       sponsor:   api.sponsor    ?? '',
       joined:    api.joined_year ? String(api.joined_year) : '',
       photo_url: api.photo_url  ?? null,
+      rpg_photo_url: api.rpg_photo_url ?? null,
       titulo_activo: api.titulo_activo ?? null,
       sedeId:    api.sede_id     ?? null,
       sedeNombre: api.sede_nombre ?? null,
