@@ -88,8 +88,8 @@ class CombatantController extends Controller
             'sede_id' => $user->sede_id,
             'sede_nombre' => $user->sede?->nombre,
             'titulo_activo' => $character->tituloActivo?->only(['id', 'nombre', 'tipo']),
-            'photo_url' => $character->imagenMapa()
-                ? Storage::disk('public')->url($character->imagenMapa()).'?v='.$character->updated_at->timestamp
+            'photo_url' => $character->photo
+                ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                 : null,
             'tutor' => $user->tutor
                 ? [
