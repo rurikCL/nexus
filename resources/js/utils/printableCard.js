@@ -19,6 +19,7 @@ export function mediaUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   if (cleanPath.startsWith('/storage/')) return cleanPath;
   if (cleanPath.startsWith('/public/'))  return cleanPath.replace('/public/', '/storage/');
+  if (cleanPath.startsWith('/assets/'))  return cleanPath;
   return `/storage${cleanPath}`;
 }
 
