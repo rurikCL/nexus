@@ -497,6 +497,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     const baseCombat = ch.combat_base_stats ?? {};
     const currentPhoto = S.character?.photo_url ?? S.character?.photo ?? null;
     const resolvedPhoto = ch.photo_url ?? ch.photo ?? currentPhoto ?? null;
+    const currentImagenRpg = S.character?.imagen_rpg_url ?? S.character?.imagen_rpg ?? null;
+    const resolvedImagenRpg = ch.imagen_rpg_url ?? ch.imagen_rpg ?? currentImagenRpg ?? null;
     S.setCharacter({
       name:        ch.name        ?? '',
       handle:      ch.handle      ?? '',
@@ -521,6 +523,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       gold:        ch.gold        ?? false,
       photo:       resolvedPhoto,
       photo_url:   resolvedPhoto,
+      imagen_rpg:     resolvedImagenRpg,
+      imagen_rpg_url: resolvedImagenRpg,
       current_forma: ch.current_forma ?? 1,
       habilidades_por_forma: ch.habilidades_por_forma ?? {},
       all_habilidades_data: ch.all_habilidades_data ?? {},
