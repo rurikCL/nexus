@@ -99,62 +99,47 @@ function fmtNow() {
   return new Date().toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-/** Markdown del registro de un combate PvP (ver PvpCombatScreen) — agrupa por ronda
+/** Texto plano del registro de un combate PvP (ver PvpCombatScreen) — agrupa por ronda
  *  usando el mismo separador "Ronda N — ..." embebido en los mensajes. */
-export function buildPvpLogMarkdown(combat) {
+export function buildPvpLogText(combat) {
   const attackerName = combat?.attacker?.name ?? 'Retador';
   const defenderName = combat?.defender?.name ?? 'Rival';
   const lines = [
-    '# Combate NÉXUS',
+    'COMBATE NÉXUS',
+    `${attackerName} vs ${defenderName}`,
+    `Fecha: ${fmtNow()}`,
     '',
-    `**${attackerName}** vs **${defenderName}**`,
-    '',
-    `**Fecha:** ${fmtNow()}`,
-    '',
-    '## Ronda 1',
-    '',
+    'RONDA 1',
   ];
   let currentRonda = 1;
   (combat?.log ?? []).forEach((entry) => {
     const msgs = entry.messages ?? [];
     const markerIdx = msgs.findIndex((m) => /^Ronda \d+ —/.test(m));
     const before = markerIdx === -1 ? msgs : msgs.slice(0, markerIdx);
-    if (before.length) {
-      const label = entry.actor_id === combat.attacker?.id ? attackerName
-        : entry.actor_id === combat.defender?.id ? defenderName
-        : null;
-      before.forEach((m) => lines.push(label ? `- **${label}:** ${m}` : `- ${m}`));
-    }
+    // El propio mensaje ya nombra al actor (ej. "Rurik ataca con...") — no hace
+    // falta repetirlo con un prefijo, sería redundante al leer el texto.
+    before.forEach((m) => lines.push(`- ${m}`));
     if (markerIdx !== -1) {
       const after = msgs.slice(markerIdx);
       const match = after[0].match(/^Ronda (\d+)/);
       currentRonda = match ? parseInt(match[1], 10) : currentRonda + 1;
-      lines.push('', `## Ronda ${currentRonda}`, '');
+      lines.push('', `RONDA ${currentRonda}`);
       after.forEach((m) => lines.push(`- ${m}`));
     }
   });
   return lines.join('\n');
 }
 
-/** Markdown del registro de un combate Raid (grupo vs jefe) — ver RaidCombatScreen. */
-export function buildRaidLogMarkdown(raid) {
+/** Texto plano del registro de un combate Raid (grupo vs jefe) — ver RaidCombatScreen. */
+export function buildRaidLogText(raid) {
   const jefeName = raid?.npc?.nombre ?? 'Jefe';
   const lines = [
-    '# Combate NÉXUS — Raid',
+    'COMBATE NÉXUS — RAID',
+    `Jefe: ${jefeName}`,
+    `Fecha: ${fmtNow()}`,
     '',
-    `**Jefe:** ${jefeName}`,
-    '',
-    `**Fecha:** ${fmtNow()}`,
-    '',
-    '## Ronda 1',
-    '',
+    'RONDA 1',
   ];
-  const actorLabel = (entry) => {
-    if (entry.actor === 'npc') return jefeName;
-    if (entry.actor === 'sistema') return null;
-    const j = raid?.jugadores?.find((p) => p.user_id === entry.actor_id);
-    return j?.name ?? 'Jugador';
-  };
   let currentRonda = 1;
   (raid?.log ?? []).forEach((entry) => {
     const roundMsg = (entry.messages ?? []).find((m) => /^Ronda \d+ —/.test(m));
@@ -163,34 +148,32 @@ export function buildRaidLogMarkdown(raid) {
       const next = match ? parseInt(match[1], 10) : currentRonda;
       if (next !== currentRonda) {
         currentRonda = next;
-        lines.push('', `## Ronda ${currentRonda}`, '');
+        lines.push('', `RONDA ${currentRonda}`);
       }
     }
-    const label = actorLabel(entry);
-    (entry.messages ?? []).forEach((m) => lines.push(label ? `- **${label}:** ${m}` : `- ${m}`));
+    // El propio mensaje ya nombra al actor — no hace falta repetirlo con un prefijo.
+    (entry.messages ?? []).forEach((m) => lines.push(`- ${m}`));
   });
   return lines.join('\n');
 }
 
-/** Markdown del registro de un combate contra NPC / encuentro naval — log plano de NpcCombatScreen. */
-export function buildNpcLogMarkdown({ npc, log, playerName = 'Tú' }) {
+/** Texto plano del registro de un combate contra NPC / encuentro naval — log plano de NpcCombatScreen. */
+export function buildNpcLogText({ npc, log, playerName = 'Tú' }) {
   const npcName = npc?.nombre ?? 'NPC';
   const lines = [
-    '# Combate NÉXUS',
-    '',
-    `**${playerName}** vs **${npcName}**`,
-    '',
-    `**Fecha:** ${fmtNow()}`,
+    'COMBATE NÉXUS',
+    `${playerName} vs ${npcName}`,
+    `Fecha: ${fmtNow()}`,
     '',
   ];
   let currentRonda = null;
   (log ?? []).forEach((entry) => {
     if (entry.ronda !== currentRonda) {
       currentRonda = entry.ronda;
-      lines.push(`## Ronda ${currentRonda}`, '');
+      lines.push(`RONDA ${currentRonda}`);
     }
-    const label = entry.actor === 'player' ? playerName : entry.actor === 'npc' ? npcName : null;
-    lines.push(label ? `- **${label}:** ${entry.text}` : `- ${entry.text}`);
+    // El propio mensaje ya nombra al actor — no hace falta repetirlo con un prefijo.
+    lines.push(`- ${entry.text}`);
   });
   return lines.join('\n');
 }
@@ -866,7 +849,7 @@ export async function drawRaidCombatCard(raid) {
  * no aplica). `generate` es una función sin argumentos que devuelve el canvas
  * (así el mismo panel sirve tanto para combates PvP como contra NPC).
  */
-function ResultCardModal({ generate, fileName, onClose, markdown, markdownFileName }) {
+function ResultCardModal({ generate, fileName, onClose, logText, logFileName }) {
   const [dataUrl, setDataUrl] = useState(null);
   const [error, setError] = useState(false);
   const cancelledRef = useRef(false);
@@ -901,15 +884,16 @@ function ResultCardModal({ generate, fileName, onClose, markdown, markdownFileNa
     download();
   };
 
-  const downloadMarkdown = () => {
-    if (!markdown) return;
+  const downloadLogText = () => {
+    if (!logText) return;
     // BOM al inicio: sin él, editores que no autodetectan UTF-8 (ej. Notepad clásico)
     // interpretan el archivo como ANSI/Windows-1252 y las tildes salen corruptas.
-    const blob = new Blob([String.fromCharCode(0xFEFF) + markdown], { type: 'text/markdown;charset=utf-8' });
+    // .txt (en vez de .md) para asegurar compatibilidad con cualquier lector de texto.
+    const blob = new Blob([String.fromCharCode(0xFEFF) + logText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = markdownFileName ?? 'nexus-combate.md';
+    a.download = logFileName ?? 'nexus-combate.txt';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -925,8 +909,8 @@ function ResultCardModal({ generate, fileName, onClose, markdown, markdownFileNa
       background: 'rgba(2,6,16,0.88)', backdropFilter: 'blur(6px)',
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, maxHeight: '94vh' }}>
-        {dataUrl && markdown && (
-          <button className="nx-btn nx-btn-ghost" onClick={downloadMarkdown}>📄 Descargar Markdown</button>
+        {dataUrl && logText && (
+          <button className="nx-btn nx-btn-ghost" onClick={downloadLogText}>📄 Descargar registro (.txt)</button>
         )}
         {error ? (
           <div style={{ color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 12 }}>
@@ -990,8 +974,8 @@ export default function CombatCardModal({ combat, onClose }) {
     <ResultCardModal
       generate={() => drawCombatCard(combat)}
       fileName={`nexus-combate-${combat.id}.png`}
-      markdown={buildPvpLogMarkdown(combat)}
-      markdownFileName={`nexus-combate-${combat.id}.md`}
+      logText={buildPvpLogText(combat)}
+      logFileName={`nexus-combate-${combat.id}.txt`}
       onClose={onClose}
     />
   );
@@ -1003,8 +987,8 @@ export function NpcCombatCardModal({ phase, player, npc, log, ronda, naveMode, p
     <ResultCardModal
       generate={() => drawNpcCombatCard({ phase, player, npc, log, ronda, naveMode, planetaNombre, lugarNombre, planetaImagen, lugarImagen })}
       fileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.png`}
-      markdown={buildNpcLogMarkdown({ npc, log, playerName: player?.nombre })}
-      markdownFileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.md`}
+      logText={buildNpcLogText({ npc, log, playerName: player?.nombre })}
+      logFileName={`nexus-combate-${(npc?.nombre ?? 'npc').toLowerCase().replace(/\s+/g, '-')}.txt`}
       onClose={onClose}
     />
   );
@@ -1016,8 +1000,8 @@ export function RaidCombatCardModal({ raid, onClose }) {
     <ResultCardModal
       generate={() => drawRaidCombatCard(raid)}
       fileName={`nexus-raid-${(raid?.npc?.nombre ?? 'jefe').toLowerCase().replace(/\s+/g, '-')}.png`}
-      markdown={buildRaidLogMarkdown(raid)}
-      markdownFileName={`nexus-raid-${(raid?.npc?.nombre ?? 'jefe').toLowerCase().replace(/\s+/g, '-')}.md`}
+      logText={buildRaidLogText(raid)}
+      logFileName={`nexus-raid-${(raid?.npc?.nombre ?? 'jefe').toLowerCase().replace(/\s+/g, '-')}.txt`}
       onClose={onClose}
     />
   );
