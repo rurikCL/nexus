@@ -686,7 +686,7 @@ async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor, cell
     await paintHabilidadIconCell(ctx, hab, cx, cy, cellSize, borderColor);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#eaf2ff';
-    const size = fitText(ctx, hab.nombre ?? '', cellSize + 10, '14px "JetBrains Mono"', 10);
+    const size = fitText(ctx, hab.nombre ?? '', cellSize + 10, '11px "JetBrains Mono"', 8);
     ctx.font = `600 ${size}px "JetBrains Mono"`;
     ctx.fillText(hab.nombre ?? '', cx + cellSize / 2, cy + cellSize + labelH - 5);
   }
@@ -732,7 +732,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   }
 
   const artY = pad + 118;
-  const artH = 280;
+  const artH = 260;
   const forma = Number(entity.forma) || 0;
   const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
   if (formaInfo?.img) {
@@ -792,8 +792,8 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const saludoBlockH = 20 + saludoMaxLines * saludoLineH;
   const habCellSize = 76;
   const habLabelH = 16;
-  const habRowGap = 16;
-  const habColGap = 20;
+  const habRowGap = 24;
+  const habColGap = 28;
   const habGridH = (habCellSize + habLabelH) * 2 + habRowGap; // grilla 2×2 de paintHabilidadesGrid (celda + etiqueta, ×2 filas + separación)
   const habilidadesBlockH = hasHabilidades ? 22 + 20 + habGridH : 0;
   const leftColH = saludoBlockH + habilidadesBlockH;
