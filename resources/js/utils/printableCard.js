@@ -69,13 +69,13 @@ export function drawIcon(ctx, iconPaths, name, cx, cy, size, color, strokeWidth 
     del fondo donde no cubre; `fit: 'cover'` la recorta para llenar todo el rectángulo.
     `alignY: 'top'` ancla la imagen a la parte superior del rectángulo (centrada en horizontal)
     en vez de centrarla también verticalmente — útil para retratos donde la cara suele quedar arriba. */
-export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, borderWidth = 3, alignY = 'center', fit = 'contain') {
+export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, borderWidth = 3, alignY = 'center', fit = 'contain', bgColor = '#0a1428') {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.closePath();
   ctx.clip();
-  ctx.fillStyle = '#0a1428';
+  ctx.fillStyle = bgColor;
   ctx.fill();
   if (img) {
     const scale = fit === 'cover'

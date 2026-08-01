@@ -18,12 +18,19 @@ use App\Services\NpcInteraccionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class MapController extends Controller
 {
+    /**
+     * `photo` sale ya resuelta con COALESCE(imagen_rpg, photo) — la imagen a mostrar en todo el
+     * Mapa Galáctico (ver Character::imagenMapa) — para que cualquier pantalla que consuma estos
+     * "presentes" (avatares de presencia, chat, confirmación de ataque PvP, etc.) no tenga que
+     * repetir la lógica de preferencia.
+     */
     private function presentes(string $fk): \Closure
     {
-        return fn ($q) => $q->select('id', $fk, 'user_id', 'handle', 'photo', 'saber_color');
+        return fn ($q) => $q->select('id', $fk, 'user_id', 'handle', DB::raw('COALESCE(imagen_rpg, photo) as photo'), 'saber_color');
     }
 
     public function sistemas(): JsonResponse

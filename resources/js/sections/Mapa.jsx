@@ -3091,7 +3091,7 @@ function getPlayerCombatStats(character) {
     iniciativa: combat?.iniciativa ?? ((character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
     punteria:   combat?.punteria   ?? ((character?.punteria   ?? 2) + (bonos.punteria ?? 0)),
     nombre:     character?.name ?? 'Tú',
-    photo:      character?.photo_url ?? null,
+    photo:      character?.imagen_rpg_url ?? character?.photo_url ?? null,
     maxFuerza:      10 + (bonos.fuerza ?? 0),
     fuerzaPorTurno: 2 + (bonos.generacion_fuerza ?? 0),
     arma_equipada: character?.arma_efectiva

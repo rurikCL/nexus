@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Character extends Model
 {
     protected $fillable = [
-        'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'cls', 'saber_color', 'side',
+        'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'imagen_rpg', 'cls', 'saber_color', 'side',
         'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'gold',
         'map_sistema_id', 'map_planeta_id', 'map_zona_id', 'map_lugar_id',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria', 'puntos_libres',
@@ -47,6 +47,13 @@ class Character extends Model
         'habilidades_por_forma' => 'array',
         'current_forma' => 'integer',
     ];
+
+    /** Imagen a mostrar en Mapa Galáctico, combates y la Carta de personaje — prioriza el
+     * retrato RPG (`imagen_rpg`) por sobre la foto de perfil genérica (`photo`). */
+    public function imagenMapa(): ?string
+    {
+        return $this->imagen_rpg ?: $this->photo;
+    }
 
     /** Forma numérica (1-7) de la Especialización ("Forma de Combate") elegida en Mi Personaje. */
     public function formaEspecializacion(): int

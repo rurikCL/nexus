@@ -27,12 +27,12 @@ class MessageController extends Controller
             ->map(function ($msgs, $senderId) {
                 $sender = $msgs->first()->sender;
 
+                $imagenMapa = $sender->character?->imagenMapa();
+
                 return [
                     'user_id' => (int) $senderId,
                     'handle' => $sender->character?->handle ?? $sender->name,
-                    'photo' => $sender->character?->photo
-                        ? Storage::disk('public')->url($sender->character->photo)
-                        : null,
+                    'photo' => $imagenMapa ? Storage::disk('public')->url($imagenMapa) : null,
                     'saber_color' => $sender->character?->saber_color ?? 'azul',
                     'count' => $msgs->count(),
                 ];
@@ -61,6 +61,7 @@ class MessageController extends Controller
             ->update(['read_at' => now()]);
 
         $other = User::with('character')->find($userId);
+        $otherImagenMapa = $other?->character?->imagenMapa();
 
         return response()->json([
             'messages' => $messages->map(fn ($m) => [
@@ -75,9 +76,7 @@ class MessageController extends Controller
                 'id' => $other->id,
                 'handle' => $other->character?->handle,
                 'name' => $other->character?->name ?? $other->name,
-                'photo' => $other->character?->photo
-                    ? Storage::disk('public')->url($other->character->photo)
-                    : null,
+                'photo' => $otherImagenMapa ? Storage::disk('public')->url($otherImagenMapa) : null,
                 'saber_color' => $other->character?->saber_color,
             ] : null,
         ]);

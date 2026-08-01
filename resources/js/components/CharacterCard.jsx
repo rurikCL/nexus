@@ -186,7 +186,7 @@ export async function drawCharacterCard(character, user) {
   const medallaActiva = character.medalla_activa?.medalla ?? null;
 
   const [photoImg, qrDataUrl, rankImg, formaImg, medallaImg] = await Promise.all([
-    loadImage(mediaUrl(character.photo ?? character.photo_url)),
+    loadImage(mediaUrl(character.imagen_rpg ?? character.imagen_rpg_url ?? character.photo ?? character.photo_url)),
     handle
       ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#eaf9ffcc', light: '#00000000' } }).catch(() => null)
       : Promise.resolve(null),

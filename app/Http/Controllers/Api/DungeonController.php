@@ -521,7 +521,7 @@ class DungeonController extends Controller
             ->map(fn (JefeRanking $r) => [
                 'user_id' => $r->user_id,
                 'nombre' => $r->user->character->name ?? $r->user->name,
-                'foto' => $r->user->character->photo ?? null,
+                'foto' => $r->user->character?->imagenMapa(),
                 'dano_al_jefe' => $r->dano_total,
                 'enemigos_eliminados' => $r->enemigos_eliminados,
                 'cofres_abiertos' => $r->cofres_abiertos,
@@ -575,7 +575,7 @@ class DungeonController extends Controller
             return [
                 'user_id' => $jp->user_id,
                 'name' => $character->name ?? $jp->user->name,
-                'photo' => $character->photo ?? null,
+                'photo' => $character?->imagenMapa(),
                 'saber_color' => $character->saber_color ?? null,
                 'hp_actual' => $jp->hp_actual ?? $stats['vida'] ?? 0,
                 'hp_max' => $stats['vida'] ?? 0,
@@ -611,7 +611,7 @@ class DungeonController extends Controller
                 'user_id' => $jp->user_id,
                 'name' => $jp->user->character->name ?? $jp->user->name,
                 'handle' => $jp->user->character->handle ?? null,
-                'photo' => $jp->user->character->photo ?? null,
+                'photo' => $jp->user->character?->imagenMapa(),
                 'saber_color' => $jp->user->character->saber_color ?? null,
                 'listo' => $jp->listo,
                 'estado' => $jp->estado,

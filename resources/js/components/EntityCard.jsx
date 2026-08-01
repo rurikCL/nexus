@@ -137,10 +137,10 @@ function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColo
 }
 
 /** Caja de arte: imagen (si hay) o gradiente + ícono de respaldo. */
-async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, artH, borderColor) {
+async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, artH, borderColor, bgColor) {
   const img = await loadImage(mediaUrl(imgSrc));
   if (img) {
-    drawImageRounded(ctx, img, innerX, artY, innerW, artH, 16, `${borderColor}66`);
+    drawImageRounded(ctx, img, innerX, artY, innerW, artH, 16, `${borderColor}66`, 3, 'center', 'contain', bgColor ?? '#0a1428');
     return;
   }
   ctx.save();
@@ -341,7 +341,15 @@ export async function drawHabilidadCard(habilidad) {
 
   const artY = pad + 118;
   const artH = 340;
-  await paintArt(ctx, habilidad.icono_url ?? habilidad.icono, TIPO_HAB_ICON[habilidad.tipo] ?? 'zap', badgeColor, innerX, artY, innerW, artH, frame.line);
+  if (classInfo?.img) {
+    const formaGap = 12;
+    const formaW = 96;
+    const mainW = innerW - formaW - formaGap;
+    await paintArt(ctx, habilidad.icono_url ?? habilidad.icono, TIPO_HAB_ICON[habilidad.tipo] ?? 'zap', badgeColor, innerX, artY, mainW, artH, frame.line);
+    await paintArt(ctx, classInfo.img, classInfo.icon ?? 'sword', badgeColor, innerX + mainW + formaGap, artY, formaW, artH, frame.line);
+  } else {
+    await paintArt(ctx, habilidad.icono_url ?? habilidad.icono, TIPO_HAB_ICON[habilidad.tipo] ?? 'zap', badgeColor, innerX, artY, innerW, artH, frame.line);
+  }
 
   const typeY = artY + artH + 36;
   paintTypeLine(ctx, classInfo ? `${classInfo.num} · ${classInfo.name}` : 'Habilidad Universal', typeY, innerX, innerRight);
@@ -610,7 +618,17 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   const artY = pad + 118;
   const artH = 280;
-  await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line);
+  const forma = Number(entity.forma) || 0;
+  const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
+  if (formaInfo?.img) {
+    const formaGap = 12;
+    const formaW = 96;
+    const mainW = innerW - formaW - formaGap;
+    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, mainW, artH, frame.line, '#000');
+    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerX + mainW + formaGap, artY, formaW, artH, frame.line, '#000');
+  } else {
+    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line, '#000');
+  }
 
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'

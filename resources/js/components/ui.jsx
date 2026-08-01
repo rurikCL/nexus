@@ -716,7 +716,10 @@ export function ToastHost() {
 
 
 /* ---- ImageSlot: subida de imagen al servidor ---- */
-export function ImageSlot({ src, onUpload, className = '', style, shape = 'rounded', radius = 12, placeholder = 'Sube tu retrato' }) {
+export function ImageSlot({
+  src, onUpload, className = '', style, shape = 'rounded', radius = 12, placeholder = 'Sube tu retrato',
+  endpoint = '/api/character/photo', fieldName = 'photo', responseKey = 'photo_url',
+}) {
   const [url, setUrl]         = useState(src || '');
   const [uploading, setUploading] = useState(false);
   const [pending, setPending] = useState(null);
@@ -740,17 +743,17 @@ export function ImageSlot({ src, onUpload, className = '', style, shape = 'round
     setUploading(true);
     try {
       const fd = new FormData();
-      fd.append('photo', file);
+      fd.append(fieldName, file);
       const token = localStorage.getItem('nx-token');
-      const res = await fetch('/api/character/photo', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
         body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Error al subir');
-      setUrl(data.photo_url);
-      onUpload?.(data.photo_url);
+      setUrl(data[responseKey]);
+      onUpload?.(data[responseKey]);
     } finally {
       setUploading(false);
     }

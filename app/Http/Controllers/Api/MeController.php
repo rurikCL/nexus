@@ -150,6 +150,9 @@ class MeController extends Controller
                 'photo_url' => $character->photo
                     ? Storage::disk('public')->url($character->photo).'?v='.$character->updated_at->timestamp
                     : null,
+                'imagen_rpg_url' => $character->imagen_rpg
+                    ? Storage::disk('public')->url($character->imagen_rpg).'?v='.$character->updated_at->timestamp
+                    : null,
                 'map_location' => $character->mapLocationArray(),
             ] : null,
         ]);
