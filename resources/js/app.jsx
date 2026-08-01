@@ -133,6 +133,13 @@ function Root() {
           ?? null;
         mergedCharacter.photo = resolvedPhoto;
         mergedCharacter.photo_url = resolvedPhoto;
+        const resolvedImagenRpg = updatedUser.character.imagen_rpg_url
+          ?? updatedUser.character.imagen_rpg
+          ?? prevCharacter.imagen_rpg_url
+          ?? prevCharacter.imagen_rpg
+          ?? null;
+        mergedCharacter.imagen_rpg = resolvedImagenRpg;
+        mergedCharacter.imagen_rpg_url = resolvedImagenRpg;
         next.character = mergedCharacter;
       }
       localStorage.setItem('nx-user', JSON.stringify(next));

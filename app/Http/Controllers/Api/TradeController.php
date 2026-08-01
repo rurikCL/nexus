@@ -262,6 +262,9 @@ class TradeController extends Controller
             ];
         })->values();
 
+        $initiatorImagen = $initiator?->character?->imagenMapa();
+        $targetImagen = $target?->character?->imagenMapa();
+
         return [
             'id'              => $trade->id,
             'status'          => $trade->status,
@@ -273,14 +276,14 @@ class TradeController extends Controller
                 'id'     => $initiator?->id,
                 'name'   => $initiator?->character?->name,
                 'handle' => $initiator?->character?->handle,
-                'photo_url' => $initiator?->character?->photo ? Storage::disk('public')->url($initiator->character->photo) : null,
+                'photo_url' => $initiatorImagen ? Storage::disk('public')->url($initiatorImagen) : null,
                 'saber_color' => $initiator?->character?->saber_color,
             ],
             'target' => [
                 'id'     => $target?->id,
                 'name'   => $target?->character?->name,
                 'handle' => $target?->character?->handle,
-                'photo_url' => $target?->character?->photo ? Storage::disk('public')->url($target->character->photo) : null,
+                'photo_url' => $targetImagen ? Storage::disk('public')->url($targetImagen) : null,
                 'saber_color' => $target?->character?->saber_color,
             ],
         ];

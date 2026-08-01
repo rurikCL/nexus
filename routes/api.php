@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/character', [CharacterController::class, 'upsert']);
     Route::post('/character/photo', [CharacterPhotoController::class, 'store']);
+    Route::post('/character/imagen-rpg', [CharacterPhotoController::class, 'storeImagenRpg']);
     Route::post('/character/reputation', [CharacterController::class, 'updateReputation']);
     Route::post('/character/npc-victory', [CharacterController::class, 'npcVictory']);
     Route::post('/character/enemigo-victory', [CharacterController::class, 'enemigoVictory']);

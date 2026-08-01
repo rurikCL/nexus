@@ -1217,13 +1217,14 @@ class RaidCombatController extends Controller
             $fCfg = self::fuerzaConfig($ch);
             $baseStats = self::getCombatStats($ch);
             $effStats = self::getEffectiveStats($baseStats, $rp->buffs ?? [], $rp->debuffs ?? []);
+            $imagenMapa = $ch?->imagenMapa();
 
             return [
                 'user_id' => $rp->user_id,
                 'slot' => $rp->slot,
                 'name' => $ch->name ?? $rp->user->name,
                 'handle' => $ch->handle ?? $rp->user->name,
-                'photo_url' => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
+                'photo_url' => $imagenMapa ? Storage::disk('public')->url($imagenMapa) : null,
                 'hp' => $rp->hp,
                 'max_hp' => $baseStats['vida'],
                 'escudo' => $rp->escudo,

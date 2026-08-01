@@ -945,9 +945,24 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                 <label className="nx-label">Alias (tag) *</label>
                 <input className="nx-input" value={ch.handle} onChange={(e) => S.setCharacter({ ...ch, handle: e.target.value.toUpperCase() })} maxLength={10} />
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label className="nx-label">Grito de guerra</label>
-                <textarea className="nx-textarea" value={ch.bio} onChange={(e) => S.setCharacter({ ...ch, bio: e.target.value })} placeholder="Tu frase antes del duelo..." />
+              <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '140px 1fr', gap: 14 }}>
+                <div>
+                  <label className="nx-label">Imagen RPG</label>
+                  <ImageSlot
+                    src={ch.imagen_rpg_url}
+                    onUpload={(url) => S.setCharacter({ ...ch, imagen_rpg: url, imagen_rpg_url: url })}
+                    endpoint="/api/character/imagen-rpg"
+                    fieldName="imagen_rpg"
+                    responseKey="imagen_rpg_url"
+                    shape="rect"
+                    style={{ width: '100%', height: 140 }}
+                    placeholder="Imagen del personaje"
+                  />
+                </div>
+                <div>
+                  <label className="nx-label">Grito de guerra</label>
+                  <textarea className="nx-textarea" value={ch.bio} onChange={(e) => S.setCharacter({ ...ch, bio: e.target.value })} placeholder="Tu frase antes del duelo..." style={{ height: 140 }} />
+                </div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="nx-label">Lore del personaje</label>

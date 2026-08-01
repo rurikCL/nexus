@@ -31,11 +31,20 @@ export function mapApiCharacterToStoreCharacter(character, fallback = {}) {
       ?? safeFallback.photo
       ?? null
   );
+  const resolvedImagenRpg = mediaUrl(
+    character.imagen_rpg_url
+      ?? character.imagen_rpg
+      ?? safeFallback.imagen_rpg_url
+      ?? safeFallback.imagen_rpg
+      ?? null
+  );
   return {
     ...character,
     saber: character.saber_color ?? character.saber ?? 'azul',
     photo: resolvedPhoto,
     photo_url: resolvedPhoto,
+    imagen_rpg: resolvedImagenRpg,
+    imagen_rpg_url: resolvedImagenRpg,
     pool: character.puntos_libres ?? character.pool ?? safeFallback.pool ?? 0,
     current_forma: character.current_forma ?? safeFallback.current_forma ?? 1,
     arma_equipada: character.arma_equipada ?? safeFallback.arma_equipada ?? null,

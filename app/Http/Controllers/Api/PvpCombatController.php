@@ -1026,12 +1026,13 @@ class PvpCombatController extends Controller
             : [];
 
         $naveOwned = $modo === 'naval' ? self::getNaveOwned($ch) : null;
+        $imagenMapa = $ch?->imagenMapa();
 
         return [
             'id' => $user->id,
             'name' => $ch?->name ?? $user->name,
             'handle' => $ch?->handle ?? $user->name,
-            'photo_url' => $ch?->photo ? Storage::disk('public')->url($ch->photo) : null,
+            'photo_url' => $imagenMapa ? Storage::disk('public')->url($imagenMapa) : null,
             'nave_imagen' => $naveOwned?->nave?->imagen,
             'stats' => self::getCombatStats($ch, $modo),
             /* Máximos reales (no el daño persistido) — para las barras de vida/escudo del HUD.
