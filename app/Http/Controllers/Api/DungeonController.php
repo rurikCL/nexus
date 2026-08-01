@@ -9,6 +9,7 @@ use App\Models\DungeonRun;
 use App\Models\DungeonRunPlayer;
 use App\Models\DungeonSala;
 use App\Models\DungeonSalaProgreso;
+use App\Models\JefeRanking;
 use App\Models\MapLugar;
 use App\Models\MapRecompensa;
 use App\Models\PvpCombat;
@@ -501,7 +502,31 @@ class DungeonController extends Controller
             ] : null,
             'equipo' => $this->formatEquipo($run),
             'mapa' => $jugador ? $this->formatMapa($run, $jugador) : [],
+            'resumen' => $run->estado === 'completado' ? $this->formatResumenCompletado($run) : null,
         ];
+    }
+
+    /**
+     * Resumen por jugador al completar el dungeon (jefe derrotado) — para la pantalla de término
+     * del frontend. Se lee desde `jefe_rankings`, el snapshot inmutable creado en
+     * RaidCombatController::grantVictoryRewards ANTES de que completarDungeonRun borre las salas
+     * (y con ellas dungeon_sala_progresos, que ya no existe para este run en este punto).
+     */
+    private function formatResumenCompletado(DungeonRun $run): array
+    {
+        return JefeRanking::where('dungeon_run_id', $run->id)
+            ->with('user.character')
+            ->orderByDesc('dano_total')
+            ->get()
+            ->map(fn (JefeRanking $r) => [
+                'user_id' => $r->user_id,
+                'nombre' => $r->user->character->name ?? $r->user->name,
+                'foto' => $r->user->character->photo ?? null,
+                'dano_al_jefe' => $r->dano_total,
+                'enemigos_eliminados' => $r->enemigos_eliminados,
+                'cofres_abiertos' => $r->cofres_abiertos,
+                'rondas' => $r->rondas,
+            ])->values()->all();
     }
 
     /**
