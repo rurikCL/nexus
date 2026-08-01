@@ -3,19 +3,25 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\RolObjeto;
 use App\Models\Task;
 use App\Models\TaskUpdate;
 use App\Notifications\TareaAsignada;
 use App\Services\MisionProgresoService;
+use App\Services\RecompensaGrantService;
 use App\Traits\ConvertsToWebp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
 {
     use ConvertsToWebp;
+
+    private const RECOMPENSAS_WITH = ['recompensas.habilidad', 'recompensas.objeto'];
 
     public function index(Request $request): JsonResponse
     {
@@ -24,17 +30,39 @@ class TaskController extends Controller
 
         if ($perspective === 'tutor' && $user->isTutor()) {
             $tasks = Task::where('tutor_id', $user->id)
-                ->with(['pupil.character', 'tutor.character'])
+                ->with(array_merge(['pupil.character', 'tutor.character'], self::RECOMPENSAS_WITH))
                 ->orderByDesc('created_at')
                 ->get();
         } else {
             $tasks = Task::where('pupil_id', $user->id)
-                ->with(['tutor.character', 'pupil.character'])
+                ->with(array_merge(['tutor.character', 'pupil.character'], self::RECOMPENSAS_WITH))
                 ->orderByDesc('created_at')
                 ->get();
         }
 
         return response()->json(['tasks' => $tasks]);
+    }
+
+    /** Créditos disponibles, habilidades ya conocidas e inventario del tutor — para el editor de recompensas al asignar. */
+    public function recursosTutor(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->isTutor()) {
+            return response()->json(['credits' => 0, 'habilidades' => [], 'objetos' => []]);
+        }
+
+        $habilidades = $user->habilidadesAprendidas()
+            ->get(['rol_habilidades.id', 'rol_habilidades.nombre', 'rol_habilidades.forma'])
+            ->map(fn ($h) => ['id' => $h->id, 'label' => $h->nombre, 'forma' => $h->forma]);
+
+        $objetos = ($user->character?->rolObjetos ?? collect())
+            ->map(fn ($o) => ['id' => $o->id, 'label' => $o->nombre, 'cantidad' => $o->pivot->cantidad]);
+
+        return response()->json([
+            'credits' => $user->character?->credits ?? 0,
+            'habilidades' => $habilidades->values(),
+            'objetos' => $objetos->values(),
+        ]);
     }
 
     /** Lista los pupilos reales del tutor autenticado (users.tutor_id = mi id), para poblar el selector de asignación. */
@@ -69,7 +97,12 @@ class TaskController extends Controller
             'title' => 'required|string|max:255',
             'detail' => 'nullable|string',
             'due_date' => 'nullable|date_format:Y-m-d',
-            'reward' => 'nullable|integer|min:0',
+            'recompensas' => 'sometimes|array',
+            'recompensas.*.nombre' => 'required|string|max:255',
+            'recompensas.*.tipo' => 'required|in:creditos,objeto,habilidad',
+            'recompensas.*.valor' => 'sometimes|numeric|min:0',
+            'recompensas.*.habilidad_id' => 'nullable|integer|exists:rol_habilidades,id',
+            'recompensas.*.objeto_id' => 'nullable|integer|exists:rol_objetos,id',
         ]);
 
         $pupilIds = collect($data['pupil_ids'])->unique()->values();
@@ -80,25 +113,78 @@ class TaskController extends Controller
             return response()->json(['message' => 'Alguno de los usuarios seleccionados no es pupilo tuyo.'], 422);
         }
 
-        $tasks = $pupilIds->map(function (int $pupilId) use ($user, $data) {
-            $task = Task::create([
-                'tutor_id' => $user->id,
-                'pupil_id' => $pupilId,
-                'title' => $data['title'],
-                'detail' => $data['detail'] ?? null,
-                'due_date' => $data['due_date'] ?? null,
-                'reward' => $data['reward'] ?? 0,
-                'status' => 'pendiente',
-                'progress' => 0,
-            ]);
+        $recompensas = collect($data['recompensas'] ?? []);
+        $pupilCount = $pupilIds->count();
+        $character = $user->character;
 
-            // Notify pupil (persists to DB for offline delivery)
-            $pupil = $task->pupil()->first();
-            if ($pupil) {
-                $pupil->notify(new TareaAsignada($task, $user));
+        // Créditos: el tutor financia la recompensa completa de todos los pupilos al asignar.
+        $totalCreditos = (int) $recompensas->where('tipo', 'creditos')->sum('valor') * $pupilCount;
+        if ($totalCreditos > 0 && (! $character || $character->credits < $totalCreditos)) {
+            return response()->json([
+                'message' => "No tienes créditos suficientes: se necesitan {$totalCreditos} para {$pupilCount} pupilo(s).",
+            ], 422);
+        }
+
+        // Habilidades: solo se pueden ofrecer las que el tutor ya conoce.
+        $habilidadIds = $recompensas->where('tipo', 'habilidad')->pluck('habilidad_id')->filter()->unique();
+        if ($habilidadIds->isNotEmpty()) {
+            $conocidas = $user->habilidadesAprendidas()->whereIn('habilidad_id', $habilidadIds)->pluck('habilidad_id');
+            if ($habilidadIds->diff($conocidas)->isNotEmpty()) {
+                return response()->json(['message' => 'Solo puedes ofrecer como recompensa habilidades que ya conoces.'], 422);
+            }
+        }
+
+        // Objetos: se descuentan del inventario del tutor (una unidad por pupilo asignado).
+        $objetoNeeds = $recompensas->where('tipo', 'objeto')->pluck('objeto_id')->filter()->countBy();
+        foreach ($objetoNeeds as $objetoId => $lineas) {
+            $necesarios = $lineas * $pupilCount;
+            $tienen = $character?->rolObjetos()->where('rol_objetos.id', $objetoId)->first()?->pivot->cantidad ?? 0;
+            if ($tienen < $necesarios) {
+                $nombre = RolObjeto::find($objetoId)?->nombre ?? "objeto #{$objetoId}";
+                return response()->json(['message' => "No tienes suficientes '{$nombre}' en tu inventario: se necesitan {$necesarios}."], 422);
+            }
+        }
+
+        $tasks = DB::transaction(function () use ($user, $data, $pupilIds, $recompensas, $totalCreditos, $objetoNeeds, $pupilCount, $character) {
+            if ($totalCreditos > 0) {
+                $character->decrement('credits', $totalCreditos);
             }
 
-            return $task->load(['tutor.character', 'pupil.character']);
+            foreach ($objetoNeeds as $objetoId => $lineas) {
+                $necesarios = $lineas * $pupilCount;
+                $pivot = $character->rolObjetos()->where('rol_objetos.id', $objetoId)->first()->pivot;
+                $restante = $pivot->cantidad - $necesarios;
+                if ($restante > 0) {
+                    $character->rolObjetos()->updateExistingPivot($objetoId, ['cantidad' => $restante]);
+                } else {
+                    $character->rolObjetos()->detach($objetoId);
+                }
+            }
+
+            return $pupilIds->map(function (int $pupilId) use ($user, $data, $recompensas) {
+                $task = Task::create([
+                    'tutor_id' => $user->id,
+                    'pupil_id' => $pupilId,
+                    'title' => $data['title'],
+                    'detail' => $data['detail'] ?? null,
+                    'due_date' => $data['due_date'] ?? null,
+                    'reward' => 0,
+                    'status' => 'pendiente',
+                    'progress' => 0,
+                ]);
+
+                foreach ($recompensas as $rec) {
+                    $task->recompensas()->create(Arr::except($rec, ['id']));
+                }
+
+                // Notify pupil (persists to DB for offline delivery)
+                $pupil = $task->pupil()->first();
+                if ($pupil) {
+                    $pupil->notify(new TareaAsignada($task, $user));
+                }
+
+                return $task->load(array_merge(['tutor.character', 'pupil.character'], self::RECOMPENSAS_WITH));
+            });
         });
 
         return response()->json(['tasks' => $tasks->values()], 201);
@@ -147,21 +233,29 @@ class TaskController extends Controller
             return response()->json(['message' => 'La tarea ya está completada.'], 409);
         }
 
-        $task->update(['status' => 'completada', 'progress' => 100]);
+        $otorgado = DB::transaction(function () use ($task) {
+            $task->update(['status' => 'completada', 'progress' => 100]);
 
-        // Award reward to pupil's character credits
-        $pupil = $task->pupil()->with('character')->first();
-        if ($pupil) {
+            $pupil = $task->pupil()->with('character')->first();
+            if (! $pupil) {
+                return [];
+            }
+
             MisionProgresoService::registrar($pupil, 'tarea', 1);
-        }
-        if ($pupil && $pupil->character && $task->reward > 0) {
-            $pupil->character->increment('credits', $task->reward);
-        }
 
-        return response()->json([
-            'task' => $task,
+            // Créditos del campo legado 'reward' (tareas antiguas, previas al sistema de recompensas).
+            if ($pupil->character && $task->reward > 0) {
+                $pupil->character->increment('credits', $task->reward);
+            }
+
+            // Recompensas estructuradas — ya fueron descontadas del tutor al asignar la tarea.
+            return app(RecompensaGrantService::class)->otorgar($task->recompensas()->get(), $pupil);
+        });
+
+        return response()->json(array_merge([
+            'task' => $task->fresh(self::RECOMPENSAS_WITH),
             'credits_awarded' => $task->reward,
-        ]);
+        ], $otorgado));
     }
 
     /** Registro de avance de una tarea: comentarios, cambios de progreso y evidencia adjunta. */

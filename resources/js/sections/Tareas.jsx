@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Modal, toast, NumberInput } from '../components/ui.jsx';
-import { Empty, mediaUrl } from './Comando.jsx';
+import { Empty, mediaUrl, FORMA_LABELS } from './Comando.jsx';
 
 const TASK_STATUS = {
   pendiente:  { label: 'Pendiente',   tone: 'dim',    color: 'var(--txt-dim)' },
@@ -9,6 +9,36 @@ const TASK_STATUS = {
   revision:   { label: 'En revisión', tone: 'orange', color: 'var(--holocron-naranja)' },
   completada: { label: 'Completada',  tone: 'green',  color: 'var(--green-500)' },
 };
+
+/* Recompensas de tarea — solo creditos/objeto/habilidad (ver TaskController::store):
+   los créditos y objetos se descuentan del inventario del tutor al asignar, y las
+   habilidades ofrecidas deben ser habilidades que el propio tutor ya conoce. */
+const TASK_RECOMPENSA_TIPOS = [
+  { value: 'creditos', label: 'Créditos' },
+  { value: 'objeto',   label: 'Objeto' },
+  { value: 'habilidad', label: 'Habilidad' },
+];
+const EMPTY_TASK_RECOMPENSA = { nombre: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null };
+const taskHabilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_LABELS[h.forma - 1]}] ${h.label}` : h.label;
+
+function taskRecompensaResumen(r) {
+  if (r.tipo === 'habilidad') return r.habilidad?.nombre ?? r.nombre;
+  if (r.tipo === 'objeto') return r.objeto?.nombre ?? r.nombre;
+  return `${r.nombre}${r.valor > 0 ? ` (${r.valor})` : ''}`;
+}
+const TASK_RECOMPENSA_ICON = { creditos: 'coin', objeto: 'box', habilidad: 'zap' };
+
+/* Chips de recompensa de una tarea — prioriza las recompensas estructuradas; si la
+   tarea es antigua (sin recompensas) cae al campo legado `reward` (solo créditos). */
+function TaskRewardChips({ t }) {
+  if (t.recompensas?.length > 0) {
+    return t.recompensas.map(r => (
+      <Chip key={r.id} tone="gold" icon={TASK_RECOMPENSA_ICON[r.tipo] ?? 'star'}>{taskRecompensaResumen(r)}</Chip>
+    ));
+  }
+  if (t.reward > 0) return <Chip tone="gold" icon="coin">+{t.reward}</Chip>;
+  return null;
+}
 
 // ---------- helpers ----------
 const HASH_COLORS = ['#FF6B00','#38cdf0','#8b5cf6','#10b981','#ec4899','#f97316','#E6B325','#3aa0ff'];
@@ -73,7 +103,7 @@ function mapTask(t, myUserId) {
   return {
     id: t.id, pupilId: t.pupil_id, tutorId: t.tutor_id,
     title: t.title, detail: t.detail ?? '',
-    due, reward: t.reward ?? 0, progress: t.progress ?? 0,
+    due, reward: t.reward ?? 0, recompensas: t.recompensas ?? [], progress: t.progress ?? 0,
     status: t.status ?? 'pendiente',
     pupilObj: pupilAvatar, tutorObj: tutorAvatar,
   };
@@ -231,10 +261,10 @@ function PupilTaskCard({ t, onUpdateProgress, onSendToReview, onOpenDetail }) {
           </div>
           {t.detail && <p style={{ fontSize: 13, color: 'var(--txt-dim)', margin: '6px 0 0' }}>{t.detail}</p>}
         </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <Chip tone="gold" icon="coin">+{t.reward}</Chip>
+        <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+          <TaskRewardChips t={t} />
           {t.due !== '—' && (
-            <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 6 }}>
+            <div className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 2 }}>
               <Icon name="clock" size={10} style={{ verticalAlign: -1 }} /> {t.due}
             </div>
           )}
@@ -244,7 +274,7 @@ function PupilTaskCard({ t, onUpdateProgress, onSendToReview, onOpenDetail }) {
       {t.status === 'completada' ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, color: 'var(--green-500)' }}>
           <Icon name="check" size={15} />
-          <span className="nx-data" style={{ fontSize: 12 }}>Aprobada · +{t.reward} créditos abonados</span>
+          <span className="nx-data" style={{ fontSize: 12 }}>Aprobada · recompensa entregada</span>
         </div>
       ) : t.status === 'revision' ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, color: 'var(--holocron-naranja)' }}>
@@ -276,17 +306,30 @@ function TareasTutor({ tasks, setTasks, pupils, user, onReload, onOpenDetail }) 
   const [assignOpen, setAssignOpen] = useState(false);
   const [preselectedIds, setPreselectedIds] = useState([]);
   const [reviewFor, setReviewFor] = useState(null);
+  const [tutorResources, setTutorResources] = useState({ credits: 0, habilidades: [], objetos: [] });
+
+  const loadTutorResources = useCallback(() => {
+    apiCall('GET', '/api/tasks/recursos-tutor').then(setTutorResources).catch(() => {});
+  }, []);
+  useEffect(() => { loadTutorResources(); }, [loadTutorResources]);
 
   const openAssign = (ids = []) => { setPreselectedIds(ids); setAssignOpen(true); };
 
   const approveTask = async (t) => {
-    if (!window.confirm(`¿Aprobar "${t.title}"? Se abonarán +${t.reward} créditos a ${t.pupilObj?.name ?? 'el pupilo'}.`)) return;
+    if (!window.confirm(`¿Aprobar "${t.title}"? Se otorgará la recompensa a ${t.pupilObj?.name ?? 'el pupilo'}.`)) return;
     try {
-      await apiCall('POST', `/api/tasks/${t.id}/approve`);
+      const data = await apiCall('POST', `/api/tasks/${t.id}/approve`);
       setTasks(prev => prev.map(x => x.id === t.id ? { ...x, status: 'completada', progress: 100 } : x));
-      toast('Tarea aprobada', { tone: 'success', icon: 'check', desc: `${t.pupilObj?.name} recibió +${t.reward} créditos` });
-    } catch {
-      toast('Error al aprobar', { tone: 'error', icon: 'x' });
+      const totalCreditos = (data.credits_awarded ?? 0) + (data.creditos_otorgados ?? 0);
+      toast('Tarea aprobada', {
+        tone: 'success', icon: 'check',
+        desc: totalCreditos > 0 ? `${t.pupilObj?.name} recibió +${totalCreditos} créditos` : `Recompensa entregada a ${t.pupilObj?.name}`,
+      });
+      if ((data.habilidades_aprendidas ?? []).length > 0) toast('⚡ Nueva habilidad desbloqueada para el pupilo', { tone: 'success', icon: 'star' });
+      if ((data.objetos_otorgados ?? []).length > 0) toast('📦 Objeto añadido al inventario del pupilo', { tone: 'success', icon: 'star' });
+      if ((data.objetos_sin_espacio ?? []).length > 0) toast('Inventario del pupilo lleno: un objeto de recompensa no se pudo entregar', { tone: 'warning', icon: 'x' });
+    } catch (err) {
+      toast(err?.message ?? 'Error al aprobar', { tone: 'error', icon: 'x' });
     }
   };
 
@@ -408,8 +451,9 @@ function TareasTutor({ tasks, setTasks, pupils, user, onReload, onOpenDetail }) 
         pupils={pupils}
         preselectedIds={preselectedIds}
         onClose={() => setAssignOpen(false)}
-        onCreated={(newTasks) => { setTasks(prev => [...prev, ...newTasks]); setAssignOpen(false); }}
+        onCreated={(newTasks) => { setTasks(prev => [...prev, ...newTasks]); setAssignOpen(false); loadTutorResources(); }}
         user={user}
+        tutorResources={tutorResources}
       />
 
       <PupilTasksModal
@@ -474,7 +518,7 @@ function PupilTasksModal({ pupil, tasks, onClose, onOpenDetail, onApprove, onRej
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9 }}>
                     <div className="nx-bar" style={{ flex: 1 }}><i style={{ width: `${t.progress}%`, background: st.color }} /></div>
                     <span className="nx-num" style={{ fontSize: 12, color: 'var(--holo)', width: 34, textAlign: 'right' }}>{t.progress}%</span>
-                    <Chip tone="gold" icon="coin" style={{ flexShrink: 0 }}>+{t.reward}</Chip>
+                    <TaskRewardChips t={t} />
                     {t.due !== '—' && (
                       <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)', flexShrink: 0 }}>
                         <Icon name="clock" size={10} style={{ verticalAlign: -1 }} /> {t.due}
@@ -589,7 +633,7 @@ function TaskDetailModal({ task, viewerId, onClose, onTaskUpdated }) {
           {task.detail && <p style={{ fontSize: 13, color: 'var(--txt-dim)', margin: '0 0 10px' }}>{task.detail}</p>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <Chip tone={st.tone}>{st.label}</Chip>
-            <Chip tone="gold" icon="coin">+{task.reward}</Chip>
+            <TaskRewardChips t={task} />
             {task.due !== '—' && (
               <span className="nx-data" style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
                 <Icon name="clock" size={10} style={{ verticalAlign: -1 }} /> {task.due}
@@ -670,25 +714,39 @@ function TaskDetailModal({ task, viewerId, onClose, onTaskUpdated }) {
   );
 }
 
-function AssignModal({ open, pupils, preselectedIds, onClose, onCreated, user }) {
-  const empty = { title: '', detail: '', due_date: '', reward: 150, notify: true };
+function AssignModal({ open, pupils, preselectedIds, onClose, onCreated, user, tutorResources }) {
+  const empty = { title: '', detail: '', due_date: '', notify: true };
   const [f, setF] = useState(empty);
   const [selectedIds, setSelectedIds] = useState(preselectedIds ?? []);
+  const [recompensas, setRecompensas] = useState([]);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    if (open) { setF(empty); setSelectedIds(preselectedIds ?? []); }
+    if (open) { setF(empty); setSelectedIds(preselectedIds ?? []); setRecompensas([]); }
   }, [open]);
 
   if (!open) return null;
+
+  const { credits: tutorCredits = 0, habilidades: tutorHabilidades = [], objetos: tutorObjetos = [] } = tutorResources ?? {};
 
   const toggleId = (id) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  const addRecompensa = () => setRecompensas(prev => [...prev, { ...EMPTY_TASK_RECOMPENSA }]);
+  const setRecompensa = (i, key, val) => setRecompensas(prev => prev.map((r, x) => x === i ? { ...r, [key]: val } : r));
+  const removeRecompensa = (i) => setRecompensas(prev => prev.filter((_, x) => x !== i));
+
+  const pupilCount = Math.max(1, selectedIds.length);
+  const totalCreditos = recompensas.filter(r => r.tipo === 'creditos').reduce((s, r) => s + (Number(r.valor) || 0), 0) * pupilCount;
+  const creditosInsuficientes = totalCreditos > tutorCredits;
+
   const submit = async () => {
     if (!f.title.trim()) { toast('Falta el título', { tone: 'error', icon: 'x' }); return; }
     if (selectedIds.length === 0) { toast('Selecciona al menos un pupilo', { tone: 'error', icon: 'x' }); return; }
+    if (recompensas.some(r => r.tipo === 'habilidad' && !r.habilidad_id)) { toast('Falta seleccionar la habilidad de una recompensa', { tone: 'error', icon: 'x' }); return; }
+    if (recompensas.some(r => r.tipo === 'objeto' && !r.objeto_id)) { toast('Falta seleccionar el objeto de una recompensa', { tone: 'error', icon: 'x' }); return; }
+    if (creditosInsuficientes) { toast('No tienes créditos suficientes para esta recompensa', { tone: 'error', icon: 'x' }); return; }
     setSending(true);
     try {
       const data = await apiCall('POST', '/api/tasks', {
@@ -696,7 +754,7 @@ function AssignModal({ open, pupils, preselectedIds, onClose, onCreated, user })
         title:     f.title,
         detail:    f.detail || null,
         due_date:  f.due_date || null,
-        reward:    +f.reward || 0,
+        recompensas: recompensas.map(r => ({ ...r, nombre: r.nombre || (TASK_RECOMPENSA_TIPOS.find(t => t.value === r.tipo)?.label ?? r.tipo) })),
       });
       onCreated((data.tasks ?? []).map(t => mapTask(t, user?.id)));
       const n = selectedIds.length;
@@ -746,16 +804,81 @@ function AssignModal({ open, pupils, preselectedIds, onClose, onCreated, user })
           <textarea className="nx-textarea" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })}
             placeholder="Detalle de lo que debe lograr..." />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div>
-            <label className="nx-label">Fecha límite</label>
-            <input className="nx-input" type="date" value={f.due_date} onChange={e => setF({ ...f, due_date: e.target.value })} />
-          </div>
-          <div>
-            <label className="nx-label">Recompensa (créditos)</label>
-            <NumberInput className="nx-input nx-data" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
-          </div>
+        <div>
+          <label className="nx-label">Fecha límite</label>
+          <input className="nx-input" type="date" value={f.due_date} onChange={e => setF({ ...f, due_date: e.target.value })} />
         </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <label className="nx-label" style={{ margin: 0 }}>Recompensas</label>
+            <Btn sm icon="plus" onClick={addRecompensa}>Agregar</Btn>
+          </div>
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 8 }}>
+            Los créditos y objetos se descuentan de tu inventario al asignar ({pupilCount} pupilo{pupilCount > 1 ? 's' : ''} seleccionado{pupilCount > 1 ? 's' : ''}). Tienes {tutorCredits} créditos.
+            Solo puedes ofrecer habilidades que ya conoces.
+          </div>
+          {recompensas.length === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin recompensas configuradas — la tarea se puede asignar igual.</div>
+          )}
+          <div style={{ display: 'grid', gap: 10 }}>
+            {recompensas.map((r, i) => (
+              <div key={i} className="nx-panel" style={{ padding: 12, position: 'relative' }}>
+                <button onClick={() => removeRecompensa(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
+                  <Icon name="x" size={12} />
+                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: r.tipo === 'creditos' ? '1fr 130px 90px' : '1fr 130px', gap: 10, paddingRight: 28 }}>
+                  <div>
+                    <label className="nx-label">Nombre</label>
+                    <input className="nx-input" value={r.nombre} onChange={e => setRecompensa(i, 'nombre', e.target.value)} placeholder="Ej: Bono de esfuerzo" />
+                  </div>
+                  <div>
+                    <label className="nx-label">Tipo</label>
+                    <select className="nx-select" value={r.tipo} onChange={e => setRecompensa(i, 'tipo', e.target.value)}>
+                      {TASK_RECOMPENSA_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  {r.tipo === 'creditos' && (
+                    <div>
+                      <label className="nx-label">Valor (c/u)</label>
+                      <NumberInput className="nx-input" min="0" value={r.valor ?? 0} onChange={e => setRecompensa(i, 'valor', +e.target.value)} />
+                    </div>
+                  )}
+                </div>
+                {r.tipo === 'habilidad' && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="nx-label">Habilidad a otorgar *</label>
+                    <select className="nx-select" value={r.habilidad_id ?? ''} onChange={e => setRecompensa(i, 'habilidad_id', e.target.value ? +e.target.value : null)}>
+                      <option value="">— Seleccionar habilidad —</option>
+                      {tutorHabilidades.map(h => <option key={h.id} value={h.id}>{taskHabilidadLabel(h)}</option>)}
+                    </select>
+                    {tutorHabilidades.length === 0 && (
+                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>Aún no conoces ninguna habilidad para ofrecer.</div>
+                    )}
+                  </div>
+                )}
+                {r.tipo === 'objeto' && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="nx-label">Objeto a otorgar (1 c/u) *</label>
+                    <select className="nx-select" value={r.objeto_id ?? ''} onChange={e => setRecompensa(i, 'objeto_id', e.target.value ? +e.target.value : null)}>
+                      <option value="">— Seleccionar objeto —</option>
+                      {tutorObjetos.map(o => <option key={o.id} value={o.id}>{o.label} (tienes {o.cantidad})</option>)}
+                    </select>
+                    {tutorObjetos.length === 0 && (
+                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>No tienes objetos en tu inventario para ofrecer.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {creditosInsuficientes && (
+            <div style={{ fontSize: 11, color: '#ff6b6b', marginTop: 8 }}>
+              Necesitas {totalCreditos} créditos para {pupilCount} pupilo(s), pero solo tienes {tutorCredits}.
+            </div>
+          )}
+        </div>
+
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, color: 'var(--txt-dim)' }}>
           <input type="checkbox" checked={f.notify} onChange={e => setF({ ...f, notify: e.target.checked })}
             style={{ accentColor: 'var(--holocron-naranja)', width: 16, height: 16 }} />
@@ -763,7 +886,7 @@ function AssignModal({ open, pupils, preselectedIds, onClose, onCreated, user })
         </label>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <Btn onClick={onClose}>Cancelar</Btn>
-          <Btn kind="accent" icon="check" onClick={submit} disabled={sending}>
+          <Btn kind="accent" icon="check" onClick={submit} disabled={sending || creditosInsuficientes}>
             {sending ? 'Asignando...' : 'Asignar tarea'}
           </Btn>
         </div>

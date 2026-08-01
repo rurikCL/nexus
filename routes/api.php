@@ -110,6 +110,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/tasks', [TaskController::class, 'index']);
     Route::get('/tasks/pupils', [TaskController::class, 'pupils']);
+    Route::get('/tasks/recursos-tutor', [TaskController::class, 'recursosTutor']);
     Route::post('/tasks', [TaskController::class, 'store']);
     Route::patch('/tasks/{task}', [TaskController::class, 'update']);
     Route::post('/tasks/{task}/approve', [TaskController::class, 'approve']);

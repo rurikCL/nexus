@@ -31,4 +31,9 @@ class Task extends Model
     {
         return $this->hasMany(TaskUpdate::class)->latest();
     }
+
+    public function recompensas(): HasMany
+    {
+        return $this->hasMany(TaskRecompensa::class);
+    }
 }
