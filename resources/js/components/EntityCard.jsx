@@ -565,7 +565,7 @@ export async function drawObjetoCard(objeto) {
 
 /* ═══════════════════════════ NPC / JEFE / ENEMIGO ═══════════════════════════ */
 
-const NPC_TIPO_FRAME = { aliado: 'info', neutral: 'neutral', hostil: 'danger', entrenador: 'ok', mercader: 'gold', mision: 'purple', jefe: 'orange' };
+const NPC_TIPO_FRAME = { aliado: 'info', neutral: 'neutral', hostil: 'danger', entrenador: 'ok', mercader: 'gold', mision: 'purple', jefe: 'gold' };
 export const NPC_TIPO_LABEL = { aliado: 'Aliado', neutral: 'Neutral', hostil: 'Hostil', entrenador: 'Entrenador', mercader: 'Mercader', mision: 'Misión', jefe: 'Jefe de Asalto' };
 const NPC_TIPO_ICON  = { aliado: 'user', neutral: 'user', hostil: 'flame', entrenador: 'shield', mercader: 'coin', mision: 'star', jefe: 'crown' };
 
