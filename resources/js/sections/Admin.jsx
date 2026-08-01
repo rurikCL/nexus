@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, Panel, Btn, Chip, Modal, toast, CropImageField } from '../components/ui.jsx';
 
 function useWindowWidth() {
@@ -1967,7 +1968,7 @@ function AssignObjetoModal({ objeto, onClose }) {
 }
 
 /* ─── ENTITY TABLE ───────────────────────────────────────── */
-function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
+function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated, headerSlotEl }) {
   const [data, setData]         = useState(null);
   const [page, setPage]         = useState(1);
   const [search, setSearch]     = useState('');
@@ -2061,31 +2062,31 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated }) {
         </div>
       )}
 
+      {/* buscador — se inyecta en el header (arriba, alineado a la derecha) vía portal */}
+      {headerSlotEl && createPortal(
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: 200 }}>
+            <input className="nx-input" style={{ paddingLeft: 30, fontSize: 12, height: 30 }}
+              placeholder={`Buscar ${config.label.toLowerCase()}...`}
+              value={searchInput} onChange={e => setSearchInput(e.target.value)}
+            />
+            <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--txt-faint)', pointerEvents: 'none' }}>
+              <Icon name="search" size={12} />
+            </span>
+          </div>
+          <Btn kind="ghost" sm icon="search" title="Buscar" onClick={() => { setSearch(searchInput); setPage(1); }} />
+          {search && (
+            <Btn kind="ghost" sm icon="x" title="Limpiar búsqueda" onClick={() => { setSearch(''); setSearchInput(''); setPage(1); }} />
+          )}
+        </form>,
+        headerSlotEl
+      )}
+
       {/* toolbar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
         borderBottom: '1px solid var(--holo-line)', flexShrink: 0,
       }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 6, flex: 1 }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: 280 }}>
-            <input className="nx-input" style={{ paddingLeft: 32, fontSize: 12 }}
-              placeholder={`Buscar ${config.label.toLowerCase()}...`}
-              value={searchInput} onChange={e => setSearchInput(e.target.value)}
-            />
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--txt-faint)', pointerEvents: 'none' }}>
-              <Icon name="target" size={13} />
-            </span>
-          </div>
-          <Btn kind="ghost" sm onClick={() => { setSearch(searchInput); setPage(1); }}>
-            Buscar
-          </Btn>
-          {search && (
-            <Btn kind="ghost" sm onClick={() => { setSearch(''); setSearchInput(''); setPage(1); }}>
-              <Icon name="x" size={11} />
-            </Btn>
-          )}
-        </form>
-
         {/* Filtros específicos de entidad */}
         {(config.filters ?? []).map(f => {
           const opts = f.related
@@ -2367,6 +2368,7 @@ export default function AdminView() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 640);
   const [activeEntity, setActiveEntity] = useState('sistemas');
   const [relatedOptions, setRelatedOptions] = useState({});
+  const [headerSlotEl, setHeaderSlotEl] = useState(null);
 
   const config = ENTITY_CONFIG[activeEntity];
 
@@ -2501,6 +2503,8 @@ export default function AdminView() {
             <div className="nx-kicker" style={{ fontSize: 8 }}>{config.group}</div>
             <div className="nx-display" style={{ fontSize: 14, color: 'var(--txt)' }}>{config.label}</div>
           </div>
+          {/* buscador de la entidad activa — inyectado vía portal desde EntityTable */}
+          <div ref={setHeaderSlotEl} style={{ display: 'flex', alignItems: 'center', gap: 6 }} />
           {config.noDelete && (
             <Chip tone="dim">Solo lectura parcial</Chip>
           )}
@@ -2517,6 +2521,7 @@ export default function AdminView() {
                 config={config}
                 relatedOptions={relatedOptions}
                 onRefreshRelated={refreshRelated}
+                headerSlotEl={headerSlotEl}
               />
             )
           }

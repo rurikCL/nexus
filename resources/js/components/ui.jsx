@@ -7,6 +7,7 @@ import { mediaUrl } from '../utils/printableCard.js';
 
 /* ---- Icon set (línea fina, estilo HUD) ---- */
 export const ICON_PATHS = {
+  search:   'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM16.65 16.65L21 21',
   command:  'M3 4h7v7H3zM14 4h7v4h-7zM14 11h7v9h-7zM3 14h7v6H3z',
   user:     'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
   calendar: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',

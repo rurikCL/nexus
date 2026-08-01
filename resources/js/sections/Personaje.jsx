@@ -19,6 +19,7 @@ import {
   MedallasPanel,
   SaberBlade,
 } from './Comando.jsx';
+import { BONUS_FIELDS } from './ArmadoSable.jsx';
 
 const EQUIP_TABS = [
   { value: 'inventario', label: 'Inventario', icon: 'roster' },
@@ -681,6 +682,10 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
 
   const sableActivo = user?.character?.sable_activo ?? null;
   const sableColorHex = NX.SABERS[sableActivo?.color_hoja] || NX.SABERS.azul;
+  const sableBonosMap = user?.character?.sable_bonos ?? {};
+  const sableBonosList = BONUS_FIELDS
+    .map((b) => ({ ...b, value: sableBonosMap[b.key.replace(/^bono_/, '')] ?? 0 }))
+    .filter((b) => b.value !== 0);
 
   const loadHabilidades = () => {
     if (habilidades.length > 0) return;
@@ -1183,6 +1188,20 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                         )}
                       </div>
                     </div>
+                    {sableBonosList.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flexBasis: '100%' }}>
+                        {sableBonosList.map((b) => (
+                          <span key={b.key} style={{
+                            fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+                            padding: '2px 7px', borderRadius: 4,
+                            background: `${b.color}18`, border: `1px solid ${b.color}40`,
+                            color: b.color, whiteSpace: 'nowrap', lineHeight: 1.5,
+                          }}>
+                            {b.value > 0 ? '+' : ''}{b.value} {b.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, color: 'var(--txt-faint)', flexBasis: '100%' }}>
                       Tu sable armado ataca cuerpo a cuerpo en combate y tiene prioridad sobre cualquier arma equipada.
                     </div>

@@ -1313,7 +1313,6 @@ function FighterPickerModal({ open, opponents, selected, onPick, onClose }) {
             onChange={e => setQ(e.target.value)}
             placeholder="Buscar combatiente..."
             style={{ paddingLeft: 34 }}
-            autoFocus
           />
         </div>
 
