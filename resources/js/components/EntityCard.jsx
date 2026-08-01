@@ -262,6 +262,60 @@ function paintStatBoxes(ctx, entries, x, y, w, h, gap = 10) {
   return y + h;
 }
 
+/** Marca de agua tenue detrás de todo el contenido — una corona gigante, apenas visible, que se
+ * asoma por los huecos entre el arte y las cajas translúcidas. Exclusivo de las cartas de Jefe,
+ * para darles más presencia física como carta "final boss" frente a un NPC/enemigo normal. */
+function paintJefeWatermark(ctx, cardH, color) {
+  const size = CARD_W * 0.72;
+  ctx.save();
+  ctx.globalAlpha = 0.1;
+  drawIcon(ctx, 'crown', CARD_W / 2, cardH * 0.46, size, color, (4 * 24) / size);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Marco doble + esquinas ornamentadas (bracket en L + gema) — refuerzo visual exclusivo de
+ * las cartas de Jefe, para que se note físicamente como una carta distinta a un NPC/enemigo
+ * normal incluso antes de leer el texto. */
+function paintJefeAdornments(ctx, pad, cardH, color) {
+  const innerPad = pad + 6;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(innerPad, innerPad, CARD_W - innerPad * 2, cardH - innerPad * 2, 26);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = `${color}cc`;
+  ctx.stroke();
+  ctx.restore();
+
+  const inset = 14;
+  const armLen = 16;
+  const corners = [
+    { ax: pad + inset, ay: pad + inset, dx: 1, dy: 1 },
+    { ax: CARD_W - pad - inset, ay: pad + inset, dx: -1, dy: 1 },
+    { ax: CARD_W - pad - inset, ay: cardH - pad - inset, dx: -1, dy: -1 },
+    { ax: pad + inset, ay: cardH - pad - inset, dx: 1, dy: -1 },
+  ];
+  corners.forEach(({ ax, ay, dx, dy }) => {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ax + dx * armLen, ay);
+    ctx.lineTo(ax, ay);
+    ctx.lineTo(ax, ay + dy * armLen);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(ax, ay);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(-4, -4, 8, 8);
+    ctx.restore();
+  });
+}
+
 function paintColofon(ctx, text, cardH = CARD_H) {
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(120,150,190,0.55)';
@@ -654,6 +708,12 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH);
   const innerW = innerRight - innerX;
+
+  if (entity.tipo === 'jefe') {
+    paintJefeWatermark(ctx, cardH, frame.line);
+    paintJefeAdornments(ctx, pad, cardH, frame.line);
+  }
+
   paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
 
   ctx.textAlign = 'left';
