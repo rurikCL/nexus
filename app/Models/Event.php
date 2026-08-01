@@ -11,11 +11,14 @@ class Event extends Model
 {
     protected $fillable = [
         'name', 'type', 'status', 'event_date', 'location', 'sede_id',
-        'reward', 'reward_badge', 'capacity', 'banner', 'description',
+        'capacity', 'banner', 'description',
     ];
 
     protected $casts = [
-        'event_date' => 'datetime',
+        // Solo se captura la fecha (sin hora) desde el formulario — 'datetime' serializaba
+        // con hora/zona (ej. "2026-08-01T00:00:00.000000Z"), lo que rompía el parseo en el
+        // frontend (que concatena "T00:00:00" asumiendo un string plano "Y-m-d").
+        'event_date' => 'date:Y-m-d',
     ];
 
     public function registrations(): BelongsToMany

@@ -129,9 +129,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);
+    Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::patch('/events/{event}', [EventController::class, 'update']);
     Route::post('/events/{event}/register', [EventController::class, 'register']);
     Route::delete('/events/{event}/register', [EventController::class, 'unregister']);
-    Route::post('/events/{event}/claim', [EventController::class, 'claim']);
+    Route::post('/events/{event}/close', [EventController::class, 'close']);
 
     Route::get('/combats', [CombatController::class, 'index']);
     Route::post('/combats/{combat}/resolve', [CombatController::class, 'resolve']);

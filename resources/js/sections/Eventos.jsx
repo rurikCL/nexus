@@ -52,8 +52,6 @@ function mapEvent(e) {
     location:    e.location ?? 'Por definir',
     sedeId:      e.sede_id ?? null,
     sedeNombre:  e.sede_nombre ?? null,
-    reward:      e.reward ?? 0,
-    rewardBadge: e.reward_badge ?? null,
     recompensas: e.recompensas ?? [],
     capacity:    e.capacity ?? 0,
     banner:      e.banner ?? null,
@@ -77,14 +75,16 @@ function apiCall(method, path, body) {
 export function EventosView({ S, go, user }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null); // null = crear · objeto = editar
+  const [detailId, setDetailId] = useState(null);
   const [filter, setFilter] = useState('todos');
   const [sedes, setSedes] = useState([]);
   const [activeSede, setActiveSede] = useState(user?.sede?.id ?? null);
   const [habilidades, setHabilidades] = useState([]);
   const [objetos, setObjetos] = useState([]);
   const [medallas, setMedallas] = useState([]);
-  const canCreateEvent = EVENT_ADMIN_TIERS.includes(user?.tier);
+  const canManage = EVENT_ADMIN_TIERS.includes(user?.tier);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -101,13 +101,13 @@ export function EventosView({ S, go, user }) {
     apiCall('GET', '/api/public/sedes').then(d => setSedes(d.sedes ?? [])).catch(() => {});
   }, []);
 
-  /* Catálogos para el editor de recompensas — solo hacen falta si el usuario puede crear eventos */
+  /* Catálogos para el editor de recompensas — solo hacen falta si el usuario puede gestionar eventos */
   useEffect(() => {
-    if (!canCreateEvent) return;
+    if (!canManage) return;
     apiCall('GET', '/api/admin/rol_habilidades/options').then(d => setHabilidades(d.options ?? [])).catch(() => {});
     apiCall('GET', '/api/admin/rol_objetos/options').then(d => setObjetos(d.options ?? [])).catch(() => {});
     apiCall('GET', '/api/admin/medallas/options').then(d => setMedallas(d.options ?? [])).catch(() => {});
-  }, [canCreateEvent]);
+  }, [canManage]);
 
   const toggleReg = async (e) => {
     if (e.mine) {
@@ -122,27 +122,32 @@ export function EventosView({ S, go, user }) {
       try {
         await apiCall('POST', `/api/events/${e.id}/register`);
         setEvents(prev => prev.map(x => x.id === e.id ? { ...x, mine: true, registered: x.registered + 1 } : x));
-        toast('Inscripción confirmada', { tone: 'success', icon: 'check', desc: `${e.name} · recompensa al asistir` });
+        toast('Inscripción confirmada', { tone: 'success', icon: 'check', desc: `${e.name} · recompensa al cerrarse el evento` });
       } catch (err) {
         toast(err?.message ?? 'Error al inscribir', { tone: 'error', icon: 'x' });
       }
     }
   };
 
-  const claimEvent = async (e) => {
+  const openCreate = () => { setEditingEvent(null); setFormOpen(true); };
+  const openEdit = async (e) => {
     try {
-      const data = await apiCall('POST', `/api/events/${e.id}/claim`);
-      setEvents(prev => prev.map(x => x.id === e.id ? { ...x, claimed: true } : x));
-      const totalCreditos = (data.credits_awarded ?? 0) + (data.creditos_otorgados ?? 0);
-      if (S.setCredits && totalCreditos > 0) S.setCredits(c => c + totalCreditos);
-      toast('Recompensa reclamada', { tone: 'success', icon: 'coin', desc: `+${totalCreditos} créditos por ${e.name}` });
-      (data.titulos_otorgados ?? []).forEach(t => toast(`🏷️ Título obtenido: "${t.nombre}"`, { tone: 'success', icon: 'star' }));
-      (data.medallas_otorgadas ?? []).forEach(m => toast(`🏅 Medalla obtenida: "${m.medalla?.nombre ?? ''}"`, { tone: 'success', icon: 'star' }));
-      if ((data.habilidades_aprendidas ?? []).length > 0) toast('⚡ Nueva habilidad desbloqueada', { tone: 'success', icon: 'star' });
-      if ((data.objetos_otorgados ?? []).length > 0) toast('📦 Objeto añadido a tu inventario', { tone: 'success', icon: 'star' });
-      if ((data.objetos_sin_espacio ?? []).length > 0) toast('Inventario lleno: un objeto de recompensa no se pudo entregar', { tone: 'warning', icon: 'x' });
+      const d = await apiCall('GET', `/api/events/${e.id}`);
+      setEditingEvent(d.event);
+      setFormOpen(true);
     } catch (err) {
-      toast(err?.message ?? 'Error al reclamar', { tone: 'error', icon: 'x' });
+      toast(err?.message ?? 'No se pudo cargar el evento', { tone: 'error', icon: 'x' });
+    }
+  };
+
+  const closeEvent = async (e) => {
+    if (!window.confirm(`¿Cerrar "${e.name}"? Se otorgarán las recompensas a todos los inscritos y no podrá editarse más.`)) return;
+    try {
+      const data = await apiCall('POST', `/api/events/${e.id}/close`);
+      toast(data.message ?? 'Evento cerrado', { tone: 'success', icon: 'check' });
+      reload();
+    } catch (err) {
+      toast(err?.message ?? 'Error al cerrar el evento', { tone: 'error', icon: 'x' });
     }
   };
 
@@ -175,8 +180,8 @@ export function EventosView({ S, go, user }) {
           <span className="nx-num" style={{ fontSize: 15, color: 'var(--txt)' }}>{misCount}</span>
           <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>inscritos</span>
         </div>
-        {canCreateEvent && (
-          <Btn kind="accent" icon="plus" onClick={() => setCreating(true)}>Agregar evento</Btn>
+        {canManage && (
+          <Btn kind="accent" icon="plus" onClick={openCreate}>Agregar evento</Btn>
         )}
       </div>
 
@@ -201,37 +206,46 @@ export function EventosView({ S, go, user }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 16 }}>
         {list.length === 0 && <Empty label="Sin eventos" />}
         {list.map(e => (
-          <EventCard key={e.id} e={e} onToggleReg={() => toggleReg(e)} onClaim={() => claimEvent(e)} />
+          <EventCard
+            key={e.id}
+            e={e}
+            canManage={canManage}
+            onToggleReg={() => toggleReg(e)}
+            onViewDetail={() => setDetailId(e.id)}
+            onEdit={() => openEdit(e)}
+            onCloseEvent={() => closeEvent(e)}
+          />
         ))}
       </div>
 
-      <CreateEventModal
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={(newEvent) => { setEvents(prev => [newEvent, ...prev]); setCreating(false); }}
+      <EventFormModal
+        open={formOpen}
+        editing={editingEvent}
+        onClose={() => setFormOpen(false)}
+        onSaved={() => { setFormOpen(false); reload(); }}
         sedes={sedes}
         habilidades={habilidades}
         objetos={objetos}
         medallas={medallas}
       />
+
+      <EventDetailModal eventId={detailId} onClose={() => setDetailId(null)} />
     </div>
   );
 }
 
-function EventCard({ e, onToggleReg, onClaim }) {
+function EventCard({ e, canManage, onToggleReg, onViewDetail, onEdit, onCloseEvent }) {
   const meta = EVENT_TYPES[e.type] ?? { banner: 'var(--holo)', icon: 'star' };
   const banner = e.banner ?? meta.banner;
   const st = EVENT_STATUS[e.status] ?? { tone: 'dim', label: e.status };
   const full = e.capacity > 0 && e.registered >= e.capacity && !e.mine;
   const pct = e.capacity > 0 ? Math.min(100, Math.round(e.registered / e.capacity * 100)) : 0;
+  const realizado = e.status === 'REALIZADO';
 
   let action;
-  if (e.status === 'REALIZADO') {
-    if (e.mine && !e.claimed)
-      action = <Btn kind="gold" icon="coin" sm style={{ width: '100%', justifyContent: 'center' }}
-        onClick={onClaim}>Reclamar +{e.reward}</Btn>;
-    else if (e.claimed)
-      action = <Chip tone="green" icon="check" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Recompensa reclamada</Chip>;
+  if (realizado) {
+    if (e.mine && e.claimed)
+      action = <Chip tone="green" icon="check" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Recompensa recibida</Chip>;
     else
       action = <Chip tone="dim" style={{ width: '100%', justifyContent: 'center', padding: '8px' }}>Evento finalizado</Chip>;
   } else if (e.mine) {
@@ -274,13 +288,13 @@ function EventCard({ e, onToggleReg, onClaim }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-          <Chip tone="gold" icon="coin">+{e.reward} créditos</Chip>
-          {e.rewardBadge && <Chip tone="gold" icon="medal">{e.rewardBadge}</Chip>}
-          {e.recompensas.map(r => (
-            <Chip key={r.id} tone="gold" icon={RECOMPENSA_ICON[r.tipo] ?? 'star'}>{recompensaResumen(r)}</Chip>
-          ))}
-        </div>
+        {e.recompensas.length > 0 && (
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {e.recompensas.map(r => (
+              <Chip key={r.id} tone="gold" icon={RECOMPENSA_ICON[r.tipo] ?? 'star'}>{recompensaResumen(r)}</Chip>
+            ))}
+          </div>
+        )}
 
         <div style={{ marginTop: 'auto' }}>
           {e.capacity > 0 && (
@@ -295,18 +309,43 @@ function EventCard({ e, onToggleReg, onClaim }) {
             </>
           )}
           {action}
+          {canManage && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <Btn sm icon="eye" style={{ flex: 1, justifyContent: 'center' }} onClick={onViewDetail}>Detalle</Btn>
+              {!realizado && (
+                <>
+                  <Btn sm icon="edit" style={{ flex: 1, justifyContent: 'center' }} onClick={onEdit}>Editar</Btn>
+                  <Btn sm icon="x" style={{ flex: 1, justifyContent: 'center' }} onClick={onCloseEvent}>Cerrar</Btn>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function CreateEventModal({ open, onClose, onCreated, sedes, habilidades = [], objetos = [], medallas = [] }) {
-  const empty = { name: '', type: 'EXHIBICIÓN', date: '', location: '', sedeId: '', capacity: 30, reward: 300, rewardBadge: '', desc: '' };
-  const [f, setF] = useState(empty);
+function EventFormModal({ open, onClose, onSaved, sedes, habilidades = [], objetos = [], medallas = [], editing }) {
+  const isEdit = !!editing;
+  const buildForm = () => editing ? {
+    name: editing.name ?? '',
+    type: editing.type ?? 'EXHIBICIÓN',
+    date: editing.event_date ?? '',
+    location: editing.location ?? '',
+    sedeId: editing.sede_id ?? '',
+    capacity: editing.capacity ?? '',
+    desc: editing.description ?? '',
+  } : { name: '', type: 'EXHIBICIÓN', date: '', location: '', sedeId: '', capacity: 30, desc: '' };
+  const buildRecompensas = () => (editing?.recompensas ?? []).map(r => ({
+    id: r.id, nombre: r.nombre, tipo: r.tipo, valor: r.valor ?? 0,
+    habilidad_id: r.habilidad_id, objeto_id: r.objeto_id, medalla_id: r.medalla_id,
+  }));
+
+  const [f, setF] = useState(buildForm);
   const [recompensas, setRecompensas] = useState([]);
   const [sending, setSending] = useState(false);
-  useEffect(() => { if (open) { setF(empty); setRecompensas([]); } }, [open]);
+  useEffect(() => { if (open) { setF(buildForm()); setRecompensas(buildRecompensas()); } }, [open, editing]);
   if (!open) return null;
 
   const addRecompensa = () => setRecompensas(prev => [...prev, { ...EMPTY_RECOMPENSA }]);
@@ -317,30 +356,34 @@ function CreateEventModal({ open, onClose, onCreated, sedes, habilidades = [], o
     if (!f.name.trim()) { toast('Falta el nombre del evento', { tone: 'error', icon: 'x' }); return; }
     setSending(true);
     try {
-      const data = await apiCall('POST', '/api/events', {
+      const body = {
         name:         f.name,
         type:         f.type,
         event_date:   f.date || null,
         location:     f.location || null,
         sede_id:      f.sedeId || null,
         capacity:     +f.capacity || null,
-        reward:       +f.reward || 0,
-        reward_badge: f.rewardBadge.trim() || null,
         description:  f.desc || null,
         banner:       EVENT_TYPES[f.type]?.banner ?? null,
         recompensas:  recompensas.map(r => ({ ...r, nombre: r.nombre || (RECOMPENSA_TIPOS.find(t => t.value === r.tipo)?.label ?? r.tipo) })),
-      });
-      onCreated(mapEvent(data.event));
-      toast('Evento creado', { tone: 'success', icon: 'star', desc: `${f.name} · inscripción abierta` });
+      };
+      if (isEdit) {
+        await apiCall('PATCH', `/api/events/${editing.id}`, body);
+        toast('Evento actualizado', { tone: 'success', icon: 'check', desc: f.name });
+      } else {
+        await apiCall('POST', '/api/events', body);
+        toast('Evento creado', { tone: 'success', icon: 'star', desc: `${f.name} · inscripción abierta` });
+      }
+      onSaved();
     } catch (e) {
-      toast(e?.message ?? 'Error al crear el evento', { tone: 'error', icon: 'x' });
+      toast(e?.message ?? 'Error al guardar el evento', { tone: 'error', icon: 'x' });
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} kicker="Nueva presentación" title="Agregar Evento" width={540}>
+    <Modal open={open} onClose={onClose} kicker={isEdit ? 'Editar presentación' : 'Nueva presentación'} title={isEdit ? 'Editar Evento' : 'Agregar Evento'} width={540}>
       <div style={{ display: 'grid', gap: 14 }}>
         <div>
           <label className="nx-label">Nombre del evento *</label>
@@ -376,25 +419,15 @@ function CreateEventModal({ open, onClose, onCreated, sedes, habilidades = [], o
             {(sedes ?? []).map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div>
-            <label className="nx-label">Recompensa (créditos)</label>
-            <NumberInput className="nx-input nx-data" value={f.reward} onChange={e => setF({ ...f, reward: e.target.value })} />
-          </div>
-          <div>
-            <label className="nx-label">Insignia / medalla (opcional)</label>
-            <input className="nx-input" value={f.rewardBadge} onChange={e => setF({ ...f, rewardBadge: e.target.value })} placeholder="Ej: Insignia Exhibición" />
-          </div>
-        </div>
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <label className="nx-label" style={{ margin: 0 }}>Recompensas adicionales (opcional)</label>
+            <label className="nx-label" style={{ margin: 0 }}>Recompensas</label>
             <Btn sm icon="plus" onClick={addRecompensa}>Agregar</Btn>
           </div>
           {recompensas.length === 0 && (
             <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
-              Además de los créditos de arriba, puedes otorgar un título, insignia real, habilidad u objeto al reclamar.
+              Créditos, título, insignia real, habilidad u objeto — se otorgan a todos los inscritos cuando se cierra el evento.
             </div>
           )}
           <div style={{ display: 'grid', gap: 10 }}>
@@ -461,10 +494,78 @@ function CreateEventModal({ open, onClose, onCreated, sedes, habilidades = [], o
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <Btn onClick={onClose}>Cancelar</Btn>
           <Btn kind="accent" icon="check" onClick={submit} disabled={sending}>
-            {sending ? 'Creando...' : 'Crear evento'}
+            {sending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear evento'}
           </Btn>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+function EventDetailModal({ eventId, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!eventId) { setData(null); return; }
+    setLoading(true);
+    apiCall('GET', `/api/events/${eventId}`)
+      .then(d => setData(d))
+      .catch(err => toast(err?.message ?? 'No se pudo cargar el detalle', { tone: 'error', icon: 'x' }))
+      .finally(() => setLoading(false));
+  }, [eventId]);
+
+  if (!eventId) return null;
+  const e = data?.event;
+  const st = e ? (EVENT_STATUS[e.status] ?? { tone: 'dim', label: e.status }) : null;
+
+  return (
+    <Modal open onClose={onClose} kicker="Detalle del evento" title={e?.name ?? 'Evento'} width={520}>
+      {loading || !e ? (
+        <div style={{ textAlign: 'center', padding: 20, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando...</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Chip tone={st.tone}>{st.label}</Chip>
+            {e.sede_nombre && <Chip tone="dim" icon="shield">Sede {e.sede_nombre}</Chip>}
+          </div>
+
+          {e.description && <p style={{ fontSize: 13, color: 'var(--txt)', margin: 0, lineHeight: 1.6 }}>{e.description}</p>}
+
+          {e.recompensas.length > 0 && (
+            <div>
+              <div className="nx-kicker" style={{ marginBottom: 8 }}>RECOMPENSAS</div>
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                {e.recompensas.map(r => (
+                  <Chip key={r.id} tone="gold" icon={RECOMPENSA_ICON[r.tipo] ?? 'star'}>{recompensaResumen(r)}</Chip>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="nx-kicker" style={{ marginBottom: 8 }}>INSCRITOS · {data.registrations.length}</div>
+            {data.registrations.length === 0 ? (
+              <Empty label="Sin inscritos aún" />
+            ) : (
+              <div style={{ display: 'grid', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+                {data.registrations.map(r => (
+                  <div key={r.user_id} className="nx-panel" style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 12 }}>{r.name}{r.handle ? ` · @${r.handle}` : ''}</span>
+                    {r.claimed
+                      ? <Chip tone="green" icon="check">Recompensado</Chip>
+                      : <Chip tone="dim">Pendiente</Chip>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Btn onClick={onClose}>Cerrar</Btn>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
