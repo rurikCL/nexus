@@ -1144,6 +1144,20 @@ class RaidCombatController extends Controller
                 }
             }
 
+            // Se calcula ANTES de completarDungeonRun (más abajo), que borra las salas del run
+            // (cascadeOnDelete) y con ellas dungeon_sala_progresos — la única fuente de estos conteos.
+            $enemigosEliminados = 0;
+            $cofresAbiertos = 0;
+            if ($raid->dungeon_run_id) {
+                $drp = DungeonRunPlayer::where('dungeon_run_id', $raid->dungeon_run_id)
+                    ->where('user_id', $rp->user_id)->first();
+                if ($drp) {
+                    $enemigosEliminados = $drp->progresos()->where('resuelta', true)
+                        ->whereHas('sala', fn ($q) => $q->whereNotNull('enemigo_id'))->count();
+                    $cofresAbiertos = $drp->progresos()->where('cofre_abierto', true)->count();
+                }
+            }
+
             JefeRanking::create([
                 'npc_id' => $raid->npc_id,
                 'user_id' => $rp->user_id,
@@ -1153,6 +1167,8 @@ class RaidCombatController extends Controller
                 'curacion_total' => $rp->curacion_total,
                 'debuffs_aplicados' => $rp->debuffs_aplicados,
                 'rondas' => $raid->ronda,
+                'enemigos_eliminados' => $enemigosEliminados,
+                'cofres_abiertos' => $cofresAbiertos,
             ]);
         }
 

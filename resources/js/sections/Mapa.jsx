@@ -2721,6 +2721,22 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
 
   if (!data?.run) return null;
 
+  /* ── RAID contra el jefe: se mantiene al mando de la pantalla mientras esté abierta (pantalla
+     completa fija, cubre todo igual que antes) para que el jugador vea la tarjeta de resumen del
+     combate ANTES de caer al estado 'completado' del dungeon. Si no se aísla así, el poll de este
+     componente (cada 4s) puede detectar 'completado' (el servidor lo marca apenas muere el jefe,
+     dentro del mismo request) y reemplazar todo el árbol por la pantalla de término, saltándose
+     el banner de victoria y la tarjeta de RaidCombatScreen. */
+  if (activeRaidId) {
+    return (
+      <RaidCombatScreen
+        raidId={activeRaidId}
+        lugarImagen={mediaUrl(lugar.imagen)}
+        onClose={() => { setActiveRaidId(null); refresh(); }}
+      />
+    );
+  }
+
   /* ── LOBBY: equipo armándose ── */
   if (estado === 'esperando') {
     const jugadores = data.jugadores ?? [];
@@ -2822,9 +2838,10 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
 
   /* ── TERMINAL: completado o abandonado ── */
   if (estado === 'completado' || estado === 'abandonado') {
+    const resumen = data.resumen ?? [];
     return (
       <DungeonBackdrop imagen={lugar.imagen}>
-        <div className="nx-panel solid" style={{ padding: 32, textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
+        <div className="nx-panel solid" style={{ padding: 32, textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
           <div className="nx-display" style={{ fontSize: 20, marginBottom: 10 }}>
             {estado === 'completado' ? '¡Dungeon completado!' : 'Dungeon abandonado'}
           </div>
@@ -2833,6 +2850,31 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               ? 'El equipo derrotó al jefe y obtuvo su botín.'
               : 'Puedes volver a entrar por este portal cuando quieras.'}
           </p>
+
+          {resumen.length > 0 && (
+            <div style={{ display: 'grid', gap: 10, marginBottom: 24, textAlign: 'left' }}>
+              <div className="nx-kicker" style={{ textAlign: 'center' }}>RESUMEN DEL EQUIPO</div>
+              {resumen.map((j) => (
+                <div key={j.user_id} className="nx-panel" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {j.foto ? (
+                    <img src={mediaUrl(j.foto)} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--holo-line)', flexShrink: 0 }} />
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>{j.nombre}</div>
+                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', marginTop: 2 }}>
+                      <span>⚔️ {j.enemigos_eliminados} eliminados</span>
+                      <span>🎁 {j.cofres_abiertos} cofres</span>
+                      <span>💥 {j.dano_al_jefe} daño al jefe</span>
+                      <span>⏱️ {j.rondas} rondas</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <Btn kind="accent" onClick={unirse}>Entrar de nuevo</Btn>
         </div>
       </DungeonBackdrop>
@@ -3024,15 +3066,6 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
           dungeonRunId={runId}
           onClose={() => setRaidQueueOpen(false)}
           onStarted={(id) => { setRaidQueueOpen(false); setActiveRaidId(id); }}
-        />
-      )}
-
-      {/* combate RAID contra el jefe — al vencerlo, el servidor cierra el DungeonRun */}
-      {activeRaidId && (
-        <RaidCombatScreen
-          raidId={activeRaidId}
-          lugarImagen={mediaUrl(lugar.imagen)}
-          onClose={() => { setActiveRaidId(null); refresh(); }}
         />
       )}
     </div>

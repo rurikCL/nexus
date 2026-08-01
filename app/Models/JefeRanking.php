@@ -18,6 +18,7 @@ class JefeRanking extends Model
     protected $fillable = [
         'npc_id', 'user_id', 'raid_combat_id', 'dungeon_run_id',
         'dano_total', 'curacion_total', 'debuffs_aplicados', 'rondas',
+        'enemigos_eliminados', 'cofres_abiertos',
     ];
 
     protected $casts = [
@@ -25,6 +26,8 @@ class JefeRanking extends Model
         'curacion_total' => 'integer',
         'debuffs_aplicados' => 'integer',
         'rondas' => 'integer',
+        'enemigos_eliminados' => 'integer',
+        'cofres_abiertos' => 'integer',
     ];
 
     public function npc(): BelongsTo
