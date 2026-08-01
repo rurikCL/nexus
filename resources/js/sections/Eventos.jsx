@@ -1,7 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Modal, toast, NumberInput } from '../components/ui.jsx';
-import { Empty } from './Comando.jsx';
+import { Empty, FORMA_LABELS } from './Comando.jsx';
+
+const RECOMPENSA_TIPOS = [
+  { value: 'creditos',        label: 'Créditos' },
+  { value: 'objeto',          label: 'Objeto' },
+  { value: 'habilidad',       label: 'Habilidad' },
+  { value: 'punto_habilidad', label: 'Punto Habilidad' },
+  { value: 'titulo',          label: 'Título' },
+  { value: 'insignia',        label: 'Insignia' },
+];
+const EMPTY_RECOMPENSA = { nombre: '', tipo: 'creditos', valor: 0, habilidad_id: null, objeto_id: null, medalla_id: null };
+const habilidadLabel = (h) => h.forma > 0 ? `[Forma ${h.forma} — ${FORMA_LABELS[h.forma - 1]}] ${h.label}` : h.label;
+
+function recompensaResumen(r) {
+  if (r.tipo === 'habilidad') return r.habilidad?.nombre ?? r.nombre;
+  if (r.tipo === 'objeto') return r.objeto?.nombre ?? r.nombre;
+  if (r.tipo === 'insignia') return r.medalla?.nombre ?? r.nombre;
+  if (r.tipo === 'titulo') return r.nombre;
+  return `${r.nombre}${r.valor > 0 ? ` (${r.valor})` : ''}`;
+}
+const RECOMPENSA_ICON = { creditos: 'coin', objeto: 'box', habilidad: 'zap', punto_habilidad: 'zap', titulo: 'crown', insignia: 'medal' };
 
 const EVENT_TYPES = {
   'EXHIBICIÓN':   { banner: '#FF6B00', icon: 'zap' },
@@ -34,6 +54,7 @@ function mapEvent(e) {
     sedeNombre:  e.sede_nombre ?? null,
     reward:      e.reward ?? 0,
     rewardBadge: e.reward_badge ?? null,
+    recompensas: e.recompensas ?? [],
     capacity:    e.capacity ?? 0,
     banner:      e.banner ?? null,
     desc:        e.description ?? '',
@@ -60,6 +81,10 @@ export function EventosView({ S, go, user }) {
   const [filter, setFilter] = useState('todos');
   const [sedes, setSedes] = useState([]);
   const [activeSede, setActiveSede] = useState(user?.sede?.id ?? null);
+  const [habilidades, setHabilidades] = useState([]);
+  const [objetos, setObjetos] = useState([]);
+  const [medallas, setMedallas] = useState([]);
+  const canCreateEvent = EVENT_ADMIN_TIERS.includes(user?.tier);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -75,6 +100,14 @@ export function EventosView({ S, go, user }) {
   useEffect(() => {
     apiCall('GET', '/api/public/sedes').then(d => setSedes(d.sedes ?? [])).catch(() => {});
   }, []);
+
+  /* Catálogos para el editor de recompensas — solo hacen falta si el usuario puede crear eventos */
+  useEffect(() => {
+    if (!canCreateEvent) return;
+    apiCall('GET', '/api/admin/rol_habilidades/options').then(d => setHabilidades(d.options ?? [])).catch(() => {});
+    apiCall('GET', '/api/admin/rol_objetos/options').then(d => setObjetos(d.options ?? [])).catch(() => {});
+    apiCall('GET', '/api/admin/medallas/options').then(d => setMedallas(d.options ?? [])).catch(() => {});
+  }, [canCreateEvent]);
 
   const toggleReg = async (e) => {
     if (e.mine) {
@@ -100,8 +133,14 @@ export function EventosView({ S, go, user }) {
     try {
       const data = await apiCall('POST', `/api/events/${e.id}/claim`);
       setEvents(prev => prev.map(x => x.id === e.id ? { ...x, claimed: true } : x));
-      if (S.setCredits && data.credits_awarded > 0) S.setCredits(c => c + data.credits_awarded);
-      toast('Recompensa reclamada', { tone: 'success', icon: 'coin', desc: `+${e.reward} créditos por ${e.name}` });
+      const totalCreditos = (data.credits_awarded ?? 0) + (data.creditos_otorgados ?? 0);
+      if (S.setCredits && totalCreditos > 0) S.setCredits(c => c + totalCreditos);
+      toast('Recompensa reclamada', { tone: 'success', icon: 'coin', desc: `+${totalCreditos} créditos por ${e.name}` });
+      (data.titulos_otorgados ?? []).forEach(t => toast(`🏷️ Título obtenido: "${t.nombre}"`, { tone: 'success', icon: 'star' }));
+      (data.medallas_otorgadas ?? []).forEach(m => toast(`🏅 Medalla obtenida: "${m.medalla?.nombre ?? ''}"`, { tone: 'success', icon: 'star' }));
+      if ((data.habilidades_aprendidas ?? []).length > 0) toast('⚡ Nueva habilidad desbloqueada', { tone: 'success', icon: 'star' });
+      if ((data.objetos_otorgados ?? []).length > 0) toast('📦 Objeto añadido a tu inventario', { tone: 'success', icon: 'star' });
+      if ((data.objetos_sin_espacio ?? []).length > 0) toast('Inventario lleno: un objeto de recompensa no se pudo entregar', { tone: 'warning', icon: 'x' });
     } catch (err) {
       toast(err?.message ?? 'Error al reclamar', { tone: 'error', icon: 'x' });
     }
@@ -116,7 +155,6 @@ export function EventosView({ S, go, user }) {
       return true;
     });
   const misCount = events.filter(e => e.mine).length;
-  const canCreateEvent = EVENT_ADMIN_TIERS.includes(user?.tier);
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
@@ -172,6 +210,9 @@ export function EventosView({ S, go, user }) {
         onClose={() => setCreating(false)}
         onCreated={(newEvent) => { setEvents(prev => [newEvent, ...prev]); setCreating(false); }}
         sedes={sedes}
+        habilidades={habilidades}
+        objetos={objetos}
+        medallas={medallas}
       />
     </div>
   );
@@ -236,6 +277,9 @@ function EventCard({ e, onToggleReg, onClaim }) {
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
           <Chip tone="gold" icon="coin">+{e.reward} créditos</Chip>
           {e.rewardBadge && <Chip tone="gold" icon="medal">{e.rewardBadge}</Chip>}
+          {e.recompensas.map(r => (
+            <Chip key={r.id} tone="gold" icon={RECOMPENSA_ICON[r.tipo] ?? 'star'}>{recompensaResumen(r)}</Chip>
+          ))}
         </div>
 
         <div style={{ marginTop: 'auto' }}>
@@ -257,12 +301,17 @@ function EventCard({ e, onToggleReg, onClaim }) {
   );
 }
 
-function CreateEventModal({ open, onClose, onCreated, sedes }) {
+function CreateEventModal({ open, onClose, onCreated, sedes, habilidades = [], objetos = [], medallas = [] }) {
   const empty = { name: '', type: 'EXHIBICIÓN', date: '', location: '', sedeId: '', capacity: 30, reward: 300, rewardBadge: '', desc: '' };
   const [f, setF] = useState(empty);
+  const [recompensas, setRecompensas] = useState([]);
   const [sending, setSending] = useState(false);
-  useEffect(() => { if (open) setF(empty); }, [open]);
+  useEffect(() => { if (open) { setF(empty); setRecompensas([]); } }, [open]);
   if (!open) return null;
+
+  const addRecompensa = () => setRecompensas(prev => [...prev, { ...EMPTY_RECOMPENSA }]);
+  const setRecompensa = (i, key, val) => setRecompensas(prev => prev.map((r, x) => x === i ? { ...r, [key]: val } : r));
+  const removeRecompensa = (i) => setRecompensas(prev => prev.filter((_, x) => x !== i));
 
   const submit = async () => {
     if (!f.name.trim()) { toast('Falta el nombre del evento', { tone: 'error', icon: 'x' }); return; }
@@ -279,6 +328,7 @@ function CreateEventModal({ open, onClose, onCreated, sedes }) {
         reward_badge: f.rewardBadge.trim() || null,
         description:  f.desc || null,
         banner:       EVENT_TYPES[f.type]?.banner ?? null,
+        recompensas:  recompensas.map(r => ({ ...r, nombre: r.nombre || (RECOMPENSA_TIPOS.find(t => t.value === r.tipo)?.label ?? r.tipo) })),
       });
       onCreated(mapEvent(data.event));
       toast('Evento creado', { tone: 'success', icon: 'star', desc: `${f.name} · inscripción abierta` });
@@ -336,6 +386,73 @@ function CreateEventModal({ open, onClose, onCreated, sedes }) {
             <input className="nx-input" value={f.rewardBadge} onChange={e => setF({ ...f, rewardBadge: e.target.value })} placeholder="Ej: Insignia Exhibición" />
           </div>
         </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <label className="nx-label" style={{ margin: 0 }}>Recompensas adicionales (opcional)</label>
+            <Btn sm icon="plus" onClick={addRecompensa}>Agregar</Btn>
+          </div>
+          {recompensas.length === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>
+              Además de los créditos de arriba, puedes otorgar un título, insignia real, habilidad u objeto al reclamar.
+            </div>
+          )}
+          <div style={{ display: 'grid', gap: 10 }}>
+            {recompensas.map((r, i) => (
+              <div key={i} className="nx-panel" style={{ padding: 12, position: 'relative' }}>
+                <button onClick={() => removeRecompensa(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
+                  <Icon name="x" size={12} />
+                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: (r.tipo === 'habilidad' || r.tipo === 'objeto' || r.tipo === 'insignia') ? '1fr 130px' : '1fr 130px 90px', gap: 10, paddingRight: 28 }}>
+                  <div>
+                    <label className="nx-label">Nombre</label>
+                    <input className="nx-input" value={r.nombre} onChange={e => setRecompensa(i, 'nombre', e.target.value)} placeholder="Ej: Título Exhibición" />
+                  </div>
+                  <div>
+                    <label className="nx-label">Tipo</label>
+                    <select className="nx-select" value={r.tipo} onChange={e => setRecompensa(i, 'tipo', e.target.value)}>
+                      {RECOMPENSA_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  {r.tipo !== 'habilidad' && r.tipo !== 'objeto' && r.tipo !== 'insignia' && (
+                    <div>
+                      <label className="nx-label">Valor</label>
+                      <NumberInput className="nx-input" min="0" value={r.valor ?? 0} onChange={e => setRecompensa(i, 'valor', +e.target.value)} />
+                    </div>
+                  )}
+                </div>
+                {r.tipo === 'habilidad' && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="nx-label">Habilidad a otorgar *</label>
+                    <select className="nx-select" value={r.habilidad_id ?? ''} onChange={e => setRecompensa(i, 'habilidad_id', e.target.value ? +e.target.value : null)}>
+                      <option value="">— Seleccionar habilidad —</option>
+                      {habilidades.map(h => <option key={h.id} value={h.id}>{habilidadLabel(h)}</option>)}
+                    </select>
+                  </div>
+                )}
+                {r.tipo === 'objeto' && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="nx-label">Objeto a otorgar *</label>
+                    <select className="nx-select" value={r.objeto_id ?? ''} onChange={e => setRecompensa(i, 'objeto_id', e.target.value ? +e.target.value : null)}>
+                      <option value="">— Seleccionar objeto —</option>
+                      {objetos.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                    </select>
+                  </div>
+                )}
+                {r.tipo === 'insignia' && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="nx-label">Medalla a otorgar *</label>
+                    <select className="nx-select" value={r.medalla_id ?? ''} onChange={e => setRecompensa(i, 'medalla_id', e.target.value ? +e.target.value : null)}>
+                      <option value="">— Seleccionar medalla —</option>
+                      {medallas.map(m => <option key={m.id} value={m.id}>{m.label} ({m.rareza})</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="nx-label">Descripción</label>
           <textarea className="nx-textarea" value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })}

@@ -16,6 +16,7 @@ class CharacterMedalla extends Model
         'character_id',
         'medalla_id',
         'mision_id',
+        'event_id',
         'activo',
     ];
 
@@ -36,5 +37,10 @@ class CharacterMedalla extends Model
     public function mision(): BelongsTo
     {
         return $this->belongsTo(Mision::class);
+    }
+
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(Event::class);
     }
 }

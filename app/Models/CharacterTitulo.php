@@ -16,6 +16,7 @@ class CharacterTitulo extends Model
         'nombre',
         'tipo',
         'mision_id',
+        'event_id',
         'activo',
     ];
 
@@ -31,5 +32,10 @@ class CharacterTitulo extends Model
     public function mision(): BelongsTo
     {
         return $this->belongsTo(Mision::class);
+    }
+
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(Event::class);
     }
 }

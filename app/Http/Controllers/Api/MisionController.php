@@ -11,6 +11,7 @@ use App\Models\Recompensa;
 use App\Models\User;
 use App\Traits\ConvertsToWebp;
 use App\Services\MisionProgresoService;
+use App\Services\RecompensaGrantService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -791,58 +792,7 @@ class MisionController extends Controller
 
     private function otorgarRecompensas(\Illuminate\Support\Collection $recompensas, User $user, Mision $mision): array
     {
-        $character = $user->character;
-
-        $habilidadesAprendidas = [];
-        $objetosOtorgados = [];
-        $objetosSinEspacio = [];
-        $creditosOtorgados = 0;
-        $puntosLibresOtorgados = 0;
-        $titulosOtorgados = [];
-        $medallasOtorgadas = [];
-
-        foreach ($recompensas as $recompensa) {
-            if ($recompensa->tipo === 'habilidad' && $recompensa->habilidad_id) {
-                $user->habilidadesAprendidas()->syncWithoutDetaching([$recompensa->habilidad_id]);
-                $habilidadesAprendidas[] = $recompensa->habilidad_id;
-            } elseif ($recompensa->tipo === 'objeto' && $recompensa->objeto_id && $character) {
-                if ($character->inventarioLleno()) {
-                    $objetosSinEspacio[] = $recompensa->objeto_id;
-                } else {
-                    $character->rolObjetos()->syncWithoutDetaching([$recompensa->objeto_id]);
-                    $objetosOtorgados[] = $recompensa->objeto_id;
-                }
-            } elseif ($recompensa->tipo === 'creditos' && $recompensa->valor && $character) {
-                $character->increment('credits', $recompensa->valor);
-                $creditosOtorgados += $recompensa->valor;
-            } elseif ($recompensa->tipo === 'punto_habilidad' && $recompensa->valor && $character) {
-                $character->increment('puntos_libres', $recompensa->valor);
-                $puntosLibresOtorgados += $recompensa->valor;
-            } elseif ($recompensa->tipo === 'titulo' && $character) {
-                $titulo = $character->titulos()->firstOrCreate(
-                    ['nombre' => $recompensa->nombre],
-                    ['tipo' => 'titulo', 'mision_id' => $mision->id]
-                );
-                $titulosOtorgados[] = $titulo->only(['id', 'nombre', 'tipo']);
-            } elseif ($recompensa->tipo === 'insignia' && $recompensa->medalla_id && $character) {
-                $medalla = $character->medallas()->firstOrCreate(
-                    ['medalla_id' => $recompensa->medalla_id],
-                    ['mision_id' => $mision->id]
-                );
-                $medalla->load('medalla');
-                $medallasOtorgadas[] = ['id' => $medalla->id, 'medalla_id' => $medalla->medalla_id, 'medalla' => $medalla->medalla];
-            }
-        }
-
-        return [
-            'habilidades_aprendidas' => $habilidadesAprendidas,
-            'objetos_otorgados' => $objetosOtorgados,
-            'objetos_sin_espacio' => $objetosSinEspacio,
-            'creditos_otorgados' => $creditosOtorgados,
-            'puntos_libres_otorgados' => $puntosLibresOtorgados,
-            'titulos_otorgados' => $titulosOtorgados,
-            'medallas_otorgadas' => $medallasOtorgadas,
-        ];
+        return app(RecompensaGrantService::class)->otorgar($recompensas, $user, ['mision_id' => $mision->id]);
     }
 
     private function otorgarHitosMision(Mision $mision, User $user): array
