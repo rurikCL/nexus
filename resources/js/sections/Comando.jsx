@@ -455,22 +455,19 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
         <div style={{ display: 'flex', gap: isMobile ? 14 : 22, padding: isMobile ? 16 : 22, flexWrap: 'wrap', alignItems: 'center', position: 'relative', zIndex: 1 }}>
           <Avatar c={me} size={isMobile ? 64 : 86} ring />
           <div style={{ flex: 1, minWidth: isMobile ? 140 : 220 }}>
-            <div className="nx-kicker">Combatiente{me.sector ? ` · ${me.sector}` : ''}</div>
+            {user?.character?.titulo_activo && (
+              <div className="nx-kicker" style={{ color: 'var(--holocron-oro)' }}>{user.character.titulo_activo.nombre}</div>
+            )}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '4px 0 8px', flexWrap: 'wrap' }}>
               <h1 className="nx-display" style={{ fontSize: isMobile ? 22 : 30, margin: 0, color: 'var(--txt)' }}>{ch.name}</h1>
-              {user?.character?.titulo_activo && (
-                <span className="nx-data" style={{ fontSize: isMobile ? 11 : 13, color: 'var(--holocron-oro)' }}>
-                  {user.character.titulo_activo.nombre}
-                </span>
-              )}
               {user?.character?.medalla_activa?.medalla && (
                 <MedallaBadge medalla={user.character.medalla_activa.medalla} size={isMobile ? 22 : 26} />
               )}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Chip tone="dim" icon="user">@{ch.handle}</Chip>
               <TierBadge tier={myTier} />
               {(() => { const c = NX.CLASSES.find(x => x.id === ch.cls); return c ? <Chip icon={c.icon}>{c.num} · {c.name}</Chip> : null; })()}
-              <Chip tone="dim" icon="user">@{ch.handle}</Chip>
               <span className="nx-chip dim" style={{ borderColor: `${sab}66` }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: sab, boxShadow: `0 0 8px ${sab}` }} />Sable {ch.saber}</span>
               <button
                 type="button"
