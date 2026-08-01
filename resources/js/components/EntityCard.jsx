@@ -212,6 +212,27 @@ function paintRows(ctx, rows, startY, innerX, innerRight, rowH = 47) {
   return startY + rows.length * rowH;
 }
 
+/** Fila de cuadros iguales lado a lado (ícono + valor + etiqueta, centrados), tipo stat-tile —
+ * a diferencia de `paintRows` (lista vertical), esta se usa para agrupar valores relacionados
+ * de forma horizontal (p.ej. daño / daño a escudo / daño perforante). Devuelve el Y final. */
+function paintStatBoxes(ctx, entries, x, y, w, h, gap = 10) {
+  const n = entries.length;
+  const boxW = (w - gap * (n - 1)) / n;
+  entries.forEach((e, i) => {
+    const bx = x + i * (boxW + gap);
+    paintBoxBg(ctx, bx, y, boxW, h, 10);
+    ctx.textAlign = 'center';
+    drawIcon(ctx, e.icon, bx + boxW / 2, y + 22, 18, e.color, 2);
+    ctx.fillStyle = e.color;
+    ctx.font = '800 20px Orbitron';
+    ctx.fillText(String(e.value), bx + boxW / 2, y + h - 20);
+    ctx.fillStyle = 'rgba(220,230,255,0.65)';
+    ctx.font = '600 10px "JetBrains Mono"';
+    ctx.fillText(e.label.toUpperCase(), bx + boxW / 2, y + h - 7);
+  });
+  return y + h;
+}
+
 function paintColofon(ctx, text, cardH = CARD_H) {
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(120,150,190,0.55)';
@@ -614,9 +635,17 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     color: COMBAT_STAT_META[key].color,
     value: entity[key] ?? 0,
   }));
+  const danoEntries = [
+    { icon: 'sword', label: 'Daño', color: '#ff7043', value: entity.dano ?? 0 },
+    { icon: 'shield', label: 'Daño Escudo', color: '#26e3e3', value: entity.dano_escudo ?? 0 },
+    { icon: 'fire', label: 'Daño Perforante', color: '#8aa0c0', value: entity.dano_perforante ?? 0 },
+  ];
+
   const statsTop = statsY;
-  const rowH = 47;
-  const attrSectionH = rows.length * rowH;
+  const rowH = 40;
+  const danoGap = 14;
+  const danoBoxH = 90;
+  const attrSectionH = rows.length * rowH + danoGap + danoBoxH;
   const colGap = 22;
   const saludoColW = innerW * 0.42;
   const attrColX = innerX + saludoColW + colGap;
@@ -660,7 +689,8 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line, habCellSize, habLabelH, habRowGap, habColGap);
   }
 
-  paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
+  const attrRowsEndY = paintRows(ctx, rows, statsTop, attrColX, attrColX + attrColW, rowH);
+  paintStatBoxes(ctx, danoEntries, attrColX, attrRowsEndY + danoGap, attrColW, danoBoxH);
 
   ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
