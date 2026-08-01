@@ -864,7 +864,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
     mapa: <MapaView S={S} setMapLocation={setMapLocation} initialLocation={mapLocation} userId={user?.id} userCharacter={user?.character} externalChatTarget={externalChatTarget} onExternalChatConsumed={() => setExternalChatTarget(null)} onUserUpdate={onUserUpdate} />,
     instagram: <InstagramView />,
     configuracion: <AdminView />,
-    'armado-sable': <ArmadoSableView user={user} onUserUpdate={onUserUpdate} />,
+    'armado-sable': <ArmadoSableView user={user} onUserUpdate={onUserUpdate} go={go} />,
   };
   const [title, sub] = TITLES[view] ?? ['', ''];
 

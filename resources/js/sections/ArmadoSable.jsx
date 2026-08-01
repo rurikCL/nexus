@@ -220,7 +220,7 @@ function DesarmarModal({ sable, recuperarId, onSelect, saving, onConfirm, onClos
   );
 }
 
-export function ArmadoSableView({ user, onUserUpdate }) {
+export function ArmadoSableView({ user, onUserUpdate, go }) {
   const inventario = user?.character?.rol_objetos ?? [];
   const refreshedMeRef = useRef(false);
 
@@ -385,7 +385,13 @@ export function ArmadoSableView({ user, onUserUpdate }) {
   return (
     <div className="nx-fade nx-saber-workbench">
       <div className="nx-saber-layout nx-saber-layout-2col">
-        <Panel kicker="Taller" title="Armado de Sable de Luz" icon="zap">
+        <Panel kicker="Taller" title="Armado de Sable de Luz" icon="zap"
+          right={go && (
+            <Btn kind="ghost" sm onClick={() => go('personaje')}>
+              <Icon name="chevron" size={13} style={{ transform: 'rotate(180deg)' }} /> Volver
+            </Btn>
+          )}
+        >
           <div className="nx-saber-main">
             <div className="nx-saber-header-row">
               <div className="nx-saber-input-wrap">
