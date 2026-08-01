@@ -5743,7 +5743,17 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
       return;
     }
     if (activeDungeonRun?.estado === 'en_curso') {
-      toast('Debes retirarte del dungeon antes de viajar', { tone: 'error', icon: 'target' });
+      toast('Debes retirarte del dungeon antes de viajar', {
+        tone: 'error', icon: 'target', dur: 6000,
+        action: {
+          label: 'Salir del dungeon',
+          onClick: () => {
+            apiPost(`/map/dungeons/runs/${activeDungeonRun.id}/salir`, {})
+              .then(() => setActiveDungeonRun(null))
+              .catch((err) => toast(err.message || 'No se pudo salir del dungeon', { tone: 'error', icon: 'x' }));
+          },
+        },
+      });
       return;
     }
     setPendingTravel({ kind, fn });
