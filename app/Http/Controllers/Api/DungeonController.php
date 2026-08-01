@@ -56,7 +56,10 @@ class DungeonController extends Controller
 
         if ($jugadorActivo) {
             if ($jugadorActivo->run->dungeon_template_id !== $template->id) {
-                return response()->json(['error' => 'Ya tienes otro dungeon en curso. Resuélvelo o abandónalo primero.'], 422);
+                return response()->json([
+                    'error' => 'Ya tienes otro dungeon en curso. Resuélvelo o abandónalo primero.',
+                    'other_run_id' => $jugadorActivo->run->id,
+                ], 422);
             }
 
             return response()->json($this->formatEstadoOLobby($jugadorActivo->run, $user));
@@ -142,6 +145,24 @@ class DungeonController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * GET /map/dungeons/active — dungeon run activo del usuario autenticado (si tiene uno),
+     * sin necesitar conocer de antemano el runId. Se consulta al montar el mapa para poder
+     * bloquear la navegación mientras el run está 'en_curso', igual que con el PvP activo.
+     */
+    public function activo(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $jugador = DungeonRunPlayer::where('user_id', $user->id)
+            ->where('estado', 'activo')
+            ->whereHas('run', fn ($q) => $q->whereIn('estado', ['esperando', 'en_curso']))
+            ->with('run.template.jefe')
+            ->first();
+
+        return response()->json(['run' => $jugador ? $this->formatRunResumen($jugador->run) : null]);
     }
 
     /** GET /map/dungeons/runs/{run} — estado del run + la sala donde está parado el jugador autenticado. */
@@ -328,6 +349,10 @@ class DungeonController extends Controller
             ['dungeon_run_player_id' => $jugador->id, 'dungeon_sala_id' => $sala->id],
             ['visitada' => true, 'resuelta' => ! $sala->enemigo_id]
         );
+
+        if ($sala->enemigo_id && ! $progreso->resuelta) {
+            return response()->json(['error' => 'Debes derrotar al enemigo de esta sala antes de abrir el cofre.'], 422);
+        }
 
         if ($progreso->cofre_abierto) {
             return response()->json(['ok' => true, 'ya_abierto' => true, 'recompensas' => []]);

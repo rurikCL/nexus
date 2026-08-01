@@ -728,6 +728,21 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
         <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
 
+          {/* Aviso grande de inicio de ronda — mismo criterio que NpcCombatScreen/PvpCombatScreen:
+              separa visualmente "empieza la ronda N" de a quién le toca actuar dentro de ella,
+              más relevante todavía acá con varios combatientes turnándose. */}
+          {raid.status === 'activo' && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 45,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', overflow: 'hidden',
+            }}>
+              <span key={raid.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
+                Turno {raid.ronda ?? 1}
+              </span>
+            </div>
+          )}
+
           {/* ── Barra superior: orden de turnos ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(4,9,20,0.6)', borderBottom: '1px solid rgba(56,205,240,0.16)' }}>
             <span className="nx-kicker" style={{ fontSize: 8, flexShrink: 0 }}>RONDA {raid.ronda}</span>

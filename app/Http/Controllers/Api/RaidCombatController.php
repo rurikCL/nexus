@@ -9,6 +9,7 @@ use App\Models\CharacterHito;
 use App\Models\Configuracion;
 use App\Models\DungeonRun;
 use App\Models\DungeonRunPlayer;
+use App\Models\JefeRanking;
 use App\Models\MapNpc;
 use App\Models\RaidCombat;
 use App\Models\RaidCombatPlayer;
@@ -541,6 +542,7 @@ class RaidCombatController extends Controller
                     } else {
                         $buffTargetPlayer->hp = $newHp;
                     }
+                    $myPlayer->curacion_total += $heal;
                     $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
                     $entry['messages'][] = "¡Curación! +{$heal} vida".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
                 }
@@ -552,6 +554,7 @@ class RaidCombatController extends Controller
                     } else {
                         $buffTargetPlayer->escudo = $newEsc;
                     }
+                    $myPlayer->curacion_total += $healEsc;
                     $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
                     $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
                 }
@@ -572,6 +575,7 @@ class RaidCombatController extends Controller
                         }
                     }
                     $raid->npc_debuffs = $npcDebuffsArr;
+                    $myPlayer->debuffs_aplicados += count($habDebuff);
                     $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
                 }
             } elseif ($dmg < 0) {
@@ -652,6 +656,7 @@ class RaidCombatController extends Controller
                             }
                         }
                         $raid->npc_debuffs = $npcDebuffs;
+                        $myPlayer->debuffs_aplicados += count($habDebuff);
                     }
 
                     $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
@@ -1138,6 +1143,17 @@ class RaidCombatController extends Controller
                     $mensajes[] = "🎁 {$rpChar->name} recibe: {$desc}";
                 }
             }
+
+            JefeRanking::create([
+                'npc_id' => $raid->npc_id,
+                'user_id' => $rp->user_id,
+                'raid_combat_id' => $raid->id,
+                'dungeon_run_id' => $raid->dungeon_run_id,
+                'dano_total' => $rp->dano_al_jefe,
+                'curacion_total' => $rp->curacion_total,
+                'debuffs_aplicados' => $rp->debuffs_aplicados,
+                'rondas' => $raid->ronda,
+            ]);
         }
 
         if ($raid->dungeon_run_id) {

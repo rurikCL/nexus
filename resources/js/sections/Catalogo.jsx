@@ -309,6 +309,104 @@ function EntityGridCard({ item, category, onClick }) {
   );
 }
 
+/* Ranking de jefes: selector de jefe + tabla ordenada por daño, alimentada por
+   JefeRankingController::index (una fila por jugador que participó en la victoria). */
+function JefesRankingTab({ jefes }) {
+  const [jefeId, setJefeId] = useState(null);
+  const [ranking, setRanking] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (jefeId !== null || jefes.length === 0) return;
+    setJefeId(jefes[0].id);
+  }, [jefes, jefeId]);
+
+  useEffect(() => {
+    if (jefeId === null) return;
+    let cancelled = false;
+    setLoading(true);
+    const token = localStorage.getItem('nx-token');
+    fetch(`/api/catalogo/jefes/${jefeId}/ranking`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : { ranking: [] })
+      .then(d => { if (!cancelled) setRanking(d.ranking ?? []); })
+      .catch(() => { if (!cancelled) setRanking([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [jefeId]);
+
+  if (jefes.length === 0) {
+    return <Empty label="No hay jefes en el catálogo" />;
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Jefe
+        </span>
+        <select
+          className="nx-select"
+          style={{ minWidth: 220, width: 'auto' }}
+          value={jefeId ?? ''}
+          onChange={e => setJefeId(Number(e.target.value))}
+        >
+          {jefes.map(j => <option key={j.id} value={j.id}>{j.nombre}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="nx-data" style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }}>Cargando ranking…</div>
+      ) : ranking.length === 0 ? (
+        <Empty label="Nadie ha vencido a este jefe todavía" />
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, whiteSpace: 'nowrap' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--holo-line)' }}>
+                <th style={{ padding: '8px 10px' }}>#</th>
+                <th style={{ padding: '8px 10px' }}>Jugador</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Daño</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Curación</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Debuffs</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Turnos</th>
+                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranking.map((r, i) => {
+                const photo = mediaUrl(r.photo_url);
+                return (
+                  <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, color: i < 3 ? '#E6B325' : 'var(--txt-faint)' }}>{i + 1}</td>
+                    <td style={{ padding: '8px 10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                          background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center',
+                        }}>
+                          {photo ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="user" size={12} />}
+                        </div>
+                        <span style={{ color: 'var(--txt)' }}>{r.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: '#ff7043', fontWeight: 700 }}>{r.dano_total}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: '#10b981' }}>{r.curacion_total}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: '#a78bfa' }}>{r.debuffs_aplicados}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--txt-dim)' }}>{r.rondas}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--txt-faint)', fontSize: 10 }}>{r.fecha}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CatalogoView() {
   const isMobile = useWindowWidth() < 640;
   const [data, setData] = useState({ habilidades: [], objetos: [], npcs: [], jefes: [], enemigos: [], buffs_estados: BUFFS_ESTADOS_REF });
@@ -318,6 +416,7 @@ export function CatalogoView() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [showFormaDiagram, setShowFormaDiagram] = useState(false);
+  const [jefesTab, setJefesTab] = useState('jefes'); // 'jefes' | 'ranking'
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -346,6 +445,7 @@ export function CatalogoView() {
   useEffect(() => {
     setActiveFilters({ tipo: 'todos', forma: 'todos', rareza: 'todos', kind: 'todos', categoria: 'todos' });
     setSearch('');
+    setJefesTab('jefes');
   }, [activeCategory]);
 
   const category = CATEGORIES.find(c => c.id === activeCategory);
@@ -407,63 +507,88 @@ export function CatalogoView() {
         ))}
       </div>
 
-      <Panel title={category.label} kicker={`${list.length} de ${rawList.length} registros`} icon={category.icon}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
-          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
-            <Icon name="filter" size={13} style={{ position: 'absolute', left: 10, top: 10, opacity: 0.4 }} />
-            <input
-              className="nx-input"
-              style={{ paddingLeft: 30, width: '100%' }}
-              placeholder="Buscar por nombre..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          {filterOptions.length > 0 && (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {filterOptions.map(filter => (
-                <div key={filter.field} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    {filter.label}
-                  </span>
-                  <button
-                    onClick={() => setActiveFilters(prev => ({ ...prev, [filter.field]: 'todos' }))}
-                    className={`nx-chip ${(activeFilters[filter.field] ?? 'todos') === 'todos' ? '' : 'dim'}`}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    Todos
-                  </button>
-                  {filter.options.map(opt => (
-                    <button
-                      key={String(opt)}
-                      onClick={() => setActiveFilters(prev => ({ ...prev, [filter.field]: opt }))}
-                      className={`nx-chip ${(activeFilters[filter.field] ?? 'todos') === opt ? '' : 'dim'}`}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {filter.labels[String(opt)] ?? filter.labels[opt] ?? opt}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }} className="nx-data">Cargando catálogo…</div>
-        ) : list.length === 0 ? (
-          <Empty label="Sin resultados" />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px,1fr))', gap: 12 }}>
-            {list.map(item => (
-              <EntityGridCard
-                key={item.id}
-                item={item}
-                category={category}
-                onClick={() => setSelected({ kind: item.kind ?? category.kind, item })}
-              />
+      <Panel
+        title={category.label}
+        kicker={activeCategory === 'jefes' && jefesTab === 'ranking' ? 'Ranking' : `${list.length} de ${rawList.length} registros`}
+        icon={category.icon}
+      >
+        {activeCategory === 'jefes' && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            {[{ id: 'jefes', label: 'Jefes' }, { id: 'ranking', label: 'Ranking' }].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setJefesTab(t.id)}
+                className={`nx-chip ${jefesTab === t.id ? '' : 'dim'}`}
+                style={{ cursor: 'pointer' }}
+              >
+                {t.label}
+              </button>
             ))}
           </div>
+        )}
+
+        {activeCategory === 'jefes' && jefesTab === 'ranking' ? (
+          <JefesRankingTab jefes={data.jefes} />
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
+                <Icon name="filter" size={13} style={{ position: 'absolute', left: 10, top: 10, opacity: 0.4 }} />
+                <input
+                  className="nx-input"
+                  style={{ paddingLeft: 30, width: '100%' }}
+                  placeholder="Buscar por nombre..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              {filterOptions.length > 0 && (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {filterOptions.map(filter => (
+                    <div key={filter.field} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        {filter.label}
+                      </span>
+                      <button
+                        onClick={() => setActiveFilters(prev => ({ ...prev, [filter.field]: 'todos' }))}
+                        className={`nx-chip ${(activeFilters[filter.field] ?? 'todos') === 'todos' ? '' : 'dim'}`}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Todos
+                      </button>
+                      {filter.options.map(opt => (
+                        <button
+                          key={String(opt)}
+                          onClick={() => setActiveFilters(prev => ({ ...prev, [filter.field]: opt }))}
+                          className={`nx-chip ${(activeFilters[filter.field] ?? 'todos') === opt ? '' : 'dim'}`}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {filter.labels[String(opt)] ?? filter.labels[opt] ?? opt}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: 30, color: 'var(--txt-faint)' }} className="nx-data">Cargando catálogo…</div>
+            ) : list.length === 0 ? (
+              <Empty label="Sin resultados" />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px,1fr))', gap: 12 }}>
+                {list.map(item => (
+                  <EntityGridCard
+                    key={item.id}
+                    item={item}
+                    category={category}
+                    onClick={() => setSelected({ kind: item.kind ?? category.kind, item })}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </Panel>
 

@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\DungeonController;
 use App\Http\Controllers\Api\EmblemUploadController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\InstagramController;
+use App\Http\Controllers\Api\JefeRankingController;
 use App\Http\Controllers\Api\LugarEncuentroController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MeController;
@@ -79,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/catalogo/objetos', [CatalogoController::class, 'objetos']);
     Route::get('/catalogo/npcs', [CatalogoController::class, 'npcs']);
     Route::get('/catalogo/enemigos', [CatalogoController::class, 'enemigos']);
+    Route::get('/catalogo/jefes/{npc}/ranking', [JefeRankingController::class, 'index']);
 
     // Armado de sable de luz
     Route::get('/sable/sables', [SableController::class, 'index']);
@@ -214,6 +216,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/location', [MapController::class, 'updateLocation']);
 
     // Dungeons rogue-like (equipo)
+    Route::get('/map/dungeons/active', [DungeonController::class, 'activo']);
     Route::post('/map/dungeons/{lugarId}/unirse', [DungeonController::class, 'unirse']);
     Route::get('/map/dungeons/runs/{runId}', [DungeonController::class, 'estado']);
     Route::post('/map/dungeons/runs/{runId}/listo', [DungeonController::class, 'listo']);

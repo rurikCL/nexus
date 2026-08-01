@@ -1788,6 +1788,22 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         {diceOverlay}
         {throwHandle}
 
+        {/* Aviso grande de inicio de ronda — separa visualmente "empieza la ronda N" (con
+            nueva tirada de iniciativa) de a quién le toca actuar dentro de ella, que solía
+            confundirse leyendo solo el registro de combate. Se remonta (key={ronda}) y
+            reproduce su animación cada vez que arranca una ronda nueva. */}
+        {phase === 'battle' && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 45,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={ronda} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
+              Turno {ronda}
+            </span>
+          </div>
+        )}
+
         {isMobile ? (
           /* Layout mobile: enemigo arriba (full width) → registro/resumen al medio → jugador abajo (full width) → barra de acciones */
           <div style={{ position: 'absolute', inset: 8, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>

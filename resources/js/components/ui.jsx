@@ -687,6 +687,7 @@ export function ToastHost() {
     return () => { _toastFn = null; };
   }, []);
   const toneColor = { success: 'var(--green-500)', error: '#ff6b6b', warning: 'var(--holocron-naranja)', info: 'var(--holo)' };
+  const dismiss = (id) => setItems((x) => x.filter((i) => i.id !== id));
   return (
     <div style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 340 }}>
       {items.map((i) => (
@@ -696,6 +697,15 @@ export function ToastHost() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--txt)' }}>{i.msg}</div>
               {i.desc && <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginTop: 2 }}>{i.desc}</div>}
+              {i.action && (
+                <Btn
+                  kind="ghost" sm
+                  style={{ marginTop: 8 }}
+                  onClick={() => { dismiss(i.id); i.action.onClick(); }}
+                >
+                  {i.action.label}
+                </Btn>
+              )}
             </div>
           </div>
         </div>

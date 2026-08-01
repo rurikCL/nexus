@@ -24,7 +24,13 @@ class CatalogoController extends Controller
     private const NPC_CAMPOS = [
         'id', 'nombre', 'tipo', 'profesion', 'faccion', 'imagen_mini', 'imagen', 'saludo',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria',
+        'dano', 'dano_escudo', 'dano_perforante',
         'forma', 'nivel', 'raid_slots', 'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
+    ];
+
+    private const HABILIDAD_SLOTS = [
+        'habilidad1:id,nombre,icono,tipo', 'habilidad2:id,nombre,icono,tipo',
+        'habilidad3:id,nombre,icono,tipo', 'habilidad4:id,nombre,icono,tipo',
     ];
 
     public function objetos(): JsonResponse
@@ -40,7 +46,7 @@ class CatalogoController extends Controller
     {
         $npcs = MapNpc::where('visible', true)
             ->select(self::NPC_CAMPOS)
-            ->with(['habilidad1:id,nombre', 'habilidad2:id,nombre', 'habilidad3:id,nombre', 'habilidad4:id,nombre'])
+            ->with(self::HABILIDAD_SLOTS)
             ->orderBy('tipo')->orderBy('nombre')
             ->get();
 
@@ -51,7 +57,7 @@ class CatalogoController extends Controller
     {
         $enemigos = MapEnemigo::where('visible', true)
             ->select(self::NPC_CAMPOS)
-            ->with(['habilidad1:id,nombre', 'habilidad2:id,nombre', 'habilidad3:id,nombre', 'habilidad4:id,nombre'])
+            ->with(self::HABILIDAD_SLOTS)
             ->orderBy('tipo')->orderBy('nombre')
             ->get();
 

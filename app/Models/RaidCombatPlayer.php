@@ -14,7 +14,8 @@ class RaidCombatPlayer extends Model
     protected $fillable = [
         'raid_combat_id', 'user_id', 'slot',
         'hp', 'escudo', 'fuerza', 'current_forma', 'last_forma',
-        'cooldowns', 'buffs', 'debuffs', 'estados', 'dano_al_jefe', 'status', 'listo',
+        'cooldowns', 'buffs', 'debuffs', 'estados', 'dano_al_jefe',
+        'curacion_total', 'debuffs_aplicados', 'status', 'listo',
     ];
 
     protected $casts = [
@@ -29,6 +30,8 @@ class RaidCombatPlayer extends Model
         'debuffs' => 'array',
         'estados' => 'array',
         'dano_al_jefe' => 'integer',
+        'curacion_total' => 'integer',
+        'debuffs_aplicados' => 'integer',
         'listo' => 'boolean',
     ];
 

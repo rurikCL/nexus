@@ -358,14 +358,14 @@ export const COMBAT_STATS = Object.keys(COMBAT_STAT_META);
 export const COMBAT_STAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
 
 /** Abre una ventana nueva e imprime `dataUrl` (PNG) al tamaño físico exacto de una carta Magic (63mm × 88mm). */
-export function printCardImage(dataUrl, onBlocked) {
+export function printCardImage(dataUrl, onBlocked, { mmW = 63, mmH = 88 } = {}) {
   const win = window.open('', '_blank', 'width=420,height=620');
   if (!win) { onBlocked?.(); return; }
   win.document.write(`<!doctype html><html><head><title>Carta imprimible</title>
     <style>
-      @page { size: 63mm 88mm; margin: 0; }
+      @page { size: ${mmW}mm ${mmH}mm; margin: 0; }
       html, body { margin: 0; padding: 0; background: #fff; }
-      img { width: 63mm; height: 88mm; display: block; }
+      img { width: ${mmW}mm; height: ${mmH}mm; display: block; }
     </style>
   </head><body><img src="${dataUrl}" /></body></html>`);
   win.document.close();
