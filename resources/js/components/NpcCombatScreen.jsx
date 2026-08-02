@@ -315,6 +315,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   useEffect(() => { rondaRef.current = ronda; }, [ronda]);
   useEffect(() => { rondaTurnoRef.current = rondaTurno; }, [rondaTurno]);
   const [npcBusy,      setNpcBusy]      = useState(false);
+  /* Bloquea toda acción del jugador entre el momento en que una acción termina de resolverse
+     (animación/daño/log ya aplicados) y el hand-off real de turno dentro de endTurnAfter — sin
+     esto, durante la nueva espera de 2s (rolling ya volvió a false) el jugador podía hacer clic
+     en otra acción y ejecutar dos golpes en el mismo turno. */
+  const [actionLock,   setActionLock]   = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
@@ -573,6 +578,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    * pausa de "fase de combate" antes de pasar al siguiente combatiente.
    */
   const endTurnAfter = async (actor, overrides = {}) => {
+    setActionLock(true);
+    try {
     await sleep(2000);
     const curPlayerHp = overrides.playerHp ?? playerHp;
     const curNpcHp = overrides.npcHp ?? npcHp;
@@ -642,6 +649,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       setCurrTurn(first);
       setPhaseLock(false);
       if (first === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
+    }
+    } finally {
+      setActionLock(false);
     }
   };
 
@@ -913,7 +923,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Ejecutar habilidad del jugador */
   const doPlayerSkill = async (hab) => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
     const habId = String(hab.id);
     if ((cooldowns[habId] ?? 0) > 0) return;
     if (playerFuerza < hab.costo_fuerza) return;
@@ -1173,7 +1183,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Intento de huida: requiere ganar tirada de iniciativa contra el rival */
   const doPlayerFlee = async () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
 
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
     const pTirada = tirarDados();
@@ -1217,7 +1227,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    * intermedio que haya dejado este uso).
    */
   const doUsarObjeto = async (objeto) => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || usingObjeto || !onUsarObjeto) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock || usingObjeto || !onUsarObjeto) return;
     setUsingObjeto(true);
     try {
       await onUsarObjeto(objeto.id);
@@ -1246,7 +1256,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   /* Evadir (solo naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa por 3 rondas —
      sirve para naves sin habilidades o para no quedar sin nada que hacer en el turno. */
   const doPlayerEvadir = () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || !naveMode) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock || !naveMode) return;
 
     setPlayerBuffs(prev => [...prev, ...['defensa', 'movimiento', 'iniciativa'].map(stat => ({ stat, turns: 3 }))]);
     setLog(prev => [...prev, {
@@ -1258,7 +1268,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Ataque básico: arma equipada o desarmado */
   const doPlayerBasicAttack = async () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
 
     const confundido = resolverConfundido(playerEstados);
     const entries = [];
@@ -1407,7 +1417,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     setObjetoPicker(true);
   };
 
-  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !phaseLock && !npcBusy && !rolling && !armed;
+  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !phaseLock && !npcBusy && !rolling && !armed && !actionLock;
   useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
   /* Bloquea el scroll de la página mientras el combate está en pantalla */
