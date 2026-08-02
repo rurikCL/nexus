@@ -209,13 +209,25 @@ function fmtDuracionRestante(segundos) {
 }
 
 function BalizaAlertRow({ baliza, onViajar, onEliminar }) {
+  const imagenUrl = mediaUrl(baliza.imagen);
   return (
     <div className="nx-panel solid" style={{ padding: 13 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{baliza.nombre}</div>
-          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2 }}>
-            {baliza.ubicacion} · {baliza.creador}
+        <div style={{ display: 'flex', gap: 10, minWidth: 0 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+            background: 'rgba(230,179,37,0.12)', border: '1px solid rgba(230,179,37,0.35)',
+            display: 'grid', placeItems: 'center',
+          }}>
+            {imagenUrl
+              ? <img src={imagenUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <Icon name="zap" size={16} style={{ color: '#E6B325' }} />}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{baliza.nombre}</div>
+            <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2 }}>
+              {baliza.ubicacion} · {baliza.creador}
+            </div>
           </div>
         </div>
         <Chip tone="gold" icon="clock">{fmtDuracionRestante(baliza.segundos_restantes)}</Chip>

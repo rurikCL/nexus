@@ -2182,6 +2182,7 @@ function fmtDuracionRestante(segundos) {
 
 function BalizaCard({ baliza, onEliminar }) {
   const [segundos, setSegundos] = useState(baliza.segundos_restantes);
+  const imagenUrl = mediaUrl(baliza.imagen);
 
   useEffect(() => {
     setSegundos(baliza.segundos_restantes);
@@ -2198,9 +2199,11 @@ function BalizaCard({ baliza, onEliminar }) {
     }}>
       <div style={{
         height: 140, position: 'relative', display: 'grid', placeItems: 'center',
-        background: 'linear-gradient(160deg, rgba(230,179,37,0.18), rgba(4,7,15,0.9))',
+        background: imagenUrl
+          ? `url(${imagenUrl}) center/cover no-repeat`
+          : 'linear-gradient(160deg, rgba(230,179,37,0.18), rgba(4,7,15,0.9))',
       }}>
-        <Icon name="zap" size={44} style={{ color: '#E6B325' }} />
+        {!imagenUrl && <Icon name="zap" size={44} style={{ color: '#E6B325' }} />}
         <div style={{
           position: 'absolute', top: 8, right: 8, zIndex: 2,
           fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',

@@ -136,7 +136,7 @@ class MapController extends Controller
 
         $balizas = BalizaAyuda::activas()
             ->where('map_lugar_id', $id)
-            ->with(['user:id,name', 'character:id,handle,name'])
+            ->with(['user:id,name', 'character:id,handle,name', 'rolObjeto:id,imagen'])
             ->latest()
             ->get()
             ->map(fn (BalizaAyuda $b) => $b->toAlertArray($request->user()?->id))
