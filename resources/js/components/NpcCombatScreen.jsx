@@ -489,7 +489,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const first = pT >= nT ? 'player' : 'npc';
     (async () => {
       await sleep(300);
-      setIniciativaMsg({ key: `ini-1-${Date.now()}`, texto: first === 'player' ? 'Jugador' : npc.nombre });
+      setIniciativaMsg({ key: `ini-1-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
       await sleep(1400);
       setLog([
         { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
@@ -560,7 +560,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const pR = pTirada.total; const nR = nTirada.total;
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
-      setIniciativaMsg({ key: `ini-${ronda + 1}-${Date.now()}`, texto: first === 'player' ? 'Jugador' : npc.nombre });
+      setIniciativaMsg({ key: `ini-${ronda + 1}-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
       await sleep(1400);
       setLog(prev => [...prev,
         { text: `Ronda ${ronda + 1} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
