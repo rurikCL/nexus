@@ -217,6 +217,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg, setBgImg]               = useState(lugarImagen ?? null);
   const pollRef                         = useRef(null);
+  const pollInFlightRef                 = useRef(false);
   const logRef                          = useRef(null);
   const stageRef                        = useRef(null);
   const myHudRef                        = useRef(null);
@@ -230,6 +231,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [emojiBurst, setEmojiBurst]     = useState(null);
   const [statusFx, setStatusFx]         = useState(null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
+  const [inicioMsg, setInicioMsg]       = useState(null); // { key } — banner "¡Combate iniciado!", solo en combates recién creados
+  /* Bloquea los botones de acción mientras se reproduce la secuencia de arranque (inicio +
+     turno + iniciativa) de un combate recién creado — sin esto, si el jugador local gana la
+     iniciativa ya se ve `is_my_turn=true` desde el primer fetch y podría atacar durante el
+     banner. */
+  const [introLock, setIntroLock] = useState(() => combat.status === 'active' && (combat.log?.length ?? 0) <= 1);
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
   const effectMaxTurnsRef = useRef({});
@@ -274,14 +281,58 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
   useEffect(() => { void playCombatePvp(); }, []);
 
+  /* Secuencia de arranque — solo si el combate se acaba de crear (log con a lo más la
+     entrada inicial de iniciativa, sin ninguna acción todavía): banner "Inicio combate" (2s) →
+     banner "Turno 1" (2s, ya visible vía el overlay incondicional de más abajo) → banner
+     "Iniciativa" (2s) con el ganador ya conocido desde la primera entrada del log. Si el
+     combate se retoma (remount con historial ya avanzado), no se repite nada de esto. */
+  const introRanRef = useRef(false);
+  useEffect(() => {
+    if (introRanRef.current) return;
+    if (combat.status !== 'active' || (combat.log?.length ?? 0) > 1) return;
+    introRanRef.current = true;
+    setIntroLock(true);
+    let cancelled = false;
+    (async () => {
+      setInicioMsg({ key: `inicio-${Date.now()}` });
+      await sleep(2000);
+      if (cancelled) return;
+      setInicioMsg(null);
+
+      await sleep(2000); // banner "Turno 1" visible
+
+      const ganador = extractIniciativaGanador(combat.log?.[0] ?? {});
+      if (ganador && !cancelled) {
+        setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: ganador });
+        await sleep(2000);
+        if (cancelled) return;
+        setIniciativaMsg(null);
+      }
+      if (!cancelled) setIntroLock(false);
+    })();
+    return () => { cancelled = true; };
+  }, [combat.status, combat.log?.length]);
+
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);
-  useEffect(() => { combatLogLenRef.current = (combat.log ?? []).length; }, [combat]);
+
+  /* Encola las invocaciones de revealWithDice (poll, acción propia, emoji) para que nunca
+   * corran en paralelo: si la animación de una entrada tarda más que el intervalo de poll
+   * (4s), el siguiente tick esperaba a esta cola en vez de volver a animar las mismas
+   * entradas — el mismo patrón que ya usa RaidCombatScreen. */
+  const revealQueueRef = useRef(Promise.resolve());
+
+  const revealWithDice = (newCombat) => {
+    revealQueueRef.current = revealQueueRef.current.then(() => revealWithDiceNow(newCombat)).catch(() => {});
+
+    return revealQueueRef.current;
+  };
 
   /* Anima con dados las tiradas de las entradas nuevas antes de revelar el estado actualizado */
-  const revealWithDice = async (newCombat) => {
+  const revealWithDiceNow = async (newCombat) => {
     const prevLen = combatLogLenRef.current;
     const newEntries = (newCombat.log ?? []).slice(prevLen);
+    combatLogLenRef.current = (newCombat.log ?? []).length;
     const statusEffects = [];
     let lastAttack = null;
     let lastHeal = null;
@@ -291,7 +342,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       const iniciativaGanador = extractIniciativaGanador(entry);
       if (iniciativaGanador) {
         setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: iniciativaGanador });
-        await sleep(1400);
+        await sleep(2000);
+        setIniciativaMsg(null);
       }
       const groups = extractRollGroups(entry, { myId: userId });
       for (const g of groups) await rollDice(g);
@@ -375,6 +427,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       }
     }
 
+    /* Fase de combate: tras resolver el efecto (mensaje ya mostrado arriba, sonido/animación
+       ya reproducidos, valores a punto de actualizarse abajo) se espera 2s antes de continuar —
+       misma pausa que el resto de los sistemas de combate. */
+    if (newEntries.length > 0) await sleep(2000);
+
     setCombat(newCombat);
   };
 
@@ -404,9 +461,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const shouldPoll = combat.status === 'pending' || (combat.status === 'active' && !combat.is_my_turn);
     if (!shouldPoll) return;
     pollRef.current = setInterval(() => {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
       apiFetch(`/pvp/${combat.id}`)
         .then(d => { if (d?.combat) revealWithDice(d.combat); })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => { pollInFlightRef.current = false; });
     }, 4000);
     return () => clearInterval(pollRef.current);
   }, [combat.is_my_turn, combat.status, combat.id]);
@@ -690,7 +750,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   };
 
   const myHabilidades = me.habilidades ?? [];
-  const lockActions = combat.status !== 'active' || !combat.is_my_turn || armed;
+  const lockActions = combat.status !== 'active' || !combat.is_my_turn || armed || introLock;
 
   /* Agrupa el log del servidor (una entrada por turno) en tarjetas de ronda → tarjetas de turno */
   const logRounds = useMemo(() => {
@@ -1125,6 +1185,20 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
         {diceOverlay}
         {throwHandle}
+
+        {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, solo en
+            combates recién creados (ver el useEffect de montaje). */}
+        {inicioMsg && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 47,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={inicioMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(30px, 7vw, 54px)' }}>
+              ⚔ ¡Combate iniciado!
+            </span>
+          </div>
+        )}
 
         {/* Aviso grande de inicio de ronda — mismo criterio que NpcCombatScreen: separa
             visualmente "empieza la ronda N" de a quién le toca actuar dentro de ella. */}

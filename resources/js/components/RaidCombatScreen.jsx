@@ -404,6 +404,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [emojiBurst, setEmojiBurst] = useState(null);
   const [statusFx, setStatusFx] = useState(null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
+  const [inicioMsg, setInicioMsg] = useState(null); // { key } — banner "¡Combate iniciado!", solo en raids recién comenzados
   const pollRef = useRef(null);
   const logRef = useRef(null);
   const stageRef = useRef(null);
@@ -501,7 +502,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
       if (m) {
         setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[1] });
-        await sleep(1400);
+        await sleep(2000);
+        setIniciativaMsg(null);
       } else {
         await sleep(220);
       }
@@ -592,7 +594,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       for (let i = 0; i < entries.length; i++) {
         await playEntry(entries[i]);
         if (i < entries.length - 1) {
-          await sleep(120);
+          /* Fase de combate: tras resolver el efecto de una entrada (mensaje + sonido/animación
+             ya reproducidos), se espera 2s antes de pasar al siguiente combatiente. */
+          await sleep(2000);
         }
       }
     } finally {
@@ -611,6 +615,33 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       const isFirstLoad = currentLen === null;
 
       if (!isFirstLoad && newLog.length < currentLen) {
+        return;
+      }
+
+      /* Secuencia de arranque — solo la primera carga de un raid recién comenzado (a lo más
+         la entrada inicial de orden de turnos, sin ninguna acción todavía): banner "Inicio
+         combate" (2s) → banner "Turno N" (2s, ya visible vía el overlay incondicional) →
+         banner "Iniciativa" (2s) con el orden ya conocido desde esa primera entrada. Un raid
+         retomado (remount con historial ya avanzado) no repite nada de esto. */
+      if (isFirstLoad && newLog.length <= 1 && newRaid.status === 'activo') {
+        setAnimBusy(true);
+        setInicioMsg({ key: `inicio-${Date.now()}` });
+        await sleep(2000);
+        setInicioMsg(null);
+
+        await sleep(2000); // banner "Turno N" visible
+
+        const msg = newLog[0]?.messages?.[0] ?? '';
+        const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
+        if (m) {
+          setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: m[1] });
+          await sleep(2000);
+          setIniciativaMsg(null);
+        }
+        setAnimBusy(false);
+        prevLogLenRef.current = newLog.length;
+        setRaid(newRaid);
+
         return;
       }
 
@@ -745,6 +776,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.76)' }} />
 
         <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+
+          {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, solo en
+              raids recién comenzados (ver revealRaid). */}
+          {inicioMsg && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 47,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', overflow: 'hidden',
+            }}>
+              <span key={inicioMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(30px, 7vw, 54px)' }}>
+                ⚔ ¡Combate iniciado!
+              </span>
+            </div>
+          )}
 
           {/* Aviso grande de inicio de ronda — mismo criterio que NpcCombatScreen/PvpCombatScreen:
               separa visualmente "empieza la ronda N" de a quién le toca actuar dentro de ella,

@@ -298,9 +298,22 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
   const [currTurn,     setCurrTurn]     = useState(initialState?.currTurn  ?? null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
+  const [inicioMsg,     setInicioMsg]     = useState(null); // { key } — banner "¡Combate iniciado!"
+  const [combatIntroDone, setCombatIntroDone] = useState(!!initialState); // true tras el banner de inicio — habilita el banner "Turno N"
+  /* Bloquea acciones de ambos lados mientras se anuncian los banners de Turno/Iniciativa
+     (inicio de combate o cambio de ronda) — evita que el jugador ataque o que el turno
+     automático del NPC se dispare en medio del anuncio. */
+  const [phaseLock,     setPhaseLock]     = useState(!initialState);
   const [log,          setLog]          = useState(initialState?.log       ?? []);
   const [ronda,        setRonda]        = useState(initialState?.ronda       ?? 1);
   const [rondaTurno,   setRondaTurno]   = useState(initialState?.rondaTurno  ?? 0);
+  /* endTurnAfter lee estos refs (no el state directo) para no depender de un closure que
+     podría haber quedado obsoleto si se invoca desde un efecto creado en un render anterior —
+     mismo riesgo que playerHp/npcHp/estados, que ya se resuelve pasándolos vía `overrides`. */
+  const rondaRef = useRef(ronda);
+  const rondaTurnoRef = useRef(rondaTurno);
+  useEffect(() => { rondaRef.current = ronda; }, [ronda]);
+  useEffect(() => { rondaTurnoRef.current = rondaTurno; }, [rondaTurno]);
   const [npcBusy,      setNpcBusy]      = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
@@ -507,28 +520,47 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     return `−${Math.max(0, dmgEscudo)} daño al escudo — ¡escudo perforado! −${totalVida} daño a la vida`;
   };
 
-  /* Iniciativa — solo si es combate nuevo (no restaurado) */
+  /* Secuencia de arranque — solo si es combate nuevo (no restaurado): banner "Inicio combate"
+     (2s) → banner "Turno 1" (2s) → banner "Iniciativa" (2s) → recién ahí se habilita la acción
+     (phaseLock=false). Guarda `cancelled`: en desarrollo React.StrictMode invoca este efecto dos
+     veces al montar sin llamar a nuestro cleanup entre medio salvo que lo devolvamos — sin esta
+     guarda, la segunda invocación corría completa igual que la primera (dos tiradas de
+     iniciativa, dos setLog pisándose entre sí). */
   useEffect(() => {
     if (initialState) return;
+    let cancelled = false;
     void playCombateNpc();
     const pTirada = tirarDados(); const nTirada = tirarDados();
     const pR = pTirada.total; const nR = nTirada.total;
     const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
     const first = pT >= nT ? 'player' : 'npc';
     (async () => {
-      await sleep(300);
+      setLog([{ text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' }]);
+      setInicioMsg({ key: `inicio-${Date.now()}` });
+      await sleep(2000);
+      if (cancelled) return;
+      setInicioMsg(null);
+      setCombatIntroDone(true); // habilita el banner "Turno N" (antes solo dependía de phase==='battle')
+
+      await sleep(2000); // banner "Turno 1" visible
+      if (cancelled) return;
+
       setIniciativaMsg({ key: `ini-1-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
-      await sleep(1400);
-      setLog([
-        { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
-        { text: `Ronda 1 — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
-        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2, ronda: 1, actor: 'system' },
+      await sleep(2000); // banner "Iniciativa"
+      if (cancelled) return;
+      setIniciativaMsg(null);
+
+      setLog(prev => [...prev,
+        { text: `Ronda 1 — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: 1, actor: 'system' },
+        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: 1, actor: 'system' },
       ]);
       setPhase('battle');
       setCurrTurn(first);
+      setPhaseLock(false);
       /* Pre-recuperar fuerza si el jugador actúa primero */
       if (first === 'player') setPlayerFuerza(fuerzaPorTurno);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   /*
@@ -536,14 +568,18 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    * iniciativa. `overrides` permite pasar el hp/estados YA actualizados por la
    * acción que se acaba de resolver (setPlayerHp/setPlayerEstados son async y
    * el closure de esta función seguiría viendo el valor previo al re-render).
+   * Se invoca SIEMPRE justo después de resolver una acción (mensaje + sonido/animación +
+   * actualización de valores ya hechos por el llamador) — la espera de 2s de acá es la
+   * pausa de "fase de combate" antes de pasar al siguiente combatiente.
    */
   const endTurnAfter = async (actor, overrides = {}) => {
+    await sleep(2000);
     const curPlayerHp = overrides.playerHp ?? playerHp;
     const curNpcHp = overrides.npcHp ?? npcHp;
     const curPlayerEstados = overrides.playerEstados ?? playerEstados;
     const curNpcEstados = overrides.npcEstados ?? npcEstados;
 
-    if (rondaTurno === 0) {
+    if (rondaTurnoRef.current === 0) {
       /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
       const next = actor === 'player' ? 'npc' : 'player';
       setRondaTurno(1);
@@ -568,17 +604,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       const tickMsgs = [...playerTick.mensajes, ...npcTick.mensajes];
       if (tickMsgs.length > 0) {
-        setLog(prev => [...prev, ...tickMsgs.map((text, i) => ({ text, type: 'info', id: prev.length + i, ronda, actor: 'system' }))]);
+        setLog(prev => [...prev, ...tickMsgs.map((text, i) => ({ text, type: 'info', id: prev.length + i, ronda: rondaRef.current, actor: 'system' }))]);
       }
 
       if (nextNpcHp.vida <= 0) {
-        setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
+        setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda: rondaRef.current, actor: 'system' }]);
         setPhase('victory');
 
         return;
       }
       if (nextPlayerHp.vida <= 0) {
-        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
+        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda: rondaRef.current, actor: 'system' }]);
         setPhase('defeat');
 
         return;
@@ -588,15 +624,23 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const pR = pTirada.total; const nR = nTirada.total;
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
-      setIniciativaMsg({ key: `ini-${ronda + 1}-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
-      await sleep(1400);
+      const nuevaRonda = rondaRef.current + 1;
+
+      setPhaseLock(true);
+      setRonda(nuevaRonda); // dispara el remount del banner "Turno N" (key={ronda})
+      await sleep(2000); // banner "Turno N" visible
+
+      setIniciativaMsg({ key: `ini-${nuevaRonda}-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
+      await sleep(2000); // banner "Iniciativa"
+      setIniciativaMsg(null);
+
       setLog(prev => [...prev,
-        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
-        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: ronda + 1, actor: 'system' },
+        { text: `Ronda ${nuevaRonda} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: nuevaRonda, actor: 'system' },
+        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: nuevaRonda, actor: 'system' },
       ]);
-      setRonda(r => r + 1);
       setRondaTurno(0);
       setCurrTurn(first);
+      setPhaseLock(false);
       if (first === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
     }
   };
@@ -627,7 +671,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Turno del NPC */
   useEffect(() => {
-    if (currTurn !== 'npc' || phase !== 'battle') return;
+    if (currTurn !== 'npc' || phase !== 'battle' || phaseLock) return;
     setNpcBusy(true);
     let cancelled = false;
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
@@ -847,11 +891,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       }
     })();
     return () => { cancelled = true; };
-  }, [currTurn, phase, ronda]);
+  }, [currTurn, phase, ronda, phaseLock]);
 
   /* Parálisis del jugador: pierde el turno automáticamente sin necesidad de que elija una acción */
   useEffect(() => {
-    if (currTurn !== 'player' || phase !== 'battle') return;
+    if (currTurn !== 'player' || phase !== 'battle' || phaseLock) return;
     if (!tieneEstado(playerEstados, 'paralizado')) return;
     let cancelled = false;
     (async () => {
@@ -863,7 +907,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       endTurnAfter('player', { playerEstados: info.estados });
     })();
     return () => { cancelled = true; };
-  }, [currTurn, phase, ronda]);
+  }, [currTurn, phase, ronda, phaseLock]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
@@ -1363,7 +1407,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     setObjetoPicker(true);
   };
 
-  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling && !armed;
+  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !phaseLock && !npcBusy && !rolling && !armed;
   useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
   /* Bloquea el scroll de la página mientras el combate está en pantalla */
@@ -1907,11 +1951,25 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         {diceOverlay}
         {throwHandle}
 
+        {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, antes
+            incluso del banner de "Turno 1". */}
+        {inicioMsg && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 47,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={inicioMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(30px, 7vw, 54px)' }}>
+              ⚔ ¡Combate iniciado!
+            </span>
+          </div>
+        )}
+
         {/* Aviso grande de inicio de ronda — separa visualmente "empieza la ronda N" (con
             nueva tirada de iniciativa) de a quién le toca actuar dentro de ella, que solía
             confundirse leyendo solo el registro de combate. Se remonta (key={ronda}) y
             reproduce su animación cada vez que arranca una ronda nueva. */}
-        {phase === 'battle' && (
+        {combatIntroDone && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 45,
             display: 'flex', alignItems: 'center', justifyContent: 'center',

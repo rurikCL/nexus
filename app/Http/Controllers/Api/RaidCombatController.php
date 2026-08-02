@@ -20,6 +20,7 @@ use App\Support\Combat\AplicaEstadosCombate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -263,21 +264,28 @@ class RaidCombatController extends Controller
     /** GET /raid/{id} — estado completo (para polling). */
     public function show(Request $request, int $id): JsonResponse
     {
-        $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->findOrFail($id);
         $user = $request->user();
 
-        if (! $raid->jugadores->contains('user_id', $user->id)) {
-            return response()->json(['error' => 'No participas en este combate.'], 403);
-        }
+        /* Varios jugadores hacen polling de este endpoint en paralelo — el chequeo de
+         * timeout (que puede resolver el turno del jefe) corre con lockForUpdate() dentro
+         * de una transacción para no pisarse con action()/otro poll concurrente sobre el
+         * mismo raid (ver docblock de action()). */
+        return DB::transaction(function () use ($id, $user) {
+            $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->lockForUpdate()->findOrFail($id);
 
-        $log = $raid->log ?? [];
-        if ($this->checkTurnTimeout($raid, $log)) {
-            $raid->log = $log;
-            $raid->save();
-            $raid->refresh()->load(['npc', 'jugadores.user.character']);
-        }
+            if (! $raid->jugadores->contains('user_id', $user->id)) {
+                return response()->json(['error' => 'No participas en este combate.'], 403);
+            }
 
-        return response()->json(['raid' => $this->formatRaid($raid, $user->id)]);
+            $log = $raid->log ?? [];
+            if ($this->checkTurnTimeout($raid, $log)) {
+                $raid->log = $log;
+                $raid->save();
+                $raid->refresh()->load(['npc', 'jugadores.user.character']);
+            }
+
+            return response()->json(['raid' => $this->formatRaid($raid, $user->id)]);
+        });
     }
 
     /** POST /raid/{id}/emoji — expresión cosmética, disponible en cualquier momento (no consume turno). */
@@ -318,10 +326,17 @@ class RaidCombatController extends Controller
         ]);
     }
 
-    /** POST /raid/{id}/action — ataque/habilidad/cambio de forma/huida del jugador cuyo turno es. */
+    /**
+     * POST /raid/{id}/action — ataque/habilidad/cambio de forma/huida del jugador cuyo turno es.
+     * Todo el cuerpo corre dentro de una transacción con `lockForUpdate()`: varios jugadores hacen
+     * polling de `show()` en paralelo (no sincronizado), y sin este lock una petición de `action()`
+     * y un `checkTurnTimeout()` concurrente podían leer el mismo estado y resolver el turno del
+     * jefe dos veces (o pisar la acción real de un jugador) al guardar ambos por separado.
+     */
     public function action(Request $request, int $id): JsonResponse
     {
-        $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->findOrFail($id);
+        return DB::transaction(function () use ($request, $id) {
+        $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->lockForUpdate()->findOrFail($id);
         $user = $request->user();
 
         if (! $raid->isActive()) {
@@ -749,6 +764,7 @@ class RaidCombatController extends Controller
         $raid->save();
 
         return response()->json(['raid' => $this->formatRaid($raid->fresh(['npc', 'jugadores.user.character']), $user->id)]);
+        });
     }
 
     // ─────────────────────────── lógica de turnos ──────────────────────────
