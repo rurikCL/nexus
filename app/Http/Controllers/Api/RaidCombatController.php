@@ -19,6 +19,7 @@ use App\Services\RecompensaRollService;
 use App\Support\Combat\AplicaEstadosCombate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -447,6 +448,7 @@ class RaidCombatController extends Controller
                     $escudoAntes = $raid->npc_escudo;
                     [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, 0, $dmgPerforante);
                     $myPlayer->dano_al_jefe += $dmg + $dmgPerforante;
+                    $myPlayer->golpes_al_jefe += 1;
                 }
                 $desc = self::describeDano($dmg, 0, $dmgPerforante, $escudoAntes);
                 $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
@@ -650,6 +652,7 @@ class RaidCombatController extends Controller
                         $escudoAntes = $raid->npc_escudo;
                         [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
+                        $myPlayer->golpes_al_jefe += 1;
 
                         $npcDebuffs = $raid->npc_debuffs ?? [];
                         foreach ($habDebuff as $stat) {
@@ -882,7 +885,32 @@ class RaidCombatController extends Controller
         }
     }
 
-    /** IA del jefe: prioriza al jugador que más daño le ha hecho; un crítico ataca a todos los jugadores activos a la vez. */
+    /**
+     * Elige a quién ataca el jefe: el jugador con más golpes conectados contra él acumula 20%
+     * de probabilidad de ser el objetivo por golpe, hasta un máximo de 80% — el resto de la
+     * probabilidad recae en UN jugador al azar (uniforme) entre los demás activos, no en el de
+     * mayor agro. Reemplaza el targeting determinista anterior (siempre el de mayor daño
+     * acumulado, `dano_al_jefe`, que se mantiene solo como estadístico).
+     */
+    private static function elegirObjetivoPorAgro(Collection $activos): RaidCombatPlayer
+    {
+        if ($activos->count() <= 1) {
+            return $activos->first();
+        }
+
+        $lider = $activos->sortByDesc('golpes_al_jefe')->first();
+        $agro = min(80, (int) $lider->golpes_al_jefe * 20);
+
+        if (random_int(1, 100) <= $agro) {
+            return $lider;
+        }
+
+        $otros = $activos->where('user_id', '!=', $lider->user_id)->values();
+
+        return $otros->isEmpty() ? $lider : $otros->random();
+    }
+
+    /** IA del jefe: agro ponderado (ver elegirObjetivoPorAgro); un crítico golpea al objetivo (+1 daño) y salpica 2 de daño a escudo al resto en raids de más de 1 jugador. */
     private function resolveNpcTurn(RaidCombat $raid, array &$log): void
     {
         $npc = $raid->npc;
@@ -908,7 +936,7 @@ class RaidCombatController extends Controller
 
         /* Confundido: 50% de que el jefe se golpee a sí mismo en vez del objetivo elegido
          * (mismo criterio que el resto del combate — ver AplicaEstadosCombate::resolverConfundido). */
-        $target = $activos->sortByDesc('dano_al_jefe')->first();
+        $target = self::elegirObjetivoPorAgro($activos);
         $targetEsNpc = self::resolverConfundido($npcEstados);
         if ($targetEsNpc) {
             $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["¡{$npc->nombre} está confundido y ataca hacia sí mismo!"]];
@@ -956,8 +984,9 @@ class RaidCombatController extends Controller
         $formaAtaque = $hab ? (int) $hab->forma : (int) $raid->npc_forma;
         $accion = $hab ? "usa {$hab->nombre}" : 'ataca';
 
-        /* Bono por nivel de dificultad: +nivel de daño (o de curación si dmgBase es negativo) */
-        $dmgBase += $dmgBase >= 0 ? $npc->nivelDificultad() : -$npc->nivelDificultad();
+        /* Bono por nivel de dificultad (0 en nivel 1, +4 en nivel 5): +daño, o +curación si dmgBase es negativo */
+        $bonoNivel = $npc->bonoAtributoPorNivel();
+        $dmgBase += $dmgBase >= 0 ? $bonoNivel : -$bonoNivel;
 
         if ($hab && $hab->cooldown > 0) {
             $npcCooldowns[(string) $hab->id] = $hab->cooldown;
@@ -975,7 +1004,7 @@ class RaidCombatController extends Controller
         $defVal = $targetStats['defensa'];
         $atkRoll = $atkDado + $atkVal;
         $defRoll = $defDado + $defVal;
-        $esCritico = $npc->esCriticoDobles($atkTirada['dado1'], $atkTirada['dado2']); // Dobles según nivel de dificultad (ej. nivel 1 → solo doble 6, nivel 7+ → doble 6 a doble 2)
+        $esCritico = $npc->esCritico($atkTirada['dado1'], $atkTirada['dado2']); // Nivel 1-3: dobles (ver esCriticoDobles). Nivel 4: un 6 y el otro 5+. Nivel 5: un 6 y el otro 4+.
         $esFalloCritico = $atkTirada['dado1'] === 1 && $atkTirada['dado2'] === 1; // Doble 1 ("ojos de serpiente") — siempre falla
 
         $nombreObjetivo = $targetEsNpc ? $npc->nombre : $targetChar->name;
@@ -1044,44 +1073,59 @@ class RaidCombatController extends Controller
         }
 
         if ($esCritico) {
-            $critBonus = $npc->nivelBonoCritico();
+            /* Crítico: golpe normal al objetivo elegido (+1 daño plano, igual que el crítico de
+             * un jugador), y si hay más de un jugador activo en el raid, un splash de 2 de daño
+             * de escudo (sin mitigar — mismo mecanismo que dmgEscudo) al RESTO de los jugadores
+             * activos (no al objetivo). Antes esto era un área que golpeaba a todos por igual;
+             * ahora el golpe fuerte sigue siendo single-target y el splash es solo una onda de
+             * choque menor sobre el escudo de los demás. */
             $habDebuffCrit = $hab && is_array($hab->debuff) ? $hab->debuff : [];
-            $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su furia y golpea a todos los combatientes."];
-            $targets = [];
-            foreach ($activos as $rp) {
+            $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
+            $resistant = self::isResistant($formaAtaque, (int) $target->current_forma);
+            $tgtMult = self::formaMultiplier($formaAtaque, (int) $target->current_forma);
+            $dmg = self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult) + 1);
+            $dmgEscudo = (int) round($dmgEscudoBase * $tgtMult);
+            $dmgPerf = (int) round($dmgPerfBase * $tgtMult);
+            $escudoAntes = $target->escudo;
+            [$target->hp, $target->escudo] = self::applyDamage($target->hp, $target->escudo, $dmg, $dmgEscudo, $dmgPerf);
+            if ($target->hp <= 0) {
+                $target->status = 'derrotado';
+            }
+            if (! empty($habDebuffCrit)) {
+                $tb = $target->debuffs ?? [];
+                $te = $target->estados ?? [];
+                foreach ($habDebuffCrit as $stat) {
+                    if (self::esTipoEstado($stat)) {
+                        $te = self::aplicarEstadoDeHabilidad($te, $stat);
+                    } else {
+                        $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
+                    }
+                }
+                $target->debuffs = $tb;
+                $target->estados = $te ?: null;
+            }
+            $target->save();
+
+            $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerf, $escudoAntes);
+            $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
+            $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su golpe."];
+            $msgs[] = "{$targetChar->name}: {$formaMsg}{$desc}";
+            $targets = [['user_id' => $target->user_id, 'effective' => $effective, 'resistant' => $resistant]];
+
+            $otros = $activos->where('user_id', '!=', $target->user_id);
+            foreach ($otros as $rp) {
                 $rpChar = $rp->user->character;
-                $rpEffective = self::isEffective($formaAtaque, (int) $rp->current_forma);
-                $rpResistant = self::isResistant($formaAtaque, (int) $rp->current_forma);
-                $rpMult = self::formaMultiplier($formaAtaque, (int) $rp->current_forma);
-                $d = self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $rpMult) + $critBonus);
-                $dE = (int) round($dmgEscudoBase * $rpMult);
-                $dP = (int) round($dmgPerfBase * $rpMult);
-                $escudoAntes = $rp->escudo;
-                [$rp->hp, $rp->escudo] = self::applyDamage($rp->hp, $rp->escudo, $d, $dE, $dP);
+                $escudoAntesRp = $rp->escudo;
+                [$rp->hp, $rp->escudo] = self::applyDamage($rp->hp, $rp->escudo, 0, 2, 0);
                 if ($rp->hp <= 0) {
                     $rp->status = 'derrotado';
                 }
-                /* Antes solo se aplicaba el debuff de la habilidad en el golpe no-crítico (rama
-                 * de abajo) — un jefe crítico dejaba pasar el efecto de estado de su propia
-                 * habilidad en el AoE. Se aplica igual a cada combatiente golpeado. */
-                if (! empty($habDebuffCrit)) {
-                    $tb = $rp->debuffs ?? [];
-                    $te = $rp->estados ?? [];
-                    foreach ($habDebuffCrit as $stat) {
-                        if (self::esTipoEstado($stat)) {
-                            $te = self::aplicarEstadoDeHabilidad($te, $stat);
-                        } else {
-                            $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
-                        }
-                    }
-                    $rp->debuffs = $tb;
-                    $rp->estados = $te ?: null;
-                }
                 $rp->save();
-                $desc = self::describeDano($d, $dE, $dP, $escudoAntes);
-                $msgs[] = "{$rpChar->name}: {$desc}".($rpEffective ? ' (¡forma efectiva!)' : ($rpResistant ? ' (resistencia de forma)' : ''));
-                $targets[] = ['user_id' => $rp->user_id, 'effective' => $rpEffective, 'resistant' => $rpResistant];
+                $descRp = self::describeDano(0, 2, 0, $escudoAntesRp);
+                $msgs[] = "{$rpChar->name} (onda de choque): {$descRp}";
+                $targets[] = ['user_id' => $rp->user_id, 'splash' => true];
             }
+
             $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'crit' => true, 'hit' => true, 'aoe' => true, 'targets' => $targets, 'messages' => $msgs];
         } else {
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
@@ -1213,10 +1257,12 @@ class RaidCombatController extends Controller
         $npcBase = self::getNpcStats($npc);
         $npcEffective = self::getEffectiveStats($npcBase, $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $current = $raid->turn_order[$raid->turn_index] ?? null;
+        // Indicador visual de "bajo agro": el jugador con más golpes conectados (el que tiene
+        // hasta 80% de probabilidad de ser el objetivo — ver elegirObjetivoPorAgro).
         $agroTargetUserId = $raid->jugadores
             ->where('status', 'activo')
             ->where('hp', '>', 0)
-            ->sortByDesc('dano_al_jefe')
+            ->sortByDesc('golpes_al_jefe')
             ->first()?->user_id;
 
         $jugadores = $raid->jugadores->sortBy('slot')->map(function (RaidCombatPlayer $rp) use ($current) {
@@ -1344,23 +1390,23 @@ class RaidCombatController extends Controller
 
     private static function getNpcStats(MapNpc $npc): array
     {
-        // +1 a todos los atributos por nivel de dificultad (además del bono de daño/crítico
-        // que nivelDificultad() ya aporta en el resto del combate). Las 5 stats tácticas
-        // quedan topeadas al mismo tope que un jugador con ítems (cap_stats_items) — un
-        // Jefe de nivel alto no debe volverse imposible de acertar/esquivar. Vida y escudo
-        // quedan fuera de ese tope a propósito: son el eje donde el nivel debe seguir
-        // sintiéndose (más aguante), no en la probabilidad de acierto.
-        $nivel = $npc->nivelDificultad();
+        // +1 a todos los atributos por nivel de dificultad SOBRE 1 (bonoAtributoPorNivel: 0 en
+        // nivel 1, +4 en nivel 5 — no confundir con nivelDificultad(), que arranca en 1 y solo
+        // se usa para el sistema de dobles/daño de habilidad). Las 5 stats tácticas quedan
+        // topeadas al mismo tope que un jugador con ítems (cap_stats_items) — un Jefe de nivel
+        // alto no debe volverse imposible de acertar/esquivar. Vida queda libre (sin tope); el
+        // escudo también escala con el nivel pero queda topado en 5 como máximo total.
+        $bono = $npc->bonoAtributoPorNivel();
         $cap = max(1, (int) Configuracion::valor('cap_stats_items', 15));
 
         return [
-            'vida' => ($npc->vida ?: 30) + $nivel,
-            'escudo' => ($npc->escudo ?: 0) + $nivel,
-            'ataque' => min($cap, ($npc->ataque ?: 10) + $nivel),
-            'defensa' => min($cap, ($npc->defensa ?: 10) + $nivel),
-            'movimiento' => min($cap, ($npc->movimiento ?: 10) + $nivel),
-            'iniciativa' => min($cap, ($npc->iniciativa ?: 10) + $nivel),
-            'punteria' => min($cap, ($npc->punteria ?: 10) + $nivel),
+            'vida' => ($npc->vida ?: 30) + $bono,
+            'escudo' => min(5, ($npc->escudo ?: 0) + $bono),
+            'ataque' => min($cap, ($npc->ataque ?: 10) + $bono),
+            'defensa' => min($cap, ($npc->defensa ?: 10) + $bono),
+            'movimiento' => min($cap, ($npc->movimiento ?: 10) + $bono),
+            'iniciativa' => min($cap, ($npc->iniciativa ?: 10) + $bono),
+            'punteria' => min($cap, ($npc->punteria ?: 10) + $bono),
         ];
     }
 
@@ -1493,7 +1539,8 @@ class RaidCombatController extends Controller
     /**
      * Aplica daño con tres componentes: dmg (normal), dmgEscudo (extra solo contra
      * escudo) y dmgPerforante (ignora el escudo, siempre pasa a la vida). Misma
-     * lógica que PvpCombatController/CombatController.
+     * lógica que PvpCombatController/CombatController — ver su docblock para el
+     * detalle de la mitigación al 50% del daño normal contra escudo restante.
      */
     private static function applyDamage(int $hp, int $escudo, int $dmg, int $dmgEscudo = 0, int $dmgPerforante = 0): array
     {
@@ -1503,7 +1550,10 @@ class RaidCombatController extends Controller
 
         $escudoTrasComponenteEscudo = max(0, $escudo - max(0, $dmgEscudo));
         if ($escudoTrasComponenteEscudo > 0) {
-            return [max(0, $hp - $dmgPerforante), max(0, $escudoTrasComponenteEscudo - $dmg)];
+            $dmgMitigado = intdiv(max(0, $dmg), 2);
+            $desborde = max(0, $dmgMitigado - $escudoTrasComponenteEscudo);
+
+            return [max(0, $hp - $desborde - $dmgPerforante), max(0, $escudoTrasComponenteEscudo - $dmgMitigado)];
         }
 
         return [max(0, $hp - $dmg - $dmgPerforante), 0];
@@ -1517,8 +1567,13 @@ class RaidCombatController extends Controller
 
         $escudoTrasComponenteEscudo = max(0, $escudoAntes - max(0, $dmgEscudo));
         if ($escudoTrasComponenteEscudo > 0) {
-            $totalEscudo = $dmg + max(0, $dmgEscudo);
+            $dmgMitigado = intdiv(max(0, $dmg), 2);
+            $desborde = max(0, $dmgMitigado - $escudoTrasComponenteEscudo);
+            $totalEscudo = min($dmgMitigado, $escudoTrasComponenteEscudo) + max(0, $dmgEscudo);
             $msg = "−{$totalEscudo} daño al escudo";
+            if ($desborde > 0) {
+                $msg .= ", −{$desborde} daño a la vida (escudo perforado)";
+            }
             if ($dmgPerforante > 0) {
                 $msg .= ", −{$dmgPerforante} daño perforante a la vida";
             }

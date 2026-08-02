@@ -146,6 +146,33 @@ class MapEnemigo extends Model
         return (int) floor($this->nivelDificultad() / 2);
     }
 
+    /**
+     * Bono plano a atributos por nivel de dificultad — 0 en nivel 1, recién crece desde nivel 2
+     * (nivel 5 → +4). A diferencia de `nivelDificultad()` (usada para el sistema de dobles/daño
+     * de habilidad), este NO afecta el sistema de crítico — ver esCritico.
+     */
+    public function bonoAtributoPorNivel(): int
+    {
+        return max(0, $this->nivelDificultad() - 1);
+    }
+
+    /**
+     * ¿Es un golpe crítico? Nivel 1-3: sistema de "dobles" de siempre (esCriticoDobles). Nivel 4:
+     * un dado en 6 y el otro en 5 o más (incluye doble 6). Nivel 5: un dado en 6 y el otro en 4 o
+     * más. Doble 1 ("ojos de serpiente") nunca es crítico bajo ningún nivel.
+     */
+    public function esCritico(int $dado1, int $dado2): bool
+    {
+        $nivel = $this->nivelDificultad();
+        if ($nivel < 4) {
+            return $this->esCriticoDobles($dado1, $dado2);
+        }
+
+        $companero = $nivel >= 5 ? 4 : 5;
+
+        return ($dado1 === 6 && $dado2 >= $companero) || ($dado2 === 6 && $dado1 >= $companero);
+    }
+
     /** Lugares donde este enemigo puede aparecer, con su tasa de aparición y nivel propios de cada lugar. */
     public function lugares(): BelongsToMany
     {

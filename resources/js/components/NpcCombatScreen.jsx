@@ -222,28 +222,39 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
      empieza cada combate a full), así que caen de vuelta a player.vida/escudo. */
   const maxPlayer = { vida: player.vida_max ?? player.vida, escudo: player.escudo_max ?? player.escudo };
 
-  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel siempre, y agranda la
-     ventana de "dobles" que cuentan como crítico sobre 2d6 (mismo criterio que
-     MapNpc::esCriticoDobles en el backend) — nivel 1 → solo doble 6, nivel 7+ → doble 6 a doble 2
-     (el máximo). Doble 1 nunca es crítico — ver esFalloCriticoNpc más abajo. No aplica a naves.
-     El bono plano de +nivel en daño y el +floor(nivel/2) extra en críticos son EXCLUSIVOS de los
-     Jefes (combate RAID) — un enemigo de encuentro aleatorio (map_enemigos, `esEnemigo`) no los recibe. */
+  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel SOBRE 1 (npcBonoNivel: 0
+     en nivel 1, +4 en nivel 5 — no confundir con npcNivel, que arranca en 1 y solo alimenta el
+     sistema de dobles/daño de habilidad de más abajo). Nivel 1-3: crítico por "dobles" de
+     siempre (mismo criterio que MapNpc::esCriticoDobles). Nivel 4: crítico si un dado es 6 y el
+     otro 5+. Nivel 5: un dado 6 y el otro 4+. Doble 1 nunca es crítico — ver esFalloCriticoNpc
+     más abajo. No aplica a naves. El bono plano de +nivel en daño (fuera de crítico) es
+     EXCLUSIVO de los Jefes (combate RAID) — un enemigo de encuentro aleatorio (map_enemigos,
+     `esEnemigo`) no lo recibe. El +1 de daño en un golpe crítico, en cambio, aplica parejo a
+     cualquier enemigo (igual que el crítico de un jugador). */
   const npcNivel = naveMode ? 0 : (npc.nivel ?? 1);
+  const npcBonoNivel = naveMode ? 0 : Math.max(0, npcNivel - 1);
   const npcBonoCriticoDobles = Math.min(4, Math.floor((npcNivel + 1) / 2));
   const esCriticoDobles = (dado1, dado2, bono) => dado1 === dado2 && dado1 !== 1 && dado1 >= (6 - bono);
+  const esCriticoNpc = (dado1, dado2) => {
+    if (npcNivel >= 4) {
+      const companero = npcNivel >= 5 ? 4 : 5;
+      return (dado1 === 6 && dado2 >= companero) || (dado2 === 6 && dado1 >= companero);
+    }
+    return esCriticoDobles(dado1, dado2, npcBonoCriticoDobles);
+  };
   const esFalloCriticoNpc = (dado1, dado2) => dado1 === 1 && dado2 === 1;
-  const npcDanoNivel = esEnemigo ? 0 : npcNivel;
-  const npcCritBonus = esEnemigo ? 0 : Math.floor(npcNivel / 2);
+  const npcDanoNivel = esEnemigo ? 0 : npcBonoNivel;
+  const npcCritBonus = 1;
 
-  const maxNpc    = { vida: Math.max(npc.vida, 1) + npcNivel, escudo: (npc.escudo ?? 0) + npcNivel };
+  const maxNpc    = { vida: Math.max(npc.vida, 1) + npcBonoNivel, escudo: Math.min(5, (npc.escudo ?? 0) + npcBonoNivel) };
 
-  const npcAtk = Math.max(npc.ataque,     1) + npcNivel;
-  const npcDef = Math.max(npc.defensa,    1) + npcNivel;
-  const npcMov = Math.max(npc.movimiento, 1) + npcNivel;
-  const npcIni = Math.max(npc.iniciativa, 1) + npcNivel;
+  const npcAtk = Math.max(npc.ataque,     1) + npcBonoNivel;
+  const npcDef = Math.max(npc.defensa,    1) + npcBonoNivel;
+  const npcMov = Math.max(npc.movimiento, 1) + npcBonoNivel;
+  const npcIni = Math.max(npc.iniciativa, 1) + npcBonoNivel;
   // punteria=0 es un flag de "sin ataque a distancia" (ver effNpcPnt > 0 más abajo) — el
   // bono de nivel no debe convertir a un NPC melee-only en uno con capacidad a distancia.
-  const npcPnt = (npc.punteria ?? 0) > 0 ? (npc.punteria + npcNivel) : 0;
+  const npcPnt = (npc.punteria ?? 0) > 0 ? (npc.punteria + npcBonoNivel) : 0;
 
   /* Hasta 2 habilidades propias de un enemigo de encuentro aleatorio (map_enemigos) — mismo
      criterio que los Jefes en Combate RAID: en su turno, 60% de probabilidad de usar una
@@ -428,18 +439,22 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Daño con tres componentes: dmg (normal), dmgEscudo (extra solo contra escudo)
      y dmgPerforante (ignora el escudo, siempre pasa a la vida). Sin escudo, todo
-     (dmg + dmgPerforante) pasa a la vida. Con escudo: si dmgEscudo por sí solo no
-     agota el escudo restante, este absorbe dmg + dmgEscudo por completo (sin dejar
-     pasar nada) y solo el perforante llega a la vida; si dmgEscudo por sí solo SÍ
-     agota el escudo, éste queda en 0 y el resto (dmg + dmgPerforante) pasa directo
-     a la vida. Misma lógica que PvpCombatController::applyDamage. */
+     (dmg + dmgPerforante) pasa a la vida, sin mitigar. Con escudo: dmgEscudo se
+     aplica primero, sin modificar; si tras eso queda algo de escudo, el daño
+     normal (dmg) se mitiga a la mitad (redondeado hacia abajo) antes de restarse
+     del escudo — el sobrante de esa mitad (ya mitigado, sin volver a dividirse)
+     pasa a la vida. Si dmgEscudo por sí solo agota el escudo restante, éste queda
+     en 0 y el resto (dmg sin mitigar + dmgPerforante) pasa directo a la vida.
+     Misma lógica que PvpCombatController::applyDamage. */
   const applyDmg = (dmg, hp, dmgEscudo = 0, dmgPerforante = 0) => {
     if (hp.escudo <= 0) {
       return { escudo: 0, vida: Math.max(0, hp.vida - dmg - dmgPerforante) };
     }
     const escudoTrasComponenteEscudo = Math.max(0, hp.escudo - Math.max(0, dmgEscudo));
     if (escudoTrasComponenteEscudo > 0) {
-      return { escudo: Math.max(0, escudoTrasComponenteEscudo - dmg), vida: Math.max(0, hp.vida - dmgPerforante) };
+      const dmgMitigado = Math.floor(Math.max(0, dmg) / 2);
+      const desborde = Math.max(0, dmgMitigado - escudoTrasComponenteEscudo);
+      return { escudo: Math.max(0, escudoTrasComponenteEscudo - dmgMitigado), vida: Math.max(0, hp.vida - desborde - dmgPerforante) };
     }
     return { escudo: 0, vida: Math.max(0, hp.vida - dmg - dmgPerforante) };
   };
@@ -451,10 +466,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     }
     const escudoTrasComponenteEscudo = Math.max(0, escudoAntes - Math.max(0, dmgEscudo));
     if (escudoTrasComponenteEscudo > 0) {
-      const totalEscudo = dmg + Math.max(0, dmgEscudo);
-      return dmgPerforante > 0
-        ? `−${totalEscudo} daño al escudo, −${dmgPerforante} daño perforante a la vida`
-        : `−${totalEscudo} daño al escudo`;
+      const dmgMitigado = Math.floor(Math.max(0, dmg) / 2);
+      const desborde = Math.max(0, dmgMitigado - escudoTrasComponenteEscudo);
+      const totalEscudo = Math.min(dmgMitigado, escudoTrasComponenteEscudo) + Math.max(0, dmgEscudo);
+      let msg = `−${totalEscudo} daño al escudo`;
+      if (desborde > 0) msg += `, −${desborde} daño a la vida (escudo perforado)`;
+      if (dmgPerforante > 0) msg += `, −${dmgPerforante} daño perforante a la vida`;
+      return msg;
     }
     const totalVida = dmg + dmgPerforante;
     return `−${Math.max(0, dmgEscudo)} daño al escudo — ¡escudo perforado! −${totalVida} daño a la vida`;
@@ -652,7 +670,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const atkStatVal = confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk);
       const defStatVal = confundidoNpc ? effNpcDef : (useRanged ? effPlayerMov : effPlayerDef);
       const [aT, dT] = [aR + atkStatVal, dR + defStatVal];
-      const esCritico = !confundidoNpc && esCriticoDobles(aTirada.dado1, aTirada.dado2, npcBonoCriticoDobles);
+      const esCritico = !confundidoNpc && esCriticoNpc(aTirada.dado1, aTirada.dado2);
       const esFalloCritico = !confundidoNpc && esFalloCriticoNpc(aTirada.dado1, aTirada.dado2);
 
       /* Marcado/protegido del objetivo se consumen sin importar si el golpe finalmente conecta */
@@ -695,8 +713,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         dmgEscudo = Number(npc.dano_escudo ?? 0);
         dmgPerforante = Number(npc.dano_perforante ?? 0);
       } else {
-        dmg = (confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk)) + npcDanoNivel + (esCritico ? npcCritBonus : 0);
+        dmg = (confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk)) + npcDanoNivel;
       }
+      // Golpe crítico de cualquier enemigo (jefe, encuentro común, o vía habilidad): +1 de daño plano.
+      if (esCritico) dmg += npcCritBonus;
       const dmgBase = mitigarDanoDebilitado(npcEstados, dmg);
       await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, effective: habEffective, resistant: habResistant, dmg: dmgBase });
 

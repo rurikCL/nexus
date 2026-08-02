@@ -1304,14 +1304,16 @@ class PvpCombatController extends Controller
      * Aplica daño con tres componentes: dmg (normal), dmgEscudo (extra solo
      * contra escudo) y dmgPerforante (ignora el escudo, siempre pasa a la vida).
      *
-     * - Sin escudo: todo (dmg + dmgPerforante) pasa a la vida.
-     * - Con escudo, si el componente dmgEscudo por sí solo NO agota el escudo
-     *   restante: el escudo absorbe dmg + dmgEscudo por completo (sin dejar
-     *   pasar nada, aunque el golpe sea mayor que el escudo restante) — solo
-     *   el perforante llega a la vida.
-     * - Con escudo, si el componente dmgEscudo por sí solo SÍ agota el escudo
-     *   restante: el escudo queda en 0 y el resto (dmg + dmgPerforante) pasa
-     *   directo a la vida.
+     * - Sin escudo: todo (dmg + dmgPerforante) pasa a la vida, sin mitigar.
+     * - Con escudo: dmgEscudo se aplica primero, sin modificar. Si tras eso
+     *   queda algo de escudo, el daño normal (dmg) se mitiga a la mitad
+     *   (redondeado hacia abajo) antes de restarse del escudo — el escudo
+     *   reduce el golpe, no lo bloquea por completo. Si esa mitad excede el
+     *   escudo restante, el sobrante (ya mitigado, sin volver a dividirse)
+     *   pasa a la vida.
+     * - Con escudo, si el componente dmgEscudo por sí solo agota el escudo
+     *   restante: el escudo queda en 0 y el resto (dmg sin mitigar +
+     *   dmgPerforante) pasa directo a la vida.
      */
     private static function applyDamage(int $hp, int $escudo, int $dmg, int $dmgEscudo = 0, int $dmgPerforante = 0): array
     {
@@ -1321,7 +1323,10 @@ class PvpCombatController extends Controller
 
         $escudoTrasComponenteEscudo = max(0, $escudo - max(0, $dmgEscudo));
         if ($escudoTrasComponenteEscudo > 0) {
-            return [max(0, $hp - $dmgPerforante), max(0, $escudoTrasComponenteEscudo - $dmg)];
+            $dmgMitigado = intdiv(max(0, $dmg), 2);
+            $desborde = max(0, $dmgMitigado - $escudoTrasComponenteEscudo);
+
+            return [max(0, $hp - $desborde - $dmgPerforante), max(0, $escudoTrasComponenteEscudo - $dmgMitigado)];
         }
 
         return [max(0, $hp - $dmg - $dmgPerforante), 0];
@@ -1340,8 +1345,13 @@ class PvpCombatController extends Controller
 
         $escudoTrasComponenteEscudo = max(0, $escudoAntes - max(0, $dmgEscudo));
         if ($escudoTrasComponenteEscudo > 0) {
-            $totalEscudo = $dmg + max(0, $dmgEscudo);
+            $dmgMitigado = intdiv(max(0, $dmg), 2);
+            $desborde = max(0, $dmgMitigado - $escudoTrasComponenteEscudo);
+            $totalEscudo = min($dmgMitigado, $escudoTrasComponenteEscudo) + max(0, $dmgEscudo);
             $msg = "−{$totalEscudo} daño al escudo";
+            if ($desborde > 0) {
+                $msg .= ", −{$desborde} daño a la vida (escudo perforado)";
+            }
             if ($dmgPerforante > 0) {
                 $msg .= ", −{$dmgPerforante} daño perforante a la vida";
             }
