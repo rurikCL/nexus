@@ -73,6 +73,7 @@ class BalizaAyuda extends Model
         return [
             'id' => $this->id,
             'nombre' => $this->nombre,
+            'imagen' => $this->rolObjeto?->imagen,
             'creador' => $this->character?->handle ?? $this->character?->name ?? $this->user?->name,
             'is_mine' => $viewerUserId !== null && $this->user_id === $viewerUserId,
             'sistema_id' => $this->map_sistema_id,

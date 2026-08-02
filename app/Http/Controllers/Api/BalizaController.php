@@ -41,7 +41,7 @@ class BalizaController extends Controller
         $userId = $request->user()->id;
 
         $balizas = BalizaAyuda::activas()
-            ->with(['user:id,name', 'character:id,handle,name', 'mapSistema:id,nombre', 'mapPlaneta:id,nombre', 'mapZona:id,nombre', 'mapLugar:id,nombre'])
+            ->with(['user:id,name', 'character:id,handle,name', 'rolObjeto:id,imagen', 'mapSistema:id,nombre', 'mapPlaneta:id,nombre', 'mapZona:id,nombre', 'mapLugar:id,nombre'])
             ->latest()
             ->get()
             ->map(fn (BalizaAyuda $b) => $b->toAlertArray($userId))
@@ -92,7 +92,7 @@ class BalizaController extends Controller
             'expires_at' => now()->addHours(12),
         ]);
 
-        $baliza->load(['user:id,name', 'character:id,handle,name', 'mapSistema:id,nombre', 'mapPlaneta:id,nombre', 'mapZona:id,nombre', 'mapLugar:id,nombre']);
+        $baliza->load(['user:id,name', 'character:id,handle,name', 'rolObjeto:id,imagen', 'mapSistema:id,nombre', 'mapPlaneta:id,nombre', 'mapZona:id,nombre', 'mapLugar:id,nombre']);
 
         return response()->json(['baliza' => $baliza->toAlertArray($user->id)], 201);
     }

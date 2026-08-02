@@ -1828,7 +1828,16 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
           presentes en el lugar-portal (fuera del equipo del dungeon) se listan dentro,
           bajo el lobby, cuando el equipo está en estado 'esperando'. */}
       {lugar.tipo === 'portal_dungeon' ? (
-        <DungeonPortal lugar={lugar} userCharacter={userCharacter} myUserId={myUserId} onAttack={onAttack} onTrade={onTrade} onDungeonRunChange={onDungeonRunChange} />
+        <DungeonPortal
+          lugar={lugar}
+          userCharacter={userCharacter}
+          myUserId={myUserId}
+          onAttack={onAttack}
+          onTrade={onTrade}
+          onDungeonRunChange={onDungeonRunChange}
+          onUsarObjeto={() => setBalizaModalOpen(true)}
+          onEliminarBaliza={handleBalizaEliminar}
+        />
       ) : (
         <>
       {/* accesos interiores — árbol de recorridos */}
@@ -2173,6 +2182,7 @@ function fmtDuracionRestante(segundos) {
 
 function BalizaCard({ baliza, onEliminar }) {
   const [segundos, setSegundos] = useState(baliza.segundos_restantes);
+  const imagenUrl = mediaUrl(baliza.imagen);
 
   useEffect(() => {
     setSegundos(baliza.segundos_restantes);
@@ -2189,9 +2199,11 @@ function BalizaCard({ baliza, onEliminar }) {
     }}>
       <div style={{
         height: 140, position: 'relative', display: 'grid', placeItems: 'center',
-        background: 'linear-gradient(160deg, rgba(230,179,37,0.18), rgba(4,7,15,0.9))',
+        background: imagenUrl
+          ? `url(${imagenUrl}) center/cover no-repeat`
+          : 'linear-gradient(160deg, rgba(230,179,37,0.18), rgba(4,7,15,0.9))',
       }}>
-        <Icon name="zap" size={44} style={{ color: '#E6B325' }} />
+        {!imagenUrl && <Icon name="zap" size={44} style={{ color: '#E6B325' }} />}
         <div style={{
           position: 'absolute', top: 8, right: 8, zIndex: 2,
           fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -2635,7 +2647,7 @@ function DungeonLootPreview({ loot }) {
   );
 }
 
-function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDungeonRunChange }) {
+function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDungeonRunChange, onUsarObjeto, onEliminarBaliza }) {
   const [data, setData]           = useState(null); // { run, jugadores?, cupos_equipo?, min_jugadores?, sala?, mi_estado?, equipo? }
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
@@ -2928,6 +2940,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
     const jugadores = data.jugadores ?? [];
     const me = jugadores.find((j) => j.soy_yo);
     const presentesZona = lugar.presentes_personajes ?? [];
+    const balizasZona = lugar.balizas_activas ?? [];
     return (
       <DungeonBackdrop imagen={lugar.imagen}>
         <div style={{
@@ -2985,7 +2998,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               </div>
             </div>
 
-            {presentesZona.length > 0 && (
+            {(presentesZona.length > 0 || balizasZona.length > 0) && (
               <div style={{ marginTop: 20, textAlign: 'left' }}>
                 <div className="nx-kicker" style={{ marginBottom: 12 }}>JUGADORES EN ESTA ZONA — {presentesZona.length}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
@@ -2997,9 +3010,21 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
                         jugador={p}
                         isMe={isMe}
                         onClick={isMe ? undefined : () => setDialogPlayer(p)}
+                        rightAction={isMe && onUsarObjeto ? (
+                          <button onClick={onUsarObjeto} title="Usar objeto"
+                            style={{
+                              background: 'none', border: '1px solid var(--holo-line)', borderRadius: 6,
+                              padding: 4, cursor: 'pointer', color: 'var(--holo)', display: 'flex',
+                            }}>
+                            <Icon name="box" size={13} />
+                          </button>
+                        ) : undefined}
                       />
                     );
                   })}
+                  {balizasZona.map((b) => (
+                    <BalizaCard key={`baliza-${b.id}`} baliza={b} onEliminar={onEliminarBaliza} />
+                  ))}
                 </div>
               </div>
             )}
