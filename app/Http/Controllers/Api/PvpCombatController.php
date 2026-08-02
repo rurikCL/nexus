@@ -137,8 +137,10 @@ class PvpCombatController extends Controller
 
         $attackerStats = self::getCombatStats($attacker->character, $modo);
         $defenderStats = self::getCombatStats($defender->character, $modo);
+        $attackerIniciativa = $attackerStats['iniciativa'] + self::formaBono($attacker->character->formaEspecializacion(), 'iniciativa');
+        $defenderIniciativa = $defenderStats['iniciativa'] + self::formaBono($defender->character->formaEspecializacion(), 'iniciativa');
 
-        $roll = self::rollIniciativa($attackerStats['iniciativa'], $defenderStats['iniciativa']);
+        $roll = self::rollIniciativa($attackerIniciativa, $defenderIniciativa);
         $firstTurn = $roll['gana_atacante'] ? $attacker->id : $defender->id;
 
         $defChar = $defender->character;
@@ -405,6 +407,8 @@ class PvpCombatController extends Controller
         $oppLastForma = ($isAttacker ? $combat->defender_last_forma : $combat->attacker_last_forma) ?? 0;
         $myEstados = ($isAttacker ? $combat->attacker_estados : $combat->defender_estados) ?? [];
         $oppEstados = ($isAttacker ? $combat->defender_estados : $combat->attacker_estados) ?? [];
+        $myCurrentForma = (int) ($isAttacker ? ($combat->attacker_current_forma ?? 1) : ($combat->defender_current_forma ?? 1));
+        $oppCurrentForma = (int) ($isAttacker ? ($combat->defender_current_forma ?? 1) : ($combat->attacker_current_forma ?? 1));
 
         /* Tick de cooldowns al inicio del turno (los buffs/debuffs se tickean por ronda, no por turno) */
         $myCooldowns = array_filter(
@@ -422,8 +426,8 @@ class PvpCombatController extends Controller
         /* Stats efectivos con buffs/debuffs */
         $actorBaseStats = self::getCombatStats($actorChar, $combat->modo);
         $opponentBaseStats = self::getCombatStats($opponentChar, $combat->modo);
-        $actorStats = self::getEffectiveStats($actorBaseStats, $myBuffs, $myDebuffs);
-        $opponentStats = self::getEffectiveStats($opponentBaseStats, $oppBuffs, $oppDebuffs);
+        $actorStats = self::aplicarBonoFormaStats(self::getEffectiveStats($actorBaseStats, $myBuffs, $myDebuffs), $myCurrentForma);
+        $opponentStats = self::aplicarBonoFormaStats(self::getEffectiveStats($opponentBaseStats, $oppBuffs, $oppDebuffs), $oppCurrentForma);
 
         $log = $combat->log ?? [];
         $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
@@ -512,18 +516,19 @@ class PvpCombatController extends Controller
             }
 
             if ($hit) {
-                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0));
-                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0);
+                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myCurrentForma, 'dano'));
+                $dmgEscudo = self::formaBono($myCurrentForma, 'dano_escudo');
+                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myCurrentForma, 'dano_perforante');
                 $objetivoEsAtacante = $confundido ? $isAttacker : ! $isAttacker;
                 $oppEscudoAntes = $objetivoEsAtacante ? $combat->attacker_escudo : $combat->defender_escudo;
                 if ($objetivoEsAtacante) {
                     [$combat->attacker_hp, $combat->attacker_escudo] =
-                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, 0, $dmgPerforante);
+                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                 } else {
                     [$combat->defender_hp, $combat->defender_escudo] =
-                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, 0, $dmgPerforante);
+                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                 }
-                $descDano = self::describeDano($dmg, 0, $dmgPerforante, $oppEscudoAntes);
+                $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
                 $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) {$descDano}" : "¡Impacto! {$descDano}";
             } else {
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
@@ -543,9 +548,6 @@ class PvpCombatController extends Controller
             /* ─── Habilidad ───────────────────────────────────────────────── */
         } else {
             $skillId = (int) $skill;
-            $myCurrentForma = $isAttacker
-                ? ($combat->attacker_current_forma ?? 1)
-                : ($combat->defender_current_forma ?? 1);
 
             /* Verificar que la habilidad está disponible: slots de la nave (combate naval)
              * o slots de la forma actual del sable (combate de personaje) */
@@ -738,6 +740,9 @@ class PvpCombatController extends Controller
                             $entry['messages'][] = "Resistencia de forma ×0.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
                         }
                     }
+                    $dmg += self::formaBono($myCurrentForma, 'dano');
+                    $dmgEscudo += self::formaBono($myCurrentForma, 'dano_escudo');
+                    $dmgPerforante += self::formaBono($myCurrentForma, 'dano_perforante');
                     $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
                     $objetivoEsAtacanteHab = $confundidoHab ? $isAttacker : ! $isAttacker;
@@ -831,8 +836,8 @@ class PvpCombatController extends Controller
                     $defBuffs = $isAttacker ? $oppBuffs : $myBuffs;
                     $defDebuffs = $isAttacker ? $oppDebuffs : $myDebuffs;
 
-                    $attEff = self::getEffectiveStats(self::getCombatStats($combat->attacker->character, $combat->modo), $attBuffs, $attDebuffs);
-                    $defEff = self::getEffectiveStats(self::getCombatStats($combat->defender->character, $combat->modo), $defBuffs, $defDebuffs);
+                    $attEff = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($combat->attacker->character, $combat->modo), $attBuffs, $attDebuffs), (int) ($combat->attacker_current_forma ?? 1));
+                    $defEff = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($combat->defender->character, $combat->modo), $defBuffs, $defDebuffs), (int) ($combat->defender_current_forma ?? 1));
 
                     $roll = self::rollIniciativa($attEff['iniciativa'], $defEff['iniciativa']);
                     $combat->current_turn = $roll['gana_atacante'] ? $combat->attacker_id : $combat->defender_id;

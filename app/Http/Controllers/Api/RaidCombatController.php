@@ -357,7 +357,7 @@ class RaidCombatController extends Controller
         $npcEstados = $raid->npc_estados ?? [];
         $myFuerza = $myPlayer->fuerza;
 
-        $actorStats = self::getEffectiveStats(self::getCombatStats($actorChar), $myBuffs, $myDebuffs);
+        $actorStats = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($actorChar), $myBuffs, $myDebuffs), (int) $myPlayer->current_forma);
         $npcEffective = self::getEffectiveStats(self::getNpcStats($raid->npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
 
         $log = $raid->log ?? [];
@@ -436,21 +436,22 @@ class RaidCombatController extends Controller
             $entry['crit'] = $esCritico;
 
             if ($hit) {
-                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0));
-                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0);
+                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myPlayer->current_forma, 'dano'));
+                $dmgEscudo = self::formaBono($myPlayer->current_forma, 'dano_escudo');
+                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myPlayer->current_forma, 'dano_perforante');
                 if ($confundido) {
                     $escudoAntes = $myPlayer->escudo;
-                    [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, 0, $dmgPerforante);
+                    [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
                     if ($myPlayer->hp <= 0) {
                         $myPlayer->status = 'derrotado';
                     }
                 } else {
                     $escudoAntes = $raid->npc_escudo;
-                    [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, 0, $dmgPerforante);
-                    $myPlayer->dano_al_jefe += $dmg + $dmgPerforante;
+                    [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                    $myPlayer->dano_al_jefe += $dmg + $dmgEscudo + $dmgPerforante;
                     $myPlayer->golpes_al_jefe += 1;
                 }
-                $desc = self::describeDano($dmg, 0, $dmgPerforante, $escudoAntes);
+                $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
                 $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
             } else {
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
@@ -640,6 +641,9 @@ class RaidCombatController extends Controller
                         $dmgEscudo = (int) round($dmgEscudo * $mult);
                         $dmgPerforante = (int) round($dmgPerforante * $mult);
                     }
+                    $dmg += self::formaBono($myPlayer->current_forma, 'dano');
+                    $dmgEscudo += self::formaBono($myPlayer->current_forma, 'dano_escudo');
+                    $dmgPerforante += self::formaBono($myPlayer->current_forma, 'dano_perforante');
                     $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
                     if ($confundidoHab) {
@@ -742,7 +746,7 @@ class RaidCombatController extends Controller
             $rp->fuerza = min($cfg['max'], $rp->fuerza + $cfg['gen']);
             $rp->save();
 
-            $stats = self::getEffectiveStats(self::getCombatStats($char), $rp->buffs ?? [], $rp->debuffs ?? []);
+            $stats = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($char), $rp->buffs ?? [], $rp->debuffs ?? []), (int) $rp->current_forma);
             $tirada = self::tirarDados();
             $rolls[] = ['type' => 'player', 'user_id' => $rp->user_id, 'dado' => $tirada['total'], 'dado1' => $tirada['dado1'], 'dado2' => $tirada['dado2'], 'total' => $tirada['total'] + $stats['iniciativa'], 'nombre' => $char->name];
         }
@@ -993,7 +997,7 @@ class RaidCombatController extends Controller
         }
         $raid->npc_cooldowns = $npcCooldowns ?: null;
 
-        $targetStats = $targetEsNpc ? $npcStats : self::getEffectiveStats(self::getCombatStats($targetChar), $target->buffs ?? [], $target->debuffs ?? []);
+        $targetStats = $targetEsNpc ? $npcStats : self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($targetChar), $target->buffs ?? [], $target->debuffs ?? []), (int) $target->current_forma);
         $targetEstadosPrevios = $targetEsNpc ? $npcEstados : ($target->estados ?? []);
 
         $atkTirada = self::tirarDados();
@@ -1274,7 +1278,7 @@ class RaidCombatController extends Controller
                 : collect();
             $fCfg = self::fuerzaConfig($ch);
             $baseStats = self::getCombatStats($ch);
-            $effStats = self::getEffectiveStats($baseStats, $rp->buffs ?? [], $rp->debuffs ?? []);
+            $effStats = self::aplicarBonoFormaStats(self::getEffectiveStats($baseStats, $rp->buffs ?? [], $rp->debuffs ?? []), (int) $rp->current_forma);
             $imagenMapa = $ch?->imagenMapa();
 
             return [

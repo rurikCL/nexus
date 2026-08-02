@@ -44,6 +44,41 @@ trait AplicaEstadosCombate
 
     private const ESTADOS_HOT = ['regeneracion' => true];
 
+    /**
+     * Bono persistente por tener una Forma de Combate equipada (current_forma), activo hasta
+     * que el jugador la cambie con la acción "stance" — igual en los 3 sistemas de combate
+     * (mirror en JS: NpcCombatScreen.jsx FORMA_BONOS). Independiente de la tabla de
+     * efectividad BEATS/RESISTS (esa vive en cada controller, es sobre el daño de ataque vs
+     * la forma del objetivo; esto es un bono plano de stats/daño propio del atacante).
+     */
+    private const FORMA_BONOS = [
+        1 => ['ataque' => 1],
+        2 => ['dano_escudo' => 1],
+        3 => ['defensa' => 1],
+        4 => ['iniciativa' => 1],
+        5 => ['dano' => 1],
+        6 => ['movimiento' => 1],
+        7 => ['dano_perforante' => 1],
+    ];
+
+    private static function formaBono(int $forma, string $clave): int
+    {
+        return (int) (self::FORMA_BONOS[$forma][$clave] ?? 0);
+    }
+
+    /** Suma el bono de stats (ataque/defensa/movimiento/iniciativa) de la forma equipada sobre un bloque de stats ya efectivo. */
+    private static function aplicarBonoFormaStats(array $stats, int $forma): array
+    {
+        foreach (['ataque', 'defensa', 'movimiento', 'iniciativa'] as $clave) {
+            $bono = self::formaBono($forma, $clave);
+            if ($bono) {
+                $stats[$clave] = ($stats[$clave] ?? 0) + $bono;
+            }
+        }
+
+        return $stats;
+    }
+
     /** ¿El string corresponde a un tipo de estado reservado (en vez de un nombre de stat)? */
     private static function esTipoEstado(string $stat): bool
     {

@@ -2904,6 +2904,22 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
     }
   };
 
+  /* Revive gratis (+2 vida) a un compañero caído (hp_actual<=0) parado en mi MISMA sala —
+     no consume objetos, a diferencia de usarObjetoEnMapa. */
+  const revivirCompanero = async (targetUserId) => {
+    if (!runId || busy) return;
+    setBusy(true);
+    try {
+      await apiPost(`/map/dungeons/runs/${runId}/revivir`, { target_user_id: targetUserId });
+      toast('¡Compañero revivido!', { tone: 'success', icon: 'check' });
+      refresh();
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo revivir a tu compañero.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) return <LoadingHUD text="ENTRANDO AL DUNGEON..." />;
 
   if (error) return (
@@ -3098,6 +3114,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
 
   const bloqueado = !!sala.enemigo;
   const equipo = data.equipo ?? [];
+  const estoyCaido = (data.mi_estado?.hp_actual ?? 1) <= 0;
 
   /* Vida/escudo con los que arranca el próximo combate: los ACTUALES del dungeon (pueden venir
      dañados de encuentros previos), no los máximos del personaje — mismo criterio que
@@ -3126,24 +3143,36 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
             <div className="nx-panel solid" style={{ padding: 16 }}>
               <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
               <div style={{ display: 'grid', gap: 10 }}>
-                {equipo.map((j) => (
-                  <div key={j.user_id}
-                    ref={(el) => { teamRefs.current[j.user_id] = el; }}
-                    style={{
-                      borderRadius: 10, padding: 6,
-                      border: `1.5px dashed ${hoverTargetId === j.user_id ? '#10b981' : 'transparent'}`,
-                      background: hoverTargetId === j.user_id ? 'rgba(16,185,129,0.10)' : 'transparent',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <CombatHPBar
-                      vida={j.hp_actual} maxVida={j.hp_max}
-                      escudo={j.escudo_actual} maxEscudo={j.escudo_max}
-                      nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}`}
-                      photoUrl={mediaUrl(j.photo)}
-                    />
-                  </div>
-                ))}
+                {equipo.map((j) => {
+                  const caido = j.hp_actual <= 0;
+                  const puedoRevivirlo = caido && j.user_id !== myUserId && j.sala_actual_id === sala.id && !estoyCaido;
+                  return (
+                    <div key={j.user_id}
+                      ref={(el) => { teamRefs.current[j.user_id] = el; }}
+                      style={{
+                        borderRadius: 10, padding: 6,
+                        border: `1.5px dashed ${hoverTargetId === j.user_id ? '#10b981' : 'transparent'}`,
+                        background: hoverTargetId === j.user_id ? 'rgba(16,185,129,0.10)' : 'transparent',
+                        opacity: caido ? 0.6 : 1,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <CombatHPBar
+                        vida={j.hp_actual} maxVida={j.hp_max}
+                        escudo={j.escudo_actual} maxEscudo={j.escudo_max}
+                        nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}${caido ? ' 💀 Caído' : ''}`}
+                        photoUrl={mediaUrl(j.photo)}
+                      />
+                      {puedoRevivirlo && (
+                        <div style={{ marginTop: 6, textAlign: 'center' }}>
+                          <Btn kind="accent" sm onClick={() => revivirCompanero(j.user_id)} disabled={busy}>
+                            💉 Revivir (+2 vida)
+                          </Btn>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -3177,8 +3206,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
           )}
         </div>
 
-        {/* CENTRO: mapa del dungeon — clic en una sala adyacente para moverse ahí */}
-        <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} onNavigate={mover} busy={busy} />
+        {/* CENTRO: mapa del dungeon — clic en una sala adyacente para moverse ahí (bloqueado si estoy caído) */}
+        <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} onNavigate={estoyCaido ? () => {} : mover} busy={busy || estoyCaido} />
 
         {/* DERECHA: qué hay en la sala actual (encuentro / cofre / jefe) */}
         <DungeonBackdrop imagen={lugar.imagen}>
@@ -3187,7 +3216,16 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
             </div>
 
-            {sala.tipo === 'jefe' ? (
+            {estoyCaido ? (
+              <>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>💀</div>
+                <p style={{ color: '#ff6b6b', fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Estás sin vida</p>
+                <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
+                  No puedes moverte, huir ni abrir cofres hasta que un compañero llegue a esta sala y te reviva.
+                  {utilizables.length > 0 && ' También podés usar un objeto curativo sobre vos mismo.'}
+                </p>
+              </>
+            ) : sala.tipo === 'jefe' ? (
               <>
                 <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
                   {data.run.template.jefe_nombre} espera al fondo de esta sala. Reúne a tu equipo para enfrentarlo.
@@ -3213,7 +3251,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
 
             {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador.
                 Si además hay un enemigo sin derrotar, se bloquea hasta resolverlo (igual que mover/huir en el backend). */}
-            {sala.tiene_cofre && !sala.cofre_abierto && (
+            {!estoyCaido && sala.tiene_cofre && !sala.cofre_abierto && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
                 {bloqueado ? (
                   <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>🔒 Derrota a {sala.enemigo.nombre} para abrir el cofre.</p>

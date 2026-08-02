@@ -196,6 +196,9 @@ class DungeonController extends Controller
         if (! $jugador || ! $jugador->activo()) {
             return response()->json(['error' => 'No participas en este dungeon.'], 403);
         }
+        if (($jugador->hp_actual ?? 1) <= 0) {
+            return response()->json(['error' => 'Estás sin vida — espera a que un compañero llegue a tu sala y te reviva.'], 422);
+        }
 
         $activeCombat = PvpCombat::where('status', 'active')
             ->where(fn ($q) => $q->where('attacker_id', $user->id)->orWhere('defender_id', $user->id))
@@ -254,6 +257,9 @@ class DungeonController extends Controller
         $jugador = DungeonRunPlayer::where('dungeon_run_id', $run->id)->where('user_id', $user->id)->first();
         if (! $jugador || ! $jugador->activo()) {
             return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+        if (($jugador->hp_actual ?? 1) <= 0) {
+            return response()->json(['error' => 'Estás sin vida — espera a que un compañero llegue a tu sala y te reviva.'], 422);
         }
 
         $salaActual = $jugador->salaActual;
@@ -339,6 +345,9 @@ class DungeonController extends Controller
 
         if (! $jugador || ! $jugador->activo() || ! $character) {
             return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+        if (($jugador->hp_actual ?? 1) <= 0) {
+            return response()->json(['error' => 'Estás sin vida — espera a que un compañero llegue a tu sala y te reviva.'], 422);
         }
 
         $sala = $jugador->salaActual;
@@ -477,6 +486,59 @@ class DungeonController extends Controller
             'target_user_id' => $objetivoJugador->user_id,
             'hp_actual' => $objetivoJugador->hp_actual,
             'escudo_actual' => $objetivoJugador->escudo_actual,
+        ]);
+    }
+
+    /**
+     * POST /map/dungeons/runs/{run}/revivir {target_user_id} — un compañero ACTIVO parado en la
+     * MISMA sala que un jugador caído (hp_actual<=0) le da 2 de vida para que pueda seguir
+     * jugando. Gratuito (no consume objetos ni inventario) — a diferencia de usarObjeto, exige
+     * estar en la misma sala: revivir no es una curación a distancia.
+     */
+    public function revivir(Request $request, int $runId): JsonResponse
+    {
+        $data = $request->validate(['target_user_id' => 'required|integer']);
+
+        $user = $request->user();
+        $run = DungeonRun::findOrFail($runId);
+
+        if (! $run->enCurso()) {
+            return response()->json(['error' => 'Este dungeon no está en curso.'], 422);
+        }
+
+        $jugador = DungeonRunPlayer::where('dungeon_run_id', $run->id)->where('user_id', $user->id)->first();
+        if (! $jugador || ! $jugador->activo()) {
+            return response()->json(['error' => 'No participas en este dungeon.'], 403);
+        }
+        if (($jugador->hp_actual ?? 1) <= 0) {
+            return response()->json(['error' => 'No puedes revivir a nadie mientras tú mismo estés sin vida.'], 422);
+        }
+        if ((int) $data['target_user_id'] === $user->id) {
+            return response()->json(['error' => 'No puedes revivirte a ti mismo.'], 422);
+        }
+
+        $objetivo = DungeonRunPlayer::where('dungeon_run_id', $run->id)
+            ->where('user_id', $data['target_user_id'])
+            ->where('estado', 'activo')
+            ->first();
+
+        if (! $objetivo) {
+            return response()->json(['error' => 'Ese jugador no está activo en este dungeon.'], 422);
+        }
+        if (($objetivo->hp_actual ?? 1) > 0) {
+            return response()->json(['error' => 'Ese jugador no está caído.'], 422);
+        }
+        if (! $jugador->sala_actual_id || $jugador->sala_actual_id !== $objetivo->sala_actual_id) {
+            return response()->json(['error' => 'Debes estar en la misma sala para revivirlo.'], 422);
+        }
+
+        $maxVida = $objetivo->user->character?->combatStats()['vida'] ?? 2;
+        $objetivo->update(['hp_actual' => min(2, $maxVida)]);
+
+        return response()->json([
+            'ok' => true,
+            'target_user_id' => $objetivo->user_id,
+            'hp_actual' => $objetivo->hp_actual,
         ]);
     }
 

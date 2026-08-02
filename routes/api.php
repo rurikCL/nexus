@@ -251,6 +251,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/dungeons/runs/{runId}/registrar-dano', [DungeonController::class, 'registrarDano']);
     Route::post('/map/dungeons/runs/{runId}/usar-objeto', [DungeonController::class, 'usarObjeto']);
     Route::post('/map/dungeons/runs/{runId}/abrir-cofre', [DungeonController::class, 'abrirCofre']);
+    Route::post('/map/dungeons/runs/{runId}/revivir', [DungeonController::class, 'revivir']);
 
     // Naves
     Route::get('/naves', [NaveController::class, 'catalogo']);

@@ -52,6 +52,18 @@ const formaMultiplicador = (atkForma, defForma) => {
   return mult;
 };
 
+/* Bono persistente por tener una Forma de Combate equipada (hasta cambiarla con "stance") — igual en los 3 sistemas de combate. */
+const FORMA_BONOS = {
+  1: { ataque: 1 },
+  2: { dano_escudo: 1 },
+  3: { defensa: 1 },
+  4: { iniciativa: 1 },
+  5: { dano: 1 },
+  6: { movimiento: 1 },
+  7: { dano_perforante: 1 },
+};
+const formaBono = (forma, clave) => FORMA_BONOS[forma]?.[clave] ?? 0;
+
 /* ─── Estados de combate ───────────────────────────────────────────────
    Espejo en JS de app/Support/Combat/AplicaEstadosCombate.php — este combate
    contra NPC es 100% client-side (localStorage), sin servidor autoritativo. */
@@ -413,17 +425,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const countNpcDeb     = (stat) => npcDebuffs.filter(d => d.stat === stat).length;
   const countPlayerDeb  = (stat) => playerDebuffs.filter(d => d.stat === stat).length;
 
-  const effPlayerAtk = Math.max(1, player.ataque     + countBuff('ataque')     - countPlayerDeb('ataque'));
-  const effPlayerDef = Math.max(1, player.defensa    + countBuff('defensa')    - countPlayerDeb('defensa'));
+  const effPlayerAtk = Math.max(1, player.ataque     + countBuff('ataque')     - countPlayerDeb('ataque')     + formaBono(currentForma, 'ataque'));
+  const effPlayerDef = Math.max(1, player.defensa    + countBuff('defensa')    - countPlayerDeb('defensa')    + formaBono(currentForma, 'defensa'));
   const effPlayerPnt = Math.max(0, player.punteria   + countBuff('punteria')   - countPlayerDeb('punteria'));
-  const effPlayerMov = Math.max(1, player.movimiento + countBuff('movimiento') - countPlayerDeb('movimiento'));
+  const effPlayerMov = Math.max(1, player.movimiento + countBuff('movimiento') - countPlayerDeb('movimiento') + formaBono(currentForma, 'movimiento'));
 
   const effNpcAtk = Math.max(1, npcAtk + countNpcBuff('ataque')     - countNpcDeb('ataque'));
   const effNpcDef = Math.max(1, npcDef + countNpcBuff('defensa')    - countNpcDeb('defensa'));
   const effNpcMov = Math.max(1, npcMov + countNpcBuff('movimiento') - countNpcDeb('movimiento'));
   const effNpcPnt = Math.max(0, npcPnt + countNpcBuff('punteria')   - countNpcDeb('punteria'));
 
-  const effPlayerIni = Math.max(1, player.iniciativa + countBuff('iniciativa') - countPlayerDeb('iniciativa'));
+  const effPlayerIni = Math.max(1, player.iniciativa + countBuff('iniciativa') - countPlayerDeb('iniciativa') + formaBono(currentForma, 'iniciativa'));
   const effNpcIni     = Math.max(1, npcIni + countNpcBuff('iniciativa') - countNpcDeb('iniciativa'));
 
   /* Fondo desde el lugar del NPC (no aplica a combates navales: usan fondo espacial fijo) */
@@ -1000,6 +1012,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           entries.push({ text: `Resistencia de forma ×0.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'danger' });
         }
       }
+      dmg += formaBono(currentForma, 'dano');
+      dmgEscudo += formaBono(currentForma, 'dano_escudo');
+      dmgPerforante += formaBono(currentForma, 'dano_perforante');
       dmg = mitigarDanoDebilitado(playerEstados, dmg);
 
       if (confundidoHab) {
@@ -1210,16 +1225,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     let newPlayerHpSelf = { ...playerHp };
     let dmgTotal = 0;
     if (hit) {
-      const dmg = mitigarDanoDebilitado(playerEstados, (arma?.dano ?? 3) + (esCritico ? 1 : 0));
-      const dmgPerforante = arma?.dano_perforante ?? 0;
-      dmgTotal = dmg + dmgPerforante;
+      const dmg = mitigarDanoDebilitado(playerEstados, (arma?.dano ?? 3) + (esCritico ? 1 : 0) + formaBono(currentForma, 'dano'));
+      const dmgEscudo = formaBono(currentForma, 'dano_escudo');
+      const dmgPerforante = (arma?.dano_perforante ?? 0) + formaBono(currentForma, 'dano_perforante');
+      dmgTotal = dmg + dmgEscudo + dmgPerforante;
       if (confundido) {
-        const descDano = describeDano(dmg, 0, dmgPerforante, playerHp.escudo);
-        newPlayerHpSelf = applyDmg(dmg, playerHp, 0, dmgPerforante);
+        const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, playerHp.escudo);
+        newPlayerHpSelf = applyDmg(dmg, playerHp, dmgEscudo, dmgPerforante);
         entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
       } else {
-        const descDano = describeDano(dmg, 0, dmgPerforante, npcHp.escudo);
-        newNpcHp = applyDmg(dmg, npcHp, 0, dmgPerforante);
+        const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, npcHp.escudo);
+        newNpcHp = applyDmg(dmg, npcHp, dmgEscudo, dmgPerforante);
         entries.push({ text: esCritico ? `¡CRÍTICO! (natural ${aR}) ${descDano}` : `¡Impacto! ${descDano}`, type: 'success' });
       }
     } else {
