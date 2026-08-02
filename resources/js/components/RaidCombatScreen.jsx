@@ -41,10 +41,12 @@ const tipoIcon = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+  deflectar: '↩️', contraataque: '🗡️',
 };
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+  deflectar: 'Deflectar', contraataque: 'Contraataque',
 };
 
 /* Badges compactos (ícono + turnos) para los estados activos de un combatiente o del jefe. */

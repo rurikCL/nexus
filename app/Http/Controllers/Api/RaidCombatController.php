@@ -416,13 +416,8 @@ class RaidCombatController extends Controller
             $estadosObjetivo = $protegidoInfo['estados'];
             $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
             $estadosObjetivo = $marcaInfo['estados'];
-            if ($confundido) {
-                $myEstados = $estadosObjetivo;
-            } else {
-                $npcEstados = $estadosObjetivo;
-            }
 
-            $hit = $esCritico || $atkRoll > $defRoll;
+            $hit = $esCritico || $atkRoll >= $defRoll;
             if ($protegidoInfo['activo']) {
                 $hit = false;
                 $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
@@ -432,27 +427,52 @@ class RaidCombatController extends Controller
                     ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
                     : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
             }
-            $entry['hit'] = $hit;
+
+            $reflejoInfo = ['activo' => false, 'tipo' => null];
+            if ($hit && ! $confundido) {
+                $reflejoInfo = self::consumirDeflectarOContraataque($estadosObjetivo, $esDistancia);
+                $estadosObjetivo = $reflejoInfo['estados'];
+            }
+            if ($confundido) {
+                $myEstados = $estadosObjetivo;
+            } else {
+                $npcEstados = $estadosObjetivo;
+            }
+
+            $entry['hit'] = $hit && ! $reflejoInfo['activo'];
             $entry['crit'] = $esCritico;
 
             if ($hit) {
                 $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myPlayer->current_forma, 'dano'));
                 $dmgEscudo = self::formaBono($myPlayer->current_forma, 'dano_escudo');
                 $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myPlayer->current_forma, 'dano_perforante');
-                if ($confundido) {
+
+                if ($reflejoInfo['activo']) {
+                    [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
+                    $escudoAntes = $myPlayer->escudo;
+                    [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                    if ($myPlayer->hp <= 0) {
+                        $myPlayer->status = 'derrotado';
+                    }
+                    $desc = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $escudoAntes);
+                    $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                    $entry['messages'][] = "¡{$raid->npc->nombre} {$verbo} el golpe de {$actorChar->name}! {$desc}";
+                } elseif ($confundido) {
                     $escudoAntes = $myPlayer->escudo;
                     [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
                     if ($myPlayer->hp <= 0) {
                         $myPlayer->status = 'derrotado';
                     }
+                    $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
+                    $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
                 } else {
                     $escudoAntes = $raid->npc_escudo;
                     [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                     $myPlayer->dano_al_jefe += $dmg + $dmgEscudo + $dmgPerforante;
                     $myPlayer->golpes_al_jefe += 1;
+                    $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
+                    $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
                 }
-                $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
             } else {
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
             }
@@ -614,13 +634,8 @@ class RaidCombatController extends Controller
                 $estadosObjetivoHab = $protegidoHab['estados'];
                 $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDado);
                 $estadosObjetivoHab = $marcaHab['estados'];
-                if ($confundidoHab) {
-                    $myEstados = $estadosObjetivoHab;
-                } else {
-                    $npcEstados = $estadosObjetivoHab;
-                }
 
-                $hitHab = $atkRoll > $defRoll;
+                $hitHab = $atkRoll >= $defRoll;
                 if ($protegidoHab['activo']) {
                     $hitHab = false;
                     $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
@@ -630,7 +645,19 @@ class RaidCombatController extends Controller
                         ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
                         : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
                 }
-                $entry['hit'] = $hitHab;
+
+                $reflejoHab = ['activo' => false, 'tipo' => null];
+                if ($hitHab && ! $confundidoHab) {
+                    $reflejoHab = self::consumirDeflectarOContraataque($estadosObjetivoHab, ! $useAtq);
+                    $estadosObjetivoHab = $reflejoHab['estados'];
+                }
+                if ($confundidoHab) {
+                    $myEstados = $estadosObjetivoHab;
+                } else {
+                    $npcEstados = $estadosObjetivoHab;
+                }
+
+                $entry['hit'] = $hitHab && ! $reflejoHab['activo'];
 
                 if ($hitHab) {
                     $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
@@ -646,12 +673,24 @@ class RaidCombatController extends Controller
                     $dmgPerforante += self::formaBono($myPlayer->current_forma, 'dano_perforante');
                     $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
-                    if ($confundidoHab) {
+                    if ($reflejoHab['activo']) {
+                        [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
+                        $escudoAntes = $myPlayer->escudo;
+                        [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                        if ($myPlayer->hp <= 0) {
+                            $myPlayer->status = 'derrotado';
+                        }
+                        $desc = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $escudoAntes);
+                        $verbo = $reflejoHab['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                        $entry['messages'][] = "¡{$raid->npc->nombre} {$verbo} el ataque de {$actorChar->name}! {$desc}";
+                    } elseif ($confundidoHab) {
                         $escudoAntes = $myPlayer->escudo;
                         [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         if ($myPlayer->hp <= 0) {
                             $myPlayer->status = 'derrotado';
                         }
+                        $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
+                        $entry['messages'][] = "¡Impacto! {$desc}";
                     } else {
                         $escudoAntes = $raid->npc_escudo;
                         [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
@@ -668,11 +707,11 @@ class RaidCombatController extends Controller
                         }
                         $raid->npc_debuffs = $npcDebuffs;
                         $myPlayer->debuffs_aplicados += count($habDebuff);
-                    }
 
-                    $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                    $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
-                    $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
+                        $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
+                        $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
+                        $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
+                    }
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
                 }
@@ -1026,14 +1065,8 @@ class RaidCombatController extends Controller
         $targetEstadosPrevios = $protegidoInfo['estados'];
         $marcaInfo = self::consumirMarcado($targetEstadosPrevios, $atkDado);
         $targetEstadosPrevios = $marcaInfo['estados'];
-        if ($targetEsNpc) {
-            $npcEstados = $targetEstadosPrevios;
-        } else {
-            $target->estados = $targetEstadosPrevios ?: null;
-        }
-        $raid->npc_estados = $npcEstados ?: null;
 
-        $hit = $esCritico || $atkRoll > $defRoll;
+        $hit = $esCritico || $atkRoll >= $defRoll;
         if ($protegidoInfo['activo']) {
             $hit = false;
         } elseif ($marcaInfo['activo']) {
@@ -1042,6 +1075,44 @@ class RaidCombatController extends Controller
         // Fallo crítico: doble 1 ("ojos de serpiente") del Jefe siempre falla, sin importar stats, marca o protección.
         if ($esFalloCritico) {
             $hit = false;
+        }
+
+        /* Deflectar (a distancia) / Contraataque (cuerpo a cuerpo): solo si el jefe realmente
+         * iba a conectar, y solo contra un jugador (no aplica cuando el jefe confundido se
+         * golpea a sí mismo). El tipo de la habilidad decide a qué tipo de ataque equivale;
+         * el golpe básico del jefe (sin habilidad) siempre cuenta como cuerpo a cuerpo. */
+        $esDistanciaAtaque = $hab ? ($hab->tipo !== 'melee') : false;
+        $reflejoInfo = ['activo' => false, 'tipo' => null];
+        if ($hit && ! $targetEsNpc) {
+            $reflejoInfo = self::consumirDeflectarOContraataque($targetEstadosPrevios, $esDistanciaAtaque);
+            $targetEstadosPrevios = $reflejoInfo['estados'];
+        }
+        if ($targetEsNpc) {
+            $npcEstados = $targetEstadosPrevios;
+        } else {
+            $target->estados = $targetEstadosPrevios ?: null;
+        }
+        $raid->npc_estados = $npcEstados ?: null;
+
+        if ($reflejoInfo['activo']) {
+            $tgtMult = self::formaMultiplier($formaAtaque, (int) $target->current_forma);
+            $dmgWouldBe = $esCritico
+                ? self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult) + 1)
+                : self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult));
+            $dmgEscudoWouldBe = (int) round($dmgEscudoBase * $tgtMult);
+            $dmgPerfWouldBe = (int) round($dmgPerfBase * $tgtMult);
+            [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmgWouldBe, $dmgEscudoWouldBe, $dmgPerfWouldBe);
+            $escudoAntesNpc = $raid->npc_escudo;
+            [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+            $desc = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $escudoAntesNpc);
+            $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+            $target->save();
+            $log[] = [
+                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $target->user_id,
+                'messages' => ["¡{$targetChar->name} {$verbo} el ataque de {$npc->nombre}! {$desc}"],
+            ];
+
+            return;
         }
 
         if (! $hit) {

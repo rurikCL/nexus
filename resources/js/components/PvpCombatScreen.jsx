@@ -191,10 +191,12 @@ const STAT_ABBR = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+  deflectar: '↩️', contraataque: '🗡️',
 };
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+  deflectar: 'Deflectar', contraataque: 'Contraataque',
 };
 
 /* Colapsa buffs/debuffs repetidos sobre el mismo stat en una sola entrada (suma monto, toma la mayor duración) */

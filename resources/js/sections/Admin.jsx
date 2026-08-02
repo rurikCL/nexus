@@ -46,14 +46,16 @@ const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento
 const BUFF_COLOR  = { ataque: '#ff7043', defensa: '#38cdf0', punteria: '#10b981', movimiento: '#a78bfa', iniciativa: '#E6B325' };
 /* Estados de combate (ver app/Support/Combat/AplicaEstadosCombate.php): nombres reservados que,
    al aparecer en el buff/debuff de una habilidad, se aplican como estado en vez de +1/-1 a un stat. */
-const ESTADO_STATS = ['paralizado', 'aturdido', 'marcado', 'protegido', 'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion'];
+const ESTADO_STATS = ['paralizado', 'aturdido', 'marcado', 'protegido', 'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion', 'deflectar', 'contraataque'];
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
+  deflectar: 'Deflectar', contraataque: 'Contraataque',
 };
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
+  deflectar: '↩️', contraataque: '🗡️',
 };
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];

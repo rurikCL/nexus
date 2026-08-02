@@ -13,18 +13,22 @@ namespace App\Support\Combat;
  *
  * turns=null → persiste hasta consumirse (solo marcado/protegido). Los demás
  * decrementan 1 en el tick de fin de ronda (mismo punto donde hoy se tiquean
- * buffs/debuffs) y se remueven al llegar a 0.
+ * buffs/debuffs) y se remueven al llegar a 0 — deflectar/contraataque son
+ * turns=1: si no se consumen contra el tipo de ataque que esperan, expiran
+ * solo con ese turno (a diferencia de protegido/marcado, que no expiran solos).
  *
  * Los tipos de estado (paralizado, aturdido, marcado, protegido, sangrado,
- * envenenado, debilitado, confundido, regeneracion) son nombres reservados:
- * un buff/debuff de habilidad cuyo string coincide con uno de estos se aplica
- * como estado en vez de como modificador de stat — ver uso en los controllers.
+ * envenenado, debilitado, confundido, regeneracion, deflectar, contraataque)
+ * son nombres reservados: un buff/debuff de habilidad cuyo string coincide
+ * con uno de estos se aplica como estado en vez de como modificador de stat
+ * — ver uso en los controllers.
  */
 trait AplicaEstadosCombate
 {
     private const TIPOS_ESTADO = [
         'paralizado', 'inmune_paralisis', 'aturdido', 'marcado', 'protegido',
         'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion',
+        'deflectar', 'contraataque',
     ];
 
     /** Duración/valor por defecto de cada estado cuando se aplica desde una habilidad. */
@@ -38,6 +42,8 @@ trait AplicaEstadosCombate
         'debilitado' => ['turns' => 2, 'valor' => 0],
         'confundido' => ['turns' => 1, 'valor' => 0],
         'regeneracion' => ['turns' => 2, 'valor' => 2],
+        'deflectar' => ['turns' => 1, 'valor' => 0],
+        'contraataque' => ['turns' => 1, 'valor' => 0],
     ];
 
     private const ESTADOS_DOT = ['sangrado' => true, 'envenenado' => true];
@@ -234,6 +240,30 @@ trait AplicaEstadosCombate
             'activo' => true,
             'forzar_exito' => $atkDadoNatural > 2,
         ];
+    }
+
+    /**
+     * Consume `deflectar` (ataques a distancia) o `contraataque` (ataques cuerpo a cuerpo) del
+     * objetivo al recibir un golpe, solo si el tipo de ataque coincide con el que ese estado
+     * espera — a diferencia de `protegido`, que bloquea cualquier ataque. Si se consume, el
+     * golpe NO impacta al objetivo (se evita por completo); en su lugar, el atacante recibe la
+     * mitad del daño que iba a infligir (ver `mitadDano`). Devuelve
+     * ['estados' => array, 'activo' => bool, 'tipo' => ?string].
+     */
+    private static function consumirDeflectarOContraataque(array $estadosObjetivo, bool $esDistancia): array
+    {
+        $tipo = $esDistancia ? 'deflectar' : 'contraataque';
+        if (! self::tieneEstado($estadosObjetivo, $tipo)) {
+            return ['estados' => $estadosObjetivo, 'activo' => false, 'tipo' => null];
+        }
+
+        return ['estados' => self::quitarEstado($estadosObjetivo, $tipo), 'activo' => true, 'tipo' => $tipo];
+    }
+
+    /** Mitad (floor) de cada componente de daño — el golpe que Deflectar/Contraataque devuelve al atacante. */
+    private static function mitadDano(int $dmg, int $dmgEscudo, int $dmgPerforante): array
+    {
+        return [intdiv(max(0, $dmg), 2), intdiv(max(0, $dmgEscudo), 2), intdiv(max(0, $dmgPerforante), 2)];
     }
 
     /**

@@ -498,11 +498,6 @@ class PvpCombatController extends Controller
             $estadosObjetivo = $protegidoInfo['estados'];
             $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
             $estadosObjetivo = $marcaInfo['estados'];
-            if ($confundido) {
-                $myEstados = $estadosObjetivo;
-            } else {
-                $oppEstados = $estadosObjetivo;
-            }
 
             $hit = $esCritico || $atkRoll > $defRoll;
             if ($protegidoInfo['activo']) {
@@ -515,21 +510,48 @@ class PvpCombatController extends Controller
                     : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
             }
 
+            $reflejoInfo = ['activo' => false, 'tipo' => null];
+            if ($hit && ! $confundido) {
+                $reflejoInfo = self::consumirDeflectarOContraataque($estadosObjetivo, $esDistancia);
+                $estadosObjetivo = $reflejoInfo['estados'];
+            }
+            if ($confundido) {
+                $myEstados = $estadosObjetivo;
+            } else {
+                $oppEstados = $estadosObjetivo;
+            }
+
             if ($hit) {
                 $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myCurrentForma, 'dano'));
                 $dmgEscudo = self::formaBono($myCurrentForma, 'dano_escudo');
                 $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myCurrentForma, 'dano_perforante');
-                $objetivoEsAtacante = $confundido ? $isAttacker : ! $isAttacker;
-                $oppEscudoAntes = $objetivoEsAtacante ? $combat->attacker_escudo : $combat->defender_escudo;
-                if ($objetivoEsAtacante) {
-                    [$combat->attacker_hp, $combat->attacker_escudo] =
-                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+
+                if ($reflejoInfo['activo']) {
+                    [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
+                    $actorEscudoAntes = $isAttacker ? $combat->attacker_escudo : $combat->defender_escudo;
+                    if ($isAttacker) {
+                        [$combat->attacker_hp, $combat->attacker_escudo] =
+                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                    } else {
+                        [$combat->defender_hp, $combat->defender_escudo] =
+                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                    }
+                    $descDano = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $actorEscudoAntes);
+                    $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                    $entry['messages'][] = "¡{$opponentChar->name} {$verbo} el golpe de {$actorChar->name}! {$descDano}";
                 } else {
-                    [$combat->defender_hp, $combat->defender_escudo] =
-                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                    $objetivoEsAtacante = $confundido ? $isAttacker : ! $isAttacker;
+                    $oppEscudoAntes = $objetivoEsAtacante ? $combat->attacker_escudo : $combat->defender_escudo;
+                    if ($objetivoEsAtacante) {
+                        [$combat->attacker_hp, $combat->attacker_escudo] =
+                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                    } else {
+                        [$combat->defender_hp, $combat->defender_escudo] =
+                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                    }
+                    $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
+                    $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) {$descDano}" : "¡Impacto! {$descDano}";
                 }
-                $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
-                $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) {$descDano}" : "¡Impacto! {$descDano}";
             } else {
                 $entry['messages'][] = "{$actorChar->name} falla el golpe";
             }
@@ -708,11 +730,6 @@ class PvpCombatController extends Controller
                 $estadosObjetivoHab = $protegidoHab['estados'];
                 $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDadoHab);
                 $estadosObjetivoHab = $marcaHab['estados'];
-                if ($confundidoHab) {
-                    $myEstados = $estadosObjetivoHab;
-                } else {
-                    $oppEstados = $estadosObjetivoHab;
-                }
 
                 $hitHab = $atkRoll > $defRoll;
                 if ($protegidoHab['activo']) {
@@ -723,6 +740,17 @@ class PvpCombatController extends Controller
                     $entry['messages'][] = $hitHab
                         ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
                         : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
+                }
+
+                $reflejoHab = ['activo' => false, 'tipo' => null];
+                if ($hitHab && ! $confundidoHab) {
+                    $reflejoHab = self::consumirDeflectarOContraataque($estadosObjetivoHab, ! $useAtq);
+                    $estadosObjetivoHab = $reflejoHab['estados'];
+                }
+                if ($confundidoHab) {
+                    $myEstados = $estadosObjetivoHab;
+                } else {
+                    $oppEstados = $estadosObjetivoHab;
                 }
 
                 if ($hitHab) {
@@ -745,33 +773,48 @@ class PvpCombatController extends Controller
                     $dmgPerforante += self::formaBono($myCurrentForma, 'dano_perforante');
                     $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
 
-                    $objetivoEsAtacanteHab = $confundidoHab ? $isAttacker : ! $isAttacker;
-                    $oppEscudoAntes = $objetivoEsAtacanteHab ? $combat->attacker_escudo : $combat->defender_escudo;
-
-                    if ($objetivoEsAtacanteHab) {
-                        [$combat->attacker_hp, $combat->attacker_escudo] =
-                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                    if ($reflejoHab['activo']) {
+                        [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
+                        $actorEscudoAntes = $isAttacker ? $combat->attacker_escudo : $combat->defender_escudo;
+                        if ($isAttacker) {
+                            [$combat->attacker_hp, $combat->attacker_escudo] =
+                                self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                        } else {
+                            [$combat->defender_hp, $combat->defender_escudo] =
+                                self::applyDamage($combat->defender_hp, $combat->defender_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                        }
+                        $descDano = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $actorEscudoAntes);
+                        $verbo = $reflejoHab['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                        $entry['messages'][] = "¡{$opponentChar->name} {$verbo} el ataque de {$actorChar->name}! {$descDano}";
                     } else {
-                        [$combat->defender_hp, $combat->defender_escudo] =
-                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                    }
+                        $objetivoEsAtacanteHab = $confundidoHab ? $isAttacker : ! $isAttacker;
+                        $oppEscudoAntes = $objetivoEsAtacanteHab ? $combat->attacker_escudo : $combat->defender_escudo;
 
-                    /* Debuffs al oponente solo si impacta y no fue un golpe redirigido por confusión */
-                    if (! $confundidoHab) {
-                        foreach ($habDebuff as $stat) {
-                            if (self::esTipoEstado($stat)) {
-                                $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat);
-                            } else {
-                                $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                        if ($objetivoEsAtacanteHab) {
+                            [$combat->attacker_hp, $combat->attacker_escudo] =
+                                self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                        } else {
+                            [$combat->defender_hp, $combat->defender_escudo] =
+                                self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                        }
+
+                        /* Debuffs al oponente solo si impacta y no fue un golpe redirigido por confusión */
+                        if (! $confundidoHab) {
+                            foreach ($habDebuff as $stat) {
+                                if (self::esTipoEstado($stat)) {
+                                    $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat);
+                                } else {
+                                    $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                                }
                             }
                         }
-                    }
 
-                    $debuffDesc = (! empty($habDebuff) && ! $confundidoHab)
-                        ? ' (penaliza: '.implode(', ', $habDebuff).')'
-                        : '';
-                    $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
-                    $entry['messages'][] = "¡Impacto! {$descDano}{$debuffDesc}";
+                        $debuffDesc = (! empty($habDebuff) && ! $confundidoHab)
+                            ? ' (penaliza: '.implode(', ', $habDebuff).')'
+                            : '';
+                        $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
+                        $entry['messages'][] = "¡Impacto! {$descDano}{$debuffDesc}";
+                    }
 
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
