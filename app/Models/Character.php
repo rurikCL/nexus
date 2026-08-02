@@ -305,8 +305,14 @@ class Character extends Model
             'punteria' => (int) ($this->punteria ?? 2) + (int) ($bonos['punteria'] ?? 0),
         ];
 
+        // Vida y escudo no comparten el tope de las 5 stats tácticas: la vida tiene 2 más
+        // (más aguante), y el escudo tiene 2 menos y puede llegar a 0 (personajes sin escudo).
         foreach ($stats as $key => $value) {
-            $stats[$key] = max(1, min($cap, $value));
+            $stats[$key] = match ($key) {
+                'vida' => max(1, min($cap + 2, $value)),
+                'escudo' => max(0, min(max(0, $cap - 2), $value)),
+                default => max(1, min($cap, $value)),
+            };
         }
 
         return $stats;

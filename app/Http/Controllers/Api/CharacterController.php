@@ -74,10 +74,18 @@ class CharacterController extends Controller
             ? (int) $data['puntos_libres']
             : 5;
 
+        // Vida y escudo no comparten el tope de las 5 stats tácticas: la vida tiene 2 más
+        // (más aguante), y el escudo tiene 2 menos y puede llegar a 0 (personajes sin escudo).
         foreach ($combatStats as $key => $value) {
-            if ($value < 1 || $value > $assignCap) {
+            [$min, $max] = match ($key) {
+                'vida' => [1, $assignCap + 2],
+                'escudo' => [0, max(0, $assignCap - 2)],
+                default => [1, $assignCap],
+            };
+
+            if ($value < $min || $value > $max) {
                 return response()->json([
-                    'message' => "El stat {$key} debe estar entre 1 y {$assignCap}.",
+                    'message' => "El stat {$key} debe estar entre {$min} y {$max}.",
                 ], 422);
             }
         }
