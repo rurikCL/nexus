@@ -14,6 +14,8 @@ import CombatCardModal from './CombatCard.jsx';
 import StatusBurstEffect from './StatusBurstEffect.jsx';
 import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 /* Clasifica una entrada del log del servidor como golpe melee/a distancia,
    con impacto o falla, para disparar el VFX correspondiente. El servidor no
    envía esta clasificación estructurada, así que se infiere del texto del
@@ -60,21 +62,31 @@ function diceValuesFromMessage(msg) {
   return out;
 }
 
-/* Agrupa las tiradas de una entrada de log en pares [rollA, rollB] con su color/label,
-   en el orden en que aparecen (acción propia primero, reroll de iniciativa después si lo hay). */
-function extractRollGroups(entry, { myId, attackerId }) {
+/* Agrupa las tiradas de una entrada de log en pares [rollA, rollB] con su color/label —
+   la tirada de iniciativa (prefijo "Ronda N —") queda excluida: ya no se anima con dados,
+   se muestra como un banner de texto (ver extractIniciativaGanador/revealWithDice). */
+function extractRollGroups(entry, { myId }) {
   const groups = [];
   for (const msg of entry.messages ?? []) {
     const vals = diceValuesFromMessage(msg);
-    if (vals.length < 2) continue;
-    const isIniciativa = /^Ronda \d+ —/.test(msg);
-    const aIsMe = isIniciativa ? myId === attackerId : entry.actor_id === myId;
+    if (vals.length < 2 || /^Ronda \d+ —/.test(msg)) continue;
+    const aIsMe = entry.actor_id === myId;
     groups.push([
       { key: 'a', color: aIsMe ? '#38cdf0' : '#ff6b6b', label: aIsMe ? 'TÚ' : 'RIVAL', values: vals[0] },
       { key: 'b', color: aIsMe ? '#ff6b6b' : '#38cdf0', label: aIsMe ? 'RIVAL' : 'TÚ', values: vals[1] },
     ]);
   }
   return groups;
+}
+
+/* Nombre de quien gana la iniciativa de la ronda, extraído del mensaje del servidor
+   ("Ronda N — Iniciativa: ..." seguido de "¡Nombre actúa primero!"). */
+function extractIniciativaGanador(entry) {
+  const msgs = entry.messages ?? [];
+  const idx = msgs.findIndex((m) => /^Ronda \d+ —/.test(m));
+  if (idx === -1) return null;
+  const m = (msgs[idx + 1] ?? '').match(/¡(.+) actúa primero!/);
+  return m ? m[1] : null;
 }
 
 /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
@@ -215,6 +227,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [emojiPicker, setEmojiPicker]   = useState(false);
   const [emojiBurst, setEmojiBurst]     = useState(null);
   const [statusFx, setStatusFx]         = useState(null);
+  const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
   const effectMaxTurnsRef = useRef({});
@@ -267,14 +280,18 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const revealWithDice = async (newCombat) => {
     const prevLen = combatLogLenRef.current;
     const newEntries = (newCombat.log ?? []).slice(prevLen);
-    const attackerId = newCombat.attacker?.id;
     const statusEffects = [];
     let lastAttack = null;
     let lastHeal = null;
     let lastFlee = null;
     let lastEmoji = null;
     for (const entry of newEntries) {
-      const groups = extractRollGroups(entry, { myId: userId, attackerId });
+      const iniciativaGanador = extractIniciativaGanador(entry);
+      if (iniciativaGanador) {
+        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: iniciativaGanador });
+        await sleep(1400);
+      }
+      const groups = extractRollGroups(entry, { myId: userId });
       for (const g of groups) await rollDice(g);
       for (const eff of entry.effects ?? []) {
         if (eff?.type === 'buff' || eff?.type === 'heal') statusEffects.push(eff);
@@ -1117,6 +1134,20 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
           }}>
             <span key={combat.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
               Turno {combat.ronda ?? 1}
+            </span>
+          </div>
+        )}
+
+        {/* Reemplaza la tirada de dados de iniciativa: en vez de animarla, se muestra
+            directamente quién la ganó (mismo estilo que el banner de turno). */}
+        {iniciativaMsg && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 46,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={iniciativaMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(26px, 6vw, 46px)' }}>
+              {iniciativaMsg.texto} — Iniciativa
             </span>
           </div>
         )}

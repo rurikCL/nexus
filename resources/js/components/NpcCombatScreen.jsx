@@ -269,6 +269,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [npcHp,        setNpcHp]        = useState(initialState?.npcHp    ?? { vida: maxNpc.vida,    escudo: maxNpc.escudo    });
   const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
   const [currTurn,     setCurrTurn]     = useState(initialState?.currTurn  ?? null);
+  const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
   const [log,          setLog]          = useState(initialState?.log       ?? []);
   const [ronda,        setRonda]        = useState(initialState?.ronda       ?? 1);
   const [rondaTurno,   setRondaTurno]   = useState(initialState?.rondaTurno  ?? 0);
@@ -488,10 +489,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const first = pT >= nT ? 'player' : 'npc';
     (async () => {
       await sleep(300);
-      await rollDice([
-        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', values: [pTirada.dado1, pTirada.dado2] },
-        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), values: [nTirada.dado1, nTirada.dado2] },
-      ]);
+      setIniciativaMsg({ key: `ini-1-${Date.now()}`, texto: first === 'player' ? 'Jugador' : npc.nombre });
+      await sleep(1400);
       setLog([
         { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
         { text: `Ronda 1 — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
@@ -561,10 +560,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const pR = pTirada.total; const nR = nTirada.total;
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
-      await rollDice([
-        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', values: [pTirada.dado1, pTirada.dado2] },
-        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), values: [nTirada.dado1, nTirada.dado2] },
-      ]);
+      setIniciativaMsg({ key: `ini-${ronda + 1}-${Date.now()}`, texto: first === 'player' ? 'Jugador' : npc.nombre });
+      await sleep(1400);
       setLog(prev => [...prev,
         { text: `Ronda ${ronda + 1} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
         { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: ronda + 1, actor: 'system' },
@@ -1843,6 +1840,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           }}>
             <span key={ronda} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
               Turno {ronda}
+            </span>
+          </div>
+        )}
+
+        {/* Reemplaza la tirada de dados de iniciativa: en vez de animar los 2d6, se
+            muestra directamente quién ganó la iniciativa (mismo estilo que el banner de turno). */}
+        {iniciativaMsg && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 46,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={iniciativaMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(26px, 6vw, 46px)' }}>
+              {iniciativaMsg.texto} — Iniciativa
             </span>
           </div>
         )}

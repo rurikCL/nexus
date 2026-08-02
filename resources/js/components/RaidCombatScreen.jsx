@@ -401,6 +401,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [emojiPicker, setEmojiPicker] = useState(false);
   const [emojiBurst, setEmojiBurst] = useState(null);
   const [statusFx, setStatusFx] = useState(null);
+  const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
   const pollRef = useRef(null);
   const logRef = useRef(null);
   const stageRef = useRef(null);
@@ -491,7 +492,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   /* Reproduce la animación (dados + golpe + texto flotante) de UNA entrada del log */
   const playEntry = async (entry) => {
     if (!raid) return;
-    if (entry.actor === 'sistema') { await sleep(220); return; }
+    if (entry.actor === 'sistema') {
+      // Orden de turnos de la ronda ("Ronda N — Orden de turnos: Nombre 2d6(...)=Total | ...")
+      // ya no se anima con dados: se muestra directamente quién actúa primero.
+      const msg = (entry.messages || [])[0] ?? '';
+      const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
+      if (m) {
+        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[1] });
+        await sleep(1400);
+      } else {
+        await sleep(220);
+      }
+
+      return;
+    }
 
     /* Expresión cosmética de algún jugador — mostrar el burst salvo que sea la mía propia
        (esa ya se mostró al instante al enviarla, en sendEmoji). No consume turno ni animación. */
@@ -741,6 +755,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
             }}>
               <span key={raid.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
                 Turno {raid.ronda ?? 1}
+              </span>
+            </div>
+          )}
+
+          {/* Reemplaza la tirada de dados de iniciativa: en vez de animarla, se muestra
+              directamente quién actúa primero (mismo estilo que el banner de turno). */}
+          {iniciativaMsg && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 46,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', overflow: 'hidden',
+            }}>
+              <span key={iniciativaMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(26px, 6vw, 46px)' }}>
+                {iniciativaMsg.texto} — Iniciativa
               </span>
             </div>
           )}
