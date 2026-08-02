@@ -1000,6 +1000,13 @@ class RaidCombatController extends Controller
             ? $habilidadesNpc->get($disponibles[array_rand($disponibles)])
             : null;
 
+        /* Sin habilidad: 50% de chance de que el golpe básico sea a distancia (Puntería/Movimiento)
+         * en vez de cuerpo a cuerpo (Ataque/Defensa) — independiente de las habilidades del jefe.
+         * Con habilidad, el tipo lo decide la habilidad (`$hab->tipo`), sin cambios. */
+        $esDistanciaAtaque = $hab
+            ? ($hab->tipo !== 'melee')
+            : (random_int(1, 100) <= 50);
+
         /* El buff propio de la habilidad (si tiene uno) se aplica al jefe mismo al usarla,
          * sin importar si el golpe conecta — mismo criterio que el buff del jugador. No
          * afecta la tirada de ESTE turno (npcStats ya se calculó más arriba), solo a partir
@@ -1025,7 +1032,7 @@ class RaidCombatController extends Controller
         $dmgEscudoBase = $hab ? (int) ($hab->damage_escudo ?? 0) : (int) ($npc->dano_escudo ?? 0);
         $dmgPerfBase = $hab ? (int) ($hab->damage_perforante ?? 0) : (int) ($npc->dano_perforante ?? 0);
         $formaAtaque = $hab ? (int) $hab->forma : (int) $raid->npc_forma;
-        $accion = $hab ? "usa {$hab->nombre}" : 'ataca';
+        $accion = $hab ? "usa {$hab->nombre}" : ($esDistanciaAtaque ? 'dispara' : 'ataca');
 
         /* Bono por nivel de dificultad (0 en nivel 1, +4 en nivel 5): +daño, o +curación si dmgBase es negativo */
         $bonoNivel = $npc->bonoAtributoPorNivel();
@@ -1043,8 +1050,8 @@ class RaidCombatController extends Controller
         $defTirada = self::tirarDados();
         $atkDado = self::mitigarTiradaAturdido($npcEstados, $atkTirada['total']);
         $defDado = self::mitigarTiradaAturdido($targetEstadosPrevios, $defTirada['total']);
-        $atkVal = $npcStats['ataque'];
-        $defVal = $targetStats['defensa'];
+        $atkVal = $esDistanciaAtaque ? $npcStats['punteria'] : $npcStats['ataque'];
+        $defVal = $esDistanciaAtaque ? $targetStats['movimiento'] : $targetStats['defensa'];
         $atkRoll = $atkDado + $atkVal;
         $defRoll = $defDado + $defVal;
         $esCritico = $npc->esCritico($atkTirada['dado1'], $atkTirada['dado2']); // Nivel 1-3: dobles (ver esCriticoDobles). Nivel 4: un 6 y el otro 5+. Nivel 5: un 6 y el otro 4+.
@@ -1079,9 +1086,8 @@ class RaidCombatController extends Controller
 
         /* Deflectar (a distancia) / Contraataque (cuerpo a cuerpo): solo si el jefe realmente
          * iba a conectar, y solo contra un jugador (no aplica cuando el jefe confundido se
-         * golpea a sí mismo). El tipo de la habilidad decide a qué tipo de ataque equivale;
-         * el golpe básico del jefe (sin habilidad) siempre cuenta como cuerpo a cuerpo. */
-        $esDistanciaAtaque = $hab ? ($hab->tipo !== 'melee') : false;
+         * golpea a sí mismo). Reutiliza `$esDistanciaAtaque` ya resuelto más arriba (habilidad,
+         * o la tirada 50/50 del golpe básico). */
         $reflejoInfo = ['activo' => false, 'tipo' => null];
         if ($hit && ! $targetEsNpc) {
             $reflejoInfo = self::consumirDeflectarOContraataque($targetEstadosPrevios, $esDistanciaAtaque);
