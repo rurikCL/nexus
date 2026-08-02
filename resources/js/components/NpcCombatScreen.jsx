@@ -118,7 +118,7 @@ const consumirProtegido = (estadosObjetivo) => {
 };
 const consumirMarcado = (estadosObjetivo, atkDadoNatural) => {
   if (!tieneEstado(estadosObjetivo, 'marcado')) return { estados: estadosObjetivo, activo: false, forzarExito: false };
-  return { estados: quitarEstado(estadosObjetivo, 'marcado'), activo: true, forzarExito: atkDadoNatural !== 1 };
+  return { estados: quitarEstado(estadosObjetivo, 'marcado'), activo: true, forzarExito: atkDadoNatural > 2 };
 };
 const aplicarEstadoDeHabilidad = (estados, tipo) => (tipo === 'paralizado' ? intentarParalizar(estados).estados : agregarEstadoPorTipo(estados, tipo));
 const tickEstadosRonda = (estados, hp, maxHp, nombreActor) => {
@@ -209,7 +209,12 @@ function SpaceBackground() {
 }
 
 export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombre, lugarNombre, planetaImagen, onVictory, onDefeat, onFlee, initialState, naveMode = false, esEnemigo = false, objetosUtilizables = [], onUsarObjeto }) {
-  const d20 = () => Math.floor(Math.random() * 20) + 1;
+  /* 2d6 (reemplaza el 1d20 anterior) — devuelve ambos dados (para el registro/animación) y su suma. */
+  const tirarDados = () => {
+    const dado1 = 1 + Math.floor(Math.random() * 6);
+    const dado2 = 1 + Math.floor(Math.random() * 6);
+    return { dado1, dado2, total: dado1 + dado2 };
+  };
 
   /* En combate naval, `player.vida`/`.escudo` es el HP/escudo ACTUAL (posiblemente
      dañado, persiste hasta reparar) — el máximo real de la nave viaja aparte en
@@ -217,12 +222,16 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
      empieza cada combate a full), así que caen de vuelta a player.vida/escudo. */
   const maxPlayer = { vida: player.vida_max ?? player.vida, escudo: player.escudo_max ?? player.escudo };
 
-  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel siempre, y redefine el
-     umbral de crítico (dado ≥ 21-nivel). No aplica a naves. El bono plano de +nivel en daño y el
-     +floor(nivel/2) extra en críticos son EXCLUSIVOS de los Jefes (combate RAID) — un enemigo de
-     encuentro aleatorio (map_enemigos, `esEnemigo`) no los recibe. */
+  /* Nivel de dificultad (estrellas): +1 a todos los atributos por nivel siempre, y agranda la
+     ventana de "dobles" que cuentan como crítico sobre 2d6 (mismo criterio que
+     MapNpc::esCriticoDobles en el backend) — nivel 1 → solo doble 6, nivel 7+ → doble 6 a doble 2
+     (el máximo). Doble 1 nunca es crítico — ver esFalloCriticoNpc más abajo. No aplica a naves.
+     El bono plano de +nivel en daño y el +floor(nivel/2) extra en críticos son EXCLUSIVOS de los
+     Jefes (combate RAID) — un enemigo de encuentro aleatorio (map_enemigos, `esEnemigo`) no los recibe. */
   const npcNivel = naveMode ? 0 : (npc.nivel ?? 1);
-  const npcCritThreshold = 21 - npcNivel;
+  const npcBonoCriticoDobles = Math.min(4, Math.floor((npcNivel + 1) / 2));
+  const esCriticoDobles = (dado1, dado2, bono) => dado1 === dado2 && dado1 !== 1 && dado1 >= (6 - bono);
+  const esFalloCriticoNpc = (dado1, dado2) => dado1 === 1 && dado2 === 1;
   const npcDanoNivel = esEnemigo ? 0 : npcNivel;
   const npcCritBonus = esEnemigo ? 0 : Math.floor(npcNivel / 2);
 
@@ -455,18 +464,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   useEffect(() => {
     if (initialState) return;
     void playCombateNpc();
-    const pR = d20(); const nR = d20();
+    const pTirada = tirarDados(); const nTirada = tirarDados();
+    const pR = pTirada.total; const nR = nTirada.total;
     const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
     const first = pT >= nT ? 'player' : 'npc';
     (async () => {
       await sleep(300);
       await rollDice([
-        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', value: pR },
-        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: nR },
+        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', values: [pTirada.dado1, pTirada.dado2] },
+        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), values: [nTirada.dado1, nTirada.dado2] },
       ]);
       setLog([
         { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
-        { text: `Ronda 1 — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
+        { text: `Ronda 1 — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
         { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2, ronda: 1, actor: 'system' },
       ]);
       setPhase('battle');
@@ -529,15 +539,16 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         return;
       }
 
-      const pR = d20(); const nR = d20();
+      const pTirada = tirarDados(); const nTirada = tirarDados();
+      const pR = pTirada.total; const nR = nTirada.total;
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
       await rollDice([
-        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', value: pR },
-        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: nR },
+        { key: 'p-ini', color: '#38cdf0', label: 'TÚ', values: [pTirada.dado1, pTirada.dado2] },
+        { key: 'n-ini', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), values: [nTirada.dado1, nTirada.dado2] },
       ]);
       setLog(prev => [...prev,
-        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 1d20(${pR})+${effPlayerIni}=${pT} | ${npc.nombre} 1d20(${nR})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
+        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
         { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: ronda + 1, actor: 'system' },
       ]);
       setRonda(r => r + 1);
@@ -634,12 +645,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       /* Leer stats efectivos ahora (closure over current state at render time) */
       const useRanged = !confundidoNpc && (hab ? hab.tipo !== 'melee' : (effNpcPnt > 0 && Math.random() > 0.5));
       const defEstadosPrevios = confundidoNpc ? npcEstados : playerEstados;
-      const aR = mitigarTiradaAturdido(npcEstados, d20());
-      const dR = mitigarTiradaAturdido(defEstadosPrevios, d20());
+      const aTirada = tirarDados();
+      const dTirada = tirarDados();
+      const aR = mitigarTiradaAturdido(npcEstados, aTirada.total);
+      const dR = mitigarTiradaAturdido(defEstadosPrevios, dTirada.total);
       const atkStatVal = confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk);
       const defStatVal = confundidoNpc ? effNpcDef : (useRanged ? effPlayerMov : effPlayerDef);
       const [aT, dT] = [aR + atkStatVal, dR + defStatVal];
-      const esCritico = !confundidoNpc && aR >= npcCritThreshold;
+      const esCritico = !confundidoNpc && esCriticoDobles(aTirada.dado1, aTirada.dado2, npcBonoCriticoDobles);
+      const esFalloCritico = !confundidoNpc && esFalloCriticoNpc(aTirada.dado1, aTirada.dado2);
 
       /* Marcado/protegido del objetivo se consumen sin importar si el golpe finalmente conecta */
       let estadosObjetivo = defEstadosPrevios;
@@ -652,10 +666,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       let hit = esCritico || aT > dT;
       if (protegidoInfo.activo) hit = false;
       else if (marcaInfo.activo) hit = marcaInfo.forzarExito;
+      if (esFalloCritico) hit = false; // Doble 1 ("ojos de serpiente") siempre falla, sin importar stats, marca o protección.
 
       await rollDice([
-        { key: 'npc', color: '#ff6b6b', label: npcLabel, value: aR },
-        { key: 'ply', color: '#38cdf0', label: 'TÚ', value: dR },
+        { key: 'npc', color: '#ff6b6b', label: npcLabel, values: [aTirada.dado1, aTirada.dado2] },
+        { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [dTirada.dado1, dTirada.dado2] },
       ]);
       if (cancelled) return;
 
@@ -686,17 +701,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       await triggerStrike({ playerIsAttacker: false, ranged: useRanged, hit, crit: esCritico, effective: habEffective, resistant: habResistant, dmg: dmgBase });
 
       const rollDesc = confundidoNpc
-        ? `${npc.nombre} se ataca a sí mismo: 1d20(${aR})+${atkStatVal}=${aT} vs 1d20(${dR})+${defStatVal}=${dT}`
+        ? `${npc.nombre} se ataca a sí mismo: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`
         : hab
-          ? `${npc.nombre} usa "${hab.nombre}": 1d20(${aR})+${atkStatVal}=${aT} vs 1d20(${dR})+${defStatVal}=${dT}`
+          ? `${npc.nombre} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`
           : useRanged
-            ? `${npc.nombre} dispara: 1d20(${aR})+${effNpcPnt}=${aT}`
-            : `${npc.nombre} ataca: 1d20(${aR})+${effNpcAtk}=${aT}`;
+            ? `${npc.nombre} dispara: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effNpcPnt}=${aT}`
+            : `${npc.nombre} ataca: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effNpcAtk}=${aT}`;
       let entries = confundidoNpc
         ? [{ text: rollDesc, type: 'info', diceColors: ['#ff6b6b'] }]
         : [
           { text: rollDesc, type: 'info', diceColors: ['#ff6b6b'] },
-          { text: useRanged ? `Esquivas: 1d20(${dR})+${effPlayerMov}=${dT}` : `Defiendes: 1d20(${dR})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
+          { text: useRanged ? `Esquivas: 2d6(${dTirada.dado1}+${dTirada.dado2})+${effPlayerMov}=${dT}` : `Defiendes: 2d6(${dTirada.dado1}+${dTirada.dado2})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
       if (hab && habEffective && hit) {
         entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'danger' });
@@ -907,17 +922,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     await armThrow(playerAvatarRef.current);
 
-    const aR = mitigarTiradaAturdido(playerEstados, d20());
-    const dR = mitigarTiradaAturdido(confundidoHab ? playerEstados : npcEstados, d20());
+    const aTirada = tirarDados();
+    const dTirada = tirarDados();
+    const aR = mitigarTiradaAturdido(playerEstados, aTirada.total);
+    const dR = mitigarTiradaAturdido(confundidoHab ? playerEstados : npcEstados, dTirada.total);
     const [aT, dT] = [aR + atkVal, dR + defVal];
 
     await rollDice([
-      { key: 'ply', color: '#38cdf0', label: 'TÚ', value: aR },
-      { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: dR },
+      { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
+      { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), values: [dTirada.dado1, dTirada.dado2] },
     ]);
 
     entries.push({
-      text: `${player.nombre} usa "${hab.nombre}": 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
+      text: `${player.nombre} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
       type: 'info',
     });
 
@@ -1034,18 +1051,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
 
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
-    const pR = mitigarTiradaAturdido(playerEstados, d20());
-    const nR = mitigarTiradaAturdido(npcEstados, d20());
+    const pTirada = tirarDados();
+    const nTirada = tirarDados();
+    const pR = mitigarTiradaAturdido(playerEstados, pTirada.total);
+    const nR = mitigarTiradaAturdido(npcEstados, nTirada.total);
     const [pT, nT] = [pR + effPlayerIni, nR + effNpcIni];
     const success = pT >= nT;
 
     await rollDice([
-      { key: 'p-flee', color: '#38cdf0', label: 'TÚ', value: pR },
-      { key: 'n-flee', color: '#ff6b6b', label: npcLabel, value: nR },
+      { key: 'p-flee', color: '#38cdf0', label: 'TÚ', values: [pTirada.dado1, pTirada.dado2] },
+      { key: 'n-flee', color: '#ff6b6b', label: npcLabel, values: [nTirada.dado1, nTirada.dado2] },
     ]);
 
     const entries = [{
-      text: `${player.nombre} intenta huir: 1d20(${pR})+${effPlayerIni}=${pT} vs 1d20(${nR})+${effNpcIni}=${nT}`,
+      text: `${player.nombre} intenta huir: 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} vs 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`,
       type: 'info',
     }];
     entries.push(success
@@ -1131,20 +1150,22 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     await armThrow(playerAvatarRef.current);
 
-    const aR = mitigarTiradaAturdido(playerEstados, d20());
-    const dR = mitigarTiradaAturdido(confundido ? playerEstados : npcEstados, d20());
+    const aTirada = tirarDados();
+    const dTirada = tirarDados();
+    const aR = mitigarTiradaAturdido(playerEstados, aTirada.total);
+    const dR = mitigarTiradaAturdido(confundido ? playerEstados : npcEstados, dTirada.total);
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const critico   = arma?.critico ?? 0;
-    const esCritico = !confundido && aR >= (20 - critico);
+    const esCritico = !confundido && aR >= (12 - critico);
     const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
 
     await rollDice([
-      { key: 'ply', color: '#38cdf0', label: 'TÚ', value: aR },
-      { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), value: dR },
+      { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
+      { key: 'npc', color: '#ff6b6b', label: naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase(), values: [dTirada.dado1, dTirada.dado2] },
     ]);
 
     entries.push({
-      text: `${player.nombre} ${accion}: 1d20(${aR})+${atkVal}=${aT} vs 1d20(${dR})+${defVal}=${dT}`,
+      text: `${player.nombre} ${accion}: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
       type: 'info',
     });
 

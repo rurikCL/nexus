@@ -143,6 +143,20 @@ trait AplicaEstadosCombate
         return self::tieneEstado($estados, 'aturdido') ? intdiv($roll, 2) : $roll;
     }
 
+    /**
+     * Tira 2d6 (reemplaza el 1d20 usado hasta ahora en todo el combate — mismo criterio
+     * en los 3 sistemas, ver espejo en JS de NpcCombatScreen.jsx). Devuelve ambos dados
+     * por separado (para el registro/animación) y su suma ('total'), que es lo que se
+     * usa en la aritmética de la tirada (roll = total + stat).
+     */
+    private static function tirarDados(): array
+    {
+        $dado1 = random_int(1, 6);
+        $dado2 = random_int(1, 6);
+
+        return ['dado1' => $dado1, 'dado2' => $dado2, 'total' => $dado1 + $dado2];
+    }
+
     /** Reduce a la mitad (floor) el daño infligido si el atacante está debilitado. */
     private static function mitigarDanoDebilitado(array $estadosAtacante, int $dmg): int
     {
@@ -170,8 +184,9 @@ trait AplicaEstadosCombate
 
     /**
      * Consume `marcado` del objetivo al recibir un ataque: si está activo, el
-     * ataque es exitoso salvo que el atacante saque natural 1. Devuelve
-     * ['estados' => array, 'activo' => bool, 'forzar_exito' => bool].
+     * ataque es exitoso salvo que el atacante saque fallo crítico (2d6 ≤ 2 —
+     * "ojos de serpiente", o una tirada mitigada por aturdido que caiga igual de
+     * bajo). Devuelve ['estados' => array, 'activo' => bool, 'forzar_exito' => bool].
      */
     private static function consumirMarcado(array $estadosObjetivo, int $atkDadoNatural): array
     {
@@ -182,7 +197,7 @@ trait AplicaEstadosCombate
         return [
             'estados' => self::quitarEstado($estadosObjetivo, 'marcado'),
             'activo' => true,
-            'forzar_exito' => $atkDadoNatural !== 1,
+            'forzar_exito' => $atkDadoNatural > 2,
         ];
     }
 

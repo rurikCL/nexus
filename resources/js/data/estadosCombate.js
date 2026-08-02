@@ -22,7 +22,7 @@ export const ESTADOS_COMBATE = [
     id: 'aturdido', label: 'Aturdido', icon: 'zap', color: '#a78bfa', frame: 'purple',
     categoria: 'control', duracion: '1 turno', badge: '1T', turnsMax: 1,
     resumen: 'Todas sus tiradas de dado se reducen a la mitad.',
-    mecanica: 'Mientras dura, todas las tiradas de 1d20 que haga (ataque, defensa e iniciativa) se dividen a la mitad, redondeando hacia abajo.',
+    mecanica: 'Mientras dura, todas las tiradas de 2d6 que haga (ataque, defensa e iniciativa) se dividen a la mitad, redondeando hacia abajo.',
   },
   {
     id: 'confundido', label: 'Confundido', icon: 'ghost', color: '#a78bfa', frame: 'purple',
@@ -34,7 +34,7 @@ export const ESTADOS_COMBATE = [
     id: 'marcado', label: 'Marcado', icon: 'target', color: '#E6B325', frame: 'gold',
     categoria: 'reaccion', duracion: 'Hasta recibir el próximo ataque', badge: '∞', turnsMax: null,
     resumen: 'El próximo ataque recibido conecta automáticamente.',
-    mecanica: 'El próximo ataque que reciba conecta automáticamente, sin comparar contra su defensa — salvo que el atacante saque un 1 natural, que falla igual. Se consume con ese primer ataque recibido, sin importar el resultado.',
+    mecanica: 'El próximo ataque que reciba conecta automáticamente, sin comparar contra su defensa — salvo que el atacante saque un fallo crítico (2d6 ≤ 2, "ojos de serpiente"), que falla igual. Se consume con ese primer ataque recibido, sin importar el resultado.',
   },
   {
     id: 'protegido', label: 'Protegido', icon: 'shield', color: '#E6B325', frame: 'gold',
@@ -76,26 +76,26 @@ export const STATS_COMBATE = [
   {
     id: 'ataque', label: 'Ataque', icon: 'sword', color: '#ff7043', frame: 'orange',
     resumen: 'Bono a la tirada de ataque cuerpo a cuerpo.',
-    mecanica: 'Se suma al 1d20 en ataques cuerpo a cuerpo (básicos o de habilidad tipo melee). Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
+    mecanica: 'Se suma al 2d6 en ataques cuerpo a cuerpo (básicos o de habilidad tipo melee). Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
   },
   {
     id: 'defensa', label: 'Defensa', icon: 'shield', color: '#38cdf0', frame: 'info',
     resumen: 'Bono a la tirada de defensa cuerpo a cuerpo.',
-    mecanica: 'Se suma al 1d20 al defenderse de ataques cuerpo a cuerpo. Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
+    mecanica: 'Se suma al 2d6 al defenderse de ataques cuerpo a cuerpo. Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
   },
   {
     id: 'punteria', label: 'Puntería', icon: 'eye', color: '#10b981', frame: 'ok',
     resumen: 'Bono a la tirada de ataque a distancia.',
-    mecanica: 'Se suma al 1d20 en ataques a distancia (básicos o de habilidad tipo distancia). Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
+    mecanica: 'Se suma al 2d6 en ataques a distancia (básicos o de habilidad tipo distancia). Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
   },
   {
     id: 'movimiento', label: 'Agilidad', icon: 'zap', color: '#a78bfa', frame: 'purple',
     resumen: 'Bono a la tirada de defensa a distancia.',
-    mecanica: 'Se suma al 1d20 al defenderse (esquivar) ataques a distancia. Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
+    mecanica: 'Se suma al 2d6 al defenderse (esquivar) ataques a distancia. Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
   },
   {
     id: 'iniciativa', label: 'Iniciativa', icon: 'star', color: '#E6B325', frame: 'gold',
     resumen: 'Bono a la tirada de iniciativa.',
-    mecanica: 'Se suma al 1d20 de iniciativa, que decide quién actúa primero en cada ronda (y en el intento de huir). Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
+    mecanica: 'Se suma al 2d6 de iniciativa, que decide quién actúa primero en cada ronda (y en el intento de huir). Buff: +1 por acumulación activa. Debuff: −1 por acumulación activa. Duración en rondas definida por la habilidad que lo aplica.',
   },
 ];

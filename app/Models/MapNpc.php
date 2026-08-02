@@ -122,8 +122,8 @@ class MapNpc extends Model
         return max(2, $this->raid_slots ?: 4);
     }
 
-    /** Umbral de crítico más bajo (más fácil) que un Jefe puede alcanzar a nivel alto — dado ≥14, nunca menos. */
-    private const CRIT_THRESHOLD_MIN = 14;
+    /** Bono de "dobles" máximo que el nivel puede otorgar — de ahí en más ya cubre todos los dobles no-1 (doble 2 en adelante), subir más el nivel no lo mejora. */
+    private const BONO_DOBLES_MAX = 4;
 
     /**
      * Nivel de dificultad (representado con estrellas en la UI): otorga a este NPC
@@ -131,19 +131,31 @@ class MapNpc extends Model
      * jugador con ítems, cap_stats_items — ver RaidCombatController::getNpcStats;
      * vida/escudo quedan fuera de ese tope y siguen escalando libres con el nivel),
      * un bono plano adicional de +nivel en daño/curación, +floor(nivel/2) extra en
-     * críticos, y redefine el umbral de crítico (dado ≥ 21-nivel, nunca por debajo
-     * de 14 — ej. nivel 4 → crítico con 17-20, nivel 10+ → siempre 14-20).
-     * Un 1 natural en la tirada de ataque del Jefe siempre falla (fallo crítico),
-     * sin importar el resultado — ver RaidCombatController::resolveNpcTurn.
+     * críticos, y agranda la ventana de "dobles" que cuentan como crítico sobre 2d6
+     * (ver esCriticoDobles) — ej. nivel 1 → solo doble 6, nivel 7+ → doble 6 a doble 2
+     * (el máximo, ~14% de probabilidad). Doble 1 ("ojos de serpiente") NUNCA es
+     * crítico — al contrario, es un fallo crítico: la tirada de ataque del Jefe
+     * falla siempre que salga, sin importar el resultado — ver
+     * RaidCombatController::resolveNpcTurn.
      */
     public function nivelDificultad(): int
     {
         return max(0, $this->nivel ?? 1);
     }
 
-    public function critThreshold(): int
+    public function bonoCriticoDobles(): int
     {
-        return max(self::CRIT_THRESHOLD_MIN, 21 - $this->nivelDificultad());
+        return min(self::BONO_DOBLES_MAX, intdiv($this->nivelDificultad() + 1, 2));
+    }
+
+    /** ¿Es un crítico bajo el sistema de "dobles"? Doble ≥ (6-bono) cuenta; doble 1 nunca es crítico. */
+    public function esCriticoDobles(int $dado1, int $dado2): bool
+    {
+        if ($dado1 !== $dado2 || $dado1 === 1) {
+            return false;
+        }
+
+        return $dado1 >= (6 - $this->bonoCriticoDobles());
     }
 
     public function nivelBonoCritico(): int

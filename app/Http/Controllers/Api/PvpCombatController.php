@@ -175,8 +175,8 @@ class PvpCombatController extends Controller
                 'turn' => 1,
                 'actor_id' => null,
                 'messages' => [
-                    "Ronda 1 — Iniciativa: {$attacker->character->name} 1d20({$roll['atk_dado']})+{$attackerStats['iniciativa']}={$roll['atk_total']} "
-                        ."vs {$defChar->name} 1d20({$roll['def_dado']})+{$defenderStats['iniciativa']}={$roll['def_total']}",
+                    "Ronda 1 — Iniciativa: {$attacker->character->name} 2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$attackerStats['iniciativa']}={$roll['atk_total']} "
+                        ."vs {$defChar->name} 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$defenderStats['iniciativa']}={$roll['def_total']}",
                     $roll['gana_atacante'] ? "¡{$attacker->character->name} actúa primero!" : "¡{$defChar->name} actúa primero!",
                 ],
             ]],
@@ -440,8 +440,8 @@ class PvpCombatController extends Controller
                 self::tieneEstado($myEstados, 'aturdido'), self::tieneEstado($oppEstados, 'aturdido')
             );
             $entry['messages'][] = "{$actorChar->name} intenta huir: "
-                ."1d20({$roll['atk_dado']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
-                ."vs 1d20({$roll['def_dado']})+{$opponentStats['iniciativa']}={$roll['def_total']}";
+                ."2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
+                ."vs 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$opponentStats['iniciativa']}={$roll['def_total']}";
 
             if ($roll['gana_atacante']) {
                 $combat->status = $isAttacker ? 'fled_attacker' : 'fled_defender';
@@ -478,14 +478,16 @@ class PvpCombatController extends Controller
             $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
             $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
             $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
-            $atkDado = self::mitigarTiradaAturdido($myEstados, random_int(1, 20));
-            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $oppEstados, random_int(1, 20));
+            $atkTirada = self::tirarDados();
+            $defTirada = self::tirarDados();
+            $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
+            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $oppEstados, $defTirada['total']);
             $atkRoll = $atkDado + $atkVal;
             $defRoll = $defDado + $defVal;
             $critico = $arma['critico'] ?? 0;
-            $esCritico = $atkDado >= (20 - $critico);
+            $esCritico = $atkDado >= (12 - $critico);
             $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
-            $entry['messages'][] = "{$actorChar->name} {$accion}: 1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
+            $entry['messages'][] = "{$actorChar->name} {$accion}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
 
             $estadosObjetivo = $confundido ? $myEstados : $oppEstados;
             $protegidoInfo = self::consumirProtegido($estadosObjetivo);
@@ -689,13 +691,15 @@ class PvpCombatController extends Controller
                 $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
                 $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
 
-                $atkDadoHab = self::mitigarTiradaAturdido($myEstados, random_int(1, 20));
-                $defDadoHab = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $oppEstados, random_int(1, 20));
+                $atkTiradaHab = self::tirarDados();
+                $defTiradaHab = self::tirarDados();
+                $atkDadoHab = self::mitigarTiradaAturdido($myEstados, $atkTiradaHab['total']);
+                $defDadoHab = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $oppEstados, $defTiradaHab['total']);
                 $atkRoll = $atkDadoHab + $atkVal;
                 $defRoll = $defDadoHab + $defVal;
 
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: "
-                    ."1d20+{$atkVal}={$atkRoll} vs 1d20+{$defVal}={$defRoll}";
+                    ."2d6({$atkTiradaHab['dado1']}+{$atkTiradaHab['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTiradaHab['dado1']}+{$defTiradaHab['dado2']})+{$defVal}={$defRoll}";
 
                 $estadosObjetivoHab = $confundidoHab ? $myEstados : $oppEstados;
                 $protegidoHab = self::consumirProtegido($estadosObjetivoHab);
@@ -834,8 +838,8 @@ class PvpCombatController extends Controller
                     $combat->current_turn = $roll['gana_atacante'] ? $combat->attacker_id : $combat->defender_id;
 
                     $entry['messages'][] = "Ronda {$combat->ronda} — Iniciativa: {$combat->attacker->character->name} "
-                        ."1d20({$roll['atk_dado']})+{$attEff['iniciativa']}={$roll['atk_total']} vs "
-                        ."{$combat->defender->character->name} 1d20({$roll['def_dado']})+{$defEff['iniciativa']}={$roll['def_total']}";
+                        ."2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$attEff['iniciativa']}={$roll['atk_total']} vs "
+                        ."{$combat->defender->character->name} 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$defEff['iniciativa']}={$roll['def_total']}";
                     $entry['messages'][] = $roll['gana_atacante']
                         ? "¡{$combat->attacker->character->name} actúa primero!"
                         : "¡{$combat->defender->character->name} actúa primero!";
@@ -1147,17 +1151,23 @@ class PvpCombatController extends Controller
         ];
     }
 
-    /** Tirada de iniciativa 1d20 + iniciativa para ambos bandos; aturdido divide el propio dado a la mitad */
+    /** Tirada de iniciativa 2d6 + iniciativa para ambos bandos; aturdido divide la suma propia a la mitad */
     private static function rollIniciativa(int $attackerIniciativa, int $defenderIniciativa, bool $atkAturdido = false, bool $defAturdido = false): array
     {
-        $atkDado = $atkAturdido ? intdiv(random_int(1, 20), 2) : random_int(1, 20);
-        $defDado = $defAturdido ? intdiv(random_int(1, 20), 2) : random_int(1, 20);
+        $atkTirada = self::tirarDados();
+        $defTirada = self::tirarDados();
+        $atkDado = $atkAturdido ? intdiv($atkTirada['total'], 2) : $atkTirada['total'];
+        $defDado = $defAturdido ? intdiv($defTirada['total'], 2) : $defTirada['total'];
         $atkTotal = $atkDado + $attackerIniciativa;
         $defTotal = $defDado + $defenderIniciativa;
 
         return [
             'atk_dado' => $atkDado,
+            'atk_dado1' => $atkTirada['dado1'],
+            'atk_dado2' => $atkTirada['dado2'],
             'def_dado' => $defDado,
+            'def_dado1' => $defTirada['dado1'],
+            'def_dado2' => $defTirada['dado2'],
             'atk_total' => $atkTotal,
             'def_total' => $defTotal,
             'gana_atacante' => $atkTotal >= $defTotal,

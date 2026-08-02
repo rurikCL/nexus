@@ -109,22 +109,36 @@ class MapEnemigo extends Model
         return array_values(array_filter([$this->habilidad_1, $this->habilidad_2]));
     }
 
+    /** Bono de "dobles" máximo que el nivel puede otorgar — de ahí en más ya cubre todos los dobles no-1. */
+    private const BONO_DOBLES_MAX = 4;
+
     /**
      * Nivel de dificultad base del catálogo (representado con estrellas en la UI): otorga
-     * +1 a todos los atributos por nivel y redefine el umbral de crítico (dado ≥ 21-nivel).
-     * A diferencia de los Jefes, un enemigo común NO recibe el bono plano de +nivel en daño
-     * ni el +floor(nivel/2) extra en críticos (ver NpcCombatScreen.jsx, prop `esEnemigo`).
-     * Al aparecer en un lugar concreto, este valor puede quedar sobrescrito por el nivel de
-     * la asignación (pivot `map_lugar_enemigos.nivel`) — ver LugarEncuentroController.
+     * +1 a todos los atributos por nivel y agranda la ventana de "dobles" que cuentan como
+     * crítico sobre 2d6 (mismo criterio que MapNpc::esCriticoDobles). A diferencia de los
+     * Jefes, un enemigo común NO recibe el bono plano de +nivel en daño ni el +floor(nivel/2)
+     * extra en críticos (ver NpcCombatScreen.jsx, prop `esEnemigo`). Al aparecer en un lugar
+     * concreto, este valor puede quedar sobrescrito por el nivel de la asignación (pivot
+     * `map_lugar_enemigos.nivel`) — ver LugarEncuentroController.
      */
     public function nivelDificultad(): int
     {
         return max(0, $this->nivel ?? 1);
     }
 
-    public function critThreshold(): int
+    public function bonoCriticoDobles(): int
     {
-        return 21 - $this->nivelDificultad();
+        return min(self::BONO_DOBLES_MAX, intdiv($this->nivelDificultad() + 1, 2));
+    }
+
+    /** ¿Es un crítico bajo el sistema de "dobles"? Doble ≥ (6-bono) cuenta; doble 1 nunca es crítico. */
+    public function esCriticoDobles(int $dado1, int $dado2): bool
+    {
+        if ($dado1 !== $dado2 || $dado1 === 1) {
+            return false;
+        }
+
+        return $dado1 >= (6 - $this->bonoCriticoDobles());
     }
 
     public function nivelBonoCritico(): int

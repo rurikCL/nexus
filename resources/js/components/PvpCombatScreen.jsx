@@ -21,7 +21,7 @@ import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 function classifyPvpAttack(entry, combat, myId) {
   const msgs = entry.messages ?? [];
   if (msgs.some((m) => /intenta huir/.test(m))) return null; // la huida tiene su propia animación
-  const attackMsg = msgs.find((m) => / vs 1d20/.test(m));
+  const attackMsg = msgs.find((m) => / vs 2d6/.test(m));
   if (!attackMsg) return null;
 
   const actorIsMe = entry.actor_id === myId;
@@ -33,7 +33,7 @@ function classifyPvpAttack(entry, combat, myId) {
   if (/ataca (con|desarmado)/.test(attackMsg)) {
     ranged = actorSide?.arma_equipada?.tipo_ataque === 'distancia';
   } else {
-    const nameMatch = attackMsg.match(/usa (.+?): 1d20/);
+    const nameMatch = attackMsg.match(/usa (.+?): 2d6/);
     const hab = nameMatch ? (actorSide?.habilidades ?? []).find((h) => h.nombre === nameMatch[1]) : null;
     ranged = hab ? hab.tipo !== 'melee' : false;
   }
@@ -47,15 +47,15 @@ function classifyPvpAttack(entry, combat, myId) {
   return { actorIsMe, ranged, hit, crit, effective, resistant, dmg };
 }
 
-/* Extrae pares de tirada 1d20 embebidos en un mensaje del log del servidor.
-   Soporta el formato "1d20+X=Y" (habilidades/ataque básico) y "1d20(D)+X=Y" (iniciativa). */
+/* Extrae pares de dados 2d6 embebidos en un mensaje del log del servidor — formato
+   "2d6(d1+d2)+X=Y" (ataques, habilidades, iniciativa). Devuelve un array de [d1,d2] por
+   cada tirada encontrada en el mensaje (típicamente 2: la propia y la del rival). */
 function diceValuesFromMessage(msg) {
-  const rx = /1d20(?:\((\d+)\))?\+(-?\d+)=(-?\d+)/g;
+  const rx = /2d6\((\d+)\+(\d+)\)\+(-?\d+)=(-?\d+)/g;
   const out = [];
   let m;
   while ((m = rx.exec(msg))) {
-    const dado = m[1] !== undefined ? Number(m[1]) : Number(m[3]) - Number(m[2]);
-    out.push(Math.max(1, Math.min(20, dado)));
+    out.push([Number(m[1]), Number(m[2])]);
   }
   return out;
 }
@@ -70,8 +70,8 @@ function extractRollGroups(entry, { myId, attackerId }) {
     const isIniciativa = /^Ronda \d+ —/.test(msg);
     const aIsMe = isIniciativa ? myId === attackerId : entry.actor_id === myId;
     groups.push([
-      { key: 'a', color: aIsMe ? '#38cdf0' : '#ff6b6b', label: aIsMe ? 'TÚ' : 'RIVAL', value: vals[0] },
-      { key: 'b', color: aIsMe ? '#ff6b6b' : '#38cdf0', label: aIsMe ? 'RIVAL' : 'TÚ', value: vals[1] },
+      { key: 'a', color: aIsMe ? '#38cdf0' : '#ff6b6b', label: aIsMe ? 'TÚ' : 'RIVAL', values: vals[0] },
+      { key: 'b', color: aIsMe ? '#ff6b6b' : '#38cdf0', label: aIsMe ? 'RIVAL' : 'TÚ', values: vals[1] },
     ]);
   }
   return groups;

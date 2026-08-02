@@ -370,8 +370,8 @@ class RaidCombatController extends Controller
             $entry['messages'][] = "{$actorChar->name} está paralizado y pierde el turno";
         } elseif ($skill === 'flee') {
             $roll = self::rollIniciativa($actorStats['iniciativa'], $npcEffective['iniciativa']);
-            $entry['messages'][] = "{$actorChar->name} intenta huir: 1d20({$roll['atk_dado']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
-                ."vs 1d20({$roll['def_dado']})+{$npcEffective['iniciativa']}={$roll['def_total']}";
+            $entry['messages'][] = "{$actorChar->name} intenta huir: 2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
+                ."vs 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$npcEffective['iniciativa']}={$roll['def_total']}";
             if ($roll['gana_atacante']) {
                 $myPlayer->status = 'huido';
                 $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
@@ -398,14 +398,16 @@ class RaidCombatController extends Controller
             $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
             $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
             $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
-            $atkDado = self::mitigarTiradaAturdido($myEstados, random_int(1, 20));
-            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $npcEstados, random_int(1, 20));
+            $atkTirada = self::tirarDados();
+            $defTirada = self::tirarDados();
+            $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
+            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $npcEstados, $defTirada['total']);
             $atkRoll = $atkDado + $atkVal;
             $defRoll = $defDado + $defVal;
             $critico = $arma['critico'] ?? 0;
-            $esCritico = $atkDado >= (20 - $critico);
+            $esCritico = $atkDado >= (12 - $critico);
             $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
-            $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}";
+            $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
             $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
 
             $estadosObjetivo = $confundido ? $myEstados : $npcEstados;
@@ -593,13 +595,15 @@ class RaidCombatController extends Controller
                 $useAtq = $hab->tipo === 'melee';
                 $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
                 $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
-                $atkDado = self::mitigarTiradaAturdido($myEstados, random_int(1, 20));
-                $defDado = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $npcEstados, random_int(1, 20));
+                $atkTirada = self::tirarDados();
+                $defTirada = self::tirarDados();
+                $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
+                $defDado = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $npcEstados, $defTirada['total']);
                 $atkRoll = $atkDado + $atkVal;
                 $defRoll = $defDado + $defVal;
 
                 $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre} contra {$raid->npc->nombre}: "
-                    ."1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}";
+                    ."2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
                 $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
 
                 $estadosObjetivoHab = $confundidoHab ? $myEstados : $npcEstados;
@@ -736,19 +740,19 @@ class RaidCombatController extends Controller
             $rp->save();
 
             $stats = self::getEffectiveStats(self::getCombatStats($char), $rp->buffs ?? [], $rp->debuffs ?? []);
-            $dado = random_int(1, 20);
-            $rolls[] = ['type' => 'player', 'user_id' => $rp->user_id, 'dado' => $dado, 'total' => $dado + $stats['iniciativa'], 'nombre' => $char->name];
+            $tirada = self::tirarDados();
+            $rolls[] = ['type' => 'player', 'user_id' => $rp->user_id, 'dado' => $tirada['total'], 'dado1' => $tirada['dado1'], 'dado2' => $tirada['dado2'], 'total' => $tirada['total'] + $stats['iniciativa'], 'nombre' => $char->name];
         }
 
         if ($raid->npc_hp > 0) {
             $stats = self::getEffectiveStats(self::getNpcStats($raid->npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
-            $dado = random_int(1, 20);
-            $rolls[] = ['type' => 'npc', 'user_id' => null, 'dado' => $dado, 'total' => $dado + $stats['iniciativa'], 'nombre' => $raid->npc->nombre];
+            $tirada = self::tirarDados();
+            $rolls[] = ['type' => 'npc', 'user_id' => null, 'dado' => $tirada['total'], 'dado1' => $tirada['dado1'], 'dado2' => $tirada['dado2'], 'total' => $tirada['total'] + $stats['iniciativa'], 'nombre' => $raid->npc->nombre];
         }
 
         usort($rolls, fn ($a, $b) => $b['total'] <=> $a['total']);
 
-        $orden = collect($rolls)->map(fn ($r) => "{$r['nombre']} 1d20({$r['dado']})={$r['total']}")->implode(' | ');
+        $orden = collect($rolls)->map(fn ($r) => "{$r['nombre']} 2d6({$r['dado1']}+{$r['dado2']})={$r['total']}")->implode(' | ');
         $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ["Ronda {$raid->ronda} — Orden de turnos: {$orden}"]];
 
         $raid->turn_order = array_map(fn ($r) => ['type' => $r['type'], 'user_id' => $r['user_id']], $rolls);
@@ -963,13 +967,16 @@ class RaidCombatController extends Controller
         $targetStats = $targetEsNpc ? $npcStats : self::getEffectiveStats(self::getCombatStats($targetChar), $target->buffs ?? [], $target->debuffs ?? []);
         $targetEstadosPrevios = $targetEsNpc ? $npcEstados : ($target->estados ?? []);
 
-        $atkDado = self::mitigarTiradaAturdido($npcEstados, random_int(1, 20));
-        $defDado = self::mitigarTiradaAturdido($targetEstadosPrevios, random_int(1, 20));
+        $atkTirada = self::tirarDados();
+        $defTirada = self::tirarDados();
+        $atkDado = self::mitigarTiradaAturdido($npcEstados, $atkTirada['total']);
+        $defDado = self::mitigarTiradaAturdido($targetEstadosPrevios, $defTirada['total']);
         $atkVal = $npcStats['ataque'];
         $defVal = $targetStats['defensa'];
         $atkRoll = $atkDado + $atkVal;
         $defRoll = $defDado + $defVal;
-        $esCritico = $atkDado >= $npc->critThreshold(); // Umbral según nivel de dificultad (ej. nivel 4 → 21-4=17, crítico con 17-20)
+        $esCritico = $npc->esCriticoDobles($atkTirada['dado1'], $atkTirada['dado2']); // Dobles según nivel de dificultad (ej. nivel 1 → solo doble 6, nivel 7+ → doble 6 a doble 2)
+        $esFalloCritico = $atkTirada['dado1'] === 1 && $atkTirada['dado2'] === 1; // Doble 1 ("ojos de serpiente") — siempre falla
 
         $nombreObjetivo = $targetEsNpc ? $npc->nombre : $targetChar->name;
         $log[] = [
@@ -977,7 +984,7 @@ class RaidCombatController extends Controller
             'target_user_id' => $targetEsNpc ? null : $target->user_id,
             'dice' => ['atk' => $atkDado, 'def' => $defDado],
             'messages' => [
-                "{$npc->nombre} {$accion} contra {$nombreObjetivo}: 1d20({$atkDado})+{$atkVal}={$atkRoll} vs 1d20({$defDado})+{$defVal}={$defRoll}",
+                "{$npc->nombre} {$accion} contra {$nombreObjetivo}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}",
             ],
         ];
 
@@ -999,14 +1006,14 @@ class RaidCombatController extends Controller
         } elseif ($marcaInfo['activo']) {
             $hit = $marcaInfo['forzar_exito'];
         }
-        // Fallo crítico: un 1 natural del Jefe siempre falla, sin importar stats, marca o protección.
-        if ($atkDado === 1) {
+        // Fallo crítico: doble 1 ("ojos de serpiente") del Jefe siempre falla, sin importar stats, marca o protección.
+        if ($esFalloCritico) {
             $hit = false;
         }
 
         if (! $hit) {
             $missMsg = match (true) {
-                $atkDado === 1 => "¡Fallo crítico! {$npc->nombre} pierde el equilibrio y falla por completo.",
+                $esFalloCritico => "¡Fallo crítico! {$npc->nombre} pierde el equilibrio y falla por completo.",
                 $protegidoInfo['activo'] => '¡El objetivo estaba protegido y bloquea el golpe automáticamente!',
                 $marcaInfo['activo'] => '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!',
                 default => "{$nombreObjetivo} esquiva/bloquea el ataque de {$npc->nombre}.",
@@ -1404,14 +1411,18 @@ class RaidCombatController extends Controller
 
     private static function rollIniciativa(int $attackerIniciativa, int $defenderIniciativa): array
     {
-        $atkDado = random_int(1, 20);
-        $defDado = random_int(1, 20);
-        $atkTotal = $atkDado + $attackerIniciativa;
-        $defTotal = $defDado + $defenderIniciativa;
+        $atkTirada = self::tirarDados();
+        $defTirada = self::tirarDados();
+        $atkTotal = $atkTirada['total'] + $attackerIniciativa;
+        $defTotal = $defTirada['total'] + $defenderIniciativa;
 
         return [
-            'atk_dado' => $atkDado,
-            'def_dado' => $defDado,
+            'atk_dado' => $atkTirada['total'],
+            'atk_dado1' => $atkTirada['dado1'],
+            'atk_dado2' => $atkTirada['dado2'],
+            'def_dado' => $defTirada['total'],
+            'def_dado1' => $defTirada['dado1'],
+            'def_dado2' => $defTirada['dado2'],
             'atk_total' => $atkTotal,
             'def_total' => $defTotal,
             'gana_atacante' => $atkTotal >= $defTotal,

@@ -311,15 +311,15 @@ function TargetPickerModal({ jugadores, onPick, onCancel }) {
 /* ── COMBATE RAID ACTIVO ───────────────────────────────────── */
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-/* Extrae los valores crudos de dado (d20) embebidos en un texto de log, en el
-   orden en que aparecen — misma regex que renderDiceText (con o sin paréntesis). */
-const DICE_RX = /1d20(?:\((\d+)\))?\+(-?\d+)=(-?\d+)/g;
+/* Extrae los pares de dados (2d6) embebidos en un texto de log, en el orden en que
+   aparecen — misma regex que renderDiceText. Cada elemento es [dado1, dado2]. */
+const DICE_RX = /2d6\((\d+)\+(\d+)\)\+(-?\d+)=(-?\d+)/g;
 const extractDice = (text) => {
   const out = [];
   DICE_RX.lastIndex = 0;
   let m;
   while ((m = DICE_RX.exec(text))) {
-    out.push(m[1] !== undefined ? Number(m[1]) : Number(m[3]) - Number(m[2]));
+    out.push([Number(m[1]), Number(m[2])]);
   }
   return out;
 };
@@ -519,8 +519,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         ? raid.npc.nombre
         : (raid.jugadores.find(j => j.user_id === targetId)?.name ?? 'Objetivo');
       await rollDice([
-        { key: 'a1', color: isPlayerActor ? '#38cdf0' : '#ff2d45', label: actorName.slice(0, 8).toUpperCase(), value: dice[0] },
-        { key: 'a2', color: isPlayerActor ? '#ff2d45' : '#38cdf0', label: targetName.slice(0, 8).toUpperCase(), value: dice[1] },
+        { key: 'a1', color: isPlayerActor ? '#38cdf0' : '#ff2d45', label: actorName.slice(0, 8).toUpperCase(), values: dice[0] },
+        { key: 'a2', color: isPlayerActor ? '#ff2d45' : '#38cdf0', label: targetName.slice(0, 8).toUpperCase(), values: dice[1] },
       ]);
     }
 
