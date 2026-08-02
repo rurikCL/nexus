@@ -32,6 +32,17 @@ const apiPost = (path, data) =>
     return body;
   });
 
+const apiDelete = (path) =>
+  fetch(`/api${path}`, { method: 'DELETE', headers: AUTH() }).then(async (r) => {
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      const err = new Error(body?.message || body?.error || `HTTP ${r.status}`);
+      err.body = body;
+      throw err;
+    }
+    return body;
+  });
+
 const mediaUrl = (path) => {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -1629,6 +1640,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
   const [loading, setLoading]       = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [dialogPlayer, setDialogPlayer] = useState(null);
+  const [balizaModalOpen, setBalizaModalOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const currentId = navStack[navStack.length - 1];
@@ -1740,7 +1752,23 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
   if (!lugar) return null;
 
   const npcs       = lugar.npcs ?? [];
+  const balizasActivas = lugar.balizas_activas ?? [];
   const lugarImagen = mediaUrl(lugar.imagen);
+
+  const handleBalizaDeployed = (baliza) => {
+    setLugar((prev) => prev ? { ...prev, balizas_activas: [baliza, ...(prev.balizas_activas ?? [])] } : prev);
+  };
+
+  const handleBalizaEliminar = async (baliza) => {
+    if (!window.confirm(`¿Eliminar la baliza "${baliza.nombre}"?`)) return;
+    try {
+      await apiDelete(`/balizas/${baliza.id}`);
+      setLugar((prev) => prev ? { ...prev, balizas_activas: (prev.balizas_activas ?? []).filter((b) => b.id !== baliza.id) } : prev);
+      toast('Baliza eliminada', { tone: 'success', icon: 'check' });
+    } catch (err) {
+      toast(err?.message ?? 'Error al eliminar la baliza', { tone: 'error', icon: 'x' });
+    }
+  };
 
   /* accesos: norte/sur/este/oeste con datos */
   const DIRS = [
@@ -1869,7 +1897,7 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
       {/* NPCs + jugadores presentes */}
       {(() => {
         const presentes = lugar.presentes_personajes ?? [];
-        const total = npcs.length + presentes.length;
+        const total = npcs.length + presentes.length + balizasActivas.length;
         return (
           <>
             <div className="nx-kicker" style={{ marginBottom: 12 }}>PERSONAJES EN ESTE LUGAR — {total}</div>
@@ -1889,11 +1917,23 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
                     jugador={p}
                     isMe={isMe}
                     onClick={isMe ? undefined : () => setDialogPlayer(p)}
+                    rightAction={isMe ? (
+                      <button onClick={() => setBalizaModalOpen(true)} title="Usar objeto"
+                        style={{
+                          background: 'none', border: '1px solid var(--holo-line)', borderRadius: 6,
+                          padding: 4, cursor: 'pointer', color: 'var(--holo)', display: 'flex',
+                        }}>
+                        <Icon name="box" size={13} />
+                      </button>
+                    ) : undefined}
                   />
                 );
               })}
               {npcs.map((npc) => (
                 <NpcCard key={npc.id} npc={npc} onClick={() => onSelectNpc(npc)} />
+              ))}
+              {balizasActivas.map((b) => (
+                <BalizaCard key={`baliza-${b.id}`} baliza={b} onEliminar={handleBalizaEliminar} />
               ))}
             </div>
           </>
@@ -1901,6 +1941,12 @@ function LugarView({ lugarId, onSelectNpc, onBack, onTravel, onDespegar, breadcr
       })()}
         </>
       )}
+
+      <BalizaUsarModal
+        open={balizaModalOpen}
+        onClose={() => setBalizaModalOpen(false)}
+        onDeployed={handleBalizaDeployed}
+      />
 
       {dialogPlayer && (
         <PlayerDialogModal
@@ -2033,11 +2079,12 @@ function NpcCard({ npc, onClick }) {
 }
 
 /* ─── CARD JUGADOR (mismo formato de NpcCard, con badge de JUGADOR) ────── */
-function PlayerCard({ jugador, onClick, isMe, subtitle, footer }) {
+function PlayerCard({ jugador, onClick, isMe, subtitle, footer, rightAction }) {
   const color = SABER_COLORS[jugador.saber_color] ?? '#38cdf0';
   const photoUrl = mediaUrl(jugador.photo);
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <button onClick={onClick}
+    <Tag onClick={onClick}
       style={{
         background: 'rgba(12,30,64,0.55)', border: '1px solid var(--holo-line)',
         borderRadius: 'var(--radius-lg)', padding: 0, cursor: onClick ? 'pointer' : 'default',
@@ -2097,18 +2144,157 @@ function PlayerCard({ jugador, onClick, isMe, subtitle, footer }) {
 
       <div style={{
         padding: '8px 12px', borderTop: '1px solid var(--holo-line)',
-        display: 'flex', alignItems: 'center', gap: 6,
+        display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between',
       }}>
-        {footer ?? (
-          <>
-            <Icon name="message" size={12} style={{ color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)' }} />
-            <span style={{ fontSize: 10, color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
-              {isMe ? 'ERES TÚ' : 'HABLAR'}
-            </span>
-          </>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {footer ?? (
+            <>
+              <Icon name="message" size={12} style={{ color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)' }} />
+              <span style={{ fontSize: 10, color: isMe ? 'var(--txt-faint)' : 'var(--holocron-naranja)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+                {isMe ? 'ERES TÚ' : 'HABLAR'}
+              </span>
+            </>
+          )}
+        </div>
+        {rightAction}
+      </div>
+    </Tag>
+  );
+}
+
+/* ─── BALIZA DE AYUDA ─── card desplegada en "Personajes en este lugar" (ver
+   BalizaController) + modal para consumir un objeto tipo `utilizable_mundo`. */
+function fmtDuracionRestante(segundos) {
+  if (segundos <= 0) return 'Expirada';
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function BalizaCard({ baliza, onEliminar }) {
+  const [segundos, setSegundos] = useState(baliza.segundos_restantes);
+
+  useEffect(() => {
+    setSegundos(baliza.segundos_restantes);
+    const id = setInterval(() => setSegundos((s) => Math.max(0, s - 60)), 60000);
+    return () => clearInterval(id);
+  }, [baliza.id, baliza.segundos_restantes]);
+
+  return (
+    <div style={{
+      background: 'rgba(12,30,64,0.55)', border: '1px solid rgba(230,179,37,0.45)',
+      boxShadow: '0 0 16px -4px rgba(230,179,37,0.35)',
+      borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', color: 'var(--txt)',
+    }}>
+      <div style={{
+        height: 140, position: 'relative', display: 'grid', placeItems: 'center',
+        background: 'linear-gradient(160deg, rgba(230,179,37,0.18), rgba(4,7,15,0.9))',
+      }}>
+        <Icon name="zap" size={44} style={{ color: '#E6B325' }} />
+        <div style={{
+          position: 'absolute', top: 8, right: 8, zIndex: 2,
+          fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
+          padding: '3px 8px', borderRadius: 4,
+          background: 'rgba(230,179,37,0.20)', border: '1px solid rgba(230,179,37,0.45)',
+          color: '#E6B325', fontFamily: 'var(--font-data)',
+        }}>BALIZA</div>
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'linear-gradient(transparent, rgba(4,7,15,0.95))',
+          padding: '20px 12px 10px',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>{baliza.nombre}</div>
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 12px', flex: 1 }}>
+        <p style={{ fontSize: 11, color: 'var(--txt-dim)', lineHeight: 1.5, margin: 0, fontStyle: 'italic' }}>
+          Desplegada por {baliza.creador}
+        </p>
+      </div>
+
+      <div style={{
+        padding: '8px 12px', borderTop: '1px solid var(--holo-line)',
+        display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="clock" size={12} style={{ color: '#E6B325' }} />
+          <span style={{ fontSize: 10, color: '#E6B325', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+            {fmtDuracionRestante(segundos)}
+          </span>
+        </div>
+        {baliza.is_mine && onEliminar && (
+          <button onClick={() => onEliminar(baliza)} title="Eliminar baliza"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 2, display: 'flex' }}>
+            <Icon name="x" size={12} />
+          </button>
         )}
       </div>
-    </button>
+    </div>
+  );
+}
+
+function BalizaUsarModal({ open, onClose, onDeployed }) {
+  const [objetos, setObjetos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending]  = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    apiFetch('/balizas/usables')
+      .then((d) => setObjetos(d.objetos ?? []))
+      .catch(() => toast('Error cargando objetos usables', { tone: 'error', icon: 'x' }))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  if (!open) return null;
+
+  const usar = async (objeto) => {
+    setSending(true);
+    try {
+      const data = await apiPost('/balizas', { rol_objeto_id: objeto.id });
+      onDeployed(data.baliza);
+      toast(`${objeto.nombre} desplegada`, { tone: 'success', icon: 'zap' });
+      onClose();
+    } catch (err) {
+      toast(err?.message ?? 'Error al usar el objeto', { tone: 'error', icon: 'x' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} kicker="INVENTARIO" title="Usar objeto" width={380}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>Cargando...</div>
+      ) : objetos.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>
+          No tienes objetos usables en este lugar.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {objetos.map((o) => (
+            <div key={o.id} className="nx-panel solid" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+                background: 'rgba(56,205,240,0.12)', display: 'grid', placeItems: 'center', overflow: 'hidden',
+              }}>
+                {o.imagen
+                  ? <img src={mediaUrl(o.imagen)} alt={o.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <Icon name="box" size={18} style={{ color: 'var(--holo)' }} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{o.nombre}</div>
+                <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>Cantidad: {o.cantidad}</div>
+              </div>
+              <Btn sm kind="accent" icon="zap" disabled={sending} onClick={() => usar(o)}>Usar</Btn>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
 

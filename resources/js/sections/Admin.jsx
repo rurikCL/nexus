@@ -72,6 +72,7 @@ const TIPO_OBJETO_OPTS = [
   { value: 'accesorio',          label: 'Accesorio' },
   { value: 'mejora_nave',        label: 'Mejora de Nave' },
   { value: 'utilizable',         label: 'Utilizable' },
+  { value: 'utilizable_mundo',   label: 'Utilizable (Mundo)' },
 ];
 const TIPO_NPC_OPTS   = [
   'aliado', 'neutral', 'hostil', 'entrenador', 'mercader', { value: 'mision', label: 'misión' }, 'jefe',
@@ -452,7 +453,7 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · 'utilizable' se consume para curar (ver Cura Vida/Cura Escudo) · el resto son componentes de sable de luz" },
+      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · 'utilizable' se consume para curar (ver Cura Vida/Cura Escudo) · 'utilizable_mundo' se usa desde el Mapa para desplegar una baliza de ayuda · el resto son componentes de sable de luz" },
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'dano_perforante', label: 'Daño Perforante', type: 'number', min: 0, hint: 'solo si tipo = arma · ignora el escudo, siempre pasa directo a la vida' },

@@ -9,6 +9,32 @@ import CharacterCardModal from '../components/CharacterCard.jsx';
 
 /* NÉXUS — Comando (dashboard) + Mi Personaje */
 
+const AUTH = () => ({ Accept: 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+const apiGet = (path) => fetch(`/api${path}`, { headers: AUTH() }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+
+const apiPost = (path, data) =>
+  fetch(`/api${path}`, {
+    method: 'POST',
+    headers: { ...AUTH(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data ?? {}),
+  }).then(async (r) => {
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      const err = new Error(body?.message || body?.error || `HTTP ${r.status}`);
+      err.body = body;
+      throw err;
+    }
+    return body;
+  });
+
+const apiDelete = (path) =>
+  fetch(`/api${path}`, { method: 'DELETE', headers: AUTH() }).then(async (r) => {
+    const body = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(body?.message || body?.error || `HTTP ${r.status}`);
+    return body;
+  });
+
 export function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -140,6 +166,7 @@ const WIDGET_DEFAULT_ORDER = [
   { id: 'kpis',       cols: 2 },
   { id: 'combate',    cols: 1 },
   { id: 'temporada',  cols: 1 },
+  { id: 'alertas',    cols: 1 },
   { id: 'tareas',     cols: 1 },
   { id: 'eventos',    cols: 1 },
   { id: 'ranking',    cols: 1 },
@@ -170,6 +197,135 @@ function HitoRow({ hito }) {
         <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)' }}>{fmtHitoDate(hito.created_at)}</div>
       </div>
     </div>
+  );
+}
+
+/* ---- Widget: Alertas de Ayuda (balizas) — ver BalizaController ---- */
+function fmtDuracionRestante(segundos) {
+  if (segundos <= 0) return 'Expirada';
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function BalizaAlertRow({ baliza, onViajar, onEliminar }) {
+  return (
+    <div className="nx-panel solid" style={{ padding: 13 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{baliza.nombre}</div>
+          <div className="nx-data" style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2 }}>
+            {baliza.ubicacion} · {baliza.creador}
+          </div>
+        </div>
+        <Chip tone="gold" icon="clock">{fmtDuracionRestante(baliza.segundos_restantes)}</Chip>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <Btn sm kind="accent" icon="zap" onClick={() => onViajar(baliza)} style={{ flex: 1, justifyContent: 'center' }}>
+          Viajar
+        </Btn>
+        {baliza.is_mine && (
+          <Btn sm icon="x" onClick={() => onEliminar(baliza)}>Eliminar</Btn>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BalizaViajarModal({ baliza, onClose, onTraveled, currentSistemaId }) {
+  const [naveData, setNaveData] = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [sending, setSending]   = useState(false);
+
+  useEffect(() => {
+    if (!baliza) return;
+    setLoading(true);
+    apiGet('/naves/mias')
+      .then((d) => {
+        const equipada = (d.naves ?? []).find((n) => n.id === d.nave_equipada_id) ?? null;
+        setNaveData({ naveEquipada: equipada, credits: d.credits ?? 0 });
+      })
+      .catch(() => setNaveData({ naveEquipada: null, credits: 0 }))
+      .finally(() => setLoading(false));
+  }, [baliza?.id]);
+
+  if (!baliza) return null;
+
+  const esSalto = currentSistemaId !== baliza.sistema_id;
+
+  const viajar = async (forzarTransbordador) => {
+    setSending(true);
+    try {
+      await apiPost(`/balizas/${baliza.id}/viajar`, forzarTransbordador ? { forzar_transbordador: true } : undefined);
+      toast(`Viajando a ${baliza.nombre}`, { tone: 'success', icon: 'zap' });
+      onTraveled();
+    } catch (err) {
+      toast(err?.message ?? 'No se pudo viajar', { tone: 'error', icon: 'x' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} kicker="BALIZA DE AYUDA" title={`Viajar a ${baliza.nombre}`} width={380}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 24, color: 'var(--txt-faint)', fontSize: 12 }}>Calculando ruta...</div>
+      ) : !esSalto ? (
+        <>
+          <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+            La baliza está en <strong>{baliza.ubicacion}</strong>, dentro de tu sistema actual. El viaje es directo y sin costo.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+            <Btn kind="accent" icon="zap" disabled={sending} onClick={() => viajar(false)}>
+              {sending ? 'Viajando...' : 'Viajar'}
+            </Btn>
+          </div>
+        </>
+      ) : (() => {
+        const nave = naveData?.naveEquipada;
+        const credits = naveData?.credits ?? 0;
+
+        if (nave) {
+          const sinCombustible = (nave.combustible_actual ?? 0) <= 0;
+          return (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+                La baliza está en <strong>{baliza.ubicacion}</strong>. Vas a saltar con tu nave equipada <strong>{nave.nave?.nombre}</strong>, consumiendo 1 unidad de combustible.
+              </p>
+              {sinCombustible && (
+                <p style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 14 }}>
+                  Tu nave no tiene combustible. Puedes pagar el transporte con créditos en su lugar.
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+                {sinCombustible && (
+                  <Btn kind="gold" disabled={sending} onClick={() => viajar(true)}>Pagar transporte</Btn>
+                )}
+                <Btn kind="accent" icon="zap" disabled={sending || sinCombustible} onClick={() => viajar(false)}>
+                  {sending ? 'Viajando...' : 'Confirmar salto'}
+                </Btn>
+              </div>
+            </>
+          );
+        }
+
+        return (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--txt)', lineHeight: 1.5, marginBottom: 14 }}>
+              La baliza está en <strong>{baliza.ubicacion}</strong>. No tienes una nave equipada, así que el transporte se pagará en créditos. Tienes {credits} créditos.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+              <Btn kind="accent" icon="zap" disabled={sending} onClick={() => viajar(true)}>
+                {sending ? 'Viajando...' : 'Pagar y viajar'}
+              </Btn>
+            </div>
+          </>
+        );
+      })()}
+    </Modal>
   );
 }
 
@@ -351,6 +507,8 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
   const [showAllHitos, setShowAllHitos]       = useState(false);
   const [showSedeModal, setShowSedeModal]     = useState(false);
   const [showCardModal, setShowCardModal]     = useState(false);
+  const [alertas, setAlertas]                 = useState([]);
+  const [viajarBaliza, setViajarBaliza]       = useState(null);
   const hitos = user?.character?.hitos ?? [];
   const saveTimer = useRef(null);
 
@@ -376,6 +534,26 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
       })
       .catch(() => {});
   }, []);
+
+  const loadAlertas = () => {
+    apiGet('/balizas/activas').then((d) => setAlertas(d.balizas ?? [])).catch(() => {});
+  };
+  useEffect(() => {
+    loadAlertas();
+    const id = setInterval(loadAlertas, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const eliminarBaliza = async (baliza) => {
+    if (!window.confirm(`¿Eliminar la baliza "${baliza.nombre}"?`)) return;
+    try {
+      await apiDelete(`/balizas/${baliza.id}`);
+      setAlertas((prev) => prev.filter((b) => b.id !== baliza.id));
+      toast('Baliza eliminada', { tone: 'success', icon: 'check' });
+    } catch (err) {
+      toast(err?.message ?? 'Error al eliminar la baliza', { tone: 'error', icon: 'x' });
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('nx-token');
@@ -731,6 +909,16 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                 </Panel>
               );
             })(),
+            alertas: (
+              <Panel title="Alertas de Ayuda" kicker="Balizas activas" icon="zap" right={panelRight(null)}>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {alertas.length === 0 && <Empty label="Sin balizas activas" />}
+                  {alertas.map((b) => (
+                    <BalizaAlertRow key={b.id} baliza={b} onViajar={setViajarBaliza} onEliminar={eliminarBaliza} />
+                  ))}
+                </div>
+              </Panel>
+            ),
             ranking: (
               <Panel title="Top Ranking" kicker="Temporada 3" icon="trophy"
                 right={panelRight(<Btn sm onClick={() => go('ranking')}>Ladder</Btn>)}>
@@ -837,6 +1025,15 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
 
       {showCardModal && (
         <CharacterCardModal character={ch} user={user} onClose={() => setShowCardModal(false)} onGenerated={handleCardGenerated} />
+      )}
+
+      {viajarBaliza && (
+        <BalizaViajarModal
+          baliza={viajarBaliza}
+          currentSistemaId={user?.character?.map_location?.sistema_id ?? null}
+          onClose={() => setViajarBaliza(null)}
+          onTraveled={() => { setViajarBaliza(null); go('mapa'); }}
+        />
       )}
     </div>
   );

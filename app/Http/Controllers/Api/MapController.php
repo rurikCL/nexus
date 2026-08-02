@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\BalizaAyuda;
 use App\Models\MapLugar;
 use App\Models\MapNpc;
 use App\Models\MapNpcEspacio;
@@ -14,6 +15,7 @@ use App\Models\MapZona;
 use App\Models\Mision;
 use App\Models\PvpCombat;
 use App\Models\User;
+use App\Services\MapTravelService;
 use App\Services\NpcInteraccionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -132,6 +134,15 @@ class MapController extends Controller
             ], 403);
         }
 
+        $balizas = BalizaAyuda::activas()
+            ->where('map_lugar_id', $id)
+            ->with(['user:id,name', 'character:id,handle,name'])
+            ->latest()
+            ->get()
+            ->map(fn (BalizaAyuda $b) => $b->toAlertArray($request->user()?->id))
+            ->values();
+        $lugar->setAttribute('balizas_activas', $balizas);
+
         return response()->json(['lugar' => $lugar]);
     }
 
@@ -150,7 +161,7 @@ class MapController extends Controller
         return response()->json(['ok' => true, 'location' => $character->mapLocationArray()]);
     }
 
-    public function updateLocation(Request $request): JsonResponse
+    public function updateLocation(Request $request, MapTravelService $travelService): JsonResponse
     {
         $user = $request->user();
         $character = $user?->character;
@@ -171,39 +182,13 @@ class MapController extends Controller
         }
 
         $sistemaDestinoId = $request->input('sistema_id');
-        $esSalto = $sistemaDestinoId && (int) $sistemaDestinoId !== (int) $character->map_sistema_id;
+        /* Si el usuario elige explícitamente pagar el transporte (p.ej. nave equipada
+           sin combustible), se ignora la nave y se cobra como transbordador de pasajeros. */
+        $forzarTransbordador = $request->boolean('forzar_transbordador');
 
-        if ($esSalto) {
-            /* Si el usuario elige explícitamente pagar el transporte (p.ej. nave equipada
-               sin combustible), se ignora la nave y se cobra como transbordador de pasajeros. */
-            $forzarTransbordador = $request->boolean('forzar_transbordador');
-            $naveEquipada = $forzarTransbordador ? null : $character->naveEquipada()->with('nave')->first();
-
-            if ($naveEquipada) {
-                if ($naveEquipada->combustible_actual <= 0) {
-                    return response()->json([
-                        'ok' => false,
-                        'blocked' => true,
-                        'message' => 'Tu nave no tiene combustible suficiente para saltar. Debes reabastecerla.',
-                    ], 422);
-                }
-
-                $naveEquipada->decrement('combustible_actual');
-            } else {
-                $costoViaje = MapSistema::find($sistemaDestinoId)?->costo_viaje ?? 0;
-
-                if ($costoViaje > 0) {
-                    if ($character->credits < $costoViaje) {
-                        return response()->json([
-                            'ok' => false,
-                            'blocked' => true,
-                            'message' => 'Créditos insuficientes para pagar el transporte a este sistema.',
-                        ], 422);
-                    }
-
-                    $character->decrement('credits', $costoViaje);
-                }
-            }
+        $error = $travelService->cobrarSalto($character, $sistemaDestinoId, $forzarTransbordador);
+        if ($error) {
+            return response()->json(['ok' => false, 'blocked' => true, 'message' => $error], 422);
         }
 
         $character->update([

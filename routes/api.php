@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\InstagramController;
 use App\Http\Controllers\Api\JefeRankingController;
 use App\Http\Controllers\Api\LugarEncuentroController;
+use App\Http\Controllers\Api\BalizaController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MessageController;
@@ -230,6 +231,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/lugares/{lugarId}/enemigo-encuentro', [LugarEncuentroController::class, 'check']);
     Route::get('/map/location', [MapController::class, 'location']);
     Route::post('/map/location', [MapController::class, 'updateLocation']);
+
+    // Balizas de ayuda
+    Route::get('/balizas/usables', [BalizaController::class, 'usables']);
+    Route::get('/balizas/activas', [BalizaController::class, 'activas']);
+    Route::post('/balizas', [BalizaController::class, 'store']);
+    Route::delete('/balizas/{baliza}', [BalizaController::class, 'destroy']);
+    Route::post('/balizas/{baliza}/viajar', [BalizaController::class, 'viajar']);
 
     // Dungeons rogue-like (equipo)
     Route::get('/map/dungeons/active', [DungeonController::class, 'activo']);
