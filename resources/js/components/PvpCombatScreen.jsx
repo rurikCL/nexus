@@ -89,6 +89,15 @@ function extractIniciativaGanador(entry) {
   return m ? m[1] : null;
 }
 
+/* Número de ronda de una entrada de iniciativa ("Ronda N — Iniciativa: ..."), para adelantar
+   el banner "Turno N" antes de mostrar el de Iniciativa (ver revealWithDiceNow). */
+function extractIniciativaRonda(entry) {
+  const msgs = entry.messages ?? [];
+  const msg = msgs.find((m) => /^Ronda \d+ —/.test(m));
+  const m = msg?.match(/^Ronda (\d+) —/);
+  return m ? Number(m[1]) : null;
+}
+
 /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
 function resultTextFor(hit, ranged, crit, dmg, effective = false, resistant = false) {
   if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
@@ -232,6 +241,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const [statusFx, setStatusFx]         = useState(null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
   const [inicioMsg, setInicioMsg]       = useState(null); // { key } — banner "¡Combate iniciado!", solo en combates recién creados
+  /* Ronda mostrada en el banner "Turno N", desacoplada de combat.ronda: este último solo se
+     actualiza al final de revealWithDiceNow (tras el sleep y setCombat), lo que hacía que el
+     banner de Iniciativa apareciera ANTES que el de Turno en cada cambio de ronda. Se actualiza
+     apenas se detecta la entrada de iniciativa de la nueva ronda, antes de mostrar ese banner. */
+  const [turnoRonda, setTurnoRonda]     = useState(combat.ronda ?? 1);
   /* Bloquea los botones de acción mientras se reproduce la secuencia de arranque (inicio +
      turno + iniciativa) de un combate recién creado — sin esto, si el jugador local gana la
      iniciativa ya se ve `is_my_turn=true` desde el primer fetch y podría atacar durante el
@@ -341,6 +355,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     for (const entry of newEntries) {
       const iniciativaGanador = extractIniciativaGanador(entry);
       if (iniciativaGanador) {
+        const nuevaRonda = extractIniciativaRonda(entry);
+        if (nuevaRonda) {
+          setTurnoRonda(nuevaRonda); // banner "Turno N" — antes de mostrar el de Iniciativa
+          await sleep(2000);
+        }
         setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: iniciativaGanador });
         await sleep(2000);
         setIniciativaMsg(null);
@@ -1208,8 +1227,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             pointerEvents: 'none', overflow: 'hidden',
           }}>
-            <span key={combat.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
-              Turno {combat.ronda ?? 1}
+            <span key={turnoRonda} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
+              Turno {turnoRonda}
             </span>
           </div>
         )}

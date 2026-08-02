@@ -404,6 +404,11 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [emojiBurst, setEmojiBurst] = useState(null);
   const [statusFx, setStatusFx] = useState(null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
+  /* Ronda mostrada en el banner "Turno N", desacoplada de raid.ronda: este último solo se
+     actualiza al final de revealRaid (tras setRaid), lo que hacía que el banner de Iniciativa
+     apareciera ANTES que el de Turno en cada cambio de ronda. Se actualiza apenas se detecta la
+     entrada de "Orden de turnos" de la nueva ronda, antes de mostrar ese banner. */
+  const [turnoRonda, setTurnoRonda] = useState(1);
   const [inicioMsg, setInicioMsg] = useState(null); // { key } — banner "¡Combate iniciado!", solo en raids recién comenzados
   const pollRef = useRef(null);
   const logRef = useRef(null);
@@ -499,9 +504,11 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       // Orden de turnos de la ronda ("Ronda N — Orden de turnos: Nombre 2d6(...)=Total | ...")
       // ya no se anima con dados: se muestra directamente quién actúa primero.
       const msg = (entry.messages || [])[0] ?? '';
-      const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
+      const m = msg.match(/^Ronda (\d+) — Orden de turnos: (.+?) 2d6/);
       if (m) {
-        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[1] });
+        setTurnoRonda(Number(m[1])); // banner "Turno N" — antes de mostrar el de Iniciativa
+        await sleep(2000);
+        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[2] });
         await sleep(2000);
         setIniciativaMsg(null);
       } else {
@@ -624,6 +631,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
          banner "Iniciativa" (2s) con el orden ya conocido desde esa primera entrada. Un raid
          retomado (remount con historial ya avanzado) no repite nada de esto. */
       if (isFirstLoad && newLog.length <= 1 && newRaid.status === 'activo') {
+        setTurnoRonda(newRaid.ronda ?? 1);
         setAnimBusy(true);
         setInicioMsg({ key: `inicio-${Date.now()}` });
         await sleep(2000);
@@ -643,6 +651,10 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         setRaid(newRaid);
 
         return;
+      }
+
+      if (isFirstLoad) {
+        setTurnoRonda(newRaid.ronda ?? 1); // raid retomado a mitad de combate: sincroniza sin banner
       }
 
       const newEntries = isFirstLoad ? [] : newLog.slice(currentLen);
@@ -800,8 +812,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               pointerEvents: 'none', overflow: 'hidden',
             }}>
-              <span key={raid.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
-                Turno {raid.ronda ?? 1}
+              <span key={turnoRonda} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
+                Turno {turnoRonda}
               </span>
             </div>
           )}
