@@ -122,11 +122,19 @@ class MapNpc extends Model
         return max(2, $this->raid_slots ?: 4);
     }
 
+    /** Umbral de crítico más bajo (más fácil) que un Jefe puede alcanzar a nivel alto — dado ≥14, nunca menos. */
+    private const CRIT_THRESHOLD_MIN = 14;
+
     /**
      * Nivel de dificultad (representado con estrellas en la UI): otorga a este NPC
-     * +1 a todos sus atributos por nivel, un bono plano adicional de +nivel en
-     * daño/curación, +floor(nivel/2) extra en críticos, y redefine el umbral de
-     * crítico (dado ≥ 21-nivel, ej. nivel 4 → crítico con 17-20).
+     * +1 a todos sus atributos por nivel (topeado en los Jefes al mismo tope que un
+     * jugador con ítems, cap_stats_items — ver RaidCombatController::getNpcStats;
+     * vida/escudo quedan fuera de ese tope y siguen escalando libres con el nivel),
+     * un bono plano adicional de +nivel en daño/curación, +floor(nivel/2) extra en
+     * críticos, y redefine el umbral de crítico (dado ≥ 21-nivel, nunca por debajo
+     * de 14 — ej. nivel 4 → crítico con 17-20, nivel 10+ → siempre 14-20).
+     * Un 1 natural en la tirada de ataque del Jefe siempre falla (fallo crítico),
+     * sin importar el resultado — ver RaidCombatController::resolveNpcTurn.
      */
     public function nivelDificultad(): int
     {
@@ -135,7 +143,7 @@ class MapNpc extends Model
 
     public function critThreshold(): int
     {
-        return 21 - $this->nivelDificultad();
+        return max(self::CRIT_THRESHOLD_MIN, 21 - $this->nivelDificultad());
     }
 
     public function nivelBonoCritico(): int

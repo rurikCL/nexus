@@ -999,9 +999,14 @@ class RaidCombatController extends Controller
         } elseif ($marcaInfo['activo']) {
             $hit = $marcaInfo['forzar_exito'];
         }
+        // Fallo crítico: un 1 natural del Jefe siempre falla, sin importar stats, marca o protección.
+        if ($atkDado === 1) {
+            $hit = false;
+        }
 
         if (! $hit) {
             $missMsg = match (true) {
+                $atkDado === 1 => "¡Fallo crítico! {$npc->nombre} pierde el equilibrio y falla por completo.",
                 $protegidoInfo['activo'] => '¡El objetivo estaba protegido y bloquea el golpe automáticamente!',
                 $marcaInfo['activo'] => '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!',
                 default => "{$nombreObjetivo} esquiva/bloquea el ataque de {$npc->nombre}.",
@@ -1333,17 +1338,22 @@ class RaidCombatController extends Controller
     private static function getNpcStats(MapNpc $npc): array
     {
         // +1 a todos los atributos por nivel de dificultad (además del bono de daño/crítico
-        // que nivelDificultad() ya aporta en el resto del combate).
+        // que nivelDificultad() ya aporta en el resto del combate). Las 5 stats tácticas
+        // quedan topeadas al mismo tope que un jugador con ítems (cap_stats_items) — un
+        // Jefe de nivel alto no debe volverse imposible de acertar/esquivar. Vida y escudo
+        // quedan fuera de ese tope a propósito: son el eje donde el nivel debe seguir
+        // sintiéndose (más aguante), no en la probabilidad de acierto.
         $nivel = $npc->nivelDificultad();
+        $cap = max(1, (int) Configuracion::valor('cap_stats_items', 15));
 
         return [
             'vida' => ($npc->vida ?: 30) + $nivel,
             'escudo' => ($npc->escudo ?: 0) + $nivel,
-            'ataque' => ($npc->ataque ?: 10) + $nivel,
-            'defensa' => ($npc->defensa ?: 10) + $nivel,
-            'movimiento' => ($npc->movimiento ?: 10) + $nivel,
-            'iniciativa' => ($npc->iniciativa ?: 10) + $nivel,
-            'punteria' => ($npc->punteria ?: 10) + $nivel,
+            'ataque' => min($cap, ($npc->ataque ?: 10) + $nivel),
+            'defensa' => min($cap, ($npc->defensa ?: 10) + $nivel),
+            'movimiento' => min($cap, ($npc->movimiento ?: 10) + $nivel),
+            'iniciativa' => min($cap, ($npc->iniciativa ?: 10) + $nivel),
+            'punteria' => min($cap, ($npc->punteria ?: 10) + $nivel),
         ];
     }
 
