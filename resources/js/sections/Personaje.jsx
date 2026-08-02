@@ -27,11 +27,28 @@ const EQUIP_TABS = [
   { value: 'nave', label: 'Nave', icon: 'ship' },
 ];
 
+/* Componentes de sable de luz (ver Admin > Objetos): se instalan desde «Armado de Sable», no desde aquí. */
+const SABLE_COMPONENTE_TIPOS = [
+  'nucleo_energia', 'cristal', 'lente_enfoque', 'emisor',
+  'estabilizador', 'empunadura', 'modulo_activacion', 'accesorio',
+];
+
+/* Agrupa el `tipo` real del objeto (string libre, ver RolObjeto) en una de las pestañas
+   del inventario. Cualquier tipo no reconocido cae en 'otro' en vez de desaparecer. */
+const itemGroup = (tipo) => {
+  if (tipo === 'arma') return 'arma';
+  if (tipo === 'utilizable' || tipo === 'utilizable_mundo') return 'utilizable';
+  if (tipo === 'mejora_nave') return 'mejora_nave';
+  if (SABLE_COMPONENTE_TIPOS.includes(tipo)) return 'sable';
+  return 'otro';
+};
+
 const ITEM_TYPES = [
-  { value: 'arma', label: 'Armas', icon: 'sword' },
-  { value: 'consumible', label: 'Consumibles', icon: 'box' },
-  { value: 'mision', label: 'Misiones', icon: 'calendar' },
-  { value: 'otro', label: 'Otros', icon: 'box' },
+  { value: 'arma',        label: 'Armas',              icon: 'sword' },
+  { value: 'utilizable',  label: 'Utilizables',         icon: 'box' },
+  { value: 'sable',       label: 'Componentes de Sable', icon: 'zap' },
+  { value: 'mejora_nave', label: 'Mejoras de Nave',     icon: 'ship' },
+  { value: 'otro',        label: 'Otros',               icon: 'star' },
 ];
 
 const fmtCr = (n) => `${Math.round(n ?? 0).toLocaleString('es-CL')} cr`;
@@ -648,7 +665,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const [invTab, setInvTab] = useState('arma');
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipTab, setEquipTab]   = useState('inventario');
-  const itemsDeTab = inventario.filter(o => o.tipo === invTab);
+  const itemsDeTab = inventario.filter(o => itemGroup(o.tipo) === invTab);
 
   useEffect(() => {
     if (!equipOpen) return;
@@ -1225,7 +1242,7 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                 ) : null}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                   {ITEM_TYPES.map(t => {
-                    const count = inventario.filter(o => o.tipo === t.value).length;
+                    const count = inventario.filter(o => itemGroup(o.tipo) === t.value).length;
                     const active = invTab === t.value;
                     return (
                       <button key={t.value} onClick={() => setInvTab(t.value)} style={{
@@ -1268,7 +1285,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   </>
                 ) : itemsDeTab.length === 0 ? (
                   <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
-                    No posees objetos de este tipo. Los componentes de sable se instalan desde «Armado de Sable».
+                    {invTab === 'sable' && 'No posees componentes de sable. Se instalan desde «Armado de Sable».'}
+                    {invTab === 'mejora_nave' && 'No posees mejoras de nave. Se instalan desde tu nave equipada.'}
+                    {invTab !== 'sable' && invTab !== 'mejora_nave' && 'No posees objetos de este tipo.'}
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
