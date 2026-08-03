@@ -113,26 +113,34 @@ trait AplicaEstadosCombate
         return false;
     }
 
+    /** Duración de deflectar/contraataque configurable por habilidad (campo `duracion`), a diferencia del resto de los estados que usan un valor fijo de diseño. */
+    private const ESTADOS_DURACION_CONFIGURABLE = ['deflectar', 'contraataque'];
+
     /** Agrega un estado usando sus valores por defecto (o refresca turns al máximo si ya estaba activo). */
-    private static function agregarEstadoPorTipo(array $estados, string $tipo): array
+    private static function agregarEstadoPorTipo(array $estados, string $tipo, ?int $duracionHabilidad = null): array
     {
         $def = self::DEFAULTS_ESTADO[$tipo] ?? ['turns' => 1, 'valor' => 0];
+        $turns = ($duracionHabilidad !== null && in_array($tipo, self::ESTADOS_DURACION_CONFIGURABLE, true))
+            ? $duracionHabilidad
+            : $def['turns'];
 
-        return self::agregarEstado($estados, $tipo, $def['turns'], $def['valor']);
+        return self::agregarEstado($estados, $tipo, $turns, $def['valor']);
     }
 
     /**
      * Aplica un estado proveniente del buff/debuff de una habilidad (`$tipo` ya
      * verificado como estado reservado vía `esTipoEstado`). `paralizado` respeta
-     * la inmunidad post-parálisis; el resto usa sus valores por defecto.
+     * la inmunidad post-parálisis; el resto usa sus valores por defecto, salvo
+     * deflectar/contraataque, que toman `$duracionHabilidad` (el campo `duracion`
+     * de la habilidad, el mismo que usan sus buffs/debuffs de stat) si se indica.
      */
-    private static function aplicarEstadoDeHabilidad(array $estados, string $tipo): array
+    private static function aplicarEstadoDeHabilidad(array $estados, string $tipo, ?int $duracionHabilidad = null): array
     {
         if ($tipo === 'paralizado') {
             return self::intentarParalizar($estados)['estados'];
         }
 
-        return self::agregarEstadoPorTipo($estados, $tipo);
+        return self::agregarEstadoPorTipo($estados, $tipo, $duracionHabilidad);
     }
 
     private static function agregarEstado(array $estados, string $tipo, ?int $turns, int $valor = 0): array

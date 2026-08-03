@@ -15,7 +15,7 @@ import { EmojiRing, EmojiBurst } from './EmojiExpressions.jsx';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-/* Tabla de efectividad entre formas: forma atacante → forma que supera con daño ×1.5 (igual que en PvP) */
+/* Tabla de efectividad entre formas: forma atacante → forma que supera con +1 de daño (ver formaBonoDano; igual que en PvP/Raid) */
 const FORMA_BEATS = {
   1: 6, // Shii-Cho    → Niman
   2: 1, // Makashi     → Shii-Cho
@@ -25,7 +25,7 @@ const FORMA_BEATS = {
   6: 7, // Niman       → Juyo/Vaapad
   7: 2, // Juyo/Vaapad → Makashi
 };
-/* Tabla de resistencia: forma defensora → forma cuyos ataques recibe a mitad de daño (×0.5) */
+/* Tabla de resistencia: forma defensora → forma cuyos ataques recibe con -1 de daño (ver formaBonoDano) */
 const FORMA_RESISTS = {
   1: 5, // Shii-Cho    resiste a Shien/Djem So
   2: 4, // Makashi     resiste a Ataru
@@ -44,12 +44,12 @@ const formaEsResistente = (atkForma, defForma) => {
   if (!atkForma || !defForma) return false;
   return FORMA_RESISTS[defForma] === atkForma;
 };
-/* Multiplicador combinado: ×1.5 si el atacante es efectivo, ×0.5 si el defensor resiste (se multiplican si ambos aplican) */
-const formaMultiplicador = (atkForma, defForma) => {
-  let mult = 1;
-  if (formaEsEfectiva(atkForma, defForma)) mult *= 1.5;
-  if (formaEsResistente(atkForma, defForma)) mult *= 0.5;
-  return mult;
+/* Bono de daño plano por forma: +1 si el atacante es efectivo, -1 si el defensor resiste (se suman si ambos aplican) */
+const formaBonoDano = (atkForma, defForma) => {
+  let bono = 0;
+  if (formaEsEfectiva(atkForma, defForma)) bono += 1;
+  if (formaEsResistente(atkForma, defForma)) bono -= 1;
+  return bono;
 };
 
 /* Bono persistente por tener una Forma de Combate equipada (hasta cambiarla con "stance") — igual en los 3 sistemas de combate. */
@@ -113,9 +113,13 @@ const agregarEstado = (estados, tipo, turns, valor = 0) => {
   };
   return next;
 };
-const agregarEstadoPorTipo = (estados, tipo) => {
+/* Duración de deflectar/contraataque configurable por habilidad (campo `duracion`), a
+   diferencia del resto de los estados que usan un valor fijo de diseño. */
+const ESTADOS_DURACION_CONFIGURABLE = ['deflectar', 'contraataque'];
+const agregarEstadoPorTipo = (estados, tipo, duracionHabilidad = null) => {
   const def = DEFAULTS_ESTADO[tipo] ?? { turns: 1, valor: 0 };
-  return agregarEstado(estados, tipo, def.turns, def.valor);
+  const turns = (duracionHabilidad != null && ESTADOS_DURACION_CONFIGURABLE.includes(tipo)) ? duracionHabilidad : def.turns;
+  return agregarEstado(estados, tipo, turns, def.valor);
 };
 const intentarParalizar = (estados) => {
   if (tieneEstado(estados, 'inmune_paralisis')) return { estados, aplicado: false };
@@ -148,7 +152,8 @@ const consumirDeflectarOContraataque = (estadosObjetivo, esDistancia) => {
 const mitadDano = (dmg, dmgEscudo, dmgPerforante) => [
   Math.floor(Math.max(0, dmg) / 2), Math.floor(Math.max(0, dmgEscudo) / 2), Math.floor(Math.max(0, dmgPerforante) / 2),
 ];
-const aplicarEstadoDeHabilidad = (estados, tipo) => (tipo === 'paralizado' ? intentarParalizar(estados).estados : agregarEstadoPorTipo(estados, tipo));
+const aplicarEstadoDeHabilidad = (estados, tipo, duracionHabilidad = null) =>
+  (tipo === 'paralizado' ? intentarParalizar(estados).estados : agregarEstadoPorTipo(estados, tipo, duracionHabilidad));
 const tickEstadosRonda = (estados, hp, maxHp, nombreActor) => {
   let nextHp = hp;
   const mensajes = [];
@@ -484,6 +489,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       .catch(() => {});
   }, []);
 
+  /* Pausa (ms) entre acciones/banners del combate — configurable en Configuracion
+     (combate_pausa_accion_ms). Este combate es 100% cliente (sin servidor autoritativo),
+     así que se lee vía el mismo endpoint admin genérico que ya usan Personaje.jsx/Mapa.jsx
+     (no requiere rol admin, solo sesión autenticada — ver AdminController). */
+  const [pausaMs, setPausaMs] = useState(2000);
+  useEffect(() => {
+    const token = localStorage.getItem('nx-token');
+    fetch('/api/admin/configuraciones?q=combate_pausa_accion_ms', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+      .then(r => r.json())
+      .then(d => {
+        const row = (d.data ?? d.items ?? []).find(r => r.nombre === 'combate_pausa_accion_ms');
+        if (row && row.valor_numerico > 0) setPausaMs(row.valor_numerico);
+      })
+      .catch(() => {});
+  }, []);
+
   /* Daño con tres componentes: dmg (normal), dmgEscudo (extra solo contra escudo)
      y dmgPerforante (ignora el escudo, siempre pasa a la vida). Sin escudo, todo
      (dmg + dmgPerforante) pasa a la vida, sin mitigar. Con escudo: dmgEscudo se
@@ -542,16 +565,16 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     (async () => {
       setLog([{ text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' }]);
       setInicioMsg({ key: `inicio-${Date.now()}` });
-      await sleep(2000);
+      await sleep(pausaMs);
       if (cancelled) return;
       setInicioMsg(null);
       setCombatIntroDone(true); // habilita el banner "Turno N" (antes solo dependía de phase==='battle')
 
-      await sleep(2000); // banner "Turno 1" visible
+      await sleep(pausaMs); // banner "Turno 1" visible
       if (cancelled) return;
 
       setIniciativaMsg({ key: `ini-1-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
-      await sleep(2000); // banner "Iniciativa"
+      await sleep(pausaMs); // banner "Iniciativa"
       if (cancelled) return;
       setIniciativaMsg(null);
 
@@ -580,7 +603,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const endTurnAfter = async (actor, overrides = {}) => {
     setActionLock(true);
     try {
-    await sleep(2000);
+    await sleep(pausaMs);
     const curPlayerHp = overrides.playerHp ?? playerHp;
     const curNpcHp = overrides.npcHp ?? npcHp;
     const curPlayerEstados = overrides.playerEstados ?? playerEstados;
@@ -635,10 +658,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       setPhaseLock(true);
       setRonda(nuevaRonda); // dispara el remount del banner "Turno N" (key={ronda})
-      await sleep(2000); // banner "Turno N" visible
+      await sleep(pausaMs); // banner "Turno N" visible
 
       setIniciativaMsg({ key: `ini-${nuevaRonda}-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
-      await sleep(2000); // banner "Iniciativa"
+      await sleep(pausaMs); // banner "Iniciativa"
       setIniciativaMsg(null);
 
       setLog(prev => [...prev,
@@ -734,7 +757,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           setNpcBuffs(prev => [...prev, ...habBuffStatsNpc.map(stat => ({ stat, turns: habRondasNpc }))]);
         }
         if (habBuffEstadosNpc.length > 0) {
-          npcEstadosAfterSelfBuff = habBuffEstadosNpc.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), npcEstadosAfterSelfBuff);
+          npcEstadosAfterSelfBuff = habBuffEstadosNpc.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo, habRondasNpc), npcEstadosAfterSelfBuff);
           setNpcEstados(npcEstadosAfterSelfBuff);
         }
       }
@@ -792,8 +815,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       ]);
       if (cancelled) return;
 
-      /* Daño: si usó habilidad, viene de esa habilidad (con bono ×1.5 por forma efectiva, igual
-         que el jefe/jugador); si no, de dano/dano_escudo/dano_perforante del enemigo (esEnemigo)
+      /* Daño: si usó habilidad, viene de esa habilidad (con bono ±1 por forma efectiva/resistente,
+         igual que el jefe/jugador); si no, de dano/dano_escudo/dano_perforante del enemigo (esEnemigo)
          o, para un NPC regular sin esos campos, el viejo estimado a partir de su Ataque/Puntería. */
       const habEffective = hab ? formaEsEfectiva(hab.forma, currentForma) : false;
       const habResistant = hab ? formaEsResistente(hab.forma, currentForma) : false;
@@ -804,10 +827,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         dmg = Number(hab.damage ?? 0);
         dmgEscudo = Number(hab.damage_escudo ?? 0);
         dmgPerforante = Number(hab.damage_perforante ?? 0);
-        const mult = formaMultiplicador(hab.forma, currentForma);
-        dmg = Math.round(dmg * mult);
-        dmgEscudo = Math.round(dmgEscudo * mult);
-        dmgPerforante = Math.round(dmgPerforante * mult);
+        dmg = Math.max(0, dmg + formaBonoDano(hab.forma, currentForma));
       } else if (esEnemigo) {
         dmg = Number(npc.dano ?? 0);
         dmgEscudo = Number(npc.dano_escudo ?? 0);
@@ -830,9 +850,9 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
           { text: useRanged ? `Esquivas: 2d6(${dTirada.dado1}+${dTirada.dado2})+${effPlayerMov}=${dT}` : `Defiendes: 2d6(${dTirada.dado1}+${dTirada.dado2})+${effPlayerDef}=${dT}`, type: 'info', diceColors: ['#38cdf0'] },
         ];
       if (hab && habEffective && hit) {
-        entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'danger' });
+        entries.push({ text: `¡Forma efectiva! +1 daño (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'danger' });
       } else if (hab && habResistant && hit) {
-        entries.push({ text: `Resistencia de forma ×0.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'success' });
+        entries.push({ text: `Resistencia de forma −1 daño (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(currentForma)})`, type: 'success' });
       }
 
       /* Estados finales del jugador tras esta acción — arranca en `estadosObjetivo` (ya incluye
@@ -872,7 +892,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
             entries.push({ text: `${player.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
           }
           if (habDebuffEstados.length > 0) {
-            finalPlayerEstados = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), finalPlayerEstados);
+            finalPlayerEstados = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo, habRondas), finalPlayerEstados);
             entries.push({ text: `${player.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
           }
         }
@@ -985,7 +1005,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       }
 
       let selfEstados = playerEstados;
-      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo); });
+      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo, habRondas); });
 
       /* Una habilidad "self" no tiene tirada de ataque — si además carga un debuff (p.ej.
        * un estado) para el enemigo, se aplica sin condición de impacto, igual que en PvP/RAID. */
@@ -997,7 +1017,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         entries.push({ text: `${npc.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
       }
       if (habDebuffEstados.length > 0) {
-        npcEstadosFinal = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), npcEstadosFinal);
+        npcEstadosFinal = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo, habRondas), npcEstadosFinal);
         entries.push({ text: `${npc.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
       }
 
@@ -1032,7 +1052,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         type: 'info',
       });
       let selfEstados = playerEstados;
-      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo); });
+      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo, habRondas); });
       if (pendingBuffs.length > 0) {
         await playStatusFx(playerHudRef, 'buff');
         setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
@@ -1118,14 +1138,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       effective = !confundidoHab && formaEsEfectiva(hab.forma, npc.forma ?? 0);
       resistant = !confundidoHab && formaEsResistente(hab.forma, npc.forma ?? 0);
       if (!confundidoHab) {
-        const mult = formaMultiplicador(hab.forma, npc.forma ?? 0);
-        dmg = Math.round(dmg * mult);
-        dmgEscudo = Math.round(dmgEscudo * mult);
-        dmgPerforante = Math.round(dmgPerforante * mult);
+        dmg = Math.max(0, dmg + formaBonoDano(hab.forma, npc.forma ?? 0));
         if (effective) {
-          entries.push({ text: `¡Forma efectiva! ×1.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
+          entries.push({ text: `¡Forma efectiva! +1 daño (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'success' });
         } else if (resistant) {
-          entries.push({ text: `Resistencia de forma ×0.5 (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'danger' });
+          entries.push({ text: `Resistencia de forma −1 daño (Forma ${formaLabel(hab.forma)} vs Forma ${formaLabel(npc.forma)})`, type: 'danger' });
         }
       }
       dmg += formaBono(currentForma, 'dano');
@@ -1168,12 +1185,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       await playStatusFx(playerHudRef, 'buff');
       setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
     }
-    habBuffEstados.forEach(tipo => { playerEstadosFinal = aplicarEstadoDeHabilidad(playerEstadosFinal, tipo); });
+    habBuffEstados.forEach(tipo => { playerEstadosFinal = aplicarEstadoDeHabilidad(playerEstadosFinal, tipo, habRondas); });
     if (hit && !confundidoHab && !reflejoHab.activo) {
       if (habDebuffStats.length > 0) {
         setNpcDebuffs(prev => [...prev, ...habDebuffStats.map(stat => ({ stat, turns: habRondas }))]);
       }
-      habDebuffEstados.forEach(tipo => { npcEstadosFinal = aplicarEstadoDeHabilidad(npcEstadosFinal, tipo); });
+      habDebuffEstados.forEach(tipo => { npcEstadosFinal = aplicarEstadoDeHabilidad(npcEstadosFinal, tipo, habRondas); });
     }
     setPlayerEstados(playerEstadosFinal);
     setNpcEstados(npcEstadosFinal);

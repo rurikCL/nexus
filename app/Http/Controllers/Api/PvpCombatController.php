@@ -46,7 +46,7 @@ class PvpCombatController extends Controller
         7 => 2, // Juyo/Vaapad → Makashi
     ];
 
-    /* Tabla de resistencia: forma defensora → forma cuyos ataques recibe a mitad de daño (×0.5) */
+    /* Tabla de resistencia: forma defensora → forma cuyos ataques recibe con -1 de daño (ver formaBonoDano) */
     private const RESISTS = [
         1 => 5, // Shii-Cho    resiste a Shien/Djem So
         2 => 4, // Makashi     resiste a Ataru
@@ -616,7 +616,7 @@ class PvpCombatController extends Controller
             $habRondas = $hab->duracion ?: 2;
             foreach ($habBuff as $stat) {
                 if (self::esTipoEstado($stat)) {
-                    $myEstados = self::aplicarEstadoDeHabilidad($myEstados, $stat);
+                    $myEstados = self::aplicarEstadoDeHabilidad($myEstados, $stat, $habRondas);
                 } else {
                     $myBuffs[] = ['stat' => $stat, 'turns' => $habRondas];
                 }
@@ -671,7 +671,7 @@ class PvpCombatController extends Controller
                 if (! empty($habDebuff)) {
                     foreach ($habDebuff as $stat) {
                         if (self::esTipoEstado($stat)) {
-                            $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat);
+                            $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
                         } else {
                             $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
                         }
@@ -758,14 +758,11 @@ class PvpCombatController extends Controller
                     $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $oppLastForma);
 
                     if (! $confundidoHab) {
-                        $mult = self::formaMultiplier((int) $hab->forma, (int) $oppLastForma);
-                        $dmg = (int) round($dmg * $mult);
-                        $dmgEscudo = (int) round($dmgEscudo * $mult);
-                        $dmgPerforante = (int) round($dmgPerforante * $mult);
+                        $dmg = max(0, $dmg + self::formaBonoDano((int) $hab->forma, (int) $oppLastForma));
                         if ($effective) {
-                            $entry['messages'][] = "¡Forma efectiva! ×1.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                            $entry['messages'][] = "¡Forma efectiva! +1 daño (Forma {$hab->forma} vs Forma {$oppLastForma})";
                         } elseif ($resistant) {
-                            $entry['messages'][] = "Resistencia de forma ×0.5 (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                            $entry['messages'][] = "Resistencia de forma −1 daño (Forma {$hab->forma} vs Forma {$oppLastForma})";
                         }
                     }
                     $dmg += self::formaBono($myCurrentForma, 'dano');
@@ -802,7 +799,7 @@ class PvpCombatController extends Controller
                         if (! $confundidoHab) {
                             foreach ($habDebuff as $stat) {
                                 if (self::esTipoEstado($stat)) {
-                                    $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat);
+                                    $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
                                 } else {
                                     $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
                                 }
@@ -1042,6 +1039,8 @@ class PvpCombatController extends Controller
             /* Para el contador de "tiempo restante antes de notificar" en el HUD de combate */
             'turno_desde' => $c->updated_at?->toISOString(),
             'notif_delay_seg' => (int) Configuracion::valor('pvp_notif_push_delay_seg', 30),
+            /* Pausa (ms) entre acciones/banners del combate — ver Configuracion::valor y su uso en PvpCombatScreen.jsx */
+            'pausa_accion_ms' => (int) Configuracion::valor('combate_pausa_accion_ms', 2000),
             /* Estado de habilidades desde perspectiva del jugador */
             'my_fuerza' => $isAtt ? $c->attacker_fuerza : $c->defender_fuerza,
             'my_fuerza_max' => $isAtt ? self::fuerzaConfig($att->character)['max'] : self::fuerzaConfig($def->character)['max'],
@@ -1273,18 +1272,18 @@ class PvpCombatController extends Controller
         return (self::RESISTS[$defForma] ?? null) === $atkForma;
     }
 
-    /** Multiplicador de daño combinado: ×1.5 si el atacante es efectivo, ×0.5 si el defensor resiste (ambos se multiplican si aplican). */
-    private static function formaMultiplier(int $atkForma, int $defForma): float
+    /** Bono de daño plano por forma: +1 si el atacante es efectivo, -1 si el defensor resiste (se suman si ambos aplican). */
+    private static function formaBonoDano(int $atkForma, int $defForma): int
     {
-        $mult = 1.0;
+        $bono = 0;
         if (self::isEffective($atkForma, $defForma)) {
-            $mult *= 1.5;
+            $bono += 1;
         }
         if (self::isResistant($atkForma, $defForma)) {
-            $mult *= 0.5;
+            $bono -= 1;
         }
 
-        return $mult;
+        return $bono;
     }
 
     private static function persistNaveDamage(?object $char, int $hp, int $escudo): void

@@ -222,6 +222,9 @@ const mergeEffects = (buffs = [], debuffs = []) => Object.values(
 
 export default function PvpCombatScreen({ combat: initialCombat, userId, onClose, lugarImagen }) {
   const [combat, setCombat]             = useState(initialCombat);
+  /* Pausa (ms) entre acciones/banners del combate — configurable en Configuracion
+     (combate_pausa_accion_ms, ver PvpCombatController::formatCombat), default 2000. */
+  const pausaMs = combat.pausa_accion_ms ?? 2000;
   const [busy, setBusy]                 = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg, setBgImg]               = useState(lugarImagen ?? null);
@@ -309,16 +312,16 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     let cancelled = false;
     (async () => {
       setInicioMsg({ key: `inicio-${Date.now()}` });
-      await sleep(2000);
+      await sleep(pausaMs);
       if (cancelled) return;
       setInicioMsg(null);
 
-      await sleep(2000); // banner "Turno 1" visible
+      await sleep(pausaMs); // banner "Turno 1" visible
 
       const ganador = extractIniciativaGanador(combat.log?.[0] ?? {});
       if (ganador && !cancelled) {
         setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: ganador });
-        await sleep(2000);
+        await sleep(pausaMs);
         if (cancelled) return;
         setIniciativaMsg(null);
       }
@@ -363,10 +366,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
         const nuevaRonda = extractIniciativaRonda(entry);
         if (nuevaRonda) {
           setTurnoRonda(nuevaRonda); // banner "Turno N" — antes de mostrar el de Iniciativa
-          await sleep(2000);
+          await sleep(pausaMs);
         }
         setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: iniciativaGanador });
-        await sleep(2000);
+        await sleep(pausaMs);
         setIniciativaMsg(null);
       }
       const groups = extractRollGroups(entry, { myId: userId });
@@ -454,7 +457,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     /* Fase de combate: tras resolver el efecto (mensaje ya mostrado arriba, sonido/animación
        ya reproducidos, valores a punto de actualizarse abajo) se espera 2s antes de continuar —
        misma pausa que el resto de los sistemas de combate. */
-    if (newEntries.length > 0) await sleep(2000);
+    if (newEntries.length > 0) await sleep(pausaMs);
 
     setCombat(newCombat);
   };

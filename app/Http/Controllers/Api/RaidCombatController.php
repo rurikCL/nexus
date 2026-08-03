@@ -43,7 +43,7 @@ class RaidCombatController extends Controller
 {
     use AplicaEstadosCombate;
 
-    /* Tabla de efectividad entre formas: forma atacante → forma que supera con daño ×1.5 (igual que PvP/NPC) */
+    /* Tabla de efectividad entre formas: forma atacante → forma que supera con +1 de daño (ver formaBonoDano; igual que PvP/NPC) */
     private const BEATS = [
         1 => 6, // Shii-Cho    → Niman
         2 => 1, // Makashi     → Shii-Cho
@@ -54,7 +54,7 @@ class RaidCombatController extends Controller
         7 => 2, // Juyo/Vaapad → Makashi
     ];
 
-    /* Tabla de resistencia: forma defensora → forma cuyos ataques recibe a mitad de daño (×0.5) */
+    /* Tabla de resistencia: forma defensora → forma cuyos ataques recibe con -1 de daño (ver formaBonoDano) */
     private const RESISTS = [
         1 => 5, // Shii-Cho    resiste a Shien/Djem So
         2 => 4, // Makashi     resiste a Ataru
@@ -564,7 +564,7 @@ class RaidCombatController extends Controller
                 $targetEstadosArr = $esBuffUnoMismo ? $myEstados : ($buffTargetPlayer->estados ?? []);
                 foreach ($habBuffAplicable as $stat) {
                     if (self::esTipoEstado($stat)) {
-                        $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat);
+                        $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat, $habRondas);
                     } else {
                         $targetBuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
                     }
@@ -638,7 +638,7 @@ class RaidCombatController extends Controller
                     $npcDebuffsArr = $raid->npc_debuffs ?? [];
                     foreach ($habDebuff as $stat) {
                         if (self::esTipoEstado($stat)) {
-                            $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat);
+                            $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
                         } else {
                             $npcDebuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
                         }
@@ -707,10 +707,7 @@ class RaidCombatController extends Controller
                     $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
                     $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $raid->npc_forma);
                     if (! $confundidoHab) {
-                        $mult = self::formaMultiplier((int) $hab->forma, (int) $raid->npc_forma);
-                        $dmg = (int) round($dmg * $mult);
-                        $dmgEscudo = (int) round($dmgEscudo * $mult);
-                        $dmgPerforante = (int) round($dmgPerforante * $mult);
+                        $dmg = max(0, $dmg + self::formaBonoDano((int) $hab->forma, (int) $raid->npc_forma));
                     }
                     $dmg += self::formaBono($myPlayer->current_forma, 'dano');
                     $dmgEscudo += self::formaBono($myPlayer->current_forma, 'dano_escudo');
@@ -744,7 +741,7 @@ class RaidCombatController extends Controller
                         $npcDebuffs = $raid->npc_debuffs ?? [];
                         foreach ($habDebuff as $stat) {
                             if (self::esTipoEstado($stat)) {
-                                $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat);
+                                $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
                             } else {
                                 $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
                             }
@@ -753,7 +750,7 @@ class RaidCombatController extends Controller
                         $myPlayer->debuffs_aplicados += count($habDebuff);
 
                         $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                        $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
+                        $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
                         $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
                     }
                 } else {
@@ -1063,7 +1060,7 @@ class RaidCombatController extends Controller
             $habRondasNpc = $hab->duracion ?: 2;
             foreach ($habBuffNpc as $stat) {
                 if (self::esTipoEstado($stat)) {
-                    $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat);
+                    $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondasNpc);
                 } else {
                     $npcBuffsArr[] = ['stat' => $stat, 'turns' => $habRondasNpc];
                 }
@@ -1147,12 +1144,12 @@ class RaidCombatController extends Controller
         $raid->npc_estados = $npcEstados ?: null;
 
         if ($reflejoInfo['activo']) {
-            $tgtMult = self::formaMultiplier($formaAtaque, (int) $target->current_forma);
+            $tgtBono = self::formaBonoDano($formaAtaque, (int) $target->current_forma);
             $dmgWouldBe = $esCritico
-                ? self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult) + 1)
-                : self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult));
-            $dmgEscudoWouldBe = (int) round($dmgEscudoBase * $tgtMult);
-            $dmgPerfWouldBe = (int) round($dmgPerfBase * $tgtMult);
+                ? self::mitigarDanoDebilitado($npcEstados, max(0, $dmgBase + $tgtBono) + 1)
+                : self::mitigarDanoDebilitado($npcEstados, max(0, $dmgBase + $tgtBono));
+            $dmgEscudoWouldBe = $dmgEscudoBase;
+            $dmgPerfWouldBe = $dmgPerfBase;
             [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmgWouldBe, $dmgEscudoWouldBe, $dmgPerfWouldBe);
             $escudoAntesNpc = $raid->npc_escudo;
             [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
@@ -1211,10 +1208,10 @@ class RaidCombatController extends Controller
             $habDebuffCrit = $hab && is_array($hab->debuff) ? $hab->debuff : [];
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
             $resistant = self::isResistant($formaAtaque, (int) $target->current_forma);
-            $tgtMult = self::formaMultiplier($formaAtaque, (int) $target->current_forma);
-            $dmg = self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult) + 1);
-            $dmgEscudo = (int) round($dmgEscudoBase * $tgtMult);
-            $dmgPerf = (int) round($dmgPerfBase * $tgtMult);
+            $tgtBono = self::formaBonoDano($formaAtaque, (int) $target->current_forma);
+            $dmg = self::mitigarDanoDebilitado($npcEstados, max(0, $dmgBase + $tgtBono) + 1);
+            $dmgEscudo = $dmgEscudoBase;
+            $dmgPerf = $dmgPerfBase;
             $escudoAntes = $target->escudo;
             [$target->hp, $target->escudo] = self::applyDamage($target->hp, $target->escudo, $dmg, $dmgEscudo, $dmgPerf);
             if ($target->hp <= 0) {
@@ -1225,7 +1222,7 @@ class RaidCombatController extends Controller
                 $te = $target->estados ?? [];
                 foreach ($habDebuffCrit as $stat) {
                     if (self::esTipoEstado($stat)) {
-                        $te = self::aplicarEstadoDeHabilidad($te, $stat);
+                        $te = self::aplicarEstadoDeHabilidad($te, $stat, $hab->duracion ?: 2);
                     } else {
                         $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
                     }
@@ -1236,7 +1233,7 @@ class RaidCombatController extends Controller
             $target->save();
 
             $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerf, $escudoAntes);
-            $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
+            $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
             $msgs = ["¡CRÍTICO! {$npc->nombre} concentra su golpe."];
             $msgs[] = "{$targetChar->name}: {$formaMsg}{$desc}";
             $targets = [['user_id' => $target->user_id, 'effective' => $effective, 'resistant' => $resistant]];
@@ -1259,10 +1256,10 @@ class RaidCombatController extends Controller
         } else {
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
             $resistant = self::isResistant($formaAtaque, (int) $target->current_forma);
-            $tgtMult = self::formaMultiplier($formaAtaque, (int) $target->current_forma);
-            $dmg = self::mitigarDanoDebilitado($npcEstados, (int) round($dmgBase * $tgtMult));
-            $dmgEscudo = (int) round($dmgEscudoBase * $tgtMult);
-            $dmgPerf = (int) round($dmgPerfBase * $tgtMult);
+            $tgtBono = self::formaBonoDano($formaAtaque, (int) $target->current_forma);
+            $dmg = self::mitigarDanoDebilitado($npcEstados, max(0, $dmgBase + $tgtBono));
+            $dmgEscudo = $dmgEscudoBase;
+            $dmgPerf = $dmgPerfBase;
             $escudoAntes = $target->escudo;
             [$target->hp, $target->escudo] = self::applyDamage($target->hp, $target->escudo, $dmg, $dmgEscudo, $dmgPerf);
             if ($target->hp <= 0) {
@@ -1276,7 +1273,7 @@ class RaidCombatController extends Controller
                     $te = $target->estados ?? [];
                     foreach ($habDebuff as $stat) {
                         if (self::esTipoEstado($stat)) {
-                            $te = self::aplicarEstadoDeHabilidad($te, $stat);
+                            $te = self::aplicarEstadoDeHabilidad($te, $stat, $hab->duracion ?: 2);
                         } else {
                             $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
                         }
@@ -1288,7 +1285,7 @@ class RaidCombatController extends Controller
             $target->save();
 
             $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerf, $escudoAntes);
-            $formaMsg = $effective ? '¡Forma efectiva! ×1.5 — ' : ($resistant ? 'Resistencia de forma ×0.5 — ' : '');
+            $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
             $log[] = [
                 'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'crit' => false,
                 'target_user_id' => $target->user_id, 'effective' => $effective, 'resistant' => $resistant,
@@ -1464,6 +1461,8 @@ class RaidCombatController extends Controller
             'turn_index' => $raid->turn_index,
             'turn_started_at' => $raid->turn_started_at?->toIso8601String(),
             'turn_max_wait' => (int) Configuracion::valor('raid_max_wait', 30),
+            /* Pausa (ms) entre acciones/banners del combate — ver Configuracion::valor y su uso en RaidCombatScreen.jsx */
+            'pausa_accion_ms' => (int) Configuracion::valor('combate_pausa_accion_ms', 2000),
             'es_turno_del_jefe' => (bool) ($current && $current['type'] === 'npc'),
             'npc_agro_user_id' => $agroTargetUserId,
             'log' => $raid->log ?? [],
@@ -1657,18 +1656,18 @@ class RaidCombatController extends Controller
         return (self::RESISTS[$defForma] ?? null) === $atkForma;
     }
 
-    /** Multiplicador de daño combinado: ×1.5 si el atacante es efectivo, ×0.5 si el defensor resiste (ambos se multiplican si aplican). */
-    private static function formaMultiplier(int $atkForma, int $defForma): float
+    /** Bono de daño plano por forma: +1 si el atacante es efectivo, -1 si el defensor resiste (se suman si ambos aplican). */
+    private static function formaBonoDano(int $atkForma, int $defForma): int
     {
-        $mult = 1.0;
+        $bono = 0;
         if (self::isEffective($atkForma, $defForma)) {
-            $mult *= 1.5;
+            $bono += 1;
         }
         if (self::isResistant($atkForma, $defForma)) {
-            $mult *= 0.5;
+            $bono -= 1;
         }
 
-        return $mult;
+        return $bono;
     }
 
     /**

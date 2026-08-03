@@ -422,6 +422,9 @@ const ActionBtn = ({ onClick, disabled, bg, border, hoverBg, hoverBorder, childr
 
 export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [raid, setRaid] = useState(null);
+  /* Pausa (ms) entre acciones/banners del combate — configurable en Configuracion
+     (combate_pausa_accion_ms, ver RaidCombatController::formatRaid), default 2000. */
+  const pausaMs = raid?.pausa_accion_ms ?? 2000;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [stancePicker, setStancePicker] = useState(false);
@@ -553,9 +556,9 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       const m = msg.match(/^Ronda (\d+) — Orden de turnos: (.+?) 2d6/);
       if (m) {
         setTurnoRonda(Number(m[1])); // banner "Turno N" — antes de mostrar el de Iniciativa
-        await sleep(2000);
+        await sleep(pausaMs);
         setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[2] });
-        await sleep(2000);
+        await sleep(pausaMs);
         setIniciativaMsg(null);
       } else {
         await sleep(220);
@@ -661,7 +664,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         if (i < entries.length - 1) {
           /* Fase de combate: tras resolver el efecto de una entrada (mensaje + sonido/animación
              ya reproducidos), se espera 2s antes de pasar al siguiente combatiente. */
-          await sleep(2000);
+          await sleep(pausaMs);
         }
       }
     } finally {
@@ -689,19 +692,23 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
          banner "Iniciativa" (2s) con el orden ya conocido desde esa primera entrada. Un raid
          retomado (remount con historial ya avanzado) no repite nada de esto. */
       if (isFirstLoad && newLog.length <= 1 && newRaid.status === 'activo') {
+        /* `raid` (estado del componente) sigue null en esta primera carga — se usa
+           newRaid.pausa_accion_ms directamente en vez del pausaMs de closure (que aún
+           caería al default). */
+        const pausaInicio = newRaid.pausa_accion_ms ?? pausaMs;
         setTurnoRonda(newRaid.ronda ?? 1);
         setAnimBusy(true);
         setInicioMsg({ key: `inicio-${Date.now()}` });
-        await sleep(2000);
+        await sleep(pausaInicio);
         setInicioMsg(null);
 
-        await sleep(2000); // banner "Turno N" visible
+        await sleep(pausaInicio); // banner "Turno N" visible
 
         const msg = newLog[0]?.messages?.[0] ?? '';
         const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
         if (m) {
           setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: m[1] });
-          await sleep(2000);
+          await sleep(pausaInicio);
           setIniciativaMsg(null);
         }
         setAnimBusy(false);
