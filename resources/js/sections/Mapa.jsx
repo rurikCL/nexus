@@ -11,7 +11,7 @@ import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen
 const AUTH = () => {
   const t = localStorage.getItem('nx-token');
   return { Accept: 'application/json', Authorization: `Bearer ${t}` };
-};ahora
+};
 const apiFetch = (path) =>
   fetch(`/api${path}`, { headers: AUTH() }).then((r) => {
     if (!r.ok) throw new Error(r.status);
