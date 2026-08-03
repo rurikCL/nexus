@@ -200,83 +200,157 @@ function useIsMobile() {
   return m;
 }
 
+/* ─── Piezas de HUD compartidas con RaidCombatScreen (mismo lenguaje visual) ──────────── */
+
+const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', AGI: 'arrow' };
+
 /* Badges compactos (ícono + turnos) para los estados activos de un combatiente */
-function EstadoBadges({ estados }) {
+function EstadoBadges({ estados, align = 'left' }) {
   if (!Array.isArray(estados) || estados.length === 0) return null;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
-      {estados.map((e, i) => (
-        <span key={i} title={ESTADO_LABEL[e.tipo] ?? e.tipo} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8,
-          padding: '1px 4px', borderRadius: 4, background: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(220,230,255,0.8)',
-          fontFamily: 'var(--font-data)',
-        }}>
-          <span style={{ fontSize: 9, lineHeight: 1 }}>{ESTADO_ICON[e.tipo] ?? '❔'}</span>
-          {e.turns !== null && <span>{e.turns}</span>}
-        </span>
-      ))}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+      {estados.map((e, i) => {
+        const label = ESTADO_LABEL[e.tipo] ?? e.tipo;
+        const turnsLabel = e.turns === null ? 'hasta consumirse' : `${e.turns} ronda${e.turns === 1 ? '' : 's'} restante${e.turns === 1 ? '' : 's'}`;
+        return (
+          <span key={`${e.tipo}-${i}`} title={`${label} · ${turnsLabel}`} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 2,
+            fontSize: 8, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 4,
+            background: 'rgba(230,179,37,0.14)', border: '1px solid rgba(230,179,37,0.45)', color: '#E6B325', fontWeight: 700,
+          }}>
+            <span style={{ fontSize: 9, lineHeight: 1 }}>{ESTADO_ICON[e.tipo] ?? '❔'}</span>
+            {e.turns === null ? '∞' : e.turns}
+          </span>
+        );
+      })}
     </div>
   );
 }
 
-const NIVEL_COLOR = { 1: '#8aa0c0', 2: '#38cdf0', 3: '#10b981', 4: '#E6B325', 5: '#ff6b6b' };
+/* Badges horizontales de atributos. `base` es opcional: cuando viene y difiere del valor
+   efectivo, dibuja ▲/▼ igual que en RaidCombatScreen. */
+function AttrBadges({ badges, align = 'left' }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+      {badges.map(b => {
+        const bonus = b.base != null && b.v > b.base;
+        const dim = b.base != null && b.v < b.base;
+        return (
+          <span key={b.l} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            fontSize: 9, fontFamily: 'var(--font-data)', padding: '2px 6px', borderRadius: 4,
+            background: `${b.c}14`, border: `1px solid ${b.c}45`, color: b.c,
+            ...(bonus ? { boxShadow: `0 0 8px ${b.c}55`, fontWeight: 700 } : {}),
+          }}>
+            {BADGE_ICON[b.l] && <Icon name={BADGE_ICON[b.l]} size={9} />}
+            {b.l} {b.v}{bonus ? ' ▲' : dim ? ' ▼' : ''}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
-/* Ficha de un miembro de la horda — atributos visibles + click para targetear */
-function EnemyCard({ enemigo, seleccionado, onSelect, cardRef }) {
+function StatBar({ label, value, max, color }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+        <span style={{ fontSize: 8, color, fontFamily: 'var(--font-data)' }}>{label}</span>
+        <span style={{ fontSize: 8, color, fontFamily: 'var(--font-data)' }}>{value}/{max}</span>
+      </div>
+      <div style={{ height: 6, background: `${color}22`, borderRadius: 3 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.3s ease' }} />
+      </div>
+    </div>
+  );
+}
+
+const ActionBtn = ({ onClick, disabled, bg, border, hoverBg, hoverBorder, children }) => (
+  <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{
+    minWidth: 0, borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+    background: bg, border: `1px solid ${border}`,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    gap: 2, padding: '3px 6px', opacity: disabled ? 0.35 : 1, transition: 'all 0.14s',
+  }}
+    onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = hoverBg; e.currentTarget.style.borderColor = hoverBorder; } }}
+    onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; }}
+  >{children}</button>
+);
+
+/* Ficha de un miembro de la horda — mismo lenguaje visual que el panel del jefe en
+ * RaidCombatScreen (retrato + barras + badges de atributo/estado), pero en grilla porque
+ * son hasta 4 a la vez. `apuntando` la marca como elegible para confirmar el objetivo de la
+ * acción pendiente (ver targeting en HordaCombatScreen); `activo` = es su turno. */
+function EnemyCard({ enemigo, seleccionado, apuntando, activo, onSelect, cardRef, compact }) {
   const derrotado = enemigo.hp <= 0;
-  const vidaPct = enemigo.maxHp > 0 ? Math.max(0, Math.min(100, (enemigo.hp / enemigo.maxHp) * 100)) : 0;
-  const escudoPct = enemigo.maxEscudo > 0 ? Math.max(0, Math.min(100, (enemigo.escudo / enemigo.maxEscudo) * 100)) : 0;
-  const vidaColor = vidaPct > 50 ? '#10b981' : vidaPct > 25 ? '#E6B325' : '#ff2d45';
-  const img = mediaUrl(enemigo.imagen_mini || enemigo.imagen);
+  const img = mediaUrl(enemigo.imagen || enemigo.imagen_mini);
+  const vidaRatio = enemigo.maxHp > 0 ? Math.max(0, enemigo.hp) / enemigo.maxHp : 0;
+  const vidaColor = vidaRatio > 0.5 ? '#10b981' : vidaRatio > 0.25 ? '#E6B325' : '#ff2d45';
+  const elegible = apuntando && !derrotado;
+  const retrato = compact ? 40 : 52;
+  const borde = derrotado ? 'rgba(255,255,255,0.07)'
+    : elegible ? '#E6B325'
+      : activo ? '#ff2d45'
+        : seleccionado ? 'rgba(255,45,69,0.6)'
+          : 'rgba(255,45,69,0.22)';
 
   return (
-    <button ref={cardRef} type="button" onClick={() => !derrotado && onSelect()} disabled={derrotado}
+    <button ref={cardRef} type="button" disabled={derrotado} onClick={() => !derrotado && onSelect()}
+      title={derrotado ? `${enemigo.nombre} — derrotado` : elegible ? `Elegir a ${enemigo.nombre} como objetivo` : enemigo.nombre}
       style={{
-        display: 'flex', flexDirection: 'column', gap: 5, padding: 8, borderRadius: 10, textAlign: 'left',
-        background: derrotado ? 'rgba(0,0,0,0.25)' : seleccionado ? 'rgba(255,45,69,0.12)' : 'rgba(255,255,255,0.03)',
-        border: `1.5px solid ${derrotado ? 'rgba(255,255,255,0.06)' : seleccionado ? '#ff2d45' : 'var(--holo-line)'}`,
-        cursor: derrotado ? 'not-allowed' : 'pointer', opacity: derrotado ? 0.45 : 1,
-        transition: 'all 0.15s', position: 'relative', minWidth: 0,
+        position: 'relative', display: 'flex', flexDirection: 'column', gap: 4, padding: 8, borderRadius: 10,
+        textAlign: 'left', minWidth: 0,
+        background: derrotado ? 'rgba(0,0,0,0.32)' : elegible ? 'rgba(230,179,37,0.10)' : 'rgba(4,9,20,0.5)',
+        border: `1.5px solid ${borde}`,
+        boxShadow: elegible ? '0 0 18px -4px #E6B325' : activo ? '0 0 18px -4px #ff2d45' : 'none',
+        cursor: derrotado ? 'not-allowed' : 'pointer', opacity: derrotado ? 0.4 : 1, transition: 'all 0.15s',
       }}>
-      {derrotado && (
-        <div style={{ position: 'absolute', top: 6, right: 6, fontSize: 16 }}>💀</div>
+      {derrotado && <div style={{ position: 'absolute', top: 6, right: 8, fontSize: 15 }}>💀</div>}
+      {elegible && (
+        <div className="nx-live-dot" style={{
+          position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%',
+          background: 'rgba(6,12,26,0.96)', border: '1px solid #E6B325', boxShadow: '0 0 12px rgba(230,179,37,0.45)',
+          display: 'grid', placeItems: 'center', color: '#E6B325',
+        }}>
+          <Icon name="target" size={11} />
+        </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
-          background: img ? undefined : 'rgba(255,45,69,0.12)', display: 'grid', placeItems: 'center',
+          width: retrato, height: retrato, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
+          border: '1px solid rgba(255,45,69,0.35)', background: 'rgba(255,45,69,0.08)',
+          display: 'grid', placeItems: 'center',
         }}>
-          {img ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="swords" size={16} style={{ color: '#ff6b6b' }} />}
+          {img
+            ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Icon name="flame" size={compact ? 18 : 24} style={{ color: '#ff2d45', opacity: 0.6 }} />}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {enemigo.nombre}
           </div>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 8, fontFamily: 'var(--font-data)', color: NIVEL_COLOR[Math.min(5, Math.max(1, enemigo.nivel))] }}>
-              {'★'.repeat(Math.min(5, Math.max(1, enemigo.nivel)))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <span title={`Nivel de dificultad ${enemigo.nivel}`} style={{ display: 'inline-flex', gap: 1 }}>
+              {Array.from({ length: Math.min(5, Math.max(1, enemigo.nivel)) }, (_, i) => (
+                <Icon key={i} name="star" fill size={8} style={{ color: '#E6B325' }} />
+              ))}
             </span>
             {enemigo.forma > 0 && (
               <span style={{ fontSize: 7.5, color: 'rgba(150,200,255,0.55)', fontFamily: 'var(--font-data)' }}>F{formaLabel(enemigo.forma)}</span>
             )}
+            {activo && <span style={{ fontSize: 7.5, color: '#ff6b6b', fontFamily: 'var(--font-data)', letterSpacing: '0.08em' }}>⚔ SU TURNO</span>}
           </div>
         </div>
       </div>
-      {enemigo.maxEscudo > 0 && (
-        <div style={{ height: 4, background: 'rgba(56,205,240,0.12)', borderRadius: 2 }}>
-          <div style={{ height: '100%', width: `${escudoPct}%`, background: '#38cdf0', borderRadius: 2, transition: 'width 0.4s ease' }} />
-        </div>
-      )}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 7.5, color: vidaColor, fontFamily: 'var(--font-data)' }}>VIDA</span>
-          <span style={{ fontSize: 7.5, color: vidaColor, fontFamily: 'var(--font-data)' }}>{Math.max(0, enemigo.hp)}/{enemigo.maxHp}</span>
-        </div>
-        <div style={{ height: 7, background: 'rgba(16,185,129,0.12)', borderRadius: 4 }}>
-          <div style={{ height: '100%', width: `${vidaPct}%`, background: vidaColor, borderRadius: 4, transition: 'width 0.4s ease' }} />
-        </div>
-      </div>
+      {enemigo.maxEscudo > 0 && <StatBar label="ESC" value={Math.max(0, enemigo.escudo)} max={enemigo.maxEscudo} color="#38cdf0" />}
+      <StatBar label="VID" value={Math.max(0, enemigo.hp)} max={enemigo.maxHp} color={vidaColor} />
+      <AttrBadges badges={[
+        { l: 'ATQ', v: enemigo.atk, c: '#ff7043' },
+        { l: 'DEF', v: enemigo.def, c: '#38cdf0' },
+        ...(enemigo.pnt > 0 ? [{ l: 'PNT', v: enemigo.pnt, c: '#10b981' }] : []),
+        { l: 'AGI', v: enemigo.mov, c: '#a78bfa' },
+      ]} />
       <EstadoBadges estados={enemigo.estados} />
     </button>
   );
@@ -353,6 +427,9 @@ export default function HordaCombatScreen({
   const [selectedTarget, setSelectedTarget] = useState(initialState?.selectedTarget ?? 0);
   const [busy, setBusy] = useState(false);
   const [enemyActing, setEnemyActing] = useState(false);
+  /* Acción esperando que el jugador elija a cuál miembro de la horda va dirigida, haciendo
+     click en su ficha: { kind: 'basico' } | { kind: 'habilidad', hab } | { kind: 'objeto', objeto } */
+  const [targeting, setTargeting] = useState(null);
 
   const [playerFuerza, setPlayerFuerza] = useState(initialState?.playerFuerza ?? 0);
   const [cooldowns, setCooldowns] = useState(initialState?.cooldowns ?? {});
@@ -464,7 +541,7 @@ export default function HordaCombatScreen({
 
     const nextRonda = ronda + 1;
     const orden = rolls.map(r => `${r.nombre} 2d6(${r.dado.dado1}+${r.dado.dado2})=${r.total}`).join(' | ');
-    setRondaMsg(`Ronda ${nextRonda} — Orden: ${orden}`);
+    setRondaMsg({ key: `${nextRonda}-${rolls[0]?.nombre ?? ''}`, ronda: nextRonda, primero: rolls[0]?.nombre ?? '' });
     setLog(prev => [...prev, { text: `Ronda ${nextRonda} — Orden de turnos: ${orden}`, type: 'info', id: prev.length, ronda: nextRonda, actor: 'system' }]);
     await sleep(1400);
     setRondaMsg(null);
@@ -682,10 +759,10 @@ export default function HordaCombatScreen({
   const isPlayerTurn = phase === 'battle' && turnOrder[turnIndex]?.type === 'player' && !busy && !enemyActing && !usingObjeto;
 
   /* ─── Ataque básico del jugador (arma equipada > desarmado) contra el objetivo elegido ── */
-  const doPlayerBasicAttack = async () => {
-    if (!isPlayerTurn || enemigosState[selectedTarget]?.hp <= 0) return;
+  const doPlayerBasicAttack = async (idx) => {
+    if (!isPlayerTurn || !(enemigosState[idx]?.hp > 0)) return;
     setBusy(true);
-    const idx = selectedTarget;
+    setSelectedTarget(idx);
     const target = enemigosState[idx];
     const confundido = resolverConfundido(playerEstados);
     const entries = [];
@@ -777,8 +854,9 @@ export default function HordaCombatScreen({
   };
 
   /* ─── Habilidad del jugador (forma actual) contra el objetivo elegido, o self ── */
-  const doPlayerSkill = async (hab) => {
+  const doPlayerSkill = async (hab, targetIdx) => {
     if (!isPlayerTurn) return;
+    if (hab.objetivo !== 'self' && !(enemigosState[targetIdx]?.hp > 0)) return;
     const habId = String(hab.id);
     if ((cooldowns[habId] ?? 0) > 0) return;
     if (playerFuerza < hab.costo_fuerza) return;
@@ -828,10 +906,11 @@ export default function HordaCombatScreen({
       return;
     }
 
-    /* Objetivo: target — el enemigo seleccionado */
-    const idx = selectedTarget;
+    /* Objetivo: target — el enemigo que el jugador eligió en su ficha */
+    const idx = targetIdx;
     const target = enemigosState[idx];
     if (!target || target.hp <= 0) { setBusy(false); return; }
+    setSelectedTarget(idx);
 
     const confundido = resolverConfundido(playerEstados);
     const statsObjetivo = confundido ? { def: effPlayerDef, mov: effPlayerMov } : { def: target.def, mov: target.mov };
@@ -933,7 +1012,7 @@ export default function HordaCombatScreen({
   };
 
   /* ─── Objeto utilizable: buff/heal a uno mismo, debuff al objetivo elegido ── */
-  const doUsarObjeto = async (objeto) => {
+  const doUsarObjeto = async (objeto, targetIdx) => {
     if (!isPlayerTurn || usingObjeto || !onUsarObjeto) return;
     setUsingObjeto(true);
     try {
@@ -960,8 +1039,9 @@ export default function HordaCombatScreen({
       buffEstados.forEach(tipo => { nuevoPlayerEstados = aplicarEstadoDeHabilidad(nuevoPlayerEstados, tipo); });
 
       let nextEnemigos = enemigosState;
-      if ((debuffStats.length > 0 || debuffEstados.length > 0) && enemigosState[selectedTarget]?.hp > 0) {
-        const idx = selectedTarget;
+      const idx = targetIdx ?? selectedTarget;
+      if ((debuffStats.length > 0 || debuffEstados.length > 0) && enemigosState[idx]?.hp > 0) {
+        if (idx !== selectedTarget) setSelectedTarget(idx);
         nextEnemigos = enemigosState.map((e, i) => {
           if (i !== idx) return e;
           let est = e.estados;
@@ -1023,6 +1103,64 @@ export default function HordaCombatScreen({
     avanzarTurno(enemigosState, playerHp, playerEstados);
   };
 
+  /* ─── Elección de objetivo ────────────────────────────────────────────────────────────
+     Toda acción dirigida (ataque básico, habilidad con objetivo, objeto con debuff) entra
+     primero en modo "apuntar": las fichas de la horda quedan elegibles y el jugador confirma
+     haciendo click en la del enemigo que quiere golpear. Con un único enemigo vivo no hay
+     nada que elegir, así que se resuelve de inmediato. */
+  const objetoNecesitaObjetivo = (objeto) => (Array.isArray(objeto.debuff) ? objeto.debuff : []).some(s => s !== 'revivir');
+
+  const ejecutarAccion = (accion, idx) => {
+    setTargeting(null);
+    if (accion.kind === 'basico') { void doPlayerBasicAttack(idx); return; }
+    if (accion.kind === 'habilidad') {
+      if (accion.hab.sonido) void playSound(accion.hab.sonido);
+      void doPlayerSkill(accion.hab, idx);
+      return;
+    }
+    setObjetoPicker(false);
+    void doUsarObjeto(accion.objeto, idx);
+  };
+
+  const pedirObjetivo = (accion) => {
+    if (!isPlayerTurn) return;
+    if (accion.kind === 'habilidad') void playClickHabilidad(); else void playClickOpcion();
+    const requiere = accion.kind === 'basico'
+      || (accion.kind === 'habilidad' && accion.hab.objetivo !== 'self')
+      || (accion.kind === 'objeto' && objetoNecesitaObjetivo(accion.objeto));
+    if (!requiere) { ejecutarAccion(accion, selectedTarget); return; }
+    const vivos = enemigosVivos();
+    if (vivos.length === 0) return;
+    if (vivos.length === 1) { ejecutarAccion(accion, vivos[0].idx); return; }
+    setObjetoPicker(false);
+    setStancePicker(false);
+    setTargeting(accion);
+  };
+
+  const clickEnemigo = (idx) => {
+    if (targeting) { void playClickOpcion(); ejecutarAccion(targeting, idx); return; }
+    setSelectedTarget(idx);
+  };
+
+  /* Si deja de ser el turno del jugador (o termina el combate), se cancela el modo apuntar */
+  useEffect(() => { if (!isPlayerTurn) setTargeting(null); }, [isPlayerTurn]);
+
+  /* Escape cancela lo que esté abierto: apuntar > selector de objeto > selector de forma */
+  useEffect(() => {
+    const onKey = (ev) => {
+      if (ev.key !== 'Escape') return;
+      if (targeting) setTargeting(null);
+      else if (objetoPicker) setObjetoPicker(false);
+      else if (stancePicker) setStancePicker(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [targeting, objetoPicker, stancePicker]);
+
+  const targetingLabel = targeting?.kind === 'habilidad' ? targeting.hab.nombre
+    : targeting?.kind === 'objeto' ? targeting.objeto.nombre
+      : 'Ataque básico';
+
   /* ─── Fin de combate: notifica al padre ── */
   useEffect(() => {
     if (phase === 'victory') {
@@ -1054,146 +1192,212 @@ export default function HordaCombatScreen({
 
   const LOG_C = { info: 'rgba(200,225,255,0.75)', success: '#10b981', danger: '#ff6b6b', miss: 'rgba(200,200,200,0.5)' };
 
-  const stageContent = (
-    <div ref={stageRef} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: 12 }}>
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: mediaUrl(lugarImagen) ? `url(${mediaUrl(lugarImagen)})` : undefined,
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        background: mediaUrl(lugarImagen) ? undefined : 'radial-gradient(ellipse at 50% 25%, #2a0c14, #020810 75%)',
-      }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(2,8,16,0.55), rgba(2,8,16,0.85))' }} />
-      </div>
-
-      {(planetaNombre || lugarNombre) && (
-        <div style={{ position: 'absolute', top: 10, left: 14, zIndex: 5, fontFamily: 'var(--font-data)' }}>
-          <div style={{ fontSize: 9, color: 'rgba(200,225,255,0.5)', letterSpacing: '0.12em' }}>{planetaNombre}</div>
-          <div style={{ fontSize: 12, color: '#ff9999', fontWeight: 700 }}>⚔ HORDA · {lugarNombre}</div>
-        </div>
-      )}
-
-      {rondaMsg && (
-        <div style={{
-          position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', zIndex: 20,
-          background: 'rgba(6,12,26,0.85)', border: '1px solid rgba(255,45,69,0.4)', borderRadius: 10,
-          padding: '8px 18px', fontFamily: 'var(--font-data)', fontSize: 11, color: '#ff9999',
-          letterSpacing: '0.06em', textAlign: 'center', maxWidth: '85%', animation: 'nx-fade-up 0.25s ease both',
-        }}>{rondaMsg}</div>
-      )}
-
-      {/* Grid de enemigos */}
-      <div style={{
-        position: 'absolute', top: 46, left: 10, right: 10, zIndex: 3,
-        display: 'grid', gridTemplateColumns: `repeat(${Math.min(enemigosState.length, isMobile ? 2 : 4)}, 1fr)`, gap: 8,
-      }}>
-        {enemigosState.map((e, idx) => (
-          <EnemyCard key={e.id + '-' + idx} enemigo={e} seleccionado={selectedTarget === idx}
-            onSelect={() => setSelectedTarget(idx)}
-            cardRef={(el) => { enemyRefs.current[idx] = { current: el }; }}
-          />
-        ))}
-      </div>
-
-      {/* Panel del jugador */}
-      <div ref={playerHudRef} style={{
-        position: 'absolute', bottom: isMobile ? 150 : 118, left: 14, zIndex: 3,
-        display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(6,12,26,0.55)',
-        border: '1px solid rgba(56,205,240,0.3)', borderRadius: 10, padding: '8px 12px', maxWidth: 260,
-      }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-          background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center', border: '2px solid rgba(56,205,240,0.4)',
-        }}>
-          {player.photo ? <img src={mediaUrl(player.photo)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="user" size={18} style={{ color: '#38cdf0' }} />}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {player.nombre || 'Tú'} <span style={{ fontSize: 8, color: 'rgba(150,200,255,0.5)' }}>F{formaLabel(currentForma)}</span>
-          </div>
-          {maxPlayer.escudo > 0 && (
-            <div style={{ height: 4, background: 'rgba(56,205,240,0.12)', borderRadius: 2, marginTop: 3 }}>
-              <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, (playerHp.escudo / maxPlayer.escudo) * 100))}%`, background: '#38cdf0', borderRadius: 2 }} />
-            </div>
-          )}
-          <div style={{ height: 7, background: 'rgba(16,185,129,0.12)', borderRadius: 4, marginTop: 3 }}>
-            <div style={{ height: '100%', width: `${Math.max(0, Math.min(100, (playerHp.vida / maxPlayer.vida) * 100))}%`, background: playerHp.vida / maxPlayer.vida > 0.5 ? '#10b981' : playerHp.vida / maxPlayer.vida > 0.25 ? '#E6B325' : '#ff2d45', borderRadius: 4 }} />
-          </div>
-          <div style={{ fontSize: 7.5, color: 'rgba(200,225,255,0.6)', fontFamily: 'var(--font-data)', marginTop: 2 }}>{playerHp.vida}/{maxPlayer.vida} vida</div>
-          <EstadoBadges estados={playerEstados} />
-        </div>
-      </div>
-
-      {diceOverlay}
-      {strike && (strike.type === 'melee'
-        ? <EnergyStrikeEffect {...strike} onDone={() => { strike.onResolve(); setStrike(null); }} />
-        : <RangedStrikeEffect {...strike} onDone={() => { strike.onResolve(); setStrike(null); }} />
-      )}
-      {statusFx && <StatusBurstEffect variant={statusFx.variant} stageRef={stageRef} targetRef={statusFx.targetRef} onDone={() => { statusFx.onResolve(); setStatusFx(null); }} />}
-      {floatTexts.map(ft => (
-        <FloatingCombatText key={ft.id} x={ft.x} y={ft.y} text={ft.text} variant={ft.variant} onDone={() => setFloatTexts(prev => prev.filter(f => f.id !== ft.id))} />
-      ))}
-    </div>
-  );
+  /* Enemigo al que le toca actuar ahora (para resaltar su ficha, como el "TURNO DEL JEFE") */
+  const turnoActual = turnOrder[turnIndex];
+  const enemigoActivoIdx = turnoActual?.type === 'enemigo' ? turnoActual.idx : -1;
+  const enPie = enemigosState.filter(e => e.hp > 0).length;
+  const armaSable = (player.arma_equipada?.es_sable && NX.SABERS[player.arma_equipada.color_hoja]) || '#ff9955';
 
   return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 900, background: '#000',
-      display: 'flex', flexDirection: isMobile ? 'column' : 'row',
+      position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 0 : 12,
     }}>
-      <div style={{ flex: isMobile ? '1 1 55%' : '1 1 68%', position: 'relative', minHeight: 0 }}>
-        {stageContent}
-      </div>
-
-      {/* Panel lateral: log + acciones */}
-      <div style={{
-        flex: isMobile ? '1 1 45%' : '0 0 340px', display: 'flex', flexDirection: 'column',
-        background: 'rgba(4,8,18,0.97)', borderLeft: isMobile ? 'none' : '1px solid rgba(255,45,69,0.2)',
-        borderTop: isMobile ? '1px solid rgba(255,45,69,0.2)' : 'none', minHeight: 0,
+      <div ref={stageRef} style={{
+        position: 'relative', width: '100%', maxWidth: 980, height: '100%', maxHeight: isMobile ? '100%' : 720,
+        borderRadius: isMobile ? 0 : 18, overflow: 'hidden',
+        boxShadow: '0 0 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,45,69,0.18)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <span style={{ fontSize: 9, color: 'rgba(255,150,150,0.7)', fontFamily: 'var(--font-data)', letterSpacing: '0.12em' }}>REGISTRO · RONDA {ronda}</span>
-          <button onClick={() => setLogCollapsed(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(200,225,255,0.5)' }}>
-            <Icon name={logCollapsed ? 'chevdown' : 'chevron'} size={12} />
-          </button>
-        </div>
-        {!logCollapsed && (
-          <div ref={logRef} style={{ overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
-            {logRounds.map(round => (
-              <div key={round.ronda} style={{ border: '1px solid rgba(255,45,69,0.16)', borderRadius: 8, background: 'rgba(255,45,69,0.03)', padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ fontSize: 8, color: '#ff9999', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', fontWeight: 700, opacity: 0.85 }}>RONDA {round.ronda}</div>
-                {round.turns.map((turn, ti) => {
-                  const isSystem = turn.actor === 'system';
-                  const isNpc = turn.actor === 'npc';
-                  return (
-                    <div key={ti} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {turn.entries.map(e => (
-                        <div key={e.id} style={{
-                          fontSize: 10, color: LOG_C[e.type] ?? 'rgba(200,225,255,0.75)', fontFamily: 'var(--font-data)',
-                          lineHeight: 1.4, paddingLeft: isSystem ? 6 : 0, borderLeft: isSystem ? '2px solid #ff6b6b' : 'none',
-                        }}>{renderDiceText(e.text, isNpc ? ['#ff2d45', '#38cdf0'] : ['#38cdf0', '#ff2d45'])}</div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-            {enemyActing && <span style={{ fontSize: 9, color: '#ff9999', fontFamily: 'var(--font-data)' }}>Enemigo actuando…</span>}
-          </div>
-        )}
+        {mediaUrl(lugarImagen)
+          ? <img src={mediaUrl(lugarImagen)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, #2a0c14, #020810)' }} />}
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.76)' }} />
 
-        {/* Barra de acciones */}
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {phase === 'victory' && (
-            <div style={{ textAlign: 'center', color: '#10b981', fontFamily: 'var(--font-data)', fontSize: 14, padding: 10 }}>⚡ VICTORIA — Horda derrotada</div>
+        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+
+          {/* Aviso grande de inicio de ronda — mismo criterio que RaidCombatScreen: el detalle
+              de la tirada de iniciativa queda en el registro, acá solo la ronda y quién abre. */}
+          {rondaMsg && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 45,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', overflow: 'hidden',
+            }}>
+              <span key={rondaMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(30px, 7vw, 54px)' }}>
+                Ronda {rondaMsg.ronda}
+              </span>
+              <span style={{ marginTop: 4, fontSize: 12, color: '#ff9999', fontFamily: 'var(--font-data)', letterSpacing: '0.12em' }}>
+                Abre {rondaMsg.primero}
+              </span>
+            </div>
           )}
-          {phase === 'defeat' && (
-            <div style={{ textAlign: 'center', color: '#ff6b6b', fontFamily: 'var(--font-data)', fontSize: 14, padding: 10 }}>☠ DERROTA</div>
-          )}
-          {phase === 'fled' && (
-            <div style={{ textAlign: 'center', color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 14, padding: 10 }}>🏃 Huiste del combate</div>
-          )}
+
+          {/* ── Barra superior: orden de turnos ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(4,9,20,0.6)', borderBottom: '1px solid rgba(255,45,69,0.16)' }}>
+            <span className="nx-kicker" style={{ fontSize: 8, flexShrink: 0 }}>RONDA {ronda}</span>
+            <div style={{ display: 'flex', gap: 8, flex: 1, overflowX: 'auto' }}>
+              {turnOrder.map((t, i) => {
+                const active = i === turnIndex;
+                const esEnemigo = t.type === 'enemigo';
+                const e = esEnemigo ? enemigosState[t.idx] : null;
+                const img = esEnemigo ? mediaUrl(e?.imagen_mini || e?.imagen) : mediaUrl(player.photo);
+                const nombre = esEnemigo ? (e?.nombre ?? '?') : (player.nombre || 'Tú');
+                const dead = esEnemigo ? (e?.hp ?? 0) <= 0 : playerHp.vida <= 0;
+                return (
+                  <div key={i} title={nombre} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0,
+                    opacity: dead ? 0.35 : 1,
+                  }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                      border: `2px solid ${active ? (esEnemigo ? '#ff2d45' : 'var(--holo)') : 'rgba(255,255,255,0.15)'}`,
+                      boxShadow: active ? `0 0 12px ${esEnemigo ? '#ff2d45' : 'var(--holo)'}` : 'none',
+                      background: esEnemigo ? 'rgba(255,45,69,0.15)' : 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center',
+                    }}>
+                      {img ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name={esEnemigo ? 'flame' : 'user'} size={14} style={{ color: esEnemigo ? '#ff2d45' : 'var(--holo)' }} />}
+                    </div>
+                    <span style={{ fontSize: 7, color: active ? 'var(--txt)' : 'var(--txt-faint)', fontFamily: 'var(--font-data)', maxWidth: 42, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {!isMobile && (planetaNombre || lugarNombre) && (
+              <div style={{ textAlign: 'right', flexShrink: 0, fontFamily: 'var(--font-data)' }}>
+                <div style={{ fontSize: 8, color: 'rgba(200,225,255,0.45)', letterSpacing: '0.12em' }}>{planetaNombre}</div>
+                <div style={{ fontSize: 11, color: '#ff9999', fontWeight: 700 }}>⚔ HORDA · {lugarNombre}</div>
+              </div>
+            )}
+            <button onClick={() => setLogCollapsed(v => !v)} title={logCollapsed ? 'Mostrar registro' : 'Ocultar registro'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: logCollapsed ? 'var(--txt-faint)' : 'var(--holo)', flexShrink: 0 }}>
+              <Icon name="tasks" size={15} />
+            </button>
+          </div>
+
+          {/* ── Centro: horda + registro ── */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 10, padding: 12 }}>
+            <div style={{ flex: logCollapsed ? '1 1 100%' : '1 1 55%', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span className="nx-kicker" style={{ fontSize: 8, color: '#ff9999' }}>HORDA · {enPie}/{enemigosState.length} EN PIE</span>
+                {!targeting && enPie > 1 && (
+                  <span style={{ fontSize: 8, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>elige objetivo al atacar</span>
+                )}
+              </div>
+
+              {/* Aviso del modo apuntar: la acción queda pendiente hasta que se elija la ficha */}
+              {targeting && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8,
+                  background: 'rgba(230,179,37,0.12)', border: '1px solid rgba(230,179,37,0.5)',
+                }}>
+                  <Icon name="target" size={14} style={{ color: '#E6B325' }} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 10, color: '#E6B325', fontFamily: 'var(--font-data)', letterSpacing: '0.04em' }}>
+                    Elige el objetivo de <strong>{targetingLabel}</strong>
+                  </span>
+                  <button onClick={() => { void playClickOpcion(); setTargeting(null); }} style={{
+                    background: 'none', border: '1px solid rgba(230,179,37,0.45)', borderRadius: 6, cursor: 'pointer',
+                    color: '#E6B325', fontFamily: 'var(--font-data)', fontSize: 9, padding: '3px 8px', letterSpacing: '0.08em',
+                  }}>CANCELAR</button>
+                </div>
+              )}
+
+              <div style={{
+                flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', alignContent: 'start',
+                gridTemplateColumns: enemigosState.length === 1 ? '1fr' : 'repeat(2, 1fr)', gap: 8,
+              }}>
+                {enemigosState.map((e, idx) => (
+                  <EnemyCard key={`${e.id}-${idx}`} enemigo={e}
+                    seleccionado={selectedTarget === idx}
+                    apuntando={!!targeting}
+                    activo={enemigoActivoIdx === idx}
+                    compact={isMobile}
+                    onSelect={() => clickEnemigo(idx)}
+                    cardRef={(el) => { enemyRefs.current[idx] = { current: el }; }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Registro */}
+            <div style={{
+              flex: '1 1 45%', display: logCollapsed ? 'none' : 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0,
+              background: 'rgba(4,9,20,0.55)', backdropFilter: 'blur(10px)', borderRadius: 10,
+              border: '1px solid rgba(255,45,69,0.16)', overflow: 'hidden',
+            }}>
+              <div style={{ padding: '7px 10px', borderBottom: '1px solid rgba(255,45,69,0.14)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="tasks" size={12} style={{ color: '#ff9999' }} />
+                <span style={{ fontSize: 8, color: 'rgba(255,150,150,0.7)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>REGISTRO DE RONDAS</span>
+              </div>
+              <div ref={logRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {logRounds.map(round => (
+                  <div key={round.ronda} style={{ border: '1px solid rgba(255,45,69,0.16)', borderRadius: 8, background: 'rgba(255,45,69,0.035)', padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontSize: 8, color: '#ff9999', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', fontWeight: 700, opacity: 0.85 }}>RONDA {round.ronda}</div>
+                    {round.turns.map((turn, ti) => {
+                      const isSystem = turn.actor === 'system';
+                      const isNpc = turn.actor === 'npc';
+                      return (
+                        <div key={ti} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {turn.entries.map(e => (
+                            <div key={e.id} style={{
+                              fontSize: 10, color: LOG_C[e.type] ?? 'rgba(200,225,255,0.75)', fontFamily: 'var(--font-data)',
+                              lineHeight: 1.4, paddingLeft: isSystem ? 6 : 0, borderLeft: isSystem ? '2px solid #ff6b6b' : 'none',
+                            }}>{renderDiceText(e.text, isNpc ? ['#ff2d45', '#38cdf0'] : ['#38cdf0', '#ff2d45'])}</div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                {enemyActing && <span style={{ fontSize: 9, color: '#ff9999', fontFamily: 'var(--font-data)' }}>Enemigo actuando…</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Barra inferior: el jugador ── */}
+          <div style={{ padding: '10px 14px', background: 'rgba(4,9,20,0.6)', borderTop: '1px solid rgba(56,205,240,0.16)' }}>
+            <div ref={playerHudRef} style={{
+              display: 'flex', gap: 10, alignItems: 'center', padding: '6px 10px', borderRadius: 8,
+              border: `1px solid ${isPlayerTurn ? 'var(--holo)' : 'rgba(255,255,255,0.1)'}`,
+              background: isPlayerTurn ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'rgba(255,255,255,0.02)',
+            }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center', border: '2px solid rgba(56,205,240,0.4)',
+              }}>
+                {player.photo
+                  ? <img src={mediaUrl(player.photo)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <Icon name="user" size={16} style={{ color: 'var(--holo)' }} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--holocron-oro)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {player.nombre || 'Tú'}
+                  </span>
+                  <span style={{ fontSize: 8, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>F{formaLabel(currentForma)} · {FORMA_LABELS_SHORT[currentForma - 1]}</span>
+                  {isPlayerTurn && <span style={{ fontSize: 8, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>TU TURNO</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 180px', minWidth: 140 }}>
+                    {maxPlayer.escudo > 0 && <StatBar label="ESC" value={Math.max(0, playerHp.escudo)} max={maxPlayer.escudo} color="#38cdf0" />}
+                    <StatBar label="VID" value={Math.max(0, playerHp.vida)} max={maxPlayer.vida}
+                      color={playerHp.vida / maxPlayer.vida > 0.5 ? '#10b981' : playerHp.vida / maxPlayer.vida > 0.25 ? '#E6B325' : '#ff2d45'} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                    <AttrBadges align="right" badges={[
+                      { l: 'ATQ', v: effPlayerAtk, base: player.ataque, c: '#ff7043' },
+                      { l: 'DEF', v: effPlayerDef, base: player.defensa, c: '#38cdf0' },
+                      ...(effPlayerPnt > 0 ? [{ l: 'PNT', v: effPlayerPnt, base: player.punteria, c: '#10b981' }] : []),
+                      { l: 'AGI', v: effPlayerMov, base: player.movimiento, c: '#a78bfa' },
+                    ]} />
+                    <EstadoBadges estados={playerEstados} align="right" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Barra de acciones ── */}
           {phase === 'battle' && (
-            <>
+            <div style={{ padding: '10px 14px', background: 'rgba(4,9,20,0.7)', borderTop: '1px solid rgba(56,205,240,0.16)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', flexShrink: 0 }}>FUERZA</span>
                 <div style={{ display: 'flex', gap: 2, flex: 1 }}>
@@ -1201,87 +1405,200 @@ export default function HordaCombatScreen({
                     <div key={i} style={{ flex: 1, height: 6, borderRadius: 2, background: i < playerFuerza ? '#38cdf0' : 'rgba(56,205,240,0.12)' }} />
                   ))}
                 </div>
-                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)' }}>{playerFuerza}/{maxFuerza}</span>
+                <span style={{ fontSize: 8, color: '#38cdf0', fontFamily: 'var(--font-data)', flexShrink: 0 }}>{playerFuerza}/{maxFuerza}</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 5 }}>
-                {habilidades.length === 0 ? (
-                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)', padding: 8 }}>Sin habilidades equipadas</div>
-                ) : habilidades.map(hab => {
-                  const cdLeft = cooldowns[String(hab.id)] ?? 0;
-                  const noFuerza = playerFuerza < hab.costo_fuerza;
-                  const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
-                  return (
-                    <button key={hab.id} onClick={() => { if (disabled) return; void playClickHabilidad(); if (hab.sonido) void playSound(hab.sonido); doPlayerSkill(hab); }} disabled={disabled}
-                      onMouseEnter={() => setHoveredHabId(hab.id)} onMouseLeave={() => setHoveredHabId(null)}
-                      style={{
-                        position: 'relative', textAlign: 'left', borderRadius: 8, padding: 6, cursor: disabled ? 'not-allowed' : 'pointer',
-                        background: disabled ? 'rgba(255,45,69,0.03)' : 'rgba(255,45,69,0.08)',
-                        border: `1px solid ${disabled ? 'rgba(255,45,69,0.09)' : 'rgba(255,45,69,0.26)'}`, opacity: disabled ? 0.45 : 1,
-                      }}>
-                      {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
-                      {cdLeft > 0 && (
-                        <div style={{ position: 'absolute', inset: 0, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.55)' }}>
-                          <span style={{ fontSize: 12, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', minHeight: 90 }}>
+                {/* Habilidades (grid 2x2) */}
+                <div style={{ flex: '1 1 62%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
+                  {habilidades.length === 0 ? (
+                    <div style={{ gridColumn: '1 / -1', gridRow: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.3)', fontFamily: 'var(--font-data)' }}>Sin habilidades equipadas</span>
+                    </div>
+                  ) : habilidades.map(hab => {
+                    const cdLeft = cooldowns[String(hab.id)] ?? 0;
+                    const noFuerza = playerFuerza < hab.costo_fuerza;
+                    const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
+                    const isSelf = hab.objetivo === 'self';
+                    const pendiente = targeting?.kind === 'habilidad' && targeting.hab.id === hab.id;
+                    return (
+                      <button key={hab.id} onClick={() => !disabled && pedirObjetivo({ kind: 'habilidad', hab })} disabled={disabled}
+                        onMouseEnter={() => setHoveredHabId(hab.id)} onMouseLeave={() => setHoveredHabId(null)}
+                        style={{
+                          minWidth: 0, borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+                          background: pendiente ? 'rgba(230,179,37,0.14)' : disabled ? 'rgba(255,45,69,0.03)' : 'rgba(255,45,69,0.08)',
+                          border: `1px solid ${pendiente ? '#E6B325' : disabled ? 'rgba(255,45,69,0.09)' : 'rgba(255,45,69,0.26)'}`,
+                          display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left',
+                          gap: 3, padding: 4, opacity: disabled ? 0.45 : 1, position: 'relative', transition: 'all 0.13s',
+                        }}>
+                        {hoveredHabId === hab.id && <SkillTooltip hab={hab} />}
+                        {cdLeft > 0 && (
+                          <div style={{ position: 'absolute', inset: 0, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.55)', zIndex: 2 }}>
+                            <span style={{ fontSize: 13, color: '#ff6b6b', fontFamily: 'var(--font-data)', fontWeight: 700 }}>CD {cdLeft}</span>
+                          </div>
+                        )}
+                        <div style={{ borderBottom: '1px solid rgba(255,45,69,0.18)', paddingBottom: 3 }}>
+                          <span style={{ fontSize: 9, color: 'var(--txt)', fontFamily: 'var(--font-data)', fontWeight: 700, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{hab.nombre}</span>
                         </div>
-                      )}
-                      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--txt)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hab.nombre}</div>
-                      <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.55)', fontFamily: 'var(--font-data)' }}>{tipoIcon(hab.tipo)} {hab.tipo === 'melee' ? 'Melee' : 'Distancia'}</span>
-                        <span style={{ fontSize: 7, fontFamily: 'var(--font-data)', color: noFuerza ? '#ff6b6b' : '#38cdf0' }}>⚡{hab.costo_fuerza}</span>
+                        <div style={{ display: 'flex', flex: 1, minHeight: 0, alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'rgba(0,0,0,0.28)', display: 'grid', placeItems: 'center' }}>
+                            {hab.icono_url
+                              ? <img src={mediaUrl(hab.icono_url)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              : <span style={{ fontSize: 16, lineHeight: 1 }}>{tipoIcon(hab.tipo)}</span>}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, justifyContent: 'center' }}>
+                            <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.55)', fontFamily: 'var(--font-data)' }}>
+                              {hab.tipo === 'melee' ? '⚔ Melee' : '◎ Distancia'}
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                              {isSelf
+                                ? <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
+                                : (
+                                  <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                                    DMG {hab.damage}
+                                    {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
+                                  </span>
+                                )}
+                              <span style={{
+                                fontSize: 7, fontFamily: 'var(--font-data)', padding: '1px 4px', borderRadius: 3,
+                                background: noFuerza ? 'rgba(255,45,69,0.25)' : 'rgba(56,205,240,0.15)',
+                                color: noFuerza ? '#ff6b6b' : '#38cdf0',
+                              }}>⚡{hab.costo_fuerza}</span>
+                              {hab.forma > 0 && <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>F{hab.forma}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', flexShrink: 0, alignSelf: 'stretch' }} />
+
+                {/* Ataque / Forma / Objeto / Huir */}
+                <div style={{ flex: '1 1 38%', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(2, 1fr)', gap: 5 }}>
+                  <ActionBtn onClick={() => pedirObjetivo({ kind: 'basico' })} disabled={!isPlayerTurn}
+                    bg={targeting?.kind === 'basico' ? 'rgba(230,179,37,0.18)' : 'rgba(255,140,0,0.07)'}
+                    border={targeting?.kind === 'basico' ? '#E6B325' : 'rgba(255,140,0,0.22)'}
+                    hoverBg="rgba(255,140,0,0.18)" hoverBorder="rgba(255,140,0,0.5)">
+                    {player.arma_equipada?.imagen ? (
+                      <div style={{ width: 26, height: 26, borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={mediaUrl(player.arma_equipada.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                    ) : player.arma_equipada?.es_sable ? (
+                      <Icon name="sword" size={18} style={{ color: armaSable }} />
+                    ) : (
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>✊</span>
+                    )}
+                    <span style={{
+                      fontSize: 7, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                      maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', color: armaSable,
+                    }}>{player.arma_equipada ? player.arma_equipada.nombre.toUpperCase() : 'DESARMADO'}</span>
+                    <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
+                      DMG {player.arma_equipada?.dano ?? 3}
+                      {!!player.arma_equipada?.dano_perforante && <span style={{ color: '#8aa0c0' }}> +{player.arma_equipada.dano_perforante}P</span>}
+                    </span>
+                  </ActionBtn>
 
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button onClick={() => isPlayerTurn && (playClickOpcion(), doPlayerBasicAttack())} disabled={!isPlayerTurn} style={btnStyle(!isPlayerTurn, '#38cdf0')}>⚔ Ataque básico</button>
-                <button onClick={() => { void playClickOpcion(); setStancePicker(v => !v); }} disabled={!isPlayerTurn} style={btnStyle(!isPlayerTurn, '#a78bfa')}>Forma</button>
-                <button onClick={() => { void playClickOpcion(); setObjetoPicker(v => !v); }} disabled={!isPlayerTurn || objetosUtilizables.length === 0} style={btnStyle(!isPlayerTurn || objetosUtilizables.length === 0, '#10b981')}>Objeto</button>
-                <button onClick={() => (playClickOpcion(), doPlayerFlee())} disabled={!isPlayerTurn} style={btnStyle(!isPlayerTurn, '#ff6b6b')}>Huir</button>
-              </div>
+                  <ActionBtn onClick={() => { void playClickOpcion(); setTargeting(null); setObjetoPicker(false); setStancePicker(v => !v); }} disabled={!isPlayerTurn}
+                    bg="rgba(139,92,246,0.07)" border="rgba(139,92,246,0.22)" hoverBg="rgba(139,92,246,0.18)" hoverBorder="rgba(139,92,246,0.5)">
+                    {NX.CLASSES[currentForma - 1]?.img ? (
+                      <div style={{ width: 22, height: 22, borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={NX.CLASSES[currentForma - 1].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ) : <span style={{ fontSize: 14, lineHeight: 1 }}>🔄</span>}
+                    <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{FORMA_LABELS_SHORT[currentForma - 1]}</span>
+                    <span style={{ fontSize: 7, color: '#a78bfa', fontFamily: 'var(--font-data)' }}>ESTANCIA</span>
+                  </ActionBtn>
 
-              {stancePicker && (
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: 6, background: 'rgba(167,139,250,0.06)', borderRadius: 8 }}>
-                  {[1, 2, 3, 4, 5, 6, 7].map(f => (
-                    <button key={f} onClick={() => doChangeForma(f)} style={{
-                      padding: '4px 8px', borderRadius: 6, fontSize: 9, fontFamily: 'var(--font-data)', cursor: 'pointer',
-                      background: currentForma === f ? '#a78bfa' : 'rgba(167,139,250,0.12)', color: currentForma === f ? '#04070f' : '#a78bfa',
-                      border: '1px solid rgba(167,139,250,0.4)',
-                    }} title={FORMA_LABELS_SHORT[f - 1]}>F{formaLabel(f)}</button>
-                  ))}
+                  <ActionBtn onClick={() => { void playClickOpcion(); setTargeting(null); setStancePicker(false); setObjetoPicker(v => !v); }}
+                    disabled={!isPlayerTurn || objetosUtilizables.length === 0}
+                    bg="rgba(16,185,129,0.07)" border="rgba(16,185,129,0.22)" hoverBg="rgba(16,185,129,0.18)" hoverBorder="rgba(16,185,129,0.5)">
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>🧪</span>
+                    <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>OBJETO</span>
+                    <span style={{ fontSize: 7, color: 'rgba(150,200,255,0.5)', fontFamily: 'var(--font-data)' }}>{objetosUtilizables.length} disp.</span>
+                  </ActionBtn>
+
+                  <ActionBtn onClick={() => { void playClickOpcion(); setTargeting(null); void doPlayerFlee(); }} disabled={!isPlayerTurn}
+                    bg="rgba(255,45,69,0.07)" border="rgba(255,45,69,0.22)" hoverBg="rgba(255,45,69,0.18)" hoverBorder="rgba(255,45,69,0.5)">
+                    <span style={{ fontSize: 16, lineHeight: 1 }}>🏃</span>
+                    <span style={{ fontSize: 7, color: '#ff6b6b', fontFamily: 'var(--font-data)' }}>HUIR</span>
+                  </ActionBtn>
                 </div>
-              )}
-
-              {objetoPicker && (
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: 6, background: 'rgba(16,185,129,0.06)', borderRadius: 8, maxHeight: 100, overflowY: 'auto' }}>
-                  {objetosUtilizables.length === 0 ? (
-                    <span style={{ fontSize: 10, color: 'rgba(150,200,255,0.4)' }}>Sin objetos utilizables</span>
-                  ) : objetosUtilizables.map(o => (
-                    <button key={o.id} disabled={usingObjeto} onClick={() => doUsarObjeto(o)} style={{
-                      padding: '4px 8px', borderRadius: 6, fontSize: 9, fontFamily: 'var(--font-data)', cursor: usingObjeto ? 'not-allowed' : 'pointer',
-                      background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.4)',
-                    }}>{o.nombre} ×{o.cantidad}</button>
-                  ))}
-                </div>
-              )}
-            </>
+              </div>
+            </div>
           )}
+
+          {/* ── Pantalla de fin ── */}
           {phase !== 'battle' && (
-            <button onClick={() => { /* el padre desmonta el componente vía onVictory/onDefeat/onFlee */ }} style={{ display: 'none' }} />
+            <div style={{
+              position: 'absolute', inset: 0, background: 'rgba(2,5,12,0.9)', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 10, zIndex: 40,
+            }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: phase === 'victory' ? '#10b981' : phase === 'fled' ? '#E6B325' : '#ff6b6b' }}>
+                {phase === 'victory' ? '⚡ ¡Horda derrotada!' : phase === 'fled' ? '🏃 Huiste del combate' : '☠ Has sido derrotado'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em' }}>
+                {ronda} ronda{ronda === 1 ? '' : 's'} · {enemigosState.length - enPie}/{enemigosState.length} enemigos abatidos
+              </div>
+            </div>
           )}
         </div>
+
+        {diceOverlay}
+        {strike && (strike.type === 'melee'
+          ? <EnergyStrikeEffect {...strike} onDone={() => { strike.onResolve(); setStrike(null); }} />
+          : <RangedStrikeEffect {...strike} onDone={() => { strike.onResolve(); setStrike(null); }} />
+        )}
+        {statusFx && <StatusBurstEffect variant={statusFx.variant} stageRef={stageRef} targetRef={statusFx.targetRef} onDone={() => { statusFx.onResolve(); setStatusFx(null); }} />}
+        {floatTexts.map(ft => (
+          <FloatingCombatText key={ft.id} x={ft.x} y={ft.y} text={ft.text} variant={ft.variant} onDone={() => setFloatTexts(prev => prev.filter(f => f.id !== ft.id))} />
+        ))}
       </div>
+
+      {/* ── Selector de forma ── */}
+      {stancePicker && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 960, background: 'rgba(2,5,12,0.85)', display: 'grid', placeItems: 'center' }}
+          onMouseDown={() => setStancePicker(false)}>
+          <div className="nx-panel solid nx-panel-glow" style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }} onMouseDown={e => e.stopPropagation()}>
+            {NX.CLASSES.map((c, i) => (
+              <button key={c.id} onClick={() => doChangeForma(i + 1)} title={FORMA_LABELS_SHORT[i]} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8, cursor: 'pointer',
+                border: `1px solid ${currentForma === i + 1 ? c.accent : 'var(--holo-line)'}`,
+                background: currentForma === i + 1 ? `color-mix(in srgb, ${c.accent} 14%, transparent)` : 'rgba(255,255,255,0.02)',
+              }}>
+                <img src={c.img} alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
+                <span style={{ fontSize: 9, color: c.accent, fontFamily: 'var(--font-data)' }}>{c.num}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Selector de objeto utilizable ── */}
+      {objetoPicker && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 960, background: 'rgba(2,5,12,0.85)', display: 'grid', placeItems: 'center', padding: 16 }}
+          onMouseDown={() => setObjetoPicker(false)}>
+          <div className="nx-panel solid nx-panel-glow" style={{ width: '100%', maxWidth: 380, padding: 18 }} onMouseDown={e => e.stopPropagation()}>
+            <div className="nx-kicker" style={{ marginBottom: 10 }}>OBJETOS UTILIZABLES</div>
+            <div style={{ display: 'grid', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+              {objetosUtilizables.length === 0 ? (
+                <span style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin objetos utilizables</span>
+              ) : objetosUtilizables.map(o => (
+                <button key={o.id} disabled={usingObjeto} onClick={() => pedirObjetivo({ kind: 'objeto', objeto: o })} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left',
+                  padding: '8px 10px', borderRadius: 7, cursor: usingObjeto ? 'not-allowed' : 'pointer',
+                  background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.35)', opacity: usingObjeto ? 0.5 : 1,
+                }}>
+                  <span style={{ fontSize: 11, color: '#10b981', fontFamily: 'var(--font-data)' }}>{o.nombre}</span>
+                  <span style={{ fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>×{o.cantidad}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );
-}
-
-function btnStyle(disabled, color) {
-  return {
-    flex: '1 1 auto', minWidth: 90, padding: '7px 10px', borderRadius: 7, cursor: disabled ? 'not-allowed' : 'pointer',
-    background: disabled ? 'rgba(255,255,255,0.03)' : `${color}18`, border: `1px solid ${disabled ? 'rgba(255,255,255,0.08)' : `${color}55`}`,
-    color: disabled ? 'rgba(200,225,255,0.3)' : color, fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: '0.04em', opacity: disabled ? 0.5 : 1,
-  };
 }
