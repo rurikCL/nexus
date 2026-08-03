@@ -331,8 +331,12 @@ const extractDice = (text) => {
 const isFormaEffectiveMsg = (text) => /forma efectiva/i.test(text);
 const isFormaResistantMsg = (text) => /resistencia de forma/i.test(text);
 
-/* Contador regresivo del turno activo — sincronizado contra `turn_started_at` (servidor),
-   se resincroniza en cada polling. Si llega a 0, el próximo show() del backend salta el turno. */
+/* Contador regresivo del turno activo — `startedAt` es un timestamp LOCAL (ver
+   countdownStart), no `raid.turn_started_at` (servidor): ese se fija apenas el turno avanza
+   en el backend, antes de que el cliente termine de reproducir banners/animaciones
+   pendientes, así que el contador visual arrancaba ya consumido. El backend sigue usando su
+   propio reloj (raid_max_wait) para el timeout real — este contador es solo una referencia
+   visual para el jugador. */
 const useCountdown = (startedAt, maxWait) => {
   const [secondsLeft, setSecondsLeft] = useState(maxWait);
 
@@ -410,6 +414,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
      entrada de "Orden de turnos" de la nueva ronda, antes de mostrar ese banner. */
   const [turnoRonda, setTurnoRonda] = useState(1);
   const [inicioMsg, setInicioMsg] = useState(null); // { key } — banner "¡Combate iniciado!", solo en raids recién comenzados
+  /* Momento (local) en que las acciones quedaron habilitadas — usado como inicio del contador
+     regresivo del turno en vez de `raid.turn_started_at` (servidor): ese timestamp se fija
+     apenas el turno avanza EN EL SERVIDOR, antes de que el cliente termine de reproducir los
+     banners/animaciones pendientes, así que el contador se veía consumir varios segundos de
+     golpe (o directamente arrancar ya avanzado) antes de que el jugador pudiera realmente
+     actuar. Se resetea cada vez que `animBusy` termina (pasa de true a false) — el momento
+     exacto en que la pantalla queda libre para la siguiente acción. */
+  const [countdownStart, setCountdownStart] = useState(null);
+  useEffect(() => {
+    if (!animBusy && raid?.status === 'activo') {
+      setCountdownStart(Date.now());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animBusy, raid?.status]);
   const pollRef = useRef(null);
   const logRef = useRef(null);
   const stageRef = useRef(null);
@@ -599,6 +617,11 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setAnimBusy(true);
     try {
       for (let i = 0; i < entries.length; i++) {
+        /* Revela el mensaje de esta entrada YA — antes de reproducir su sonido/animación —
+           en vez de esperar a que todo el lote termine (que hacía que el texto apareciera
+           recién al final del turno). El resto del estado (hp/escudo/turn_order) se aplica
+           al final del lote completo, vía el setRaid(newRaid) de revealRaid. */
+        setRaid(prev => (prev ? { ...prev, log: [...(prev.log ?? []), entries[i]] } : prev));
         await playEntry(entries[i]);
         if (i < entries.length - 1) {
           /* Fase de combate: tras resolver el efecto de una entrada (mensaje + sonido/animación
@@ -1103,8 +1126,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                         <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
                       </ActionBtn>
 
-                      {raid.turn_started_at && (
-                        <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} icon={turnIcon} />
+                      {countdownStart && !animBusy && (
+                        <TurnCountdownCard startedAt={countdownStart} maxWait={raid.turn_max_wait ?? 30} icon={turnIcon} />
                       )}
                     </div>
                   </div>

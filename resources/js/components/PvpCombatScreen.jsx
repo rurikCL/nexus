@@ -353,6 +353,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     let lastFlee = null;
     let lastEmoji = null;
     for (const entry of newEntries) {
+      /* Revela el mensaje de esta entrada YA — antes de su animación — en vez de esperar a
+         que todo el lote termine (que hacía que el texto apareciera recién al final del
+         turno). El resto del estado (hp/escudo/turno) se aplica al final, con setCombat. */
+      setCombat(prev => ({ ...prev, log: [...(prev.log ?? []), entry] }));
+
       const iniciativaGanador = extractIniciativaGanador(entry);
       if (iniciativaGanador) {
         const nuevaRonda = extractIniciativaRonda(entry);

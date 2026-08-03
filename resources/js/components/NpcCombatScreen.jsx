@@ -741,6 +741,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       /* Leer stats efectivos ahora (closure over current state at render time) */
       const useRanged = !confundidoNpc && (hab ? hab.tipo !== 'melee' : (effNpcPnt > 0 && Math.random() > 0.5));
+
+      /* Anuncio inmediato — antes de la animación (dados/golpe). Si el NPC está confundido,
+         el mensaje de confusión de más arriba ya cubre el anuncio (el "objetivo" real es
+         forzado, no una elección). */
+      if (!confundidoNpc) {
+        const accionLabel = hab
+          ? `${npc.nombre} usa "${hab.nombre}"`
+          : useRanged
+            ? `${npc.nombre} dispara`
+            : `${npc.nombre} ataca`;
+        setLog(prev => [...prev, { text: accionLabel, type: 'info', id: prev.length, ronda, actor: 'npc' }]);
+      }
+
       const defEstadosPrevios = confundidoNpc ? npcEstados : playerEstados;
       const aTirada = tirarDados();
       const dTirada = tirarDados();
@@ -809,11 +822,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       const rollDesc = confundidoNpc
         ? `${npc.nombre} se ataca a sí mismo: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`
-        : hab
-          ? `${npc.nombre} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`
-          : useRanged
-            ? `${npc.nombre} dispara: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effNpcPnt}=${aT}`
-            : `${npc.nombre} ataca: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effNpcAtk}=${aT}`;
+        : `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`;
       let entries = confundidoNpc
         ? [{ text: rollDesc, type: 'info', diceColors: ['#ff6b6b'] }]
         : [
@@ -927,6 +936,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const habId = String(hab.id);
     if ((cooldowns[habId] ?? 0) > 0) return;
     if (playerFuerza < hab.costo_fuerza) return;
+    setActionLock(true);
 
     const habBuff   = Array.isArray(hab.buff)   ? hab.buff   : [];
     const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
@@ -948,8 +958,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
     if (hab.objetivo === 'self') {
-      const buffDesc = habBuffStats.map(s => `+1 ${s}`).join(', ');
-      entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
+      /* Anuncio inmediato — antes de la animación de FX (buff/curación) */
+      setLog(prev => [...prev, { text: `${player.nombre} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
+
+      if (habBuffStats.length > 0) {
+        entries.push({ text: `${player.nombre}: ${habBuffStats.map(s => `+1 ${s}`).join(', ')}`, type: 'info' });
+      }
       if (habBuffEstados.length > 0) {
         entries.push({ text: `${player.nombre}: ${habBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
       }
@@ -1008,10 +1022,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ─ */
     const targetDmg = hab.damage ?? 0;
     if (hab.objetivo === 'target' && targetDmg < 0) {
+      /* Anuncio inmediato — antes de la animación de FX (curación) */
+      setLog(prev => [...prev, { text: `${player.nombre} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
+
       const heal = -targetDmg;
       const newNpcHp = { ...npcHp, vida: Math.min(maxNpc.vida, npcHp.vida + heal) };
       entries.push({
-        text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
+        text: `Cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
         type: 'info',
       });
       let selfEstados = playerEstados;
@@ -1031,12 +1048,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     /* ─── Habilidad de ataque ───────────────────────────────────── */
     const confundidoHab = resolverConfundido(playerEstados);
-    if (confundidoHab) {
-      entries.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
-    }
     const useAtq  = hab.tipo === 'melee';
     const atkVal  = useAtq ? effPlayerAtk : effPlayerPnt;
     const defVal  = confundidoHab ? (useAtq ? effPlayerDef : effPlayerMov) : (useAtq ? effNpcDef : effNpcMov);
+
+    /* Anuncio inmediato — antes de la animación (dados/golpe) */
+    const announceHab = [];
+    if (confundidoHab) announceHab.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    announceHab.push({ text: `${player.nombre} usa "${hab.nombre}"`, type: 'info' });
+    setLog(prev => [...prev, ...announceHab.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
 
     await armThrow(playerAvatarRef.current);
 
@@ -1052,7 +1072,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     ]);
 
     entries.push({
-      text: `${player.nombre} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
+      text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
       type: 'info',
     });
 
@@ -1184,6 +1204,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   /* Intento de huida: requiere ganar tirada de iniciativa contra el rival */
   const doPlayerFlee = async () => {
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
+    setActionLock(true);
+
+    /* Anuncio inmediato — antes de la tirada/animación */
+    setLog(prev => [...prev, { text: `${player.nombre} intenta huir`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
 
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
     const pTirada = tirarDados();
@@ -1199,7 +1223,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     ]);
 
     const entries = [{
-      text: `${player.nombre} intenta huir: 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} vs 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`,
+      text: `2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} vs 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`,
       type: 'info',
     }];
     entries.push(success
@@ -1228,7 +1252,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    */
   const doUsarObjeto = async (objeto) => {
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock || usingObjeto || !onUsarObjeto) return;
+    setActionLock(true);
     setUsingObjeto(true);
+    /* Anuncio inmediato — antes de la validación del servidor y la animación de FX */
+    setLog(prev => [...prev, { text: `${player.nombre} usa ${objeto.nombre}`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
     try {
       await onUsarObjeto(objeto.id);
       const newHp = {
@@ -1240,7 +1267,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       if (objeto.cura_vida) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${objeto.cura_vida}` });
       if (objeto.cura_escudo) showFloatText(playerHudRef, { variant: 'heal', text: `+${objeto.cura_escudo} escudo` });
       setLog(prev => [...prev, {
-        text: `${player.nombre} usa ${objeto.nombre}`, type: 'success', id: prev.length, ronda, actor: 'player',
+        text: '¡Curación aplicada!', type: 'success', id: prev.length, ronda, actor: 'player',
       }]);
       setPlayerHp(newHp);
       endTurnAfter('player', { playerHp: newHp });
@@ -1248,6 +1275,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       setLog(prev => [...prev, {
         text: e?.message || 'No se pudo usar el objeto.', type: 'danger', id: prev.length, ronda, actor: 'player',
       }]);
+      setActionLock(false);
     } finally {
       setUsingObjeto(false);
     }
@@ -1269,19 +1297,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   /* Ataque básico: arma equipada o desarmado */
   const doPlayerBasicAttack = async () => {
     if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
+    setActionLock(true);
 
     const confundido = resolverConfundido(playerEstados);
-    const entries = [];
-    if (confundido) {
-      entries.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
-    }
-
     const arma        = player.arma_equipada;
     const esDistancia = arma?.tipo_ataque === 'distancia';
     const atkVal       = esDistancia ? effPlayerPnt : effPlayerAtk;
     const defVal       = confundido
       ? (esDistancia ? effPlayerMov : effPlayerDef)
       : (esDistancia ? effNpcMov : effNpcDef);
+    const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
+
+    /* Anuncio inmediato — antes de cualquier animación (dados/golpe) */
+    const announce = [];
+    if (confundido) announce.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    announce.push({ text: `${player.nombre} ${accion}`, type: 'info' });
+    setLog(prev => [...prev, ...announce.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+
+    const entries = [];
 
     await armThrow(playerAvatarRef.current);
 
@@ -1292,7 +1325,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const critico   = arma?.critico ?? 0;
     const esCritico = !confundido && aR >= (12 - critico);
-    const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
 
     await rollDice([
       { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
@@ -1300,7 +1332,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     ]);
 
     entries.push({
-      text: `${player.nombre} ${accion}: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
+      text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
       type: 'info',
     });
 
