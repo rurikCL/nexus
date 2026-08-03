@@ -44,6 +44,19 @@ const REWARD_ICON = { creditos: 'coin', objeto: 'box', habilidad: 'zap', punto_h
    de esperar al estado final de todo el lote (ver playEntries). Sin snapshot, no cambia nada. */
 function aplicarSnapshot(raid, snapshot) {
   if (!snapshot || !raid) return raid;
+  const jugadores = raid.jugadores.map((j) => {
+    const s = snapshot.jugadores?.[j.user_id];
+    if (!s) return j;
+    return { ...j, hp: s.hp, escudo: s.escudo, buffs: s.buffs, debuffs: s.debuffs, estados: s.estados, status: s.status, agro_puntos: s.agro_puntos };
+  });
+
+  /* El líder de agro (es_bajo_agro) depende de TODOS los jugadores, no solo del que cambió en
+     esta entrada — se recalcula igual que el backend (RaidCombatController::formatRaid): el
+     activo con más agro_puntos, solo si ese máximo es > 0 (si todos están en 0 no hay líder). */
+  const activos = jugadores.filter((j) => j.status === 'activo' && j.hp > 0);
+  const lider = activos.reduce((max, j) => ((j.agro_puntos ?? 0) > (max?.agro_puntos ?? -1) ? j : max), null);
+  const liderUserId = lider && (lider.agro_puntos ?? 0) > 0 ? lider.user_id : null;
+
   return {
     ...raid,
     npc: {
@@ -54,11 +67,7 @@ function aplicarSnapshot(raid, snapshot) {
       debuffs: snapshot.npc.debuffs,
       estados: snapshot.npc.estados,
     },
-    jugadores: raid.jugadores.map((j) => {
-      const s = snapshot.jugadores?.[j.user_id];
-      if (!s) return j;
-      return { ...j, hp: s.hp, escudo: s.escudo, buffs: s.buffs, debuffs: s.debuffs, estados: s.estados, status: s.status };
-    }),
+    jugadores: jugadores.map((j) => ({ ...j, es_bajo_agro: j.user_id === liderUserId })),
   };
 }
 
@@ -1008,8 +1017,17 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                 background: j.es_mi_turno ? 'color-mix(in srgb, var(--holo) 10%, transparent)' : 'rgba(255,255,255,0.02)',
                 opacity: j.status !== 'activo' ? 0.4 : 1,
               }}>
-                {j.es_bajo_agro && (
-                  <div title="Bajo agro del jefe" style={{
+                {j.es_bajo_agro ? (
+                  <div title={`Mayor agro del jefe (${j.agro_puntos} pts) — 80% de ser el objetivo`} style={{
+                    position: 'absolute', top: -8, right: -8, zIndex: 2,
+                    width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                    background: 'rgba(6,12,26,0.96)', border: '1px solid rgba(255,45,69,0.75)',
+                    color: '#ff2d45', boxShadow: '0 0 12px rgba(255,45,69,0.3)',
+                  }}>
+                    <Icon name="eye" size={12} />
+                  </div>
+                ) : (j.agro_puntos ?? 0) > 0 && (
+                  <div title={`Tiene agro del jefe (${j.agro_puntos} pts)`} style={{
                     position: 'absolute', top: -8, right: -8, zIndex: 2,
                     width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center',
                     background: 'rgba(6,12,26,0.96)', border: '1px solid rgba(230,179,37,0.65)',

@@ -422,6 +422,9 @@ class RaidCombatController extends Controller
             $defRoll = $defDado + $defVal;
             $critico = $arma['critico'] ?? 0;
             $esCritico = $atkDado >= (12 - $critico);
+            /* Agro: cualquier intento de golpear al jefe suma, conecte o no; un crítico
+             * vale 2 en vez de sumarse aparte (ver elegirObjetivoPorAgro). */
+            $myPlayer->agro_puntos += $esCritico ? 2 : 1;
             $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
             $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
             $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
@@ -484,7 +487,6 @@ class RaidCombatController extends Controller
                     $escudoAntes = $raid->npc_escudo;
                     [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                     $myPlayer->dano_al_jefe += $dmg + $dmgEscudo + $dmgPerforante;
-                    $myPlayer->golpes_al_jefe += 1;
                     $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
                     $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
                 }
@@ -603,6 +605,7 @@ class RaidCombatController extends Controller
                 $targetHp = $esBuffUnoMismo ? $myPlayer->hp : $buffTargetPlayer->hp;
                 $targetEscudo = $esBuffUnoMismo ? $myPlayer->escudo : $buffTargetPlayer->escudo;
 
+                $curoCompanero = false;
                 if ($dmg < 0) {
                     $heal = -$dmg;
                     $newHp = min($targetMax['vida'], $targetHp + $heal);
@@ -610,6 +613,7 @@ class RaidCombatController extends Controller
                         $myPlayer->hp = $newHp;
                     } else {
                         $buffTargetPlayer->hp = $newHp;
+                        $curoCompanero = true;
                     }
                     $myPlayer->curacion_total += $heal;
                     $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
@@ -622,10 +626,14 @@ class RaidCombatController extends Controller
                         $myPlayer->escudo = $newEsc;
                     } else {
                         $buffTargetPlayer->escudo = $newEsc;
+                        $curoCompanero = true;
                     }
                     $myPlayer->curacion_total += $healEsc;
                     $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
                     $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
+                }
+                if ($curoCompanero) {
+                    $myPlayer->agro_puntos += 1; // curar a un compañero (no a uno mismo) suma agro
                 }
 
                 if (! $esBuffUnoMismo) {
@@ -645,6 +653,7 @@ class RaidCombatController extends Controller
                     }
                     $raid->npc_debuffs = $npcDebuffsArr;
                     $myPlayer->debuffs_aplicados += count($habDebuff);
+                    $myPlayer->agro_puntos += 1; // debuff al jefe suma agro
                     $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
                 }
             } elseif ($dmg < 0) {
@@ -657,6 +666,10 @@ class RaidCombatController extends Controller
                 if ($confundidoHab) {
                     $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
                 }
+                /* Agro: cualquier intento de golpear al jefe suma, conecte o no (las
+                 * habilidades no tienen crítico propio en RAID, a diferencia del arma
+                 * equipada en un ataque desarmado). */
+                $myPlayer->agro_puntos += 1;
                 $statsObjetivoHab = $confundidoHab ? $actorStats : $npcEffective;
 
                 $useAtq = $hab->tipo === 'melee';
@@ -736,7 +749,6 @@ class RaidCombatController extends Controller
                         $escudoAntes = $raid->npc_escudo;
                         [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
-                        $myPlayer->golpes_al_jefe += 1;
 
                         $npcDebuffs = $raid->npc_debuffs ?? [];
                         foreach ($habDebuff as $stat) {
@@ -748,6 +760,9 @@ class RaidCombatController extends Controller
                         }
                         $raid->npc_debuffs = $npcDebuffs;
                         $myPlayer->debuffs_aplicados += count($habDebuff);
+                        if (! empty($habDebuff)) {
+                            $myPlayer->agro_puntos += 1; // debuff al jefe suma agro, además del intento de golpe ya sumado arriba
+                        }
 
                         $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
                         $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
@@ -972,11 +987,14 @@ class RaidCombatController extends Controller
     }
 
     /**
-     * Elige a quién ataca el jefe: el jugador con más golpes conectados contra él acumula 20%
-     * de probabilidad de ser el objetivo por golpe, hasta un máximo de 80% — el resto de la
-     * probabilidad recae en UN jugador al azar (uniforme) entre los demás activos, no en el de
-     * mayor agro. Reemplaza el targeting determinista anterior (siempre el de mayor daño
-     * acumulado, `dano_al_jefe`, que se mantiene solo como estadístico).
+     * Elige a quién ataca el jefe: quien tenga más `agro_puntos` acumulados (golpe fallido o
+     * exitoso al jefe +1, crítico +2, debuff al jefe +1, curar a un compañero +1 — ver los
+     * puntos donde se suma en `action()`) tiene 80% fijo de probabilidad de ser el objetivo;
+     * el 20% restante recae en UN jugador al azar (uniforme) entre los demás activos. Si nadie
+     * ha generado agro todavía (todos en 0, ej. recién empezado el raid), no hay "líder" real
+     * que premiar: se sortea parejo entre todos los activos en vez de darle el 80% a un ganador
+     * arbitrario del empate. Reemplaza el targeting por daño acumulado (`dano_al_jefe`, que se
+     * mantiene solo como estadístico para el ranking).
      */
     private static function elegirObjetivoPorAgro(Collection $activos): RaidCombatPlayer
     {
@@ -984,10 +1002,12 @@ class RaidCombatController extends Controller
             return $activos->first();
         }
 
-        $lider = $activos->sortByDesc('golpes_al_jefe')->first();
-        $agro = min(80, (int) $lider->golpes_al_jefe * 20);
+        $lider = $activos->sortByDesc('agro_puntos')->first();
+        if ((int) $lider->agro_puntos <= 0) {
+            return $activos->random();
+        }
 
-        if (random_int(1, 100) <= $agro) {
+        if (random_int(1, 100) <= 80) {
             return $lider;
         }
 
@@ -1388,13 +1408,15 @@ class RaidCombatController extends Controller
         $npcBase = self::getNpcStats($npc);
         $npcEffective = self::getEffectiveStats($npcBase, $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
         $current = $raid->turn_order[$raid->turn_index] ?? null;
-        // Indicador visual de "bajo agro": el jugador con más golpes conectados (el que tiene
-        // hasta 80% de probabilidad de ser el objetivo — ver elegirObjetivoPorAgro).
-        $agroTargetUserId = $raid->jugadores
+        // Indicador visual de agro: el jugador activo con más agro_puntos (el que tiene 80% de
+        // probabilidad de ser el objetivo — ver elegirObjetivoPorAgro). Si todos están en 0
+        // (nadie ha generado agro todavía), no hay líder real que marcar en rojo.
+        $liderAgro = $raid->jugadores
             ->where('status', 'activo')
             ->where('hp', '>', 0)
-            ->sortByDesc('golpes_al_jefe')
-            ->first()?->user_id;
+            ->sortByDesc('agro_puntos')
+            ->first();
+        $agroTargetUserId = ($liderAgro && (int) $liderAgro->agro_puntos > 0) ? $liderAgro->user_id : null;
 
         $jugadores = $raid->jugadores->sortBy('slot')->map(function (RaidCombatPlayer $rp) use ($current) {
             $ch = $rp->user->character;
@@ -1435,6 +1457,7 @@ class RaidCombatController extends Controller
                 'estados' => $rp->estados ?? [],
                 'status' => $rp->status,
                 'dano_al_jefe' => $rp->dano_al_jefe,
+                'agro_puntos' => $rp->agro_puntos,
                 'recompensas' => $rp->recompensas_otorgadas ?? [],
                 'habilidades' => $habilidades,
                 'arma_equipada' => $ch?->armaEfectiva(),
@@ -1721,6 +1744,7 @@ class RaidCombatController extends Controller
                     'debuffs' => $rp->debuffs ?? [],
                     'estados' => $rp->estados ?? [],
                     'status' => $rp->status,
+                    'agro_puntos' => $rp->agro_puntos,
                 ],
             ])->all(),
         ];
