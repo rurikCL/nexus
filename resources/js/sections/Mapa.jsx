@@ -2809,7 +2809,18 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
     setBusy(true);
     try {
       const d = await apiPost(`/map/dungeons/runs/${runId}/mover`, { direccion });
-      setData((prev) => ({ ...prev, sala: d.sala }));
+      /* Refleja la nueva posición en el minimapa de inmediato -sin esto, `mapa` solo se
+         actualiza en el próximo tick del polling de 4s (ver refresh más abajo), y el jugador
+         ve su click "sin efecto" durante varios segundos aunque el servidor ya lo movió-. */
+      setData((prev) => ({
+        ...prev,
+        sala: d.sala,
+        mapa: prev.mapa?.map((s) => (
+          s.id === d.sala.id
+            ? { ...s, es_actual: true, visitada: true, tiene_enemigo: !!(d.sala.enemigo && !d.sala.resuelta), tiene_cofre: d.sala.tiene_cofre && !d.sala.cofre_abierto }
+            : (s.es_actual ? { ...s, es_actual: false } : s)
+        )),
+      }));
     } catch (e) {
       toast(e?.body?.error || e?.message || 'No se pudo mover.', { tone: 'error', icon: 'x' });
     } finally {
