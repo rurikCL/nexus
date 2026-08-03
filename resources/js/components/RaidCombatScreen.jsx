@@ -41,12 +41,12 @@ const tipoIcon = (tipo) => tipo === 'melee' ? '⚔' : '◎';
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
-  deflectar: '↩️', contraataque: '🗡️',
+  deflectar: '↩️', contraataque: '🗡️', revivir: '✨',
 };
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
-  deflectar: 'Deflectar', contraataque: 'Contraataque',
+  deflectar: 'Deflectar', contraataque: 'Contraataque', revivir: 'Revivir',
 };
 
 /* Badges compactos (ícono + turnos) para los estados activos de un combatiente o del jefe. */
@@ -522,7 +522,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
     const text = (entry.messages || []).join(' ');
     const dice = extractDice(text);
-    const statusEffects = Array.isArray(entry.effects) ? entry.effects.filter((e) => e?.type === 'buff' || e?.type === 'heal') : [];
+    const statusEffects = Array.isArray(entry.effects) ? entry.effects.filter((e) => e?.type === 'buff' || e?.type === 'heal' || e?.type === 'revivir') : [];
     const isPlayerActor = entry.actor === 'jugador';
     const actorId = isPlayerActor ? entry.actor_id : 'npc';
     const targetId = isPlayerActor ? 'npc' : (entry.target_user_id ?? null);
@@ -561,7 +561,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       });
       for (const eff of statusEffects) {
         const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
-        await playStatusFx(fxTarget, eff.type);
+        await playStatusFx(fxTarget, eff.type === 'revivir' ? 'heal' : eff.type);
       }
       return;
     }
@@ -569,7 +569,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       await triggerStrike({ attackerId: actorId, targetId: targetId ?? 'npc', hit: false, crit: false, text: lastMsg });
       for (const eff of statusEffects) {
         const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
-        await playStatusFx(fxTarget, eff.type);
+        await playStatusFx(fxTarget, eff.type === 'revivir' ? 'heal' : eff.type);
       }
       return;
     }
@@ -579,7 +579,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       const fxTarget = eff.target_user_id ?? (isPlayerActor ? entry.actor_id : 'npc');
       await playStatusFx(fxTarget, eff.type);
     }
-    if (text.includes('Curación') || text.includes('restaurado')) {
+    if (text.includes('Curación') || text.includes('restaurado') || text.includes('ha revivido')) {
       const healTarget = entry.target_user_id ?? (isPlayerActor && text.includes(raid.npc.nombre) ? 'npc' : (isPlayerActor ? entry.actor_id : null));
       if (healTarget != null) showFloatText(healTarget, { variant: 'heal', text: lastMsg });
     }

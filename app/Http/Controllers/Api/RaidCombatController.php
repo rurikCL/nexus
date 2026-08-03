@@ -508,6 +508,14 @@ class RaidCombatController extends Controller
             $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
             $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
 
+            /* 'revivir' (si está en el buff) es una acción instantánea, no un estado que
+             * persista — se intercepta acá y se excluye del buff genérico de abajo (ver
+             * AplicaEstadosCombate::esEfectoRevivir/sinEfectoRevivir). Solo tiene sentido en
+             * una habilidad "self", que es la única que permite elegir un objetivo distinto
+             * de quien la usa (ver más abajo). */
+            $esRevivirHab = self::esEfectoRevivir($habBuff);
+            $habBuffAplicable = self::sinEfectoRevivir($habBuff);
+
             /* El buff (si la habilidad tiene uno) SIEMPRE se aplica al usarla, sin importar
              * si además es una habilidad de ataque contra el jefe (igual que en PvP) — solo
              * las habilidades "self" permiten elegir a cuál de los combatientes del grupo
@@ -519,7 +527,14 @@ class RaidCombatController extends Controller
                  * el jugador elige a cuál de los 4 combatientes (incluso él mismo) afecta. */
                 $targetUserId = (int) ($data['target_user_id'] ?? $user->id);
                 $targetPlayer = $raid->jugadores->firstWhere('user_id', $targetUserId);
-                if (! $targetPlayer || $targetPlayer->status !== 'activo') {
+                if (! $targetPlayer) {
+                    return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente del grupo.'], 422);
+                }
+                if ($esRevivirHab) {
+                    if ($targetPlayer->status !== 'derrotado') {
+                        return response()->json(['error' => 'Ese combatiente no está caído — no puedes revivirlo.'], 422);
+                    }
+                } elseif ($targetPlayer->status !== 'activo') {
                     return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente activo del grupo.'], 422);
                 }
                 $buffTargetPlayer = $targetPlayer;
@@ -528,11 +543,11 @@ class RaidCombatController extends Controller
             $buffTargetChar = $buffTargetPlayer->user->character;
             $buffTargetUserId = $buffTargetPlayer->user_id;
 
-            $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
-            if (! empty($habBuff)) {
+            $buffDesc = ! empty($habBuffAplicable) ? ' (+'.implode(', +', $habBuffAplicable).')' : '';
+            if (! empty($habBuffAplicable)) {
                 $targetBuffsArr = $esBuffUnoMismo ? $myBuffs : ($buffTargetPlayer->buffs ?? []);
                 $targetEstadosArr = $esBuffUnoMismo ? $myEstados : ($buffTargetPlayer->estados ?? []);
-                foreach ($habBuff as $stat) {
+                foreach ($habBuffAplicable as $stat) {
                     if (self::esTipoEstado($stat)) {
                         $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat);
                     } else {
@@ -556,6 +571,20 @@ class RaidCombatController extends Controller
                     : "{$actorChar->name} usa {$hab->nombre} en {$buffTargetChar->name}{$buffDesc}";
 
                 $targetMax = self::getCombatStats($buffTargetChar);
+
+                if ($esRevivirHab) {
+                    $vidaRevivido = self::vidaAlRevivir($targetMax['vida']);
+                    if ($esBuffUnoMismo) {
+                        $myPlayer->hp = $vidaRevivido;
+                        $myPlayer->status = 'activo';
+                    } else {
+                        $buffTargetPlayer->hp = $vidaRevivido;
+                        $buffTargetPlayer->status = 'activo';
+                    }
+                    $entry['effects'][] = ['type' => 'revivir', 'target_user_id' => $buffTargetUserId];
+                    $entry['messages'][] = "¡{$buffTargetChar->name} ha revivido con la mitad de su vida!";
+                }
+
                 $targetHp = $esBuffUnoMismo ? $myPlayer->hp : $buffTargetPlayer->hp;
                 $targetEscudo = $esBuffUnoMismo ? $myPlayer->escudo : $buffTargetPlayer->escudo;
 

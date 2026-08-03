@@ -70,7 +70,7 @@ const formaBono = (forma, clave) => FORMA_BONOS[forma]?.[clave] ?? 0;
 const TIPOS_ESTADO = [
   'paralizado', 'inmune_paralisis', 'aturdido', 'marcado', 'protegido',
   'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion',
-  'deflectar', 'contraataque',
+  'deflectar', 'contraataque', 'revivir',
 ];
 const DEFAULTS_ESTADO = {
   paralizado: { turns: 1, valor: 0 },
@@ -84,18 +84,19 @@ const DEFAULTS_ESTADO = {
   regeneracion: { turns: 2, valor: 2 },
   deflectar: { turns: 1, valor: 0 },
   contraataque: { turns: 1, valor: 0 },
+  revivir: { turns: 1, valor: 0 },
 };
 const ESTADOS_DOT = { sangrado: true, envenenado: true };
 const ESTADOS_HOT = { regeneracion: true };
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
-  deflectar: '↩️', contraataque: '🗡️',
+  deflectar: '↩️', contraataque: '🗡️', revivir: '✨',
 };
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
-  deflectar: 'Deflectar', contraataque: 'Contraataque',
+  deflectar: 'Deflectar', contraataque: 'Contraataque', revivir: 'Revivir',
 };
 
 const esTipoEstado = (stat) => TIPOS_ESTADO.includes(stat);
@@ -1185,11 +1186,45 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       await playStatusFx(playerHudRef, 'heal');
       if (objeto.cura_vida) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${objeto.cura_vida}` });
       if (objeto.cura_escudo) showFloatText(playerHudRef, { variant: 'heal', text: `+${objeto.cura_escudo} escudo` });
-      setLog(prev => [...prev, {
-        text: `${player.nombre} usa ${objeto.nombre}`, type: 'success', id: prev.length, ronda, actor: 'player',
-      }]);
+
+      const entries = [{ text: `${player.nombre} usa ${objeto.nombre}`, type: 'success' }];
+
+      /* Buff/debuff de un objeto utilizable: mismo registro de estados reservados que las
+         habilidades (ver RolObjeto::buff/debuff) — el buff siempre beneficia a quien lo usa,
+         el debuff siempre penaliza al enemigo. 'revivir' no aplica acá (no hay a quién revivir
+         en un combate 1v1 sin aliados) y se filtra en vez de dejarlo como estado sin efecto. */
+      const objBuff = Array.isArray(objeto.buff) ? objeto.buff : [];
+      const objDebuff = Array.isArray(objeto.debuff) ? objeto.debuff : [];
+      const objBuffStats = objBuff.filter(s => !esTipoEstado(s));
+      const objBuffEstados = objBuff.filter(s => esTipoEstado(s) && s !== 'revivir');
+      const objDebuffStats = objDebuff.filter(s => !esTipoEstado(s));
+      const objDebuffEstados = objDebuff.filter(s => esTipoEstado(s) && s !== 'revivir');
+
+      let playerEstadosFinal = playerEstados;
+      if (objBuffStats.length > 0) {
+        setPlayerBuffs(prev => [...prev, ...objBuffStats.map(stat => ({ stat, turns: 2 }))]);
+        entries.push({ text: `${player.nombre}: +${objBuffStats.join(', +')}`, type: 'info' });
+      }
+      if (objBuffEstados.length > 0) {
+        playerEstadosFinal = objBuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), playerEstadosFinal);
+        entries.push({ text: `${player.nombre}: ${objBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+      }
+
+      let npcEstadosFinal = npcEstados;
+      if (objDebuffStats.length > 0) {
+        setNpcDebuffs(prev => [...prev, ...objDebuffStats.map(stat => ({ stat, turns: 2 }))]);
+        entries.push({ text: `${npc.nombre}: −${objDebuffStats.join(', −')}`, type: 'info' });
+      }
+      if (objDebuffEstados.length > 0) {
+        npcEstadosFinal = objDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), npcEstadosFinal);
+        entries.push({ text: `${npc.nombre}: ${objDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+      }
+
+      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
       setPlayerHp(newHp);
-      endTurnAfter('player', { playerHp: newHp });
+      if (playerEstadosFinal !== playerEstados) setPlayerEstados(playerEstadosFinal);
+      if (npcEstadosFinal !== npcEstados) setNpcEstados(npcEstadosFinal);
+      endTurnAfter('player', { playerHp: newHp, playerEstados: playerEstadosFinal, npcEstados: npcEstadosFinal });
     } catch (e) {
       setLog(prev => [...prev, {
         text: e?.message || 'No se pudo usar el objeto.', type: 'danger', id: prev.length, ronda, actor: 'player',

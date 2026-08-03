@@ -420,6 +420,10 @@ class DungeonController extends Controller
      * `target_user_id` es opcional (default: uno mismo) y permite usarlo en cualquier
      * compañero de equipo ACTIVO del mismo run, sin importar en qué sala esté parado — el
      * objeto siempre se descuenta del inventario de quien lo usa, no del objetivo.
+     *
+     * Si el objeto trae 'revivir' en su buff (ver RolObjeto::buff, mismo registro de estados
+     * reservados que las habilidades), solo puede usarse sobre un compañero caído (hp_actual
+     * <= 0) y lo revive con la mitad de su vida máxima en vez de aplicar cura_vida/cura_escudo.
      */
     public function usarObjeto(Request $request, int $runId): JsonResponse
     {
@@ -468,9 +472,20 @@ class DungeonController extends Controller
             return response()->json(['error' => 'Este objeto no se puede usar.'], 422);
         }
 
+        /* 'revivir' (en el buff del objeto) solo puede usarse sobre un compañero caído (0 de
+         * vida) y lo revive con la mitad de su vida máxima — igual criterio que la habilidad
+         * "self" con revivir en RaidCombatController. El resto de objetos utilizables no
+         * cambia: curan (cura_vida/cura_escudo) a quien sea, esté o no caído. */
+        $esRevivirObjeto = in_array('revivir', is_array($owned->buff) ? $owned->buff : [], true);
+        if ($esRevivirObjeto && ($objetivoJugador->hp_actual ?? 1) > 0) {
+            return response()->json(['error' => 'Ese jugador no está caído.'], 422);
+        }
+
         $stats = $objetivoCharacter->combatStats();
         $objetivoJugador->update([
-            'hp_actual' => min($stats['vida'], ($objetivoJugador->hp_actual ?? $stats['vida']) + (int) ($owned->cura_vida ?? 0)),
+            'hp_actual' => $esRevivirObjeto
+                ? max(1, intdiv($stats['vida'], 2))
+                : min($stats['vida'], ($objetivoJugador->hp_actual ?? $stats['vida']) + (int) ($owned->cura_vida ?? 0)),
             'escudo_actual' => min($stats['escudo'], ($objetivoJugador->escudo_actual ?? $stats['escudo']) + (int) ($owned->cura_escudo ?? 0)),
         ]);
 
@@ -486,6 +501,7 @@ class DungeonController extends Controller
             'target_user_id' => $objetivoJugador->user_id,
             'hp_actual' => $objetivoJugador->hp_actual,
             'escudo_actual' => $objetivoJugador->escudo_actual,
+            'revivido' => $esRevivirObjeto,
         ]);
     }
 

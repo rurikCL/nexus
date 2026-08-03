@@ -46,6 +46,8 @@ class RolObjeto extends Model
         'bono_cooldown',
         'cura_vida',
         'cura_escudo',
+        'buff',
+        'debuff',
     ];
 
     protected $casts = [
@@ -73,6 +75,36 @@ class RolObjeto extends Model
         'cura_vida' => 'integer',
         'cura_escudo' => 'integer',
     ];
+
+    /* buff y debuff se reciben como array o como JSON string (desde FormData) — mismo mutador
+     * que RolHabilidad, para reutilizar el mismo registro de estados reservados (ver
+     * app/Support/Combat/AplicaEstadosCombate.php) en objetos 'utilizable'. */
+
+    public function getBuffAttribute(?string $value): ?array
+    {
+        return $value !== null ? json_decode($value, true) : null;
+    }
+
+    public function setBuffAttribute(mixed $value): void
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true) ?? [];
+        }
+        $this->attributes['buff'] = ($value && count($value) > 0) ? json_encode($value) : null;
+    }
+
+    public function getDebuffAttribute(?string $value): ?array
+    {
+        return $value !== null ? json_decode($value, true) : null;
+    }
+
+    public function setDebuffAttribute(mixed $value): void
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true) ?? [];
+        }
+        $this->attributes['debuff'] = ($value && count($value) > 0) ? json_encode($value) : null;
+    }
 
     public function characters(): BelongsToMany
     {
