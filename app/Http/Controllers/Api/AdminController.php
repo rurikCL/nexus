@@ -82,7 +82,7 @@ class AdminController extends Controller
             'zonas' => ['planeta:id,nombre'],
             'lugares' => ['zona:id,nombre', 'enemigos'],
             'npcs' => ['lugar:id,nombre', 'naves', 'objetos', 'recompensas'],
-            'enemigos' => ['recompensas'],
+            'enemigos' => ['recompensas', 'hordaSlots.enemigo'],
             'dungeon_templates' => ['zona:id,nombre', 'jefe:id,nombre', 'enemigos', 'recompensas'],
             'usuarios' => ['tutor:id,name', 'roles:id,name,label', 'sede:id,nombre'],
             'personajes' => ['user:id,name,tier,email'],
@@ -193,6 +193,51 @@ class AdminController extends Controller
         $record->recompensas()->whereNotIn('id', $keepIds)->delete();
     }
 
+    /**
+     * Extrae del payload un array tipo [{enemigo_id, nivel}, ...] (o su versión JSON-string)
+     * para sincronizar la composición de un enemigo tipo 'horda'. Devuelve null si la clave no
+     * vino en el payload (no tocar los slots existentes).
+     */
+    private function extractHordaSlots(array &$data, string $key = 'horda_slots'): ?array
+    {
+        if (! array_key_exists($key, $data)) {
+            return null;
+        }
+
+        $raw = $data[$key];
+        unset($data[$key]);
+
+        return is_string($raw) ? (json_decode($raw, true) ?? []) : ($raw ?? []);
+    }
+
+    /**
+     * Reemplaza por completo los slots de una horda (hasta 4, cada uno un enemigo válido y no-
+     * horda del mismo catálogo) — a diferencia de syncRecompensas, no preserva ids entre
+     * ediciones porque un slot no tiene estado propio más allá de qué enemigo y a qué nivel, y
+     * la misma horda puede repetir el mismo enemigo en más de un slot.
+     */
+    private function syncHordaSlots(MapEnemigo $record, array $items): void
+    {
+        $enemigoIdsValidos = MapEnemigo::whereIn('id', collect($items)->pluck('enemigo_id')->filter()->all())
+            ->where('tipo', '!=', 'horda')
+            ->where('id', '!=', $record->id)
+            ->pluck('id')
+            ->all();
+
+        $record->hordaSlots()->delete();
+
+        foreach (array_slice($items, 0, 4) as $item) {
+            $enemigoId = (int) ($item['enemigo_id'] ?? 0);
+            if (! in_array($enemigoId, $enemigoIdsValidos, true)) {
+                continue;
+            }
+            $record->hordaSlots()->create([
+                'enemigo_id' => $enemigoId,
+                'nivel' => max(1, (int) ($item['nivel'] ?? 1)),
+            ]);
+        }
+    }
+
     /** Guarda un archivo subido: las imágenes se convierten a WebP; el resto (ej. audio) se guarda tal cual. */
     private function saveUpload(UploadedFile $file, string $directory): string
     {
@@ -275,6 +320,7 @@ class AdminController extends Controller
         $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
         $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
         $recompensas = in_array($entity, ['npcs', 'enemigos', 'dungeon_templates'], true) ? $this->extractRecompensas($data) : null;
+        $hordaSlots = $entity === 'enemigos' ? $this->extractHordaSlots($data) : null;
 
         $record = $model::create($data);
 
@@ -292,6 +338,9 @@ class AdminController extends Controller
         }
         if ($recompensas !== null) {
             $this->syncRecompensas($record, $recompensas);
+        }
+        if ($hordaSlots !== null) {
+            $this->syncHordaSlots($record, $hordaSlots);
         }
 
         $fresh = $record->fresh();
@@ -325,6 +374,7 @@ class AdminController extends Controller
         $objetos = $entity === 'npcs' ? $this->extractVentaPivot($data, 'objetos') : null;
         $enemigos = in_array($entity, ['lugares', 'dungeon_templates'], true) ? $this->extractSpawnPivot($data, 'enemigos') : null;
         $recompensas = in_array($entity, ['npcs', 'enemigos', 'dungeon_templates'], true) ? $this->extractRecompensas($data) : null;
+        $hordaSlots = $entity === 'enemigos' ? $this->extractHordaSlots($data) : null;
 
         $record->update($data);
 
@@ -342,6 +392,9 @@ class AdminController extends Controller
         }
         if ($recompensas !== null) {
             $this->syncRecompensas($record, $recompensas);
+        }
+        if ($hordaSlots !== null) {
+            $this->syncHordaSlots($record, $hordaSlots);
         }
 
         $fresh = $record->fresh();

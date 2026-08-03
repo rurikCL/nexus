@@ -67,6 +67,17 @@ class LugarEncuentroController extends Controller
         }
         $elegido ??= $candidatos->first();
 
+        // 'horda' (hasta 4 enemigos simultáneos) no pelea con sus propios stats — se resuelve
+        // a sus miembros reales, cada uno con el nivel de SU slot (ver MapEnemigo::hordaSlots).
+        if ($elegido->esHorda()) {
+            $miembros = $elegido->resolverHordaSlots();
+            if (empty($miembros)) {
+                return response()->json(['ataque' => false]);
+            }
+
+            return response()->json(['ataque' => true, 'horda' => $miembros, 'horda_nombre' => $elegido->nombre]);
+        }
+
         // El nivel de la asignación lugar-enemigo sobrescribe el nivel base del catálogo.
         $elegido->nivel = (int) $elegido->pivot->nivel;
 

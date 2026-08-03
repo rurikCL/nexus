@@ -4,6 +4,7 @@ import { Icon, Panel, Btn, Chip, Modal, toast, NumberInput } from '../components
 import { playAtras, playSound } from '../utils/sounds.js';
 import PvpCombatScreen from '../components/PvpCombatScreen.jsx';
 import NpcCombatScreen from '../components/NpcCombatScreen.jsx';
+import HordaCombatScreen from '../components/HordaCombatScreen.jsx';
 import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen.jsx';
 
 /* ─── helpers ─────────────────────────────────────────── */
@@ -3126,7 +3127,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
   const sala = data.sala;
   if (!sala) return <LoadingHUD text="CARGANDO SALA..." />;
 
-  const bloqueado = !!sala.enemigo;
+  const bloqueado = !!sala.enemigo || (Array.isArray(sala.horda) && sala.horda.length > 0);
   const equipo = data.equipo ?? [];
   const estoyCaido = (data.mi_estado?.hp_actual ?? 1) <= 0;
 
@@ -3248,12 +3249,27 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               </>
             ) : bloqueado ? (
               <>
-                <EnemigoPortrait enemigo={sala.enemigo} />
-                <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
-                  {sala.enemigo.nombre} bloquea el paso.
-                </p>
+                {Array.isArray(sala.horda) && sala.horda.length > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                      {sala.horda.map((en) => <EnemigoPortrait key={en.id} enemigo={en} size={64} />)}
+                    </div>
+                    <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                      ⚔ Una horda de {sala.horda.length} enemigos bloquea el paso: {sala.horda.map((en) => en.nombre).join(', ')}.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <EnemigoPortrait enemigo={sala.enemigo} />
+                    <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                      {sala.enemigo.nombre} bloquea el paso.
+                    </p>
+                  </>
+                )}
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                  <Btn kind="accent" icon="swords" onClick={() => setActiveCombat({ enemigo: sala.enemigo })}>Combatir</Btn>
+                  <Btn kind="accent" icon="swords" onClick={() => setActiveCombat(
+                    Array.isArray(sala.horda) && sala.horda.length > 0 ? { horda: sala.horda } : { enemigo: sala.enemigo }
+                  )}>Combatir</Btn>
                   <Btn kind="ghost" onClick={huirSala} disabled={busy}>Huir</Btn>
                 </div>
               </>
@@ -3295,8 +3311,31 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
         document.body
       )}
 
-      {/* combate 1v1 contra el enemigo de la sala */}
-      {activeCombat && (
+      {/* combate contra el/los enemigo(s) de la sala — 1v1 normal, o 1 vs hasta 4 si es una horda */}
+      {activeCombat && (activeCombat.horda ? (
+        <HordaCombatScreen
+          enemigos={activeCombat.horda}
+          player={playerStats}
+          lugarImagen={mediaUrl(lugar.imagen)}
+          planetaNombre={data.run.template.nombre}
+          lugarNombre={sala.tipo === 'entrada' ? 'Entrada' : 'Sala'}
+          objetosUtilizables={utilizables}
+          onUsarObjeto={(objetoId) => consumirObjeto(objetoId)}
+          onVictory={async (hp) => {
+            await registrarDano(hp);
+            try {
+              const d = await apiPost(`/map/dungeons/runs/${runId}/enemigo-victory`, {});
+              if (d?.recompensas?.length) {
+                toast(`🎁 Recompensa: ${d.recompensas.map((r) => r.label).join(' y ')}`, { tone: 'success', icon: 'box' });
+              }
+            } catch { /* ignore */ }
+            setActiveCombat(null);
+            refresh();
+          }}
+          onDefeat={async (hp) => { await registrarDano(hp); setActiveCombat(null); }}
+          onFlee={async (hp) => { await registrarDano(hp); setActiveCombat(null); }}
+        />
+      ) : (
         <NpcCombatScreen
           npc={activeCombat.enemigo}
           player={playerStats}
@@ -3320,7 +3359,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
           onDefeat={async (hp) => { await registrarDano(hp); setActiveCombat(null); }}
           onFlee={async (hp) => { await registrarDano(hp); setActiveCombat(null); }}
         />
-      )}
+      ))}
 
       {/* cola del jefe — se une el equipo entero, cupos = raid_slots del jefe */}
       {raidQueueOpen && (
@@ -5844,6 +5883,9 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
   const [activeNpcCombat, setActiveNpcCombat] = useState(() => {
     try { const s = localStorage.getItem('nx-npc-combat'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
+  const [activeHordaCombat, setActiveHordaCombat] = useState(() => {
+    try { const s = localStorage.getItem('nx-horda-combat'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [activeNaveCombat, setActiveNaveCombat] = useState(null);
   const [raidQueueNpcId, setRaidQueueNpcId] = useState(null);
   const [activeRaidId, setActiveRaidId] = useState(null);
@@ -5997,6 +6039,16 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
     try {
       const d = await apiPost(`/map/lugares/${lugarId}/enemigo-encuentro`, {});
       if (!d?.ataque) return;
+      if (Array.isArray(d.horda)) {
+        toast('¡Emboscada!', { tone: 'error', icon: 'swords', desc: `${d.horda_nombre ?? 'Una horda'} te ataca` });
+        const session = {
+          enemigos: d.horda, player: getPlayerCombatStats(userCharacter), lugarImagen,
+          planetaNombre: planeta?.nombre, lugarNombre, planetaImagen,
+        };
+        localStorage.setItem('nx-horda-combat', JSON.stringify(session));
+        setActiveHordaCombat(session);
+        return;
+      }
       toast('¡Emboscada!', { tone: 'error', icon: 'swords', desc: `${d.enemigo.nombre} te ataca` });
       const session = {
         npc: d.enemigo, player: getPlayerCombatStats(userCharacter), lugarImagen,
@@ -6369,6 +6421,38 @@ export default function MapaView({ S, setMapLocation, initialLocation, userId, u
           }}
           onDefeat={() => { localStorage.removeItem('nx-npc-combat'); setActiveNpcCombat(null); }}
           onFlee={() => { localStorage.removeItem('nx-npc-combat'); setActiveNpcCombat(null); }}
+        />
+      )}
+
+      {/* Combate contra una horda (emboscada mundial, hasta 4 enemigos) — overlay persistente */}
+      {activeHordaCombat && (
+        <HordaCombatScreen
+          enemigos={activeHordaCombat.enemigos}
+          player={activeHordaCombat.player ?? getPlayerCombatStats(userCharacter)}
+          lugarImagen={activeHordaCombat.lugarImagen || lugarImagen}
+          planetaNombre={activeHordaCombat.planetaNombre}
+          lugarNombre={activeHordaCombat.lugarNombre}
+          planetaImagen={activeHordaCombat.planetaImagen || planetaImagen}
+          initialState={activeHordaCombat.state}
+          onVictory={async (hp, defeatedIds) => {
+            localStorage.removeItem('nx-horda-combat');
+            postReputation(25); toast('+25 reputación', { tone: 'success', icon: 'star' });
+            const recompensasTotal = [];
+            let lastCredits;
+            for (const enemigoId of defeatedIds ?? []) {
+              const d = await postEnemigoVictory(enemigoId);
+              if (d?.credits !== undefined) lastCredits = d.credits;
+              if (d?.recompensas?.length) recompensasTotal.push(...d.recompensas);
+            }
+            if (lastCredits !== undefined) syncCredits(lastCredits);
+            if (recompensasTotal.length) {
+              toast(`🎁 Recompensa: ${recompensasTotal.map(r => r.label).join(' y ')}`, { tone: 'success', icon: 'box' });
+            }
+            setLugarRefreshKey((k) => k + 1);
+            setActiveHordaCombat(null);
+          }}
+          onDefeat={() => { localStorage.removeItem('nx-horda-combat'); setActiveHordaCombat(null); }}
+          onFlee={() => { localStorage.removeItem('nx-horda-combat'); setActiveHordaCombat(null); }}
         />
       )}
 
