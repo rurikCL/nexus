@@ -2321,10 +2321,10 @@ function BalizaUsarModal({ open, onClose, onDeployed }) {
 
 /* Fondo con la foto del lugar-portal (lobby/sala/terminal) — mismo tratamiento que el
    header de LugarView: imagen atenuada + degradado oscuro, contenido encima. */
-function DungeonBackdrop({ imagen, children }) {
+function DungeonBackdrop({ imagen, children, style }) {
   const bg = mediaUrl(imagen);
   return (
-    <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+    <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', height: '100%', ...style }}>
       {bg && (
         <div style={{
           position: 'absolute', inset: 0,
@@ -2338,7 +2338,7 @@ function DungeonBackdrop({ imagen, children }) {
         background: 'linear-gradient(180deg, rgba(4,7,15,0.35) 0%, rgba(4,7,15,0.90) 100%)',
         pointerEvents: 'none',
       }} />
-      <div style={{ position: 'relative', zIndex: 1, padding: 24 }}>
+      <div style={{ position: 'relative', zIndex: 1, padding: 24, height: '100%' }}>
         {children}
       </div>
     </div>
@@ -3158,12 +3158,12 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
 
       <div style={{ display: 'grid', gap: 16 }}>
         {/* FILA 1: mapa del dungeon (más ancho) + sala actual */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 16, alignItems: 'stretch' }}>
           <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} onNavigate={estoyCaido ? () => {} : mover} busy={busy || estoyCaido} />
 
           {/* qué hay en la sala actual (encuentro / cofre / jefe) */}
           <DungeonBackdrop imagen={lugar.imagen}>
-            <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center' }}>
+            <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div className="nx-display" style={{ fontSize: 16, marginBottom: 10 }}>
                 {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
               </div>
