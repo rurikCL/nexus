@@ -73,17 +73,17 @@ class RecompensaRollService
 
         if ($r->tipo === 'objeto' && $r->objeto_id) {
             if ($character->inventarioLleno()) {
-                return ['tipo' => 'objeto', 'objeto_id' => $r->objeto_id, 'sin_espacio' => true, 'label' => ($r->objeto->nombre ?? 'objeto') . ' (sin espacio en inventario)'];
+                return ['tipo' => 'objeto', 'objeto_id' => $r->objeto_id, 'sin_espacio' => true, 'label' => ($r->objeto->nombre ?? 'objeto') . ' (sin espacio en inventario)', 'imagen' => $r->objeto->imagen ?? null];
             }
             $character->rolObjetos()->syncWithoutDetaching([$r->objeto_id]);
 
-            return ['tipo' => 'objeto', 'objeto_id' => $r->objeto_id, 'label' => $r->objeto->nombre ?? 'objeto'];
+            return ['tipo' => 'objeto', 'objeto_id' => $r->objeto_id, 'label' => $r->objeto->nombre ?? 'objeto', 'imagen' => $r->objeto->imagen ?? null];
         }
 
         if ($r->tipo === 'habilidad' && $r->habilidad_id) {
             $user->habilidadesAprendidas()->syncWithoutDetaching([$r->habilidad_id]);
 
-            return ['tipo' => 'habilidad', 'habilidad_id' => $r->habilidad_id, 'label' => $r->habilidad->nombre ?? 'habilidad'];
+            return ['tipo' => 'habilidad', 'habilidad_id' => $r->habilidad_id, 'label' => $r->habilidad->nombre ?? 'habilidad', 'imagen' => $r->habilidad->icono ?? null];
         }
 
         if ($r->tipo === 'punto_habilidad' && $r->valor) {
@@ -101,7 +101,7 @@ class RecompensaRollService
         if ($r->tipo === 'insignia' && $r->medalla_id) {
             $character->medallas()->firstOrCreate(['medalla_id' => $r->medalla_id]);
 
-            return ['tipo' => 'insignia', 'medalla_id' => $r->medalla_id, 'label' => 'insignia "' . ($r->medalla->nombre ?? '') . '"'];
+            return ['tipo' => 'insignia', 'medalla_id' => $r->medalla_id, 'label' => 'insignia "' . ($r->medalla->nombre ?? '') . '"', 'imagen' => $r->medalla->imagen ?? null];
         }
 
         return null;

@@ -34,6 +34,34 @@ const mediaUrl = (path) => {
   return `/storage${clean}`;
 };
 
+/* Ícono de respaldo para una recompensa del resumen de victoria cuando no trae imagen propia
+   (solo objeto/habilidad/insignia tienen — ver RecompensaRollService::aplicar). */
+const REWARD_ICON = { creditos: 'coin', objeto: 'box', habilidad: 'zap', punto_habilidad: 'star', titulo: 'crown', insignia: 'medal' };
+
+/* Aplica el snapshot de hp/escudo/buffs/debuffs/estados que trae una entrada del log (ver
+   RaidCombatController::snapshotEstado) al raid actual — permite que la barra de vida/escudo y
+   los badges de estado se actualicen en el momento exacto en que se revela esa entrada, en vez
+   de esperar al estado final de todo el lote (ver playEntries). Sin snapshot, no cambia nada. */
+function aplicarSnapshot(raid, snapshot) {
+  if (!snapshot || !raid) return raid;
+  return {
+    ...raid,
+    npc: {
+      ...raid.npc,
+      hp: snapshot.npc.hp,
+      escudo: snapshot.npc.escudo,
+      buffs: snapshot.npc.buffs,
+      debuffs: snapshot.npc.debuffs,
+      estados: snapshot.npc.estados,
+    },
+    jugadores: raid.jugadores.map((j) => {
+      const s = snapshot.jugadores?.[j.user_id];
+      if (!s) return j;
+      return { ...j, hp: s.hp, escudo: s.escudo, buffs: s.buffs, debuffs: s.debuffs, estados: s.estados, status: s.status };
+    }),
+  };
+}
+
 const FORMA_LABELS = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien/DjSo', 'Niman', 'Juyo/Vaapad'];
 const formaLabel = (f) => f > 0 ? FORMA_LABELS[f - 1] : 'Universal';
 const BADGE_ICON = { ATQ: 'sword', DEF: 'shield', PNT: 'target', MOV: 'arrow' };
@@ -619,9 +647,16 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       for (let i = 0; i < entries.length; i++) {
         /* Revela el mensaje de esta entrada YA — antes de reproducir su sonido/animación —
            en vez de esperar a que todo el lote termine (que hacía que el texto apareciera
-           recién al final del turno). El resto del estado (hp/escudo/turn_order) se aplica
-           al final del lote completo, vía el setRaid(newRaid) de revealRaid. */
-        setRaid(prev => (prev ? { ...prev, log: [...(prev.log ?? []), entries[i]] } : prev));
+           recién al final del turno). Si la entrada trae un snapshot de hp/escudo/buffs, se
+           aplica en el mismo momento — así la vida/escudo/buffs se ven cambiar de inmediato en
+           vez de recién al final del lote completo (turn_order y demás campos que no vienen en
+           el snapshot sí esperan al setRaid(newRaid) final de revealRaid). */
+        setRaid(prev => {
+          if (!prev) return prev;
+          const withLog = { ...prev, log: [...(prev.log ?? []), entries[i]] };
+
+          return aplicarSnapshot(withLog, entries[i].snapshot);
+        });
         await playEntry(entries[i]);
         if (i < entries.length - 1) {
           /* Fase de combate: tras resolver el efecto de una entrada (mensaje + sonido/animación
@@ -1145,6 +1180,31 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
               <div style={{ fontSize: 26, fontWeight: 700, color: raid.status === 'ganado' ? '#10b981' : '#ff6b6b' }}>
                 {raid.status === 'ganado' ? '¡Victoria del grupo!' : 'El grupo ha sido derrotado'}
               </div>
+
+              {raid.status === 'ganado' && (me?.recompensas ?? []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', maxWidth: 340, padding: '0 16px' }}>
+                  <div className="nx-kicker" style={{ fontSize: 10 }}>RECOMPENSA OBTENIDA</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+                    {me.recompensas.map((r, i) => (
+                      <div key={i} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8,
+                        background: 'rgba(230,179,37,0.10)', border: '1px solid rgba(230,179,37,0.35)',
+                      }}>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 6, flexShrink: 0, overflow: 'hidden',
+                          display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.25)',
+                        }}>
+                          {r.imagen
+                            ? <img src={mediaUrl(r.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : <Icon name={REWARD_ICON[r.tipo] ?? 'star'} size={16} style={{ color: '#E6B325' }} />}
+                        </div>
+                        <span style={{ fontSize: 12, color: '#E6B325', fontFamily: 'var(--font-data)' }}>{r.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button onClick={() => setShowCombatCard(true)} style={{
                 padding: '10px 28px', borderRadius: 7, cursor: 'pointer',
                 background: raid.status === 'ganado' ? 'rgba(16,185,129,0.18)' : 'rgba(255,45,69,0.14)',

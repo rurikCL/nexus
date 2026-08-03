@@ -15,7 +15,7 @@ class RaidCombatPlayer extends Model
         'raid_combat_id', 'user_id', 'slot',
         'hp', 'escudo', 'fuerza', 'current_forma', 'last_forma',
         'cooldowns', 'buffs', 'debuffs', 'estados', 'dano_al_jefe', 'golpes_al_jefe',
-        'curacion_total', 'debuffs_aplicados', 'status', 'listo',
+        'curacion_total', 'debuffs_aplicados', 'recompensas_otorgadas', 'status', 'listo',
     ];
 
     protected $casts = [
@@ -33,6 +33,7 @@ class RaidCombatPlayer extends Model
         'golpes_al_jefe' => 'integer',
         'curacion_total' => 'integer',
         'debuffs_aplicados' => 'integer',
+        'recompensas_otorgadas' => 'array',
         'listo' => 'boolean',
     ];
 

@@ -752,6 +752,7 @@ class RaidCombatController extends Controller
             $entry['messages'][] = 'Todos los jugadores han caído. El jefe los ha derrotado.';
         }
 
+        $entry['snapshot'] = self::snapshotEstado($raid);
         $log[] = $entry;
 
         if ($raid->status === 'activo') {
@@ -847,7 +848,7 @@ class RaidCombatController extends Controller
                     $rp->status = 'derrotado';
                 }
                 foreach ($tick['mensajes'] as $mensajeEstado) {
-                    $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => [$mensajeEstado]];
+                    $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => [$mensajeEstado], 'snapshot' => self::snapshotEstado($raid)];
                 }
 
                 $rp->save();
@@ -859,14 +860,14 @@ class RaidCombatController extends Controller
             $raid->npc_estados = $npcTick['estados'] ?: null;
             $raid->npc_hp = $npcTick['hp'];
             foreach ($npcTick['mensajes'] as $mensajeEstado) {
-                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => [$mensajeEstado]];
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => [$mensajeEstado], 'snapshot' => self::snapshotEstado($raid)];
             }
 
             /* El sangrado/envenenado del tick puede haber matado al jefe o a los jugadores restantes */
             if ($raid->npc_hp <= 0) {
                 $raid->status = 'ganado';
                 $mensajes = ["¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo.", ...$this->grantVictoryRewards($raid)];
-                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => $mensajes];
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => $mensajes, 'snapshot' => self::snapshotEstado($raid)];
 
                 return;
             }
@@ -874,7 +875,7 @@ class RaidCombatController extends Controller
             $activos = $raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count();
             if ($activos === 0) {
                 $raid->status = 'perdido';
-                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ['Todos los jugadores han caído. El jefe los ha derrotado.']];
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'sistema', 'messages' => ['Todos los jugadores han caído. El jefe los ha derrotado.'], 'snapshot' => self::snapshotEstado($raid)];
 
                 return;
             }
@@ -988,7 +989,7 @@ class RaidCombatController extends Controller
         $npcEstados = $paralisisInfo['estados'];
         if ($paralisisInfo['paralizado']) {
             $raid->npc_estados = $npcEstados ?: null;
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} está paralizado y pierde el turno"]];
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} está paralizado y pierde el turno"], 'snapshot' => self::snapshotEstado($raid)];
 
             return;
         }
@@ -1039,7 +1040,7 @@ class RaidCombatController extends Controller
                 }
             }
             $raid->npc_buffs = $npcBuffsArr;
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} se refuerza: +".implode(', +', $habBuffNpc)]];
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} se refuerza: +".implode(', +', $habBuffNpc)], 'snapshot' => self::snapshotEstado($raid)];
         }
 
         /* Daño base de un ataque normal (sin habilidad): configurado en la ficha del Jefe
@@ -1132,6 +1133,7 @@ class RaidCombatController extends Controller
             $log[] = [
                 'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $target->user_id,
                 'messages' => ["¡{$targetChar->name} {$verbo} el ataque de {$npc->nombre}! {$desc}"],
+                'snapshot' => self::snapshotEstado($raid),
             ];
 
             return;
@@ -1144,13 +1146,14 @@ class RaidCombatController extends Controller
                 $marcaInfo['activo'] => '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!',
                 default => "{$nombreObjetivo} esquiva/bloquea el ataque de {$npc->nombre}.",
             };
-            $log[] = [
-                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $targetEsNpc ? null : $target->user_id,
-                'messages' => [$missMsg],
-            ];
             if (! $targetEsNpc) {
                 $target->save();
             }
+            $log[] = [
+                'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => false, 'target_user_id' => $targetEsNpc ? null : $target->user_id,
+                'messages' => [$missMsg],
+                'snapshot' => self::snapshotEstado($raid),
+            ];
 
             return;
         }
@@ -1164,7 +1167,7 @@ class RaidCombatController extends Controller
             $escudoAntes = $raid->npc_escudo;
             [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudoBase, $dmgPerfBase);
             $desc = self::describeDano($dmg, $dmgEscudoBase, $dmgPerfBase, $escudoAntes);
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'messages' => ["{$npc->nombre} se golpea a sí mismo: {$desc}"]];
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'messages' => ["{$npc->nombre} se golpea a sí mismo: {$desc}"], 'snapshot' => self::snapshotEstado($raid)];
 
             return;
         }
@@ -1223,7 +1226,7 @@ class RaidCombatController extends Controller
                 $targets[] = ['user_id' => $rp->user_id, 'splash' => true];
             }
 
-            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'crit' => true, 'hit' => true, 'aoe' => true, 'targets' => $targets, 'messages' => $msgs];
+            $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'crit' => true, 'hit' => true, 'aoe' => true, 'targets' => $targets, 'messages' => $msgs, 'snapshot' => self::snapshotEstado($raid)];
         } else {
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
             $resistant = self::isResistant($formaAtaque, (int) $target->current_forma);
@@ -1261,6 +1264,7 @@ class RaidCombatController extends Controller
                 'turn' => count($log) + 1, 'actor' => 'npc', 'hit' => true, 'crit' => false,
                 'target_user_id' => $target->user_id, 'effective' => $effective, 'resistant' => $resistant,
                 'messages' => [$formaMsg."¡Impacto! {$desc}"],
+                'snapshot' => self::snapshotEstado($raid),
             ];
         }
 
@@ -1294,6 +1298,10 @@ class RaidCombatController extends Controller
                 if ($otorgadas) {
                     $desc = collect($otorgadas)->pluck('label')->implode(' y ');
                     $mensajes[] = "🎁 {$rpChar->name} recibe: {$desc}";
+                    // Persistido (no solo el mensaje de texto) para mostrar imagen+nombre en el
+                    // resumen de victoria — ver RaidCombatScreen, campo `recompensas` del jugador.
+                    $rp->recompensas_otorgadas = $otorgadas;
+                    $rp->save();
                 }
             }
 
@@ -1401,6 +1409,7 @@ class RaidCombatController extends Controller
                 'estados' => $rp->estados ?? [],
                 'status' => $rp->status,
                 'dano_al_jefe' => $rp->dano_al_jefe,
+                'recompensas' => $rp->recompensas_otorgadas ?? [],
                 'habilidades' => $habilidades,
                 'arma_equipada' => $ch?->armaEfectiva(),
                 'listo' => (bool) $rp->listo,
@@ -1654,6 +1663,39 @@ class RaidCombatController extends Controller
         }
 
         return [max(0, $hp - $dmg - $dmgPerforante), 0];
+    }
+
+    /**
+     * Snapshot del hp/escudo/buffs/debuffs/estados de TODOS los combatientes (jefe + jugadores),
+     * capturado en el momento exacto en que se resuelve una entrada del log. Se adjunta a cada
+     * entrada relevante (ver invocaciones) para que el frontend pueda aplicar los cambios de ESA
+     * entrada de inmediato al revelarla — en vez de esperar al estado final de todo el lote de
+     * entradas que trae una respuesta (ver RaidCombatScreen::playEntries), que hacía que la vida/
+     * escudo/buffs se vieran actualizar tardíamente. Lee directamente los objetos ya mutados en
+     * `$raid->jugadores` (misma instancia que `$myPlayer`/`$target`/`$rp` en el resto del método,
+     * Collection::firstWhere/where no clonan), así que refleja el estado real a esta altura.
+     */
+    private static function snapshotEstado(RaidCombat $raid): array
+    {
+        return [
+            'npc' => [
+                'hp' => $raid->npc_hp,
+                'escudo' => $raid->npc_escudo,
+                'buffs' => $raid->npc_buffs ?? [],
+                'debuffs' => $raid->npc_debuffs ?? [],
+                'estados' => $raid->npc_estados ?? [],
+            ],
+            'jugadores' => $raid->jugadores->mapWithKeys(fn (RaidCombatPlayer $rp) => [
+                $rp->user_id => [
+                    'hp' => $rp->hp,
+                    'escudo' => $rp->escudo,
+                    'buffs' => $rp->buffs ?? [],
+                    'debuffs' => $rp->debuffs ?? [],
+                    'estados' => $rp->estados ?? [],
+                    'status' => $rp->status,
+                ],
+            ])->all(),
+        ];
     }
 
     private static function describeDano(int $dmg, int $dmgEscudo, int $dmgPerforante, int $escudoAntes): string
