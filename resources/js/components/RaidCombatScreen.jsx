@@ -306,7 +306,12 @@ export function RaidQueueModal({ npcId, dungeonRunId, onClose, onStarted }) {
 }
 
 /* ── PICKER DE OBJETIVO (habilidades "self" — elige a cuál de los 4 afecta) ── */
-function TargetPickerModal({ jugadores, onPick, onCancel }) {
+function TargetPickerModal({ jugadores, esRevivir, onPick, onCancel }) {
+  /* Una habilidad con 'revivir' solo tiene sentido sobre un compañero caído — el resto de
+     habilidades "self" (buffs/curación/debuffs) solo pueden afectar a un combatiente activo.
+     Debe reflejar exactamente la misma regla que valida el backend (ver action() en
+     RaidCombatController, rama objetivo === 'self'). */
+  const esSeleccionable = (j) => (esRevivir ? j.status === 'derrotado' : j.status === 'activo');
   return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9700, background: 'rgba(2,5,12,0.85)', backdropFilter: 'blur(6px)',
@@ -314,15 +319,17 @@ function TargetPickerModal({ jugadores, onPick, onCancel }) {
     }} onMouseDown={onCancel}>
       <div className="nx-panel solid nx-panel-glow" style={{ width: '100%', maxWidth: 420, padding: 20 }} onMouseDown={e => e.stopPropagation()}>
         <div className="nx-kicker" style={{ marginBottom: 4 }}>ELEGIR OBJETIVO</div>
-        <div className="nx-display" style={{ fontSize: 15, marginBottom: 14 }}>¿A quién afecta esta habilidad?</div>
+        <div className="nx-display" style={{ fontSize: 15, marginBottom: 14 }}>
+          {esRevivir ? '¿A cuál compañero caído revives?' : '¿A quién afecta esta habilidad?'}
+        </div>
         <div style={{ display: 'grid', gap: 8 }}>
           {jugadores.map(j => (
-            <button key={j.user_id} onClick={() => onPick(j.user_id)} disabled={j.status !== 'activo'}
+            <button key={j.user_id} onClick={() => onPick(j.user_id)} disabled={!esSeleccionable(j)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', textAlign: 'left',
-                borderRadius: 8, cursor: j.status === 'activo' ? 'pointer' : 'not-allowed',
+                borderRadius: 8, cursor: esSeleccionable(j) ? 'pointer' : 'not-allowed',
                 border: '1px solid var(--holo-line)', background: 'rgba(255,255,255,0.03)',
-                opacity: j.status === 'activo' ? 1 : 0.4,
+                opacity: esSeleccionable(j) ? 1 : 0.4,
               }}>
               <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', background: 'rgba(56,205,240,0.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                 {j.photo_url
@@ -788,13 +795,16 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setError('');
     try {
       const d = await apiPost(`/raid/${raid.id}/action`, payload);
+      /* La acción ya quedó confirmada por el servidor — el picker se cierra de inmediato en
+         vez de esperar a que termine de reproducirse la animación (revealRaid puede tardar
+         varios segundos con las pausas entre entradas + un posible turno del jefe encadenado). */
+      setStancePicker(false);
+      setPendingSelfHab(null);
       await revealRaid(d.raid);
     } catch (e) {
       setError(e?.error || e?.message || 'No se pudo realizar la acción.');
     } finally {
       setBusy(false);
-      setStancePicker(false);
-      setPendingSelfHab(null);
     }
   };
 
@@ -1351,6 +1361,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       {pendingSelfHab && (
         <TargetPickerModal
           jugadores={raid.jugadores}
+          esRevivir={Array.isArray(pendingSelfHab.buff) && pendingSelfHab.buff.includes('revivir')}
           onCancel={() => setPendingSelfHab(null)}
           onPick={(targetUserId) => {
             const habId = pendingSelfHab.id;

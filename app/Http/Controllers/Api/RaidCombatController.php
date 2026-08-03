@@ -261,21 +261,34 @@ class RaidCombatController extends Controller
         return response()->json(['raid' => $this->formatRaid($rp->raidCombat->load(['npc', 'jugadores.user.character']), $user->id)]);
     }
 
-    /** GET /raid/{id} — estado completo (para polling). */
+    /**
+     * GET /raid/{id} — estado completo (para polling).
+     *
+     * Cada jugador del raid hace polling de este endpoint cada pocos segundos en paralelo —
+     * tomar `lockForUpdate()` en CADA poll (como se hacía antes) serializaba todas esas
+     * consultas contra la misma fila, y con varios jugadores conectados el lock quedaba
+     * disputado casi permanentemente, sumando latencia perceptible a cada turno (incluida la
+     * de `action()`, que a veces debía esperar a que un poll ajeno soltara el lock). El chequeo
+     * de timeout solo necesita el lock en el momento en que REALMENTE va a mutar el raid (turno
+     * vencido) — algo raro (requiere que un jugador no actúe en `raid_max_wait` segundos), así
+     * que primero se hace una lectura simple sin lock para descartar el caso común, y solo se
+     * escala a la transacción con lock cuando de verdad parece haber vencido.
+     */
     public function show(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
+        $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->findOrFail($id);
 
-        /* Varios jugadores hacen polling de este endpoint en paralelo — el chequeo de
-         * timeout (que puede resolver el turno del jefe) corre con lockForUpdate() dentro
-         * de una transacción para no pisarse con action()/otro poll concurrente sobre el
-         * mismo raid (ver docblock de action()). */
+        if (! $raid->jugadores->contains('user_id', $user->id)) {
+            return response()->json(['error' => 'No participas en este combate.'], 403);
+        }
+
+        if (! self::pareceTurnoExpirado($raid)) {
+            return response()->json(['raid' => $this->formatRaid($raid, $user->id)]);
+        }
+
         return DB::transaction(function () use ($id, $user) {
             $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->lockForUpdate()->findOrFail($id);
-
-            if (! $raid->jugadores->contains('user_id', $user->id)) {
-                return response()->json(['error' => 'No participas en este combate.'], 403);
-            }
 
             $log = $raid->log ?? [];
             if ($this->checkTurnTimeout($raid, $log)) {
@@ -286,6 +299,23 @@ class RaidCombatController extends Controller
 
             return response()->json(['raid' => $this->formatRaid($raid, $user->id)]);
         });
+    }
+
+    /** Chequeo optimista (sin lock) de si el turno actual ya venció — ver `show()`/`checkTurnTimeout`. */
+    private static function pareceTurnoExpirado(RaidCombat $raid): bool
+    {
+        if (! $raid->isActive() || ! $raid->turn_started_at) {
+            return false;
+        }
+
+        $current = $raid->turn_order[$raid->turn_index] ?? null;
+        if (! $current || $current['type'] !== 'player') {
+            return false;
+        }
+
+        $maxWait = (int) Configuracion::valor('raid_max_wait', 30);
+
+        return $raid->turn_started_at->diffInSeconds(now()) >= $maxWait;
     }
 
     /** POST /raid/{id}/emoji — expresión cosmética, disponible en cualquier momento (no consume turno). */
@@ -1419,13 +1449,26 @@ class RaidCombatController extends Controller
             ->first();
         $agroTargetUserId = ($liderAgro && (int) $liderAgro->agro_puntos > 0) ? $liderAgro->user_id : null;
 
-        $jugadores = $raid->jugadores->sortBy('slot')->map(function (RaidCombatPlayer $rp) use ($current) {
+        /* Una sola consulta para las habilidades de TODOS los jugadores (en vez de una por
+         * jugador dentro del map de abajo) — este método corre en cada poll de cada cliente
+         * conectado al raid, así que evitar el N+1 acá importa para la latencia percibida. */
+        $todosLosSlotIds = $raid->jugadores->flatMap(function (RaidCombatPlayer $rp) {
+            $ch = $rp->user->character;
+            $porForma = is_array($ch->habilidades_por_forma ?? null) ? $ch->habilidades_por_forma : [];
+
+            return array_filter($porForma[(string) $rp->current_forma] ?? []);
+        })->unique()->values();
+        $habilidadesPorId = RolHabilidad::whereIn('id', $todosLosSlotIds)->get()->keyBy('id');
+
+        $jugadores = $raid->jugadores->sortBy('slot')->map(function (RaidCombatPlayer $rp) use ($current, $habilidadesPorId) {
             $ch = $rp->user->character;
             $porForma = is_array($ch->habilidades_por_forma ?? null) ? $ch->habilidades_por_forma : [];
             $slotIds = array_filter($porForma[(string) $rp->current_forma] ?? []);
-            $habilidades = $slotIds
-                ? RolHabilidad::whereIn('id', $slotIds)->get()->map(fn ($h) => self::fmtHab($h))->values()
-                : collect();
+            $habilidades = collect($slotIds)
+                ->map(fn ($hid) => $habilidadesPorId->get($hid))
+                ->filter()
+                ->map(fn ($h) => self::fmtHab($h))
+                ->values();
             $fCfg = self::fuerzaConfig($ch);
             $baseStats = self::getCombatStats($ch);
             $effStats = self::aplicarBonoFormaStats(self::getEffectiveStats($baseStats, $rp->buffs ?? [], $rp->debuffs ?? []), (int) $rp->current_forma);
