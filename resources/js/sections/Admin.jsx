@@ -1897,6 +1897,127 @@ function CellValue({ col, record }) {
   );
 }
 
+/* ─── ENTIDADES QUE SE MUESTRAN COMO TARJETAS EN VEZ DE TABLA ── */
+const CARD_ENTITIES = ['npcs', 'enemigos', 'naves', 'rol_habilidades'];
+
+function resolveEntityImage(record) {
+  const raw = record.imagen_mini || record.imagen || record.icono || null;
+  if (!raw) return null;
+  return raw.startsWith('http') ? raw : `/storage/${raw}`;
+}
+
+const ACTION_BTN_TONES = {
+  holo:    { base: 'rgba(56,205,240,0.08)',  border: 'var(--holo-line)',        color: 'var(--holo)',         hoverBg: 'rgba(56,205,240,0.18)',  hoverBorder: 'var(--holo)' },
+  gold:    { base: 'rgba(230,179,37,0.08)',  border: 'rgba(230,179,37,0.3)',    color: 'var(--holocron-oro)', hoverBg: 'rgba(230,179,37,0.20)',  hoverBorder: '#E6B325' },
+  danger:  { base: 'rgba(220,38,38,0.06)',   border: 'rgba(220,38,38,0.2)',     color: '#ff6b6b',              hoverBg: 'rgba(220,38,38,0.18)',   hoverBorder: 'rgba(220,38,38,0.5)' },
+};
+
+function ActionBtn({ icon, title, onClick, tone = 'holo' }) {
+  const t = ACTION_BTN_TONES[tone];
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{ background: t.base, border: `1px solid ${t.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', color: t.color, transition: 'all 0.15s' }}
+      onMouseEnter={e => { e.currentTarget.style.background = t.hoverBg; e.currentTarget.style.borderColor = t.hoverBorder; }}
+      onMouseLeave={e => { e.currentTarget.style.background = t.base; e.currentTarget.style.borderColor = t.border; }}
+    >
+      <Icon name={icon} size={12} />
+    </button>
+  );
+}
+
+/* ─── TARJETA DE ENTIDAD (grid) — misma info que las columnas de la tabla,
+   pero en formato card, con el mismo look del Catálogo ── */
+function EntityCard({ entityKey, config, record, deleting, onEdit, onAskDelete, onConfirmDelete, onCancelDelete, onAssignHabilidad, onAssignObjeto }) {
+  const img = resolveEntityImage(record);
+  const visibleCol = config.columns.find(col => col.key === 'visible');
+  const badgeCols = config.columns.filter(col => col.key !== 'id' && col.key !== 'nombre' && col.key !== 'visible' && col.type !== 'image');
+
+  return (
+    <div className="nx-panel solid" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+      {visibleCol && (
+        <div style={{ position: 'absolute', top: 10, right: 10 }}>
+          <CellValue col={visibleCol} record={record} />
+        </div>
+      )}
+
+      <div style={{
+        width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden',
+        background: 'rgba(255,255,255,.04)', display: 'grid', placeItems: 'center', color: 'var(--holo)',
+      }}>
+        {img
+          ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <Icon name={config.icon} size={26} />}
+      </div>
+
+      <div style={{
+        fontSize: 13, fontWeight: 700, color: 'var(--txt)',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {record.nombre ?? `#${record.id}`}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1 }}>
+        {badgeCols.map(col => {
+          const raw = col.resolve ? col.resolve(record) : record[col.key];
+          if (raw == null || raw === '') return null;
+          return (
+            <div key={col.key} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10,
+              border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)',
+              borderRadius: 6, padding: '3px 7px', maxWidth: '100%',
+            }}>
+              <span style={{ color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', letterSpacing: '0.04em' }}>{col.label}</span>
+              <CellValue col={col} record={record} />
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        style={{ paddingTop: 8, borderTop: '1px solid var(--holo-line)', display: 'flex', gap: 6, justifyContent: 'flex-end' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {deleting ? (
+          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)', marginRight: 4 }}>¿Eliminar?</span>
+            <button
+              onClick={onConfirmDelete}
+              style={{
+                background: 'rgba(220,38,38,0.2)', border: '1px solid rgba(220,38,38,0.5)',
+                borderRadius: 4, padding: '3px 9px', cursor: 'pointer',
+                color: '#ff6b6b', fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+              }}
+            >Sí</button>
+            <button
+              onClick={onCancelDelete}
+              style={{
+                background: 'transparent', border: '1px solid var(--holo-line)',
+                borderRadius: 4, padding: '3px 9px', cursor: 'pointer',
+                color: 'var(--txt-dim)', fontSize: 10, fontFamily: 'var(--font-data)',
+              }}
+            >No</button>
+          </span>
+        ) : (
+          <>
+            <ActionBtn icon="edit" title="Editar" onClick={onEdit} tone="holo" />
+            {entityKey === 'rol_habilidades' && (
+              <ActionBtn icon="user" title="Asignar a un personaje" onClick={onAssignHabilidad} tone="gold" />
+            )}
+            {entityKey === 'rol_objetos' && (
+              <ActionBtn icon="user" title="Asignar a uno o más personajes" onClick={onAssignObjeto} tone="gold" />
+            )}
+            {!config.noDelete && (
+              <ActionBtn icon="x" title="Eliminar" onClick={onAskDelete} tone="danger" />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── ASIGNAR HABILIDAD A UN PERSONAJE ──────────────────────
    Desbloquea la habilidad (rol_habilidades_aprendidas) para el usuario dueño
    del personaje elegido — el mismo mecanismo que "aprender" una habilidad
@@ -2218,12 +2339,36 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated, head
         </div>
       </div>
 
-      {/* tabla */}
+      {/* tabla / tarjetas */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {loading && !data ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
             <div className="nx-kicker" style={{ animation: 'nx-pulse 1.4s infinite' }}>CARGANDO...</div>
           </div>
+        ) : CARD_ENTITIES.includes(entityKey) ? (
+          records.length === 0 ? (
+            <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--txt-faint)', fontSize: 13 }}>
+              {search ? `Sin resultados para "${search}"` : 'Sin registros'}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14, padding: 16 }}>
+              {records.map(r => (
+                <EntityCard
+                  key={r.id}
+                  entityKey={entityKey}
+                  config={config}
+                  record={r}
+                  deleting={deleteId === r.id}
+                  onEdit={() => setEditRecord(r)}
+                  onAskDelete={() => setDeleteId(r.id)}
+                  onConfirmDelete={() => handleDelete(r.id)}
+                  onCancelDelete={() => setDeleteId(null)}
+                  onAssignHabilidad={() => setAssignHabilidad(r)}
+                  onAssignObjeto={() => setAssignObjeto(r)}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
