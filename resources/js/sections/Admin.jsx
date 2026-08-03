@@ -1555,7 +1555,7 @@ function LugarCrudModal({ config, record, relatedOptions, onSave, onClose }) {
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
         <EnemigoSpawnPicker
           label={`Enemigos que pueden aparecer aquí · ${(form.enemigos ?? []).length}`}
-          catalog={enemigosCatalog.filter(e => e.tipo !== 'horda')}
+          catalog={enemigosCatalog}
           selected={form.enemigos}
           onChange={v => setField('enemigos', v)}
         />
@@ -1641,7 +1641,7 @@ function DungeonTemplateCrudModal({ config, record, relatedOptions, onSave, onCl
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
         <EnemigoSpawnPicker
           label={`Enemigos que pueden aparecer en las salas normales · ${(form.enemigos ?? []).length}`}
-          catalog={enemigosCatalog.filter(e => e.tipo !== 'horda')}
+          catalog={enemigosCatalog}
           selected={form.enemigos}
           onChange={v => setField('enemigos', v)}
         />
