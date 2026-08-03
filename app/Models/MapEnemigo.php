@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -185,5 +186,47 @@ class MapEnemigo extends Model
     public function recompensas(): MorphMany
     {
         return $this->morphMany(MapRecompensa::class, 'dropable');
+    }
+
+    /**
+     * Composición de este enemigo cuando `tipo === 'horda'`: hasta 4 slots, cada uno
+     * apuntando a OTRO enemigo del catálogo con su propio nivel para este encuentro. Un
+     * registro horda no pelea con sus propios stats — ver comentario en la migración
+     * create_map_enemigo_horda_slots_table. No es un pivot con clave por enemigo_id (a
+     * diferencia de `lugares()`): admite repetir el mismo enemigo en más de un slot.
+     */
+    public function hordaSlots(): HasMany
+    {
+        return $this->hasMany(MapEnemigoHordaSlot::class, 'horda_id');
+    }
+
+    public function esHorda(): bool
+    {
+        return $this->tipo === 'horda';
+    }
+
+    /**
+     * Si este registro es tipo 'horda', resuelve sus hasta 4 slots a instancias de MapEnemigo
+     * listas para combate (cada una con el nivel de SU slot ya aplicado, sobrescribiendo el
+     * nivel base del catálogo — a diferencia de un enemigo común, una horda no tiene un nivel
+     * de encuentro propio: cada miembro trae el suyo). Devuelve [] si no es horda o quedó sin
+     * slots configurados (ej. todos apuntaban a enemigos borrados).
+     */
+    public function resolverHordaSlots(): array
+    {
+        if (! $this->esHorda()) {
+            return [];
+        }
+
+        return $this->hordaSlots()->with(['enemigo.habilidad1', 'enemigo.habilidad2'])->get()
+            ->filter(fn (MapEnemigoHordaSlot $slot) => $slot->enemigo !== null)
+            ->map(function (MapEnemigoHordaSlot $slot) {
+                $enemigo = $slot->enemigo;
+                $enemigo->nivel = $slot->nivel;
+
+                return $enemigo;
+            })
+            ->values()
+            ->all();
     }
 }

@@ -314,13 +314,23 @@ class DungeonController extends Controller
         $progreso->update(['resuelta' => true]);
 
         $enemigo = $sala->enemigo;
-        MisionProgresoService::registrar($user, 'combate', 1);
 
-        $recompensas = RecompensaRollService::resolverYOtorgar(
-            $enemigo->recompensas()->with(['objeto', 'habilidad', 'medalla'])->get(),
-            $user,
-            $character
-        );
+        // Una horda no tiene recompensas propias (quedan sin usar a propósito): se agregan las
+        // de cada uno de sus miembros, ya que cada slot trae su propio pool configurado.
+        if ($enemigo->esHorda()) {
+            $miembros = $enemigo->hordaSlots()->with(['enemigo.recompensas.objeto', 'enemigo.recompensas.habilidad', 'enemigo.recompensas.medalla'])->get()->pluck('enemigo')->filter();
+            MisionProgresoService::registrar($user, 'combate', max(1, $miembros->count()));
+            $recompensas = $miembros->flatMap(
+                fn ($miembro) => RecompensaRollService::resolverYOtorgar($miembro->recompensas, $user, $character)
+            )->all();
+        } else {
+            MisionProgresoService::registrar($user, 'combate', 1);
+            $recompensas = RecompensaRollService::resolverYOtorgar(
+                $enemigo->recompensas()->with(['objeto', 'habilidad', 'medalla'])->get(),
+                $user,
+                $character
+            );
+        }
 
         return response()->json([
             'ok' => true,
@@ -757,9 +767,17 @@ class DungeonController extends Controller
         $sala->loadMissing(['norte:id,tipo', 'sur:id,tipo', 'este:id,tipo', 'oeste:id,tipo', 'enemigo.habilidad1', 'enemigo.habilidad2']);
 
         $enemigo = null;
+        $horda = null;
         if (! $progreso?->resuelta && $sala->enemigo) {
-            $enemigo = $sala->enemigo;
-            $enemigo->nivel = $sala->nivel_enemigo ?? $enemigo->nivel;
+            if ($sala->enemigo->esHorda()) {
+                // Una horda no tiene un nivel de encuentro propio (a diferencia de un enemigo
+                // común): cada miembro trae el nivel de SU slot, así que nivel_enemigo de la
+                // sala no aplica acá.
+                $horda = $sala->enemigo->resolverHordaSlots();
+            } else {
+                $enemigo = $sala->enemigo;
+                $enemigo->nivel = $sala->nivel_enemigo ?? $enemigo->nivel;
+            }
         }
 
         return [
@@ -767,6 +785,7 @@ class DungeonController extends Controller
             'tipo' => $sala->tipo,
             'resuelta' => (bool) ($progreso?->resuelta),
             'enemigo' => $enemigo,
+            'horda' => $horda,
             'tiene_cofre' => (bool) $sala->tiene_cofre,
             'cofre_abierto' => (bool) ($progreso?->cofre_abierto),
             'jefe_npc_id' => $sala->tipo === 'jefe' ? $jugador->run->template->jefe_npc_id : null,

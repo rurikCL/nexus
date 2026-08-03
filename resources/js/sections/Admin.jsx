@@ -85,6 +85,10 @@ const TIPO_NPC_OPTS   = [
   { value: 'vendedor_naves', label: 'Vendedor de Naves' },
 ];
 const TIPO_LUGAR_OPTS = ['exterior', 'interior', { value: 'portal_dungeon', label: 'Portal de Dungeon' }];
+const TIPO_ENEMIGO_OPTS = [
+  { value: 'comun', label: 'Común' },
+  { value: 'horda', label: 'Horda (hasta 4 enemigos)' },
+];
 const TIPO_INTERACCION_NPC_OPTS = [
   { value: 'interaccion', label: 'Interacción' },
   { value: 'agente_ia', label: 'Agente IA' },
@@ -305,26 +309,26 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',        label: 'Nombre',           type: 'text', required: true, span: 2, hint: 'Este catálogo alimenta el sistema de encuentros aleatorios: asigna estos enemigos a un Lugar (con su tasa de aparición y nivel) desde la ficha de esa entidad.' },
-      { key: 'tipo',          label: 'Tipo',             type: 'text' },
+      { key: 'tipo',          label: 'Tipo',             type: 'select', options: TIPO_ENEMIGO_OPTS, hint: "'Horda' convierte a este registro en una composición de hasta 4 enemigos de este mismo catálogo (ver más abajo) en vez de un combatiente propio — no participa solo en encuentros 1v1." },
       { key: 'profesion',     label: 'Profesión',        type: 'text' },
       { key: 'faccion',       label: 'Facción',          type: 'text' },
       { key: 'visible',       label: 'Visible',          type: 'toggle' },
       { key: 'imagen_mini',   label: 'Miniatura',        type: 'file' },
       { key: 'imagen',        label: 'Imagen principal',  type: 'file' },
-      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, hint: 'Nivel de dificultad por defecto (1-5): +1 a todos sus atributos por nivel sobre el 1 (nivel 1 = +0, nivel 5 = +4; incluye vida y escudo, este último topado en 5). Crítico: nivel 1-3 por "dobles" en 2d6; nivel 4 → un dado en 6 y el otro 5+; nivel 5 → un dado en 6 y el otro 4+ (siempre +1 de daño plano). A diferencia de los Jefes, un enemigo NO recibe el bono de nivel como daño extra fuera de un crítico. Al asignar este enemigo a un Lugar (o a una sala de Dungeon) puedes sobrescribir este nivel con uno específico.' },
-      { key: 'vida',          label: 'Vida',             type: 'number', min: 0 },
-      { key: 'escudo',        label: 'Escudo',           type: 'number', min: 0 },
-      { key: 'defensa',       label: 'Defensa',          type: 'number', min: 0 },
-      { key: 'ataque',        label: 'Ataque',           type: 'number', min: 0 },
-      { key: 'movimiento',    label: 'Agilidad',         type: 'number', min: 0 },
-      { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0 },
-      { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0 },
-      { key: 'dano',            label: 'Daño',              type: 'number', min: 0, hint: 'Daño base de un ataque normal (sin habilidad).' },
-      { key: 'dano_escudo',     label: 'Daño a Escudo',     type: 'number', min: 0, hint: 'Daño extra que solo afecta al escudo del objetivo, en un ataque normal.' },
-      { key: 'dano_perforante', label: 'Daño Perforante',   type: 'number', min: 0, hint: 'Daño de un ataque normal que ignora el escudo y llega directo a la vida.' },
-      { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, hint: 'Forma de combate del enemigo, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
-      { key: 'habilidad_1',   label: 'Habilidad — Slot 1', type: 'habilidadPicker', related: 'rol_habilidades', span: 2, hint: 'Hasta 2 habilidades propias — en combate, 60% de probabilidad de usar una disponible (sin cooldown) en vez de su ataque normal, igual que un Jefe.' },
-      { key: 'habilidad_2',   label: 'Habilidad — Slot 2', type: 'habilidadPicker', related: 'rol_habilidades', span: 2 },
+      { key: 'nivel',         label: 'Nivel base (★)',   type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda', hint: 'Nivel de dificultad por defecto (1-5): +1 a todos sus atributos por nivel sobre el 1 (nivel 1 = +0, nivel 5 = +4; incluye vida y escudo, este último topado en 5). Crítico: nivel 1-3 por "dobles" en 2d6; nivel 4 → un dado en 6 y el otro 5+; nivel 5 → un dado en 6 y el otro 4+ (siempre +1 de daño plano). A diferencia de los Jefes, un enemigo NO recibe el bono de nivel como daño extra fuera de un crítico. Al asignar este enemigo a un Lugar (o a una sala de Dungeon) puedes sobrescribir este nivel con uno específico.' },
+      { key: 'vida',          label: 'Vida',             type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'escudo',        label: 'Escudo',           type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'defensa',       label: 'Defensa',          type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'ataque',        label: 'Ataque',           type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'movimiento',    label: 'Agilidad',         type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'iniciativa',    label: 'Iniciativa',       type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'punteria',      label: 'Puntería',         type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
+      { key: 'dano',            label: 'Daño',              type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda', hint: 'Daño base de un ataque normal (sin habilidad).' },
+      { key: 'dano_escudo',     label: 'Daño a Escudo',     type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda', hint: 'Daño extra que solo afecta al escudo del objetivo, en un ataque normal.' },
+      { key: 'dano_perforante', label: 'Daño Perforante',   type: 'number', min: 0, showIf: f => (f.tipo ?? 'comun') !== 'horda', hint: 'Daño de un ataque normal que ignora el escudo y llega directo a la vida.' },
+      { key: 'forma',         label: 'Forma (0–7)',      type: 'number', min: 0, max: 7, showIf: f => (f.tipo ?? 'comun') !== 'horda', hint: 'Forma de combate del enemigo, para el sistema de fortalezas/debilidades entre formas (0 = universal, sin bono ni penalización)' },
+      { key: 'habilidad_1',   label: 'Habilidad — Slot 1', type: 'habilidadPicker', related: 'rol_habilidades', span: 2, showIf: f => (f.tipo ?? 'comun') !== 'horda', hint: 'Hasta 2 habilidades propias — en combate, 60% de probabilidad de usar una disponible (sin cooldown) en vez de su ataque normal, igual que un Jefe.' },
+      { key: 'habilidad_2',   label: 'Habilidad — Slot 2', type: 'habilidadPicker', related: 'rol_habilidades', span: 2, showIf: f => (f.tipo ?? 'comun') !== 'horda' },
     ],
     defaults: { visible: true, vida: 0, escudo: 0, defensa: 0, ataque: 0, movimiento: 0, iniciativa: 0, punteria: 0, dano: 0, dano_escudo: 0, dano_perforante: 0, forma: 0, nivel: 1, recompensas: [] },
   },
@@ -1017,9 +1021,18 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
         base[f.key] = base[f.key].map(v => (typeof v === 'object' ? v.id : v));
       }
     });
+    if (entityKey === 'enemigos') {
+      base.horda_slots = (record?.horda_slots ?? []).map(s => ({ enemigo_id: s.enemigo_id, nivel: s.nivel ?? 1 }));
+    }
     return base;
   });
   const [saving, setSaving]   = useState(false);
+  const [enemigosCatalog, setEnemigosCatalog] = useState([]);
+
+  useEffect(() => {
+    if (entityKey !== 'enemigos') return;
+    api('GET', '/admin/enemigos?per_page=200').then(r => setEnemigosCatalog(r.data ?? [])).catch(() => {});
+  }, [entityKey]);
 
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
@@ -1069,7 +1082,7 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
       width={620}
     >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', paddingTop: 4 }}>
-        {config.fields.map(field => (
+        {config.fields.filter(field => !field.showIf || field.showIf(form)).map(field => (
           <div key={field.key}
             style={{ gridColumn: field.span === 2 ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}
           >
@@ -1090,7 +1103,17 @@ function CrudModal({ entityKey, config, record, relatedOptions, onSave, onClose 
         ))}
       </div>
 
-      {entityKey === 'enemigos' && (
+      {entityKey === 'enemigos' && form.tipo === 'horda' && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+          <HordaSlotEditor
+            slots={form.horda_slots}
+            onChange={v => setField('horda_slots', v)}
+            catalog={enemigosCatalog.filter(e => e.tipo !== 'horda' && e.id !== record?.id)}
+          />
+        </div>
+      )}
+
+      {entityKey === 'enemigos' && form.tipo !== 'horda' && (
         <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
           <RecompensaDropEditor
             recompensas={form.recompensas}
@@ -1264,6 +1287,66 @@ function EnemigoSpawnPicker({ label, catalog, selected, onChange }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Enemigo tipo 'horda' — composición de hasta 4 enemigos de este mismo catálogo, cada uno
+   con su propio nivel. A diferencia de EnemigoSpawnPicker (un toggle por ítem del catálogo,
+   pensado para un pool sin duplicados), acá cada fila es independiente por índice: la misma
+   horda puede repetir el mismo enemigo en más de un slot (ej. 2 "Bandido" + 1 "Francotirador"),
+   así que es "agregar fila" en vez de "marcar del catálogo". ── */
+function HordaSlotEditor({ slots, onChange, catalog }) {
+  const list = slots ?? [];
+  const MAX_SLOTS = 4;
+
+  const add    = () => onChange([...list, { enemigo_id: null, nivel: 1 }]);
+  const remove = (i) => onChange(list.filter((_, x) => x !== i));
+  const setAt  = (i, key, val) => onChange(list.map((s, x) => (x === i ? { ...s, [key]: val } : s)));
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <label className="nx-label" style={{ margin: 0 }}>Enemigos de la horda · {list.length}/{MAX_SLOTS}</label>
+        <button type="button" onClick={add} disabled={list.length >= MAX_SLOTS} style={{
+          background: 'rgba(230,179,37,0.1)', border: '1px solid rgba(230,179,37,0.3)', color: '#E6B325',
+          borderRadius: 6, padding: '4px 10px', cursor: list.length >= MAX_SLOTS ? 'not-allowed' : 'pointer',
+          opacity: list.length >= MAX_SLOTS ? 0.4 : 1, fontSize: 11, display: 'flex', alignItems: 'center', gap: 5,
+        }}>
+          <Icon name="plus" size={11} /> Agregar enemigo
+        </button>
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginBottom: 10, lineHeight: 1.5 }}>
+        Cada slot es un enemigo de este mismo catálogo (no puede ser otra Horda) que aparecerá simultáneamente
+        en el encuentro, con el nivel que definas acá — sus recompensas al derrotarlo son las que ya tenga
+        configuradas en su propia ficha, no hay una recompensa aparte para la Horda.
+      </div>
+      {list.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '10px 0' }}>Sin enemigos agregados</div>
+      )}
+      <div style={{ display: 'grid', gap: 10 }}>
+        {list.map((s, i) => (
+          <div key={i} style={{ padding: '12px 14px', background: 'rgba(230,179,37,0.04)', borderRadius: 8, border: '1px solid rgba(230,179,37,0.15)', position: 'relative' }}>
+            <button type="button" onClick={() => remove(i)} style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--txt-faint)', padding: 4 }}>
+              <Icon name="x" size={12} />
+            </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 10, paddingRight: 28 }}>
+              <div>
+                <label className="nx-label">Enemigo *</label>
+                <select className="nx-select" value={s.enemigo_id ?? ''} onChange={e => setAt(i, 'enemigo_id', e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— Seleccionar enemigo —</option>
+                  {catalog.map(c => <option key={c.id} value={c.id}>{c.nombre} (★{c.nivel ?? 1})</option>)}
+                </select>
+                {catalog.length === 0 && <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 4 }}>Cargando catálogo...</div>}
+              </div>
+              <div>
+                <label className="nx-label">Nivel</label>
+                <NumberInput className="nx-input" min={1} value={s.nivel ?? 1} onChange={e => setAt(i, 'nivel', Math.max(1, Number(e.target.value) || 1))} />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1472,7 +1555,7 @@ function LugarCrudModal({ config, record, relatedOptions, onSave, onClose }) {
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
         <EnemigoSpawnPicker
           label={`Enemigos que pueden aparecer aquí · ${(form.enemigos ?? []).length}`}
-          catalog={enemigosCatalog}
+          catalog={enemigosCatalog.filter(e => e.tipo !== 'horda')}
           selected={form.enemigos}
           onChange={v => setField('enemigos', v)}
         />
@@ -1558,7 +1641,7 @@ function DungeonTemplateCrudModal({ config, record, relatedOptions, onSave, onCl
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
         <EnemigoSpawnPicker
           label={`Enemigos que pueden aparecer en las salas normales · ${(form.enemigos ?? []).length}`}
-          catalog={enemigosCatalog}
+          catalog={enemigosCatalog.filter(e => e.tipo !== 'horda')}
           selected={form.enemigos}
           onChange={v => setField('enemigos', v)}
         />
