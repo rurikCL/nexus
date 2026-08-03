@@ -2500,13 +2500,18 @@ function DungeonMinimap({ mapa, equipo = [], myUserId, onNavigate, busy }) {
               {iconFor(s)}
               {jugadoresAqui.length > 0 && (
                 <div style={{ position: 'absolute', bottom: 2, right: 2, display: 'flex', gap: 2 }}>
-                  {jugadoresAqui.map((j) => (
-                    <div key={j.user_id} title={j.user_id === myUserId ? `${j.name} (vos)` : j.name} style={{
-                      width: 10, height: 10, borderRadius: '50%',
-                      background: SABER_COLORS[j.saber_color] ?? '#38cdf0',
-                      border: '1.5px solid rgba(4,7,15,0.85)',
-                    }} />
-                  ))}
+                  {jugadoresAqui.map((j) => {
+                    const photoUrl = mediaUrl(j.photo);
+                    return (
+                      <div key={j.user_id} title={j.user_id === myUserId ? `${j.name} (vos)` : j.name} style={{
+                        width: 14, height: 14, borderRadius: '50%',
+                        backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        background: photoUrl ? undefined : (SABER_COLORS[j.saber_color] ?? '#38cdf0'),
+                        border: '1.5px solid rgba(4,7,15,0.85)',
+                      }} />
+                    );
+                  })}
                 </div>
               )}
             </div>
