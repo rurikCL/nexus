@@ -331,8 +331,12 @@ const extractDice = (text) => {
 const isFormaEffectiveMsg = (text) => /forma efectiva/i.test(text);
 const isFormaResistantMsg = (text) => /resistencia de forma/i.test(text);
 
-/* Contador regresivo del turno activo — sincronizado contra `turn_started_at` (servidor),
-   se resincroniza en cada polling. Si llega a 0, el próximo show() del backend salta el turno. */
+/* Contador regresivo del turno activo — `startedAt` es un timestamp LOCAL (ver
+   countdownStart), no `raid.turn_started_at` (servidor): ese se fija apenas el turno avanza
+   en el backend, antes de que el cliente termine de reproducir banners/animaciones
+   pendientes, así que el contador visual arrancaba ya consumido. El backend sigue usando su
+   propio reloj (raid_max_wait) para el timeout real — este contador es solo una referencia
+   visual para el jugador. */
 const useCountdown = (startedAt, maxWait) => {
   const [secondsLeft, setSecondsLeft] = useState(maxWait);
 
@@ -404,6 +408,26 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
   const [emojiBurst, setEmojiBurst] = useState(null);
   const [statusFx, setStatusFx] = useState(null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
+  /* Ronda mostrada en el banner "Turno N", desacoplada de raid.ronda: este último solo se
+     actualiza al final de revealRaid (tras setRaid), lo que hacía que el banner de Iniciativa
+     apareciera ANTES que el de Turno en cada cambio de ronda. Se actualiza apenas se detecta la
+     entrada de "Orden de turnos" de la nueva ronda, antes de mostrar ese banner. */
+  const [turnoRonda, setTurnoRonda] = useState(1);
+  const [inicioMsg, setInicioMsg] = useState(null); // { key } — banner "¡Combate iniciado!", solo en raids recién comenzados
+  /* Momento (local) en que las acciones quedaron habilitadas — usado como inicio del contador
+     regresivo del turno en vez de `raid.turn_started_at` (servidor): ese timestamp se fija
+     apenas el turno avanza EN EL SERVIDOR, antes de que el cliente termine de reproducir los
+     banners/animaciones pendientes, así que el contador se veía consumir varios segundos de
+     golpe (o directamente arrancar ya avanzado) antes de que el jugador pudiera realmente
+     actuar. Se resetea cada vez que `animBusy` termina (pasa de true a false) — el momento
+     exacto en que la pantalla queda libre para la siguiente acción. */
+  const [countdownStart, setCountdownStart] = useState(null);
+  useEffect(() => {
+    if (!animBusy && raid?.status === 'activo') {
+      setCountdownStart(Date.now());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animBusy, raid?.status]);
   const pollRef = useRef(null);
   const logRef = useRef(null);
   const stageRef = useRef(null);
@@ -498,10 +522,13 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       // Orden de turnos de la ronda ("Ronda N — Orden de turnos: Nombre 2d6(...)=Total | ...")
       // ya no se anima con dados: se muestra directamente quién actúa primero.
       const msg = (entry.messages || [])[0] ?? '';
-      const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
+      const m = msg.match(/^Ronda (\d+) — Orden de turnos: (.+?) 2d6/);
       if (m) {
-        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[1] });
-        await sleep(1400);
+        setTurnoRonda(Number(m[1])); // banner "Turno N" — antes de mostrar el de Iniciativa
+        await sleep(2000);
+        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: m[2] });
+        await sleep(2000);
+        setIniciativaMsg(null);
       } else {
         await sleep(220);
       }
@@ -590,9 +617,16 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     setAnimBusy(true);
     try {
       for (let i = 0; i < entries.length; i++) {
+        /* Revela el mensaje de esta entrada YA — antes de reproducir su sonido/animación —
+           en vez de esperar a que todo el lote termine (que hacía que el texto apareciera
+           recién al final del turno). El resto del estado (hp/escudo/turn_order) se aplica
+           al final del lote completo, vía el setRaid(newRaid) de revealRaid. */
+        setRaid(prev => (prev ? { ...prev, log: [...(prev.log ?? []), entries[i]] } : prev));
         await playEntry(entries[i]);
         if (i < entries.length - 1) {
-          await sleep(120);
+          /* Fase de combate: tras resolver el efecto de una entrada (mensaje + sonido/animación
+             ya reproducidos), se espera 2s antes de pasar al siguiente combatiente. */
+          await sleep(2000);
         }
       }
     } finally {
@@ -612,6 +646,38 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
       if (!isFirstLoad && newLog.length < currentLen) {
         return;
+      }
+
+      /* Secuencia de arranque — solo la primera carga de un raid recién comenzado (a lo más
+         la entrada inicial de orden de turnos, sin ninguna acción todavía): banner "Inicio
+         combate" (2s) → banner "Turno N" (2s, ya visible vía el overlay incondicional) →
+         banner "Iniciativa" (2s) con el orden ya conocido desde esa primera entrada. Un raid
+         retomado (remount con historial ya avanzado) no repite nada de esto. */
+      if (isFirstLoad && newLog.length <= 1 && newRaid.status === 'activo') {
+        setTurnoRonda(newRaid.ronda ?? 1);
+        setAnimBusy(true);
+        setInicioMsg({ key: `inicio-${Date.now()}` });
+        await sleep(2000);
+        setInicioMsg(null);
+
+        await sleep(2000); // banner "Turno N" visible
+
+        const msg = newLog[0]?.messages?.[0] ?? '';
+        const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
+        if (m) {
+          setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: m[1] });
+          await sleep(2000);
+          setIniciativaMsg(null);
+        }
+        setAnimBusy(false);
+        prevLogLenRef.current = newLog.length;
+        setRaid(newRaid);
+
+        return;
+      }
+
+      if (isFirstLoad) {
+        setTurnoRonda(newRaid.ronda ?? 1); // raid retomado a mitad de combate: sincroniza sin banner
       }
 
       const newEntries = isFirstLoad ? [] : newLog.slice(currentLen);
@@ -746,6 +812,20 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
         <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
 
+          {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, solo en
+              raids recién comenzados (ver revealRaid). */}
+          {inicioMsg && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 47,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', overflow: 'hidden',
+            }}>
+              <span key={inicioMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(30px, 7vw, 54px)' }}>
+                ⚔ ¡Combate iniciado!
+              </span>
+            </div>
+          )}
+
           {/* Aviso grande de inicio de ronda — mismo criterio que NpcCombatScreen/PvpCombatScreen:
               separa visualmente "empieza la ronda N" de a quién le toca actuar dentro de ella,
               más relevante todavía acá con varios combatientes turnándose. */}
@@ -755,8 +835,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               pointerEvents: 'none', overflow: 'hidden',
             }}>
-              <span key={raid.ronda ?? 1} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
-                Turno {raid.ronda ?? 1}
+              <span key={turnoRonda} className="nx-turno-banner" style={{ fontSize: 'clamp(34px, 8vw, 60px)' }}>
+                Turno {turnoRonda}
               </span>
             </div>
           )}
@@ -1046,8 +1126,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                         <span style={{ fontSize: 8, color: '#E6B325', fontFamily: 'var(--font-data)' }}>EMOTE</span>
                       </ActionBtn>
 
-                      {raid.turn_started_at && (
-                        <TurnCountdownCard startedAt={raid.turn_started_at} maxWait={raid.turn_max_wait ?? 30} icon={turnIcon} />
+                      {countdownStart && !animBusy && (
+                        <TurnCountdownCard startedAt={countdownStart} maxWait={raid.turn_max_wait ?? 30} icon={turnIcon} />
                       )}
                     </div>
                   </div>

@@ -70,7 +70,7 @@ const formaBono = (forma, clave) => FORMA_BONOS[forma]?.[clave] ?? 0;
 const TIPOS_ESTADO = [
   'paralizado', 'inmune_paralisis', 'aturdido', 'marcado', 'protegido',
   'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion',
-  'deflectar', 'contraataque', 'revivir',
+  'deflectar', 'contraataque',
 ];
 const DEFAULTS_ESTADO = {
   paralizado: { turns: 1, valor: 0 },
@@ -84,19 +84,18 @@ const DEFAULTS_ESTADO = {
   regeneracion: { turns: 2, valor: 2 },
   deflectar: { turns: 1, valor: 0 },
   contraataque: { turns: 1, valor: 0 },
-  revivir: { turns: 1, valor: 0 },
 };
 const ESTADOS_DOT = { sangrado: true, envenenado: true };
 const ESTADOS_HOT = { regeneracion: true };
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
-  deflectar: '↩️', contraataque: '🗡️', revivir: '✨',
+  deflectar: '↩️', contraataque: '🗡️',
 };
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
-  deflectar: 'Deflectar', contraataque: 'Contraataque', revivir: 'Revivir',
+  deflectar: 'Deflectar', contraataque: 'Contraataque',
 };
 
 const esTipoEstado = (stat) => TIPOS_ESTADO.includes(stat);
@@ -299,10 +298,28 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [phase,        setPhase]        = useState(initialState?.phase     ?? 'initiative');
   const [currTurn,     setCurrTurn]     = useState(initialState?.currTurn  ?? null);
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
+  const [inicioMsg,     setInicioMsg]     = useState(null); // { key } — banner "¡Combate iniciado!"
+  const [combatIntroDone, setCombatIntroDone] = useState(!!initialState); // true tras el banner de inicio — habilita el banner "Turno N"
+  /* Bloquea acciones de ambos lados mientras se anuncian los banners de Turno/Iniciativa
+     (inicio de combate o cambio de ronda) — evita que el jugador ataque o que el turno
+     automático del NPC se dispare en medio del anuncio. */
+  const [phaseLock,     setPhaseLock]     = useState(!initialState);
   const [log,          setLog]          = useState(initialState?.log       ?? []);
   const [ronda,        setRonda]        = useState(initialState?.ronda       ?? 1);
   const [rondaTurno,   setRondaTurno]   = useState(initialState?.rondaTurno  ?? 0);
+  /* endTurnAfter lee estos refs (no el state directo) para no depender de un closure que
+     podría haber quedado obsoleto si se invoca desde un efecto creado en un render anterior —
+     mismo riesgo que playerHp/npcHp/estados, que ya se resuelve pasándolos vía `overrides`. */
+  const rondaRef = useRef(ronda);
+  const rondaTurnoRef = useRef(rondaTurno);
+  useEffect(() => { rondaRef.current = ronda; }, [ronda]);
+  useEffect(() => { rondaTurnoRef.current = rondaTurno; }, [rondaTurno]);
   const [npcBusy,      setNpcBusy]      = useState(false);
+  /* Bloquea toda acción del jugador entre el momento en que una acción termina de resolverse
+     (animación/daño/log ya aplicados) y el hand-off real de turno dentro de endTurnAfter — sin
+     esto, durante la nueva espera de 2s (rolling ya volvió a false) el jugador podía hacer clic
+     en otra acción y ejecutar dos golpes en el mismo turno. */
+  const [actionLock,   setActionLock]   = useState(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
@@ -508,28 +525,47 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     return `−${Math.max(0, dmgEscudo)} daño al escudo — ¡escudo perforado! −${totalVida} daño a la vida`;
   };
 
-  /* Iniciativa — solo si es combate nuevo (no restaurado) */
+  /* Secuencia de arranque — solo si es combate nuevo (no restaurado): banner "Inicio combate"
+     (2s) → banner "Turno 1" (2s) → banner "Iniciativa" (2s) → recién ahí se habilita la acción
+     (phaseLock=false). Guarda `cancelled`: en desarrollo React.StrictMode invoca este efecto dos
+     veces al montar sin llamar a nuestro cleanup entre medio salvo que lo devolvamos — sin esta
+     guarda, la segunda invocación corría completa igual que la primera (dos tiradas de
+     iniciativa, dos setLog pisándose entre sí). */
   useEffect(() => {
     if (initialState) return;
+    let cancelled = false;
     void playCombateNpc();
     const pTirada = tirarDados(); const nTirada = tirarDados();
     const pR = pTirada.total; const nR = nTirada.total;
     const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
     const first = pT >= nT ? 'player' : 'npc';
     (async () => {
-      await sleep(300);
+      setLog([{ text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' }]);
+      setInicioMsg({ key: `inicio-${Date.now()}` });
+      await sleep(2000);
+      if (cancelled) return;
+      setInicioMsg(null);
+      setCombatIntroDone(true); // habilita el banner "Turno N" (antes solo dependía de phase==='battle')
+
+      await sleep(2000); // banner "Turno 1" visible
+      if (cancelled) return;
+
       setIniciativaMsg({ key: `ini-1-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
-      await sleep(1400);
-      setLog([
-        { text: '⚔ ¡COMBATE INICIADO!', type: 'system', id: 0, ronda: 1, actor: 'system' },
-        { text: `Ronda 1 — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: 1, ronda: 1, actor: 'system' },
-        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: 2, ronda: 1, actor: 'system' },
+      await sleep(2000); // banner "Iniciativa"
+      if (cancelled) return;
+      setIniciativaMsg(null);
+
+      setLog(prev => [...prev,
+        { text: `Ronda 1 — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: 1, actor: 'system' },
+        { text: first === 'player' ? '¡Atacas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: 1, actor: 'system' },
       ]);
       setPhase('battle');
       setCurrTurn(first);
+      setPhaseLock(false);
       /* Pre-recuperar fuerza si el jugador actúa primero */
       if (first === 'player') setPlayerFuerza(fuerzaPorTurno);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   /*
@@ -537,14 +573,20 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    * iniciativa. `overrides` permite pasar el hp/estados YA actualizados por la
    * acción que se acaba de resolver (setPlayerHp/setPlayerEstados son async y
    * el closure de esta función seguiría viendo el valor previo al re-render).
+   * Se invoca SIEMPRE justo después de resolver una acción (mensaje + sonido/animación +
+   * actualización de valores ya hechos por el llamador) — la espera de 2s de acá es la
+   * pausa de "fase de combate" antes de pasar al siguiente combatiente.
    */
   const endTurnAfter = async (actor, overrides = {}) => {
+    setActionLock(true);
+    try {
+    await sleep(2000);
     const curPlayerHp = overrides.playerHp ?? playerHp;
     const curNpcHp = overrides.npcHp ?? npcHp;
     const curPlayerEstados = overrides.playerEstados ?? playerEstados;
     const curNpcEstados = overrides.npcEstados ?? npcEstados;
 
-    if (rondaTurno === 0) {
+    if (rondaTurnoRef.current === 0) {
       /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
       const next = actor === 'player' ? 'npc' : 'player';
       setRondaTurno(1);
@@ -569,17 +611,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       const tickMsgs = [...playerTick.mensajes, ...npcTick.mensajes];
       if (tickMsgs.length > 0) {
-        setLog(prev => [...prev, ...tickMsgs.map((text, i) => ({ text, type: 'info', id: prev.length + i, ronda, actor: 'system' }))]);
+        setLog(prev => [...prev, ...tickMsgs.map((text, i) => ({ text, type: 'info', id: prev.length + i, ronda: rondaRef.current, actor: 'system' }))]);
       }
 
       if (nextNpcHp.vida <= 0) {
-        setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda, actor: 'system' }]);
+        setLog(prev => [...prev, { text: `⚡ ¡${npc.nombre} derrotado!`, type: 'success', id: prev.length, ronda: rondaRef.current, actor: 'system' }]);
         setPhase('victory');
 
         return;
       }
       if (nextPlayerHp.vida <= 0) {
-        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda, actor: 'system' }]);
+        setLog(prev => [...prev, { text: '☠ Has sido derrotado.', type: 'danger', id: prev.length, ronda: rondaRef.current, actor: 'system' }]);
         setPhase('defeat');
 
         return;
@@ -589,16 +631,27 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       const pR = pTirada.total; const nR = nTirada.total;
       const pT = pR + effPlayerIni; const nT = nR + effNpcIni;
       const first = pT >= nT ? 'player' : 'npc';
-      setIniciativaMsg({ key: `ini-${ronda + 1}-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
-      await sleep(1400);
+      const nuevaRonda = rondaRef.current + 1;
+
+      setPhaseLock(true);
+      setRonda(nuevaRonda); // dispara el remount del banner "Turno N" (key={ronda})
+      await sleep(2000); // banner "Turno N" visible
+
+      setIniciativaMsg({ key: `ini-${nuevaRonda}-${Date.now()}`, texto: first === 'player' ? player.nombre : npc.nombre });
+      await sleep(2000); // banner "Iniciativa"
+      setIniciativaMsg(null);
+
       setLog(prev => [...prev,
-        { text: `Ronda ${ronda + 1} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: ronda + 1, actor: 'system' },
-        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: ronda + 1, actor: 'system' },
+        { text: `Ronda ${nuevaRonda} — Iniciativa: Tú 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} | ${npc.nombre} 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`, type: 'info', id: prev.length, ronda: nuevaRonda, actor: 'system' },
+        { text: first === 'player' ? '¡Actúas primero!' : `¡${npc.nombre} actúa primero!`, type: first === 'player' ? 'success' : 'danger', id: prev.length + 1, ronda: nuevaRonda, actor: 'system' },
       ]);
-      setRonda(r => r + 1);
       setRondaTurno(0);
       setCurrTurn(first);
+      setPhaseLock(false);
       if (first === 'player') setPlayerFuerza(p => Math.min(maxFuerza, p + fuerzaPorTurno));
+    }
+    } finally {
+      setActionLock(false);
     }
   };
 
@@ -628,7 +681,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Turno del NPC */
   useEffect(() => {
-    if (currTurn !== 'npc' || phase !== 'battle') return;
+    if (currTurn !== 'npc' || phase !== 'battle' || phaseLock) return;
     setNpcBusy(true);
     let cancelled = false;
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
@@ -688,6 +741,19 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       /* Leer stats efectivos ahora (closure over current state at render time) */
       const useRanged = !confundidoNpc && (hab ? hab.tipo !== 'melee' : (effNpcPnt > 0 && Math.random() > 0.5));
+
+      /* Anuncio inmediato — antes de la animación (dados/golpe). Si el NPC está confundido,
+         el mensaje de confusión de más arriba ya cubre el anuncio (el "objetivo" real es
+         forzado, no una elección). */
+      if (!confundidoNpc) {
+        const accionLabel = hab
+          ? `${npc.nombre} usa "${hab.nombre}"`
+          : useRanged
+            ? `${npc.nombre} dispara`
+            : `${npc.nombre} ataca`;
+        setLog(prev => [...prev, { text: accionLabel, type: 'info', id: prev.length, ronda, actor: 'npc' }]);
+      }
+
       const defEstadosPrevios = confundidoNpc ? npcEstados : playerEstados;
       const aTirada = tirarDados();
       const dTirada = tirarDados();
@@ -756,11 +822,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
       const rollDesc = confundidoNpc
         ? `${npc.nombre} se ataca a sí mismo: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`
-        : hab
-          ? `${npc.nombre} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`
-          : useRanged
-            ? `${npc.nombre} dispara: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effNpcPnt}=${aT}`
-            : `${npc.nombre} ataca: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effNpcAtk}=${aT}`;
+        : `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkStatVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defStatVal}=${dT}`;
       let entries = confundidoNpc
         ? [{ text: rollDesc, type: 'info', diceColors: ['#ff6b6b'] }]
         : [
@@ -848,11 +910,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       }
     })();
     return () => { cancelled = true; };
-  }, [currTurn, phase, ronda]);
+  }, [currTurn, phase, ronda, phaseLock]);
 
   /* Parálisis del jugador: pierde el turno automáticamente sin necesidad de que elija una acción */
   useEffect(() => {
-    if (currTurn !== 'player' || phase !== 'battle') return;
+    if (currTurn !== 'player' || phase !== 'battle' || phaseLock) return;
     if (!tieneEstado(playerEstados, 'paralizado')) return;
     let cancelled = false;
     (async () => {
@@ -864,16 +926,17 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       endTurnAfter('player', { playerEstados: info.estados });
     })();
     return () => { cancelled = true; };
-  }, [currTurn, phase, ronda]);
+  }, [currTurn, phase, ronda, phaseLock]);
 
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
   /* Ejecutar habilidad del jugador */
   const doPlayerSkill = async (hab) => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
     const habId = String(hab.id);
     if ((cooldowns[habId] ?? 0) > 0) return;
     if (playerFuerza < hab.costo_fuerza) return;
+    setActionLock(true);
 
     const habBuff   = Array.isArray(hab.buff)   ? hab.buff   : [];
     const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
@@ -895,8 +958,12 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
     if (hab.objetivo === 'self') {
-      const buffDesc = habBuffStats.map(s => `+1 ${s}`).join(', ');
-      entries.push({ text: `${player.nombre} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
+      /* Anuncio inmediato — antes de la animación de FX (buff/curación) */
+      setLog(prev => [...prev, { text: `${player.nombre} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
+
+      if (habBuffStats.length > 0) {
+        entries.push({ text: `${player.nombre}: ${habBuffStats.map(s => `+1 ${s}`).join(', ')}`, type: 'info' });
+      }
       if (habBuffEstados.length > 0) {
         entries.push({ text: `${player.nombre}: ${habBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
       }
@@ -955,10 +1022,13 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ─ */
     const targetDmg = hab.damage ?? 0;
     if (hab.objetivo === 'target' && targetDmg < 0) {
+      /* Anuncio inmediato — antes de la animación de FX (curación) */
+      setLog(prev => [...prev, { text: `${player.nombre} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
+
       const heal = -targetDmg;
       const newNpcHp = { ...npcHp, vida: Math.min(maxNpc.vida, npcHp.vida + heal) };
       entries.push({
-        text: `${player.nombre} usa "${hab.nombre}": cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
+        text: `Cura +${heal} vida a ${naveMode ? 'la nave enemiga' : npc.nombre}`,
         type: 'info',
       });
       let selfEstados = playerEstados;
@@ -978,12 +1048,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     /* ─── Habilidad de ataque ───────────────────────────────────── */
     const confundidoHab = resolverConfundido(playerEstados);
-    if (confundidoHab) {
-      entries.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
-    }
     const useAtq  = hab.tipo === 'melee';
     const atkVal  = useAtq ? effPlayerAtk : effPlayerPnt;
     const defVal  = confundidoHab ? (useAtq ? effPlayerDef : effPlayerMov) : (useAtq ? effNpcDef : effNpcMov);
+
+    /* Anuncio inmediato — antes de la animación (dados/golpe) */
+    const announceHab = [];
+    if (confundidoHab) announceHab.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    announceHab.push({ text: `${player.nombre} usa "${hab.nombre}"`, type: 'info' });
+    setLog(prev => [...prev, ...announceHab.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
 
     await armThrow(playerAvatarRef.current);
 
@@ -999,7 +1072,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     ]);
 
     entries.push({
-      text: `${player.nombre} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
+      text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
       type: 'info',
     });
 
@@ -1130,7 +1203,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Intento de huida: requiere ganar tirada de iniciativa contra el rival */
   const doPlayerFlee = async () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
+    setActionLock(true);
+
+    /* Anuncio inmediato — antes de la tirada/animación */
+    setLog(prev => [...prev, { text: `${player.nombre} intenta huir`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
 
     const npcLabel = naveMode ? 'NAVE' : npc.nombre.slice(0, 8).toUpperCase();
     const pTirada = tirarDados();
@@ -1146,7 +1223,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     ]);
 
     const entries = [{
-      text: `${player.nombre} intenta huir: 2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} vs 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`,
+      text: `2d6(${pTirada.dado1}+${pTirada.dado2})+${effPlayerIni}=${pT} vs 2d6(${nTirada.dado1}+${nTirada.dado2})+${effNpcIni}=${nT}`,
       type: 'info',
     }];
     entries.push(success
@@ -1174,8 +1251,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    * intermedio que haya dejado este uso).
    */
   const doUsarObjeto = async (objeto) => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || usingObjeto || !onUsarObjeto) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock || usingObjeto || !onUsarObjeto) return;
+    setActionLock(true);
     setUsingObjeto(true);
+    /* Anuncio inmediato — antes de la validación del servidor y la animación de FX */
+    setLog(prev => [...prev, { text: `${player.nombre} usa ${objeto.nombre}`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
     try {
       await onUsarObjeto(objeto.id);
       const newHp = {
@@ -1186,49 +1266,16 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       await playStatusFx(playerHudRef, 'heal');
       if (objeto.cura_vida) showFloatText(playerHudRef, { variant: 'heal', text: `Curación: ${objeto.cura_vida}` });
       if (objeto.cura_escudo) showFloatText(playerHudRef, { variant: 'heal', text: `+${objeto.cura_escudo} escudo` });
-
-      const entries = [{ text: `${player.nombre} usa ${objeto.nombre}`, type: 'success' }];
-
-      /* Buff/debuff de un objeto utilizable: mismo registro de estados reservados que las
-         habilidades (ver RolObjeto::buff/debuff) — el buff siempre beneficia a quien lo usa,
-         el debuff siempre penaliza al enemigo. 'revivir' no aplica acá (no hay a quién revivir
-         en un combate 1v1 sin aliados) y se filtra en vez de dejarlo como estado sin efecto. */
-      const objBuff = Array.isArray(objeto.buff) ? objeto.buff : [];
-      const objDebuff = Array.isArray(objeto.debuff) ? objeto.debuff : [];
-      const objBuffStats = objBuff.filter(s => !esTipoEstado(s));
-      const objBuffEstados = objBuff.filter(s => esTipoEstado(s) && s !== 'revivir');
-      const objDebuffStats = objDebuff.filter(s => !esTipoEstado(s));
-      const objDebuffEstados = objDebuff.filter(s => esTipoEstado(s) && s !== 'revivir');
-
-      let playerEstadosFinal = playerEstados;
-      if (objBuffStats.length > 0) {
-        setPlayerBuffs(prev => [...prev, ...objBuffStats.map(stat => ({ stat, turns: 2 }))]);
-        entries.push({ text: `${player.nombre}: +${objBuffStats.join(', +')}`, type: 'info' });
-      }
-      if (objBuffEstados.length > 0) {
-        playerEstadosFinal = objBuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), playerEstadosFinal);
-        entries.push({ text: `${player.nombre}: ${objBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
-      }
-
-      let npcEstadosFinal = npcEstados;
-      if (objDebuffStats.length > 0) {
-        setNpcDebuffs(prev => [...prev, ...objDebuffStats.map(stat => ({ stat, turns: 2 }))]);
-        entries.push({ text: `${npc.nombre}: −${objDebuffStats.join(', −')}`, type: 'info' });
-      }
-      if (objDebuffEstados.length > 0) {
-        npcEstadosFinal = objDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo), npcEstadosFinal);
-        entries.push({ text: `${npc.nombre}: ${objDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
-      }
-
-      setLog(prev => [...prev, ...entries.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+      setLog(prev => [...prev, {
+        text: '¡Curación aplicada!', type: 'success', id: prev.length, ronda, actor: 'player',
+      }]);
       setPlayerHp(newHp);
-      if (playerEstadosFinal !== playerEstados) setPlayerEstados(playerEstadosFinal);
-      if (npcEstadosFinal !== npcEstados) setNpcEstados(npcEstadosFinal);
-      endTurnAfter('player', { playerHp: newHp, playerEstados: playerEstadosFinal, npcEstados: npcEstadosFinal });
+      endTurnAfter('player', { playerHp: newHp });
     } catch (e) {
       setLog(prev => [...prev, {
         text: e?.message || 'No se pudo usar el objeto.', type: 'danger', id: prev.length, ronda, actor: 'player',
       }]);
+      setActionLock(false);
     } finally {
       setUsingObjeto(false);
     }
@@ -1237,7 +1284,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   /* Evadir (solo naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa por 3 rondas —
      sirve para naves sin habilidades o para no quedar sin nada que hacer en el turno. */
   const doPlayerEvadir = () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || !naveMode) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock || !naveMode) return;
 
     setPlayerBuffs(prev => [...prev, ...['defensa', 'movimiento', 'iniciativa'].map(stat => ({ stat, turns: 3 }))]);
     setLog(prev => [...prev, {
@@ -1249,20 +1296,25 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
   /* Ataque básico: arma equipada o desarmado */
   const doPlayerBasicAttack = async () => {
-    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed) return;
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
+    setActionLock(true);
 
     const confundido = resolverConfundido(playerEstados);
-    const entries = [];
-    if (confundido) {
-      entries.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
-    }
-
     const arma        = player.arma_equipada;
     const esDistancia = arma?.tipo_ataque === 'distancia';
     const atkVal       = esDistancia ? effPlayerPnt : effPlayerAtk;
     const defVal       = confundido
       ? (esDistancia ? effPlayerMov : effPlayerDef)
       : (esDistancia ? effNpcMov : effNpcDef);
+    const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
+
+    /* Anuncio inmediato — antes de cualquier animación (dados/golpe) */
+    const announce = [];
+    if (confundido) announce.push({ text: `¡${player.nombre} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    announce.push({ text: `${player.nombre} ${accion}`, type: 'info' });
+    setLog(prev => [...prev, ...announce.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+
+    const entries = [];
 
     await armThrow(playerAvatarRef.current);
 
@@ -1273,7 +1325,6 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     const [aT, dT] = [aR + atkVal, dR + defVal];
     const critico   = arma?.critico ?? 0;
     const esCritico = !confundido && aR >= (12 - critico);
-    const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
 
     await rollDice([
       { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
@@ -1281,7 +1332,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     ]);
 
     entries.push({
-      text: `${player.nombre} ${accion}: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
+      text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${aT} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${dT}`,
       type: 'info',
     });
 
@@ -1398,7 +1449,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     setObjetoPicker(true);
   };
 
-  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !npcBusy && !rolling && !armed;
+  const isPlayerTurn = currTurn === 'player' && phase === 'battle' && !phaseLock && !npcBusy && !rolling && !armed && !actionLock;
   useEffect(() => { if (!isPlayerTurn) setHoveredHabId(null); }, [isPlayerTurn]);
 
   /* Bloquea el scroll de la página mientras el combate está en pantalla */
@@ -1942,11 +1993,25 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         {diceOverlay}
         {throwHandle}
 
+        {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, antes
+            incluso del banner de "Turno 1". */}
+        {inicioMsg && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 47,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <span key={inicioMsg.key} className="nx-turno-banner" style={{ fontSize: 'clamp(30px, 7vw, 54px)' }}>
+              ⚔ ¡Combate iniciado!
+            </span>
+          </div>
+        )}
+
         {/* Aviso grande de inicio de ronda — separa visualmente "empieza la ronda N" (con
             nueva tirada de iniciativa) de a quién le toca actuar dentro de ella, que solía
             confundirse leyendo solo el registro de combate. Se remonta (key={ronda}) y
             reproduce su animación cada vez que arranca una ronda nueva. */}
-        {phase === 'battle' && (
+        {combatIntroDone && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 45,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
