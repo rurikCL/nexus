@@ -45,17 +45,20 @@ const BUFF_STATS  = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'
 const BUFF_LABEL  = { ataque: 'ATQ', defensa: 'DEF', punteria: 'PNT', movimiento: 'AGI', iniciativa: 'INI' };
 const BUFF_COLOR  = { ataque: '#ff7043', defensa: '#38cdf0', punteria: '#10b981', movimiento: '#a78bfa', iniciativa: '#E6B325' };
 /* Estados de combate (ver app/Support/Combat/AplicaEstadosCombate.php): nombres reservados que,
-   al aparecer en el buff/debuff de una habilidad, se aplican como estado en vez de +1/-1 a un stat. */
-const ESTADO_STATS = ['paralizado', 'aturdido', 'marcado', 'protegido', 'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion', 'deflectar', 'contraataque'];
+   al aparecer en el buff/debuff de una habilidad O de un objeto utilizable (RolObjeto::buff/
+   debuff), se aplican como estado en vez de +1/-1 a un stat. 'revivir' es especial: solo puede
+   targetear a un combatiente con 0 de vida y lo revive con la mitad de su vida máxima, en vez
+   de persistir como los demás. */
+const ESTADO_STATS = ['paralizado', 'aturdido', 'marcado', 'protegido', 'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion', 'deflectar', 'contraataque', 'revivir'];
 const ESTADO_LABEL = {
   paralizado: 'Paralizado', aturdido: 'Aturdido', marcado: 'Marcado', protegido: 'Protegido',
   sangrado: 'Sangrado', envenenado: 'Envenenado', debilitado: 'Debilitado', confundido: 'Confundido', regeneracion: 'Regeneración',
-  deflectar: 'Deflectar', contraataque: 'Contraataque',
+  deflectar: 'Deflectar', contraataque: 'Contraataque', revivir: 'Revivir',
 };
 const ESTADO_ICON = {
   paralizado: '🔒', aturdido: '💫', marcado: '🎯', protegido: '🛡️',
   sangrado: '🩸', envenenado: '☠️', debilitado: '⬇️', confundido: '❓', regeneracion: '💚',
-  deflectar: '↩️', contraataque: '🗡️',
+  deflectar: '↩️', contraataque: '🗡️', revivir: '✨',
 };
 const HOSTILIDAD_OPTS = ['seguro', 'bajo', 'medio', 'alto', 'extremo'];
 const TIER_OPTS       = ['iniciado', 'padawan', 'caballero', 'maestro', 'granmaestro'];
@@ -451,16 +454,20 @@ const ENTITY_CONFIG = {
       { key: 'tipo', label: 'Tipo', dim: true },
       { key: 'rareza', label: 'Rareza', type: 'rareza' },
       { key: 'costo', label: 'Costo', dim: true },
+      { key: 'buff',   label: 'Buff',   dim: true, w: 56, resolve: r => (r.buff?.length   > 0 ? 'Sí' : 'No') },
+      { key: 'debuff', label: 'Debuff', dim: true, w: 64, resolve: r => (r.debuff?.length > 0 ? 'Sí' : 'No') },
       { key: 'activo', label: 'Activo', type: 'bool', w: 68 },
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · 'utilizable' se consume para curar (ver Cura Vida/Cura Escudo) · 'utilizable_mundo' se usa desde el Mapa para desplegar una baliza de ayuda · el resto son componentes de sable de luz" },
+      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · 'utilizable' se consume para curar (Cura Vida/Cura Escudo) y/o aplicar Buff/Debuff (incluye Revivir) · 'utilizable_mundo' se usa desde el Mapa para desplegar una baliza de ayuda · el resto son componentes de sable de luz" },
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'dano_perforante', label: 'Daño Perforante', type: 'number', min: 0, hint: 'solo si tipo = arma · ignora el escudo, siempre pasa directo a la vida' },
       { key: 'cura_vida',   label: 'Cura Vida',   type: 'number', min: 0, hint: "Solo si tipo = utilizable · vida que restaura al consumirse (ej. Kit Médico)" },
       { key: 'cura_escudo', label: 'Cura Escudo', type: 'number', min: 0, hint: "Solo si tipo = utilizable · escudo que restaura al consumirse (ej. Generador de Escudo)" },
+      { key: 'buff',        label: 'Buff (a quien lo usa)', type: 'statStack', span: 2, hint: "Solo si tipo = utilizable · mismos estados que una habilidad (ver Habilidades). 'Revivir' es especial: solo puede usarse sobre un compañero con 0 de vida y lo revive con la mitad de su vida máxima" },
+      { key: 'debuff',      label: 'Debuff (al enemigo)',   type: 'statStack', span: 2, hint: 'Solo si tipo = utilizable y se usa en un combate 1v1 contra un NPC (ver NpcCombatScreen) · en el Mapa/Dungeon no tiene efecto al no haber enemigo objetivo' },
       { key: 'rareza',      label: 'Rareza',      type: 'select', options: RAREZA_OPTS },
       { key: 'costo',       label: 'Costo (cr)',  type: 'number', min: 0, hint: 'Costo base usado por NPCs vendedores (se le aplica el interés de cada uno)' },
       { key: 'activo',      label: 'Activo',      type: 'toggle' },

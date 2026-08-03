@@ -2878,7 +2878,10 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
       const nombreObjetivo = res.target_user_id === myUserId
         ? 'vos'
         : (equipo.find((j) => j.user_id === res.target_user_id)?.name ?? 'un aliado');
-      toast(`${res.nombre} usado en ${nombreObjetivo}`, { tone: 'success', icon: 'box' });
+      toast(
+        res.revivido ? `¡${nombreObjetivo === 'vos' ? 'Reviviste' : nombreObjetivo + ' revivió'} con la mitad de su vida!` : `${res.nombre} usado en ${nombreObjetivo}`,
+        { tone: 'success', icon: res.revivido ? 'zap' : 'box' }
+      );
     } catch (e) {
       toast(e?.body?.error || e?.message || 'No se pudo usar el objeto.', { tone: 'error', icon: 'x' });
     } finally {

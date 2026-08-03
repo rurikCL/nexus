@@ -18,17 +18,27 @@ namespace App\Support\Combat;
  * solo con ese turno (a diferencia de protegido/marcado, que no expiran solos).
  *
  * Los tipos de estado (paralizado, aturdido, marcado, protegido, sangrado,
- * envenenado, debilitado, confundido, regeneracion, deflectar, contraataque)
- * son nombres reservados: un buff/debuff de habilidad cuyo string coincide
- * con uno de estos se aplica como estado en vez de como modificador de stat
- * — ver uso en los controllers.
+ * envenenado, debilitado, confundido, regeneracion, deflectar, contraataque,
+ * revivir) son nombres reservados: un buff/debuff de habilidad (o de un
+ * objeto 'utilizable', que ahora comparte el mismo registro — ver
+ * App\Models\RolObjeto) cuyo string coincide con uno de estos se aplica como
+ * estado en vez de como modificador de stat — ver uso en los controllers.
+ *
+ * 'revivir' es un caso especial: no es un estado que persista, es una acción
+ * instantánea que cada controller intercepta ANTES de llegar al flujo
+ * genérico de buff/debuff (ver RaidCombatController y DungeonController::
+ * usarObjeto) — solo puede targetear a un combatiente con 0 de vida, y lo
+ * revive con la mitad de su vida máxima. La entrada en DEFAULTS_ESTADO de
+ * abajo es solo un resguardo por si 'revivir' llega sin ser interceptado
+ * (p.ej. en un debuff mal configurado): se vuelve un estado inofensivo de 1
+ * turno sin efecto, en vez de romper el flujo genérico.
  */
 trait AplicaEstadosCombate
 {
     private const TIPOS_ESTADO = [
         'paralizado', 'inmune_paralisis', 'aturdido', 'marcado', 'protegido',
         'sangrado', 'envenenado', 'debilitado', 'confundido', 'regeneracion',
-        'deflectar', 'contraataque',
+        'deflectar', 'contraataque', 'revivir',
     ];
 
     /** Duración/valor por defecto de cada estado cuando se aplica desde una habilidad. */
@@ -44,6 +54,7 @@ trait AplicaEstadosCombate
         'regeneracion' => ['turns' => 2, 'valor' => 2],
         'deflectar' => ['turns' => 1, 'valor' => 0],
         'contraataque' => ['turns' => 1, 'valor' => 0],
+        'revivir' => ['turns' => 1, 'valor' => 0],
     ];
 
     private const ESTADOS_DOT = ['sangrado' => true, 'envenenado' => true];
@@ -258,6 +269,24 @@ trait AplicaEstadosCombate
         }
 
         return ['estados' => self::quitarEstado($estadosObjetivo, $tipo), 'activo' => true, 'tipo' => $tipo];
+    }
+
+    /** ¿Esta lista de buff/debuff (de una habilidad o de un objeto utilizable) trae 'revivir'? */
+    private static function esEfectoRevivir(array $buffODebuff): bool
+    {
+        return in_array('revivir', $buffODebuff, true);
+    }
+
+    /** La misma lista sin 'revivir' — para no aplicarlo también como un estado genérico de 1 turno sin efecto. */
+    private static function sinEfectoRevivir(array $buffODebuff): array
+    {
+        return array_values(array_diff($buffODebuff, ['revivir']));
+    }
+
+    /** Vida con la que revive un combatiente caído: la mitad (floor) de su vida máxima, mínimo 1. */
+    private static function vidaAlRevivir(int $vidaMaxima): int
+    {
+        return max(1, intdiv($vidaMaxima, 2));
     }
 
     /** Mitad (floor) de cada componente de daño — el golpe que Deflectar/Contraataque devuelve al atacante. */
