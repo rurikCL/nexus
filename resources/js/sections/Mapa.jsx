@@ -3289,7 +3289,9 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
             {!estoyCaido && sala.tiene_cofre && !sala.cofre_abierto && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
                 {bloqueado ? (
-                  <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>🔒 Derrota a {sala.enemigo.nombre} para abrir el cofre.</p>
+                  <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
+                    🔒 Derrota {Array.isArray(sala.horda) && sala.horda.length > 0 ? 'a la horda' : `a ${sala.enemigo?.nombre}`} para abrir el cofre.
+                  </p>
                 ) : (
                   <>
                     <p style={{ color: 'var(--holocron-oro)', fontSize: 13, marginBottom: 10 }}>🎁 Hay un cofre en esta sala.</p>

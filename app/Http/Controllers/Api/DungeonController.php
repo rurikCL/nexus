@@ -20,6 +20,7 @@ use App\Services\RecompensaRollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Dungeon rogue-like en equipo: se arma un lobby al entrar por un
@@ -606,15 +607,19 @@ class DungeonController extends Controller
             ->with('user.character')
             ->orderByDesc('dano_total')
             ->get()
-            ->map(fn (JefeRanking $r) => [
-                'user_id' => $r->user_id,
-                'nombre' => $r->user->character->name ?? $r->user->name,
-                'foto' => $r->user->character?->imagenMapa(),
-                'dano_al_jefe' => $r->dano_total,
-                'enemigos_eliminados' => $r->enemigos_eliminados,
-                'cofres_abiertos' => $r->cofres_abiertos,
-                'rondas' => $r->rondas,
-            ])->values()->all();
+            ->map(function (JefeRanking $r) {
+                $imagenMapa = $r->user->character?->imagenMapa();
+
+                return [
+                    'user_id' => $r->user_id,
+                    'nombre' => $r->user->character->name ?? $r->user->name,
+                    'foto' => $imagenMapa ? Storage::disk('public')->url($imagenMapa) : null,
+                    'dano_al_jefe' => $r->dano_total,
+                    'enemigos_eliminados' => $r->enemigos_eliminados,
+                    'cofres_abiertos' => $r->cofres_abiertos,
+                    'rondas' => $r->rondas,
+                ];
+            })->values()->all();
     }
 
     /**
@@ -659,11 +664,12 @@ class DungeonController extends Controller
         return $run->jugadores->where('estado', 'activo')->map(function (DungeonRunPlayer $jp) {
             $character = $jp->user->character;
             $stats = $character?->combatStats();
+            $imagenMapa = $character?->imagenMapa();
 
             return [
                 'user_id' => $jp->user_id,
                 'name' => $character->name ?? $jp->user->name,
-                'photo' => $character?->imagenMapa(),
+                'photo' => $imagenMapa ? Storage::disk('public')->url($imagenMapa) : null,
                 'saber_color' => $character->saber_color ?? null,
                 'hp_actual' => $jp->hp_actual ?? $stats['vida'] ?? 0,
                 'hp_max' => $stats['vida'] ?? 0,
@@ -695,16 +701,20 @@ class DungeonController extends Controller
 
         return [
             'run' => $this->formatRunResumen($run),
-            'jugadores' => $run->jugadores->map(fn (DungeonRunPlayer $jp) => [
-                'user_id' => $jp->user_id,
-                'name' => $jp->user->character->name ?? $jp->user->name,
-                'handle' => $jp->user->character->handle ?? null,
-                'photo' => $jp->user->character?->imagenMapa(),
-                'saber_color' => $jp->user->character->saber_color ?? null,
-                'listo' => $jp->listo,
-                'estado' => $jp->estado,
-                'soy_yo' => $jp->user_id === $userId,
-            ])->values(),
+            'jugadores' => $run->jugadores->map(function (DungeonRunPlayer $jp) use ($userId) {
+                $imagenMapa = $jp->user->character?->imagenMapa();
+
+                return [
+                    'user_id' => $jp->user_id,
+                    'name' => $jp->user->character->name ?? $jp->user->name,
+                    'handle' => $jp->user->character->handle ?? null,
+                    'photo' => $imagenMapa ? Storage::disk('public')->url($imagenMapa) : null,
+                    'saber_color' => $jp->user->character->saber_color ?? null,
+                    'listo' => $jp->listo,
+                    'estado' => $jp->estado,
+                    'soy_yo' => $jp->user_id === $userId,
+                ];
+            })->values(),
             'cupos_equipo' => $run->template->cuposEquipo(),
             'min_jugadores' => self::MIN_JUGADORES,
             'loot' => [
