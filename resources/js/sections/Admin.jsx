@@ -1897,11 +1897,19 @@ function CellValue({ col, record }) {
   );
 }
 
-/* ─── ENTIDADES QUE SE MUESTRAN COMO TARJETAS EN VEZ DE TABLA ── */
-const CARD_ENTITIES = ['npcs', 'enemigos', 'naves', 'rol_habilidades'];
+/* ─── ENTIDADES QUE SE MUESTRAN COMO TARJETAS EN VEZ DE TABLA ──
+   Todos los mantenedores genéricos (los que usan EntityTable) salvo 'misiones'
+   y 'torneos', que tienen su propia vista custom (config.custom = true) y ni
+   siquiera pasan por acá. */
+const CARD_ENTITIES = [
+  'sistemas', 'planetas', 'zonas', 'lugares',
+  'npcs', 'enemigos', 'naves', 'dungeon_templates',
+  'rol_habilidades', 'rol_sonidos', 'rol_objetos', 'medallas',
+  'usuarios', 'roles', 'personajes', 'configuraciones', 'sedes',
+];
 
 function resolveEntityImage(record) {
-  const raw = record.imagen_mini || record.imagen || record.icono || null;
+  const raw = record.imagen_mini || record.imagen || record.icono || record.photo || null;
   if (!raw) return null;
   return raw.startsWith('http') ? raw : `/storage/${raw}`;
 }
@@ -1931,14 +1939,20 @@ function ActionBtn({ icon, title, onClick, tone = 'holo' }) {
    pero en formato card, con el mismo look del Catálogo ── */
 function EntityCard({ entityKey, config, record, deleting, onEdit, onAskDelete, onConfirmDelete, onCancelDelete, onAssignHabilidad, onAssignObjeto }) {
   const img = resolveEntityImage(record);
-  const visibleCol = config.columns.find(col => col.key === 'visible');
-  const badgeCols = config.columns.filter(col => col.key !== 'id' && col.key !== 'nombre' && col.key !== 'visible' && col.type !== 'image');
+  // La columna "bold" de cada config es la que hoy hace de título en la tabla
+  // (nombre/name/handle según la entidad) — la usamos también como título de la card.
+  const titleCol = config.columns.find(col => col.bold) ?? config.columns.find(col => col.key !== 'id');
+  const statusCol = config.columns.find(col => col.type === 'bool');
+  const badgeCols = config.columns.filter(col => (
+    col.key !== 'id' && col.type !== 'image' && col !== titleCol && col !== statusCol
+  ));
+  const title = titleCol ? (titleCol.resolve ? titleCol.resolve(record) : record[titleCol.key]) : null;
 
   return (
     <div className="nx-panel solid" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-      {visibleCol && (
+      {statusCol && (
         <div style={{ position: 'absolute', top: 10, right: 10 }}>
-          <CellValue col={visibleCol} record={record} />
+          <CellValue col={statusCol} record={record} />
         </div>
       )}
 
@@ -1955,7 +1969,7 @@ function EntityCard({ entityKey, config, record, deleting, onEdit, onAskDelete, 
         fontSize: 13, fontWeight: 700, color: 'var(--txt)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
-        {record.nombre ?? `#${record.id}`}
+        {title || `#${record.id}`}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1 }}>
