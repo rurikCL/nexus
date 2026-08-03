@@ -11,7 +11,7 @@ import RaidCombatScreen, { RaidQueueModal } from '../components/RaidCombatScreen
 const AUTH = () => {
   const t = localStorage.getItem('nx-token');
   return { Accept: 'application/json', Authorization: `Bearer ${t}` };
-};
+};ahora
 const apiFetch = (path) =>
   fetch(`/api${path}`, { headers: AUTH() }).then((r) => {
     if (!r.ok) throw new Error(r.status);
@@ -242,7 +242,7 @@ function PresentesAvatars({ presentes = [], max = 3 }) {
               width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
               backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
               backgroundSize: 'cover', backgroundPosition: 'center',
-              background: photoUrl ? undefined : color,
+              backgroundColor: photoUrl ? undefined : color,
               border: '1.5px solid rgba(4,7,15,0.85)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 7, fontWeight: 800, color: '#fff',
@@ -2507,7 +2507,7 @@ function DungeonMinimap({ mapa, equipo = [], myUserId, onNavigate, busy }) {
                         width: 14, height: 14, borderRadius: '50%',
                         backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
                         backgroundSize: 'cover', backgroundPosition: 'center',
-                        background: photoUrl ? undefined : (SABER_COLORS[j.saber_color] ?? '#38cdf0'),
+                        backgroundColor: photoUrl ? undefined : (SABER_COLORS[j.saber_color] ?? '#38cdf0'),
                         border: '1.5px solid rgba(4,7,15,0.85)',
                       }} />
                     );
@@ -3008,7 +3008,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
                           width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                           backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
                           backgroundSize: 'cover', backgroundPosition: 'center',
-                          background: photoUrl ? undefined : color,
+                          backgroundColor: photoUrl ? undefined : color,
                           border: `2px solid ${color}55`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: 11, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
@@ -3212,7 +3212,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
                 </>
               ) : (
                 <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
-                  Sala despejada. Hacé clic en una sala adyacente del mapa para avanzar.
+                  Sala despejada. Haz clic en una sala adyacente del mapa para avanzar.
                 </p>
               )}
 
@@ -3562,7 +3562,7 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
         width: 46, height: 46, borderRadius: '50%', flexShrink: 0,
         backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
         backgroundSize: 'cover', backgroundPosition: 'center',
-        background: photoUrl ? undefined : 'rgba(56,205,240,0.15)',
+        backgroundColor: photoUrl ? undefined : 'rgba(56,205,240,0.15)',
         border: '2px solid var(--holo-line)', display: 'grid', placeItems: 'center',
       }}>
         {!photoUrl && <Icon name="user" size={20} style={{ color: 'var(--holo)', opacity: 0.5 }} />}
@@ -4904,7 +4904,7 @@ function PresentesPanel({ presentes = [], onChat, onAttack, myUserId }) {
                   width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
                   backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
                   backgroundSize: 'cover', backgroundPosition: 'center',
-                  background: photoUrl ? undefined : color,
+                  backgroundColor: photoUrl ? undefined : color,
                   border: `2px solid ${color}55`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 9, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
@@ -5005,7 +5005,7 @@ function ChatModal({ target, myUserId, onClose }) {
           width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
           backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
           backgroundSize: 'cover', backgroundPosition: 'center',
-          background: photoUrl ? undefined : color,
+          backgroundColor: photoUrl ? undefined : color,
           border: `2px solid ${color}66`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 12, fontWeight: 800, color: '#fff', textTransform: 'uppercase',
@@ -5186,7 +5186,7 @@ function PlayerDialogModal({ jugador, myUserId, onClose, onAttack, onTrade }) {
         <div style={{
           width: isMobile ? 42 : 56, height: isMobile ? 42 : 56, borderRadius: 8, overflow: 'hidden',
           border: `2px solid ${color}66`, flexShrink: 0,
-          background: photoUrl ? undefined : `${color}22`,
+          backgroundColor: photoUrl ? undefined : `${color}22`,
           backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
           backgroundSize: 'cover', backgroundPosition: 'center',
           display: 'grid', placeItems: 'center',
