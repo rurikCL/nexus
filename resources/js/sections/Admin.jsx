@@ -421,6 +421,7 @@ const ENTITY_CONFIG = {
       { key: 'buff',         label: 'Buff (al usuario)',     type: 'statStack', span: 2, hint: 'Cada clic en un stat suma +1 (Ej: ATQ×2 + DEF×1 = +2 ataque y +1 defensa). Los estados de abajo se auto-aplican al usuario (ej. Regeneración)' },
       { key: 'debuff',       label: 'Debuff (al objetivo)',  type: 'statStack', span: 2, hint: 'Igual que Buff pero se aplica al objetivo solo si el ataque conecta. Los estados de abajo (ej. Paralizado, Sangrado) se aplican al objetivo al impactar' },
       { key: 'duracion',     label: 'Duración del Buff/Debuff (rondas)', type: 'number', min: 1, hint: 'Rondas completas que duran el Buff y Debuff de esta habilidad al aplicarse' },
+      { key: 'agro',         label: 'Agro (Combate RAID)',   type: 'number', min: -99, hint: 'Puntos de agro del jefe que suma usar esta habilidad (sin importar si conecta, ni qué efecto tenga) — puede ser negativo para reducir el agro propio. Un golpe básico sin habilidad siempre suma +1 fijo (+1 extra si es crítico); esto no aplica ahí.' },
       { key: 'sonido',       label: 'Sonido al usar',        type: 'text', hint: 'Nombre del sonido en el catálogo de Sonidos (rol_sonidos) que se reproduce al usar esta habilidad. Vacío = sin sonido.' },
     ],
     defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },

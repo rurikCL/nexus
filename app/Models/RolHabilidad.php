@@ -27,6 +27,7 @@ class RolHabilidad extends Model
         'debuff',
         'duracion',
         'sonido',
+        'agro',
     ];
 
     protected $casts = [
@@ -37,6 +38,7 @@ class RolHabilidad extends Model
         'damage_perforante' => 'integer',
         'cooldown'      => 'integer',
         'duracion'      => 'integer',
+        'agro'          => 'integer',
     ];
 
     /* buff y debuff se reciben como array o como JSON string (desde FormData).
