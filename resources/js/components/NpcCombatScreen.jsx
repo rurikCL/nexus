@@ -305,6 +305,11 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
   const [iniciativaMsg, setIniciativaMsg] = useState(null); // { key, texto } — banner grande en vez de la tirada de dados
   const [inicioMsg,     setInicioMsg]     = useState(null); // { key } — banner "¡Combate iniciado!"
   const [combatIntroDone, setCombatIntroDone] = useState(!!initialState); // true tras el banner de inicio — habilita el banner "Turno N"
+  /* Combate nuevo (no restaurado): arranca detenido en un botón "Comenzar" — evita que, si le
+     toca actuar primero al NPC, su golpe se resuelva tan rápido tras montar la pantalla que no
+     dé tiempo a notarlo. Un combate restaurado (initialState) ya estaba en curso, así que arranca
+     ya "iniciado". */
+  const [started, setStarted] = useState(!!initialState);
   /* Bloquea acciones de ambos lados mientras se anuncian los banners de Turno/Iniciativa
      (inicio de combate o cambio de ronda) — evita que el jugador ataque o que el turno
      automático del NPC se dispare en medio del anuncio. */
@@ -548,14 +553,14 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     return `−${Math.max(0, dmgEscudo)} daño al escudo — ¡escudo perforado! −${totalVida} daño a la vida`;
   };
 
-  /* Secuencia de arranque — solo si es combate nuevo (no restaurado): banner "Inicio combate"
-     (2s) → banner "Turno 1" (2s) → banner "Iniciativa" (2s) → recién ahí se habilita la acción
-     (phaseLock=false). Guarda `cancelled`: en desarrollo React.StrictMode invoca este efecto dos
-     veces al montar sin llamar a nuestro cleanup entre medio salvo que lo devolvamos — sin esta
-     guarda, la segunda invocación corría completa igual que la primera (dos tiradas de
-     iniciativa, dos setLog pisándose entre sí). */
+  /* Secuencia de arranque — solo si es combate nuevo (no restaurado) Y el jugador ya presionó
+     "Comenzar" (`started`): banner "Inicio combate" (2s) → banner "Turno 1" (2s) → banner
+     "Iniciativa" (2s) → recién ahí se habilita la acción (phaseLock=false). Guarda `cancelled`:
+     en desarrollo React.StrictMode invoca este efecto dos veces al montar sin llamar a nuestro
+     cleanup entre medio salvo que lo devolvamos — sin esta guarda, la segunda invocación corría
+     completa igual que la primera (dos tiradas de iniciativa, dos setLog pisándose entre sí). */
   useEffect(() => {
-    if (initialState) return;
+    if (initialState || !started) return;
     let cancelled = false;
     void playCombateNpc();
     const pTirada = tirarDados(); const nTirada = tirarDados();
@@ -589,7 +594,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       if (first === 'player') setPlayerFuerza(fuerzaPorTurno);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [started]);
 
   /*
    * Termina el turno de quien actuó — decide si sigue la ronda o se tira nueva
@@ -2009,6 +2014,25 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
         {diceOverlay}
         {throwHandle}
+
+        {/* Botón "Comenzar" — el combate queda detenido hasta que el jugador lo presiona, para
+            que si le toca actuar primero al enemigo, su golpe no se resuelva tan rápido tras
+            entrar a la pantalla que no dé tiempo a notarlo. */}
+        {!started && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 50,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(2,6,16,0.6)',
+          }}>
+            <button onClick={() => setStarted(true)} style={{
+              padding: '14px 40px', borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(56,205,240,0.16)', border: '1px solid var(--holo)',
+              color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 15,
+              letterSpacing: '0.18em', boxShadow: '0 0 24px -6px var(--holo)',
+              animation: 'nx-pulse 2s ease-in-out infinite',
+            }}>COMENZAR</button>
+          </div>
+        )}
 
         {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, antes
             incluso del banner de "Turno 1". */}

@@ -254,6 +254,10 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
      iniciativa ya se ve `is_my_turn=true` desde el primer fetch y podría atacar durante el
      banner. */
   const [introLock, setIntroLock] = useState(() => combat.status === 'active' && (combat.log?.length ?? 0) <= 1);
+  /* Combate recién creado: arranca detenido en un botón "Comenzar" — evita que, si el rival
+     actúa primero, su golpe se resuelva tan rápido tras entrar a la pantalla que no dé tiempo
+     a notarlo. Un combate retomado (ya con historial) arranca ya "iniciado". */
+  const [started, setStarted] = useState(() => !(combat.status === 'active' && (combat.log?.length ?? 0) <= 1));
   /* Duración máxima observada por efecto (buff/debuff), para dibujar la barrita
      de rondas restantes que se va reduciendo — se resetea cuando el efecto expira. */
   const effectMaxTurnsRef = useRef({});
@@ -307,6 +311,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   useEffect(() => {
     if (introRanRef.current) return;
     if (combat.status !== 'active' || (combat.log?.length ?? 0) > 1) return;
+    if (!started) return;
     introRanRef.current = true;
     setIntroLock(true);
     let cancelled = false;
@@ -328,7 +333,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       if (!cancelled) setIntroLock(false);
     })();
     return () => { cancelled = true; };
-  }, [combat.status, combat.log?.length]);
+  }, [combat.status, combat.log?.length, started]);
 
   /* Rastrea cuántas entradas de log ya se mostraron, para animar solo las nuevas */
   const combatLogLenRef = useRef((combat.log ?? []).length);
@@ -1212,6 +1217,25 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
         {diceOverlay}
         {throwHandle}
+
+        {/* Botón "Comenzar" — el combate queda detenido hasta que el jugador lo presiona, para
+            que si el rival actúa primero, su golpe no se resuelva tan rápido tras entrar a la
+            pantalla que no dé tiempo a notarlo. */}
+        {!started && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 50,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(2,6,16,0.6)',
+          }}>
+            <button onClick={() => setStarted(true)} style={{
+              padding: '14px 40px', borderRadius: 10, cursor: 'pointer',
+              background: 'rgba(56,205,240,0.16)', border: '1px solid var(--holo)',
+              color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 15,
+              letterSpacing: '0.18em', boxShadow: '0 0 24px -6px var(--holo)',
+              animation: 'nx-pulse 2s ease-in-out infinite',
+            }}>COMENZAR</button>
+          </div>
+        )}
 
         {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, solo en
             combates recién creados (ver el useEffect de montaje). */}

@@ -454,6 +454,12 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
      entrada de "Orden de turnos" de la nueva ronda, antes de mostrar ese banner. */
   const [turnoRonda, setTurnoRonda] = useState(1);
   const [inicioMsg, setInicioMsg] = useState(null); // { key } — banner "¡Combate iniciado!", solo en raids recién comenzados
+  /* Raid recién comenzado: arranca detenido en un botón "Comenzar" — evita que, si el jefe
+     actúa primero, su golpe se resuelva tan rápido tras entrar a la pantalla que no dé tiempo a
+     notarlo. Se activa apenas se detecta que es un raid fresco (antes de jugar la secuencia de
+     banners); el botón dispara `playIntroSequence` directamente. Un raid retomado nunca pone
+     `awaitingStart` en true, así que el botón no aparece. */
+  const [awaitingStart, setAwaitingStart] = useState(false);
   /* Momento (local) en que las acciones quedaron habilitadas — usado como inicio del contador
      regresivo del turno en vez de `raid.turn_started_at` (servidor): ese timestamp se fija
      apenas el turno avanza EN EL SERVIDOR, antes de que el cliente termine de reproducir los
@@ -681,6 +687,29 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     }
   };
 
+  /* Reproduce el banner "Inicio combate" → "Turno N" → "Iniciativa" de la primera ronda,
+     usando la primera entrada del log ("Ronda N — Orden de turnos: ..."). La dispara el botón
+     "Comenzar" (ver JSX) para un raid recién creado — antes de esto, el raid queda cargado
+     (HP/turno visibles) pero sin animar, para que el jugador decida cuándo empezar a mirar. */
+  const playIntroSequence = async (primeraEntrada) => {
+    const pausaInicio = raid?.pausa_accion_ms ?? pausaMs;
+    setAnimBusy(true);
+    setInicioMsg({ key: `inicio-${Date.now()}` });
+    await sleep(pausaInicio);
+    setInicioMsg(null);
+
+    await sleep(pausaInicio); // banner "Turno N" visible
+
+    const msg = primeraEntrada?.messages?.[0] ?? '';
+    const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
+    if (m) {
+      setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: m[1] });
+      await sleep(pausaInicio);
+      setIniciativaMsg(null);
+    }
+    setAnimBusy(false);
+  };
+
   /* Anima las entradas nuevas del log (dados + golpe + texto flotante) y solo entonces
      revela el estado actualizado (HP/escudo/turno) — así los efectos se ven ANTES de que
      cambien los números, no al revés. Se invoca explícitamente al recibir cada respuesta
@@ -695,34 +724,17 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         return;
       }
 
-      /* Secuencia de arranque — solo la primera carga de un raid recién comenzado (a lo más
-         la entrada inicial de orden de turnos, sin ninguna acción todavía): banner "Inicio
-         combate" (2s) → banner "Turno N" (2s, ya visible vía el overlay incondicional) →
-         banner "Iniciativa" (2s) con el orden ya conocido desde esa primera entrada. Un raid
-         retomado (remount con historial ya avanzado) no repite nada de esto. */
+      /* Solo la primera carga de un raid recién comenzado (a lo más la entrada inicial de
+         orden de turnos, sin ninguna acción todavía): se revela el estado ya, pero la
+         secuencia de banners (ver playIntroSequence) queda pendiente del botón "Comenzar" —
+         evita que, si el jefe actúa primero, su golpe se resuelva demasiado rápido tras
+         entrar a la pantalla. Un raid retomado (remount con historial ya avanzado) no pasa
+         por acá — sigue directo al camino normal de abajo. */
       if (isFirstLoad && newLog.length <= 1 && newRaid.status === 'activo') {
-        /* `raid` (estado del componente) sigue null en esta primera carga — se usa
-           newRaid.pausa_accion_ms directamente en vez del pausaMs de closure (que aún
-           caería al default). */
-        const pausaInicio = newRaid.pausa_accion_ms ?? pausaMs;
         setTurnoRonda(newRaid.ronda ?? 1);
-        setAnimBusy(true);
-        setInicioMsg({ key: `inicio-${Date.now()}` });
-        await sleep(pausaInicio);
-        setInicioMsg(null);
-
-        await sleep(pausaInicio); // banner "Turno N" visible
-
-        const msg = newLog[0]?.messages?.[0] ?? '';
-        const m = msg.match(/^Ronda \d+ — Orden de turnos: (.+?) 2d6/);
-        if (m) {
-          setIniciativaMsg({ key: `ini-mount-${Date.now()}`, texto: m[1] });
-          await sleep(pausaInicio);
-          setIniciativaMsg(null);
-        }
-        setAnimBusy(false);
         prevLogLenRef.current = newLog.length;
         setRaid(newRaid);
+        setAwaitingStart(true);
 
         return;
       }
@@ -755,7 +767,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
 
   const me = raid.jugadores.find(j => j.es_yo);
   const isMyTurn = !!me?.es_mi_turno && raid.status === 'activo';
-  const canAct = isMyTurn && !busy && !rolling && !animBusy && !armed;
+  const canAct = isMyTurn && !busy && !rolling && !animBusy && !armed && !awaitingStart;
   const finished = raid.status === 'ganado' || raid.status === 'perdido';
   const showEndScreen = finished && !animBusy;
 
@@ -862,6 +874,28 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,16,0.76)' }} />
 
         <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+
+          {/* Botón "Comenzar" — el raid queda detenido hasta que el jugador lo presiona, para
+              que si el jefe actúa primero, su golpe no se resuelva tan rápido tras entrar a la
+              pantalla que no dé tiempo a notarlo. */}
+          {awaitingStart && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 50,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(2,6,16,0.6)',
+            }}>
+              <button onClick={() => {
+                setAwaitingStart(false);
+                revealQueueRef.current = revealQueueRef.current.then(() => playIntroSequence(raid.log?.[0])).catch(() => {});
+              }} style={{
+                padding: '14px 40px', borderRadius: 10, cursor: 'pointer',
+                background: 'rgba(56,205,240,0.16)', border: '1px solid var(--holo)',
+                color: 'var(--holo)', fontFamily: 'var(--font-data)', fontSize: 15,
+                letterSpacing: '0.18em', boxShadow: '0 0 24px -6px var(--holo)',
+                animation: 'nx-pulse 2s ease-in-out infinite',
+              }}>COMENZAR</button>
+            </div>
+          )}
 
           {/* Banner "¡Combate iniciado!" — primera fase de la secuencia de arranque, solo en
               raids recién comenzados (ver revealRaid). */}
