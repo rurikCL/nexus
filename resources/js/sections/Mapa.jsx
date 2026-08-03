@@ -3156,152 +3156,154 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
         <Btn kind="ghost" sm onClick={salirDungeon} disabled={busy}>Abandonar dungeon</Btn>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '240px 1fr 260px', gap: 16, alignItems: 'start' }}>
-        {/* IZQUIERDA: equipo (tarjetas = blanco de arrastre) + objetos (se arrastran sobre esas tarjetas) */}
-        <div style={{ display: 'grid', gap: 16 }}>
-          {equipo.length > 0 && (
-            <div className="nx-panel solid" style={{ padding: 16 }}>
-              <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
-              <div style={{ display: 'grid', gap: 10 }}>
-                {equipo.map((j) => {
-                  const caido = j.hp_actual <= 0;
-                  const puedoRevivirlo = caido && j.user_id !== myUserId && j.sala_actual_id === sala.id && !estoyCaido;
-                  return (
-                    <div key={j.user_id}
-                      ref={(el) => { teamRefs.current[j.user_id] = el; }}
-                      style={{
-                        borderRadius: 10, padding: 6,
-                        border: `1.5px dashed ${hoverTargetId === j.user_id ? '#10b981' : 'transparent'}`,
-                        background: hoverTargetId === j.user_id ? 'rgba(16,185,129,0.10)' : 'transparent',
-                        opacity: caido ? 0.6 : 1,
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      <CombatHPBar
-                        vida={j.hp_actual} maxVida={j.hp_max}
-                        escudo={j.escudo_actual} maxEscudo={j.escudo_max}
-                        nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}${caido ? ' 💀 Caído' : ''}`}
-                        photoUrl={mediaUrl(j.photo)}
-                      />
-                      {puedoRevivirlo && (
-                        <div style={{ marginTop: 6, textAlign: 'center' }}>
-                          <Btn kind="accent" sm onClick={() => revivirCompanero(j.user_id)} disabled={busy}>
-                            💉 Revivir (+2 vida)
-                          </Btn>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      <div style={{ display: 'grid', gap: 16 }}>
+        {/* FILA 1: mapa del dungeon (más ancho) + sala actual */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 16, alignItems: 'start' }}>
+          <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} onNavigate={estoyCaido ? () => {} : mover} busy={busy || estoyCaido} />
 
-          {utilizables.length > 0 && (
-            <div className="nx-panel solid" style={{ padding: 16 }}>
-              <div className="nx-kicker" style={{ marginBottom: 4 }}>OBJETOS</div>
-              <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginBottom: 10, lineHeight: 1.5 }}>
-                Arrastrá un objeto sobre la tarjeta de un compañero (arriba) para usarlo en él.
+          {/* qué hay en la sala actual (encuentro / cofre / jefe) */}
+          <DungeonBackdrop imagen={lugar.imagen}>
+            <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center' }}>
+              <div className="nx-display" style={{ fontSize: 16, marginBottom: 10 }}>
+                {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
               </div>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {utilizables.map((objeto) => (
-                  <div key={objeto.id}
-                    onPointerDown={(e) => iniciarArrastre(e, objeto)}
-                    style={{
-                      padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
-                      background: 'rgba(16,185,129,0.06)', textAlign: 'left',
-                      cursor: draggingObjeto ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none',
-                      opacity: draggingObjeto?.id === objeto.id ? 0.35 : 1,
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
-                    <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
-                      {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
-                      {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
-                    </div>
+
+              {estoyCaido ? (
+                <>
+                  <div style={{ fontSize: 40, marginBottom: 10 }}>💀</div>
+                  <p style={{ color: '#ff6b6b', fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Estás sin vida</p>
+                  <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
+                    No puedes moverte, huir ni abrir cofres hasta que un compañero llegue a esta sala y te reviva.
+                    {utilizables.length > 0 && ' También podés usar un objeto curativo sobre vos mismo.'}
+                  </p>
+                </>
+              ) : sala.tipo === 'jefe' ? (
+                <>
+                  <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                    {data.run.template.jefe_nombre} espera al fondo de esta sala. Reúne a tu equipo para enfrentarlo.
+                  </p>
+                  <Btn kind="accent" icon="swords" onClick={() => setRaidQueueOpen(true)}>Enfrentar al Jefe</Btn>
+                </>
+              ) : bloqueado ? (
+                <>
+                  {Array.isArray(sala.horda) && sala.horda.length > 0 ? (
+                    <>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                        {sala.horda.map((en) => <EnemigoPortrait key={en.id} enemigo={en} size={64} />)}
+                      </div>
+                      <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                        ⚔ Una horda de {sala.horda.length} enemigos bloquea el paso: {sala.horda.map((en) => en.nombre).join(', ')}.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <EnemigoPortrait enemigo={sala.enemigo} />
+                      <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
+                        {sala.enemigo.nombre} bloquea el paso.
+                      </p>
+                    </>
+                  )}
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                    <Btn kind="accent" icon="swords" onClick={() => setActiveCombat(
+                      Array.isArray(sala.horda) && sala.horda.length > 0 ? { horda: sala.horda } : { enemigo: sala.enemigo }
+                    )}>Combatir</Btn>
+                    <Btn kind="ghost" onClick={huirSala} disabled={busy}>Huir</Btn>
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
+                  Sala despejada. Hacé clic en una sala adyacente del mapa para avanzar.
+                </p>
+              )}
+
+              {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador.
+                  Si además hay un enemigo sin derrotar, se bloquea hasta resolverlo (igual que mover/huir en el backend). */}
+              {!estoyCaido && sala.tiene_cofre && !sala.cofre_abierto && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
+                  {bloqueado ? (
+                    <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
+                      🔒 Derrota {Array.isArray(sala.horda) && sala.horda.length > 0 ? 'a la horda' : `a ${sala.enemigo?.nombre}`} para abrir el cofre.
+                    </p>
+                  ) : (
+                    <>
+                      <p style={{ color: 'var(--holocron-oro)', fontSize: 13, marginBottom: 10 }}>🎁 Hay un cofre en esta sala.</p>
+                      <Btn kind="gold" onClick={abrirCofre} disabled={busy}>Abrir Cofre</Btn>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </DungeonBackdrop>
         </div>
 
-        {/* CENTRO: mapa del dungeon — clic en una sala adyacente para moverse ahí (bloqueado si estoy caído) */}
-        <DungeonMinimap mapa={data.mapa} equipo={equipo} myUserId={myUserId} onNavigate={estoyCaido ? () => {} : mover} busy={busy || estoyCaido} />
-
-        {/* DERECHA: qué hay en la sala actual (encuentro / cofre / jefe) */}
-        <DungeonBackdrop imagen={lugar.imagen}>
-          <div className="nx-panel solid" style={{ padding: 24, textAlign: 'center' }}>
-            <div className="nx-display" style={{ fontSize: 16, marginBottom: 10 }}>
-              {sala.tipo === 'entrada' ? 'Entrada' : sala.tipo === 'jefe' ? 'Sala del Jefe' : 'Sala'}
+        {/* FILA 2: equipo horizontal (tarjetas = blanco de arrastre para los objetos de la fila 3) */}
+        {equipo.length > 0 && (
+          <div className="nx-panel solid" style={{ padding: 16 }}>
+            <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {equipo.map((j) => {
+                const caido = j.hp_actual <= 0;
+                const puedoRevivirlo = caido && j.user_id !== myUserId && j.sala_actual_id === sala.id && !estoyCaido;
+                return (
+                  <div key={j.user_id}
+                    ref={(el) => { teamRefs.current[j.user_id] = el; }}
+                    style={{
+                      flex: '1 1 220px', minWidth: 220,
+                      borderRadius: 10, padding: 6,
+                      border: `1.5px dashed ${hoverTargetId === j.user_id ? '#10b981' : 'transparent'}`,
+                      background: hoverTargetId === j.user_id ? 'rgba(16,185,129,0.10)' : 'transparent',
+                      opacity: caido ? 0.6 : 1,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <CombatHPBar
+                      vida={j.hp_actual} maxVida={j.hp_max}
+                      escudo={j.escudo_actual} maxEscudo={j.escudo_max}
+                      nombre={`${j.name}${j.user_id === myUserId ? ' (tú)' : ''}${j.en_sala_jefe ? ' 👑' : ''}${caido ? ' 💀 Caído' : ''}`}
+                      photoUrl={mediaUrl(j.photo)}
+                    />
+                    {puedoRevivirlo && (
+                      <div style={{ marginTop: 6, textAlign: 'center' }}>
+                        <Btn kind="accent" sm onClick={() => revivirCompanero(j.user_id)} disabled={busy}>
+                          💉 Revivir (+2 vida)
+                        </Btn>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-
-            {estoyCaido ? (
-              <>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>💀</div>
-                <p style={{ color: '#ff6b6b', fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Estás sin vida</p>
-                <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
-                  No puedes moverte, huir ni abrir cofres hasta que un compañero llegue a esta sala y te reviva.
-                  {utilizables.length > 0 && ' También podés usar un objeto curativo sobre vos mismo.'}
-                </p>
-              </>
-            ) : sala.tipo === 'jefe' ? (
-              <>
-                <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
-                  {data.run.template.jefe_nombre} espera al fondo de esta sala. Reúne a tu equipo para enfrentarlo.
-                </p>
-                <Btn kind="accent" icon="swords" onClick={() => setRaidQueueOpen(true)}>Enfrentar al Jefe</Btn>
-              </>
-            ) : bloqueado ? (
-              <>
-                {Array.isArray(sala.horda) && sala.horda.length > 0 ? (
-                  <>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-                      {sala.horda.map((en) => <EnemigoPortrait key={en.id} enemigo={en} size={64} />)}
-                    </div>
-                    <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
-                      ⚔ Una horda de {sala.horda.length} enemigos bloquea el paso: {sala.horda.map((en) => en.nombre).join(', ')}.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <EnemigoPortrait enemigo={sala.enemigo} />
-                    <p style={{ color: 'var(--txt-dim)', fontSize: 13, marginBottom: 16 }}>
-                      {sala.enemigo.nombre} bloquea el paso.
-                    </p>
-                  </>
-                )}
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                  <Btn kind="accent" icon="swords" onClick={() => setActiveCombat(
-                    Array.isArray(sala.horda) && sala.horda.length > 0 ? { horda: sala.horda } : { enemigo: sala.enemigo }
-                  )}>Combatir</Btn>
-                  <Btn kind="ghost" onClick={huirSala} disabled={busy}>Huir</Btn>
-                </div>
-              </>
-            ) : (
-              <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
-                Sala despejada. Hacé clic en una sala adyacente del mapa para avanzar.
-              </p>
-            )}
-
-            {/* cofre de la sala — una recompensa al azar del pool del template, una vez por jugador.
-                Si además hay un enemigo sin derrotar, se bloquea hasta resolverlo (igual que mover/huir en el backend). */}
-            {!estoyCaido && sala.tiene_cofre && !sala.cofre_abierto && (
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--holo-line)' }}>
-                {bloqueado ? (
-                  <p style={{ color: 'var(--txt-dim)', fontSize: 13 }}>
-                    🔒 Derrota {Array.isArray(sala.horda) && sala.horda.length > 0 ? 'a la horda' : `a ${sala.enemigo?.nombre}`} para abrir el cofre.
-                  </p>
-                ) : (
-                  <>
-                    <p style={{ color: 'var(--holocron-oro)', fontSize: 13, marginBottom: 10 }}>🎁 Hay un cofre en esta sala.</p>
-                    <Btn kind="gold" onClick={abrirCofre} disabled={busy}>Abrir Cofre</Btn>
-                  </>
-                )}
-              </div>
-            )}
           </div>
-        </DungeonBackdrop>
+        )}
+
+        {/* FILA 3: objetos usables, en 2 columnas */}
+        {utilizables.length > 0 && (
+          <div className="nx-panel solid" style={{ padding: 16 }}>
+            <div className="nx-kicker" style={{ marginBottom: 4 }}>OBJETOS</div>
+            <div style={{ fontSize: 9, color: 'var(--txt-faint)', marginBottom: 10, lineHeight: 1.5 }}>
+              Arrastrá un objeto sobre la tarjeta de un compañero (arriba) para usarlo en él.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
+              {utilizables.map((objeto) => (
+                <div key={objeto.id}
+                  onPointerDown={(e) => iniciarArrastre(e, objeto)}
+                  style={{
+                    padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)',
+                    background: 'rgba(16,185,129,0.06)', textAlign: 'left',
+                    cursor: draggingObjeto ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none',
+                    opacity: draggingObjeto?.id === objeto.id ? 0.35 : 1,
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--txt)' }}>{objeto.nombre} ×{objeto.cantidad}</div>
+                  <div style={{ fontSize: 9, color: 'var(--txt-dim)', fontFamily: 'var(--font-data)' }}>
+                    {objeto.cura_vida > 0 && `+${objeto.cura_vida} vida `}
+                    {objeto.cura_escudo > 0 && `+${objeto.cura_escudo} escudo`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ghost del objeto mientras se arrastra */}
