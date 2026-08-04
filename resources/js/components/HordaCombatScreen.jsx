@@ -427,6 +427,26 @@ export default function HordaCombatScreen({
   const [selectedTarget, setSelectedTarget] = useState(initialState?.selectedTarget ?? 0);
   const [busy, setBusy] = useState(false);
   const [enemyActing, setEnemyActing] = useState(false);
+  /* Cerrojo que cubre la transición de turno completa (pausa de fase + tick de fin de ronda +
+     banner de nueva ronda) — ver avanzarTurno. Equivale al `actionLock` de NpcCombatScreen. */
+  const [actionLock, setActionLock] = useState(false);
+  /* Pausa (ms) entre acciones/banners del combate — configurable en Configuracion
+     (combate_pausa_accion_ms), igual que las otras tres pantallas de combate. Este combate es
+     100% cliente (sin servidor autoritativo), así que se lee vía el mismo endpoint admin
+     genérico que usa NpcCombatScreen (no requiere rol admin, solo sesión autenticada). */
+  const [pausaMs, setPausaMs] = useState(2000);
+  useEffect(() => {
+    const token = localStorage.getItem('nx-token');
+    fetch('/api/admin/configuraciones?q=combate_pausa_accion_ms', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+      .then(r => r.json())
+      .then(d => {
+        const row = (d.data ?? d.items ?? []).find(r => r.nombre === 'combate_pausa_accion_ms');
+        if (row && row.valor_numerico > 0) setPausaMs(row.valor_numerico);
+      })
+      .catch(() => {});
+  }, []);
   /* Acción esperando que el jugador elija a cuál miembro de la horda va dirigida, haciendo
      click en su ficha: { kind: 'basico' } | { kind: 'habilidad', hab } | { kind: 'objeto', objeto } */
   const [targeting, setTargeting] = useState(null);
@@ -543,7 +563,7 @@ export default function HordaCombatScreen({
     const orden = rolls.map(r => `${r.nombre} 2d6(${r.dado.dado1}+${r.dado.dado2})=${r.total}`).join(' | ');
     setRondaMsg({ key: `${nextRonda}-${rolls[0]?.nombre ?? ''}`, ronda: nextRonda, primero: rolls[0]?.nombre ?? '' });
     setLog(prev => [...prev, { text: `Ronda ${nextRonda} — Orden de turnos: ${orden}`, type: 'info', id: prev.length, ronda: nextRonda, actor: 'system' }]);
-    await sleep(1400);
+    await sleep(pausaMs); // banner de nueva ronda — misma pausa configurable que el resto
     setRondaMsg(null);
 
     setRonda(nextRonda);
@@ -564,7 +584,26 @@ export default function HordaCombatScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /*
+   * Termina el turno de quien actuó. Se invoca SIEMPRE justo después de resolver una acción
+   * (mensaje + animación + valores ya aplicados por el llamador) — la espera de acá es la pausa
+   * de "fase de combate" antes de pasar al siguiente combatiente, igual que
+   * NpcCombatScreen::endTurnAfter. El `actionLock` cubre toda la transición: los llamadores
+   * hacen setBusy(false) ANTES de llamar acá y `turnIndex` todavía apunta al jugador, así que
+   * sin este cerrojo se podía actuar de nuevo durante la pausa y el banner de nueva ronda.
+   */
   const avanzarTurno = async (enemigosActuales, playerHpActual, playerEstadosActuales) => {
+    setActionLock(true);
+    try {
+      await avanzarTurnoInner(enemigosActuales, playerHpActual, playerEstadosActuales);
+    } finally {
+      setActionLock(false);
+    }
+  };
+
+  const avanzarTurnoInner = async (enemigosActuales, playerHpActual, playerEstadosActuales) => {
+    await sleep(pausaMs);
+
     const vivos = enemigosActuales.filter(e => e.hp > 0);
     if (vivos.length === 0) {
       setPhase('victory');
@@ -684,8 +723,13 @@ export default function HordaCombatScreen({
 
       const nombreObjetivo = confundido ? enemigo.nombre : (player.nombre || 'Tú');
       const accion = hab ? `usa "${hab.nombre}"` : (useRanged ? 'dispara' : 'ataca');
+      /* Anuncio inmediato — antes de la animación del golpe; el resultado va en `entries`. */
+      setLog(prev => [...prev, {
+        text: `${enemigo.nombre} ${accion} contra ${nombreObjetivo}`,
+        type: 'info', id: prev.length, ronda, actor: 'npc',
+      }]);
       const entries = [{
-        text: `${enemigo.nombre} ${accion} contra ${nombreObjetivo}: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${atkRoll} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${defRoll}`,
+        text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${atkRoll} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${defRoll}`,
         type: 'info',
       }];
 
@@ -761,7 +805,7 @@ export default function HordaCombatScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turnIndex, ronda, phase]);
 
-  const isPlayerTurn = phase === 'battle' && turnOrder[turnIndex]?.type === 'player' && !busy && !enemyActing && !usingObjeto;
+  const isPlayerTurn = phase === 'battle' && turnOrder[turnIndex]?.type === 'player' && !busy && !enemyActing && !usingObjeto && !actionLock;
 
   /* ─── Ataque básico del jugador (arma equipada > desarmado) contra el objetivo elegido ── */
   const doPlayerBasicAttack = async (idx) => {
@@ -771,7 +815,6 @@ export default function HordaCombatScreen({
     const target = enemigosState[idx];
     const confundido = resolverConfundido(playerEstados);
     const entries = [];
-    if (confundido) entries.push({ text: `¡${player.nombre || 'Tú'} está confundido y ataca hacia sí mismo!`, type: 'info' });
 
     const arma = player.arma_equipada;
     const esDistancia = arma?.tipo_ataque === 'distancia';
@@ -790,12 +833,19 @@ export default function HordaCombatScreen({
     const esCritico = aR >= (12 - critico);
     const accion = arma ? `ataca con ${arma.nombre}` : 'ataca desarmado';
 
+    /* Anuncio inmediato — antes de cualquier animación (dados/golpe), igual que
+       NpcCombatScreen::doPlayerAttack. El texto del resultado va después, en `entries`. */
+    const announce = [];
+    if (confundido) announce.push({ text: `¡${player.nombre || 'Tú'} está confundido y ataca hacia sí mismo!`, type: 'info' });
+    announce.push({ text: `${player.nombre || 'Tú'} ${accion} a ${confundido ? 'sí mismo' : target.nombre}`, type: 'info' });
+    setLog(prev => [...prev, ...announce.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+
     await rollDice([
       { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
       { key: 'obj', color: '#ff2d45', label: (confundido ? player.nombre : target.nombre)?.slice(0, 8)?.toUpperCase(), values: [dTirada.dado1, dTirada.dado2] },
     ]);
 
-    entries.push({ text: `${player.nombre || 'Tú'} ${accion} a ${confundido ? 'sí mismo' : target.nombre}: 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${atkRoll} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${defRoll}`, type: 'info' });
+    entries.push({ text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${atkRoll} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${defRoll}`, type: 'info' });
 
     let estadosObjetivo = targetEstadosPrevios;
     const protegidoInfo = consumirProtegido(estadosObjetivo);
@@ -882,7 +932,11 @@ export default function HordaCombatScreen({
       const buffStats = habBuff.filter(s => !esTipoEstado(s));
       const buffEstados = habBuff.filter(esTipoEstado);
       const buffDesc = buffStats.map(s => `+1 ${s}`).join(', ');
-      entries.push({ text: `${player.nombre || 'Tú'} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`, type: 'info' });
+      /* Anuncio inmediato — antes del FX de buff/curación de más abajo. */
+      setLog(prev => [...prev, {
+        text: `${player.nombre || 'Tú'} usa "${hab.nombre}"${buffDesc ? ` (${buffDesc})` : ''}`,
+        type: 'info', id: prev.length, ronda, actor: 'player',
+      }]);
 
       const selfDmg = hab.damage ?? 0;
       const selfDmgEscudo = hab.damage_escudo ?? 0;
@@ -933,11 +987,17 @@ export default function HordaCombatScreen({
     const atkRoll = aR + atkVal;
     const defRoll = dR + defVal;
 
+    /* Anuncio inmediato — antes de los dados y del golpe; el resultado va en `entries`. */
+    setLog(prev => [...prev, {
+      text: `${player.nombre || 'Tú'} usa "${hab.nombre}" contra ${confundido ? 'sí mismo' : target.nombre}`,
+      type: 'info', id: prev.length, ronda, actor: 'player',
+    }]);
+
     await rollDice([
       { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
       { key: 'obj', color: '#ff2d45', label: (confundido ? player.nombre : target.nombre)?.slice(0, 8)?.toUpperCase(), values: [dTirada.dado1, dTirada.dado2] },
     ]);
-    entries.push({ text: `${player.nombre || 'Tú'} usa "${hab.nombre}": 2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${atkRoll} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${defRoll}`, type: 'info' });
+    entries.push({ text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${atkVal}=${atkRoll} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${defVal}=${defRoll}`, type: 'info' });
 
     let estadosObjetivo = targetEstadosPrevios;
     const protegidoInfo = consumirProtegido(estadosObjetivo);
@@ -1099,12 +1159,18 @@ export default function HordaCombatScreen({
     const dR = dTirada.total + (rival?.e.ini ?? 0);
     const gana = aR >= dR;
 
+    /* Anuncio inmediato — antes de la tirada de dados. */
+    setLog(prev => [...prev, {
+      text: `${player.nombre || 'Tú'} intenta huir`,
+      type: 'info', id: prev.length, ronda, actor: 'player',
+    }]);
+
     await rollDice([
       { key: 'ply', color: '#38cdf0', label: 'TÚ', values: [aTirada.dado1, aTirada.dado2] },
       { key: 'obj', color: '#ff2d45', label: rival?.e.nombre?.slice(0, 8)?.toUpperCase() ?? '—', values: [dTirada.dado1, dTirada.dado2] },
     ]);
     setLog(prev => [...prev, {
-      text: `${player.nombre || 'Tú'} intenta huir: 2d6(${aTirada.dado1}+${aTirada.dado2})+${effPlayerIni}=${aR} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${rival?.e.ini ?? 0}=${dR}`,
+      text: `2d6(${aTirada.dado1}+${aTirada.dado2})+${effPlayerIni}=${aR} vs 2d6(${dTirada.dado1}+${dTirada.dado2})+${rival?.e.ini ?? 0}=${dR}`,
       type: 'info', id: prev.length, ronda, actor: 'player',
     }]);
 
