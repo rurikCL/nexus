@@ -531,10 +531,12 @@ export const TIPO_OBJ_LABEL = {
   arma: 'Arma', nucleo_energia: 'Núcleo de energía', cristal: 'Cristal', lente_enfoque: 'Lente de enfoque',
   emisor: 'Emisor', estabilizador: 'Estabilizador', empunadura: 'Empuñadura', modulo_activacion: 'Módulo de activación',
   accesorio: 'Accesorio', mejora_nave: 'Mejora de nave',
+  armadura: 'Armadura', mejora_armadura: 'Mejora de armadura',
 };
 const TIPO_OBJ_ICON = {
   arma: 'sword', nucleo_energia: 'zap', cristal: 'star', lente_enfoque: 'eye', emisor: 'zap',
   estabilizador: 'shield', empunadura: 'anvil', modulo_activacion: 'settings', accesorio: 'box', mejora_nave: 'ship',
+  armadura: 'shield', mejora_armadura: 'settings',
 };
 const BONUS_META = {
   bono_ataque:            { label: 'ATQ',  color: '#ff7043', icon: 'sword' },

@@ -570,7 +570,8 @@ function GalaxiaView({ onSelectSistema, side }) {
 
             if (nave) {
               const fuelActual = nave.combustible_actual ?? 0;
-              const fuelMax    = nave.nave?.capacidad_salto ?? 0;
+              /* Máximo con las mejoras instaladas (lo que llena «Reabastecer»), no el de la nave base. */
+              const fuelMax    = nave.capacidad_salto_max ?? nave.nave?.capacidad_salto ?? 0;
               const sinCombustible = fuelActual <= 0;
               return (
                 <>

@@ -783,23 +783,31 @@ class RaidCombatController extends Controller
                         [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
 
-                        $npcDebuffs = $raid->npc_debuffs ?? [];
-                        foreach ($habDebuff as $stat) {
-                            if (self::esTipoEstado($stat)) {
-                                $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
-                            } else {
-                                $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
-                            }
-                        }
-                        $raid->npc_debuffs = $npcDebuffs;
-                        $myPlayer->debuffs_aplicados += count($habDebuff);
-
                         $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
                         $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
                         $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
                     }
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
+                }
+
+                /* Debuffs/estados al jefe: se aplican por el solo hecho de usar la habilidad,
+                 * conecte o no el golpe (mismo criterio que el buff propio) — la tirada decide el
+                 * daño, no el efecto. Incluye deflectar/contraataque del jefe. Única excepción: si
+                 * la confusión redirigió el golpe contra el propio jugador, el jefe nunca fue el
+                 * objetivo real y no recibe nada. */
+                if (! empty($habDebuff) && ! $confundidoHab) {
+                    $npcDebuffs = $raid->npc_debuffs ?? [];
+                    foreach ($habDebuff as $stat) {
+                        if (self::esTipoEstado($stat)) {
+                            $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
+                        } else {
+                            $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                        }
+                    }
+                    $raid->npc_debuffs = $npcDebuffs;
+                    $myPlayer->debuffs_aplicados += count($habDebuff);
+                    $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
                 }
             }
         }
@@ -1194,6 +1202,30 @@ class RaidCombatController extends Controller
         }
         $raid->npc_estados = $npcEstados ?: null;
 
+        /* Debuffs/estados de la habilidad del jefe sobre el jugador: se aplican por el solo hecho
+         * de usarla, conecte o no el golpe (mismo criterio que el buff propio del jefe, más arriba,
+         * y que el debuff de las habilidades de los jugadores). Va ANTES de los `return` de
+         * deflexión y de fallo para que no se pierdan en esos caminos. Se salta cuando el jefe
+         * confundido se golpea a sí mismo: ahí no hay jugador objetivo. */
+        $habDebuffNpc = $hab && ! $targetEsNpc && is_array($hab->debuff) ? $hab->debuff : [];
+        if (! empty($habDebuffNpc)) {
+            $tb = $target->debuffs ?? [];
+            $te = $target->estados ?? [];
+            foreach ($habDebuffNpc as $stat) {
+                if (self::esTipoEstado($stat)) {
+                    $te = self::aplicarEstadoDeHabilidad($te, $stat, $hab->duracion ?: 2);
+                } else {
+                    $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
+                }
+            }
+            $target->debuffs = $tb ?: null;
+            $target->estados = $te ?: null;
+            $log[] = [
+                'turn' => count($log) + 1, 'actor' => 'npc', 'target_user_id' => $target->user_id,
+                'messages' => ["{$targetChar->name} sufre: ".implode(', ', $habDebuffNpc)],
+            ];
+        }
+
         if ($reflejoInfo['activo']) {
             $tgtBono = self::formaBonoDano($formaAtaque, (int) $target->current_forma);
             $dmgWouldBe = $esCritico
@@ -1256,7 +1288,6 @@ class RaidCombatController extends Controller
              * activos (no al objetivo). Antes esto era un área que golpeaba a todos por igual;
              * ahora el golpe fuerte sigue siendo single-target y el splash es solo una onda de
              * choque menor sobre el escudo de los demás. */
-            $habDebuffCrit = $hab && is_array($hab->debuff) ? $hab->debuff : [];
             $effective = self::isEffective($formaAtaque, (int) $target->current_forma);
             $resistant = self::isResistant($formaAtaque, (int) $target->current_forma);
             $tgtBono = self::formaBonoDano($formaAtaque, (int) $target->current_forma);
@@ -1267,19 +1298,6 @@ class RaidCombatController extends Controller
             [$target->hp, $target->escudo] = self::applyDamage($target->hp, $target->escudo, $dmg, $dmgEscudo, $dmgPerf);
             if ($target->hp <= 0) {
                 $target->status = 'derrotado';
-            }
-            if (! empty($habDebuffCrit)) {
-                $tb = $target->debuffs ?? [];
-                $te = $target->estados ?? [];
-                foreach ($habDebuffCrit as $stat) {
-                    if (self::esTipoEstado($stat)) {
-                        $te = self::aplicarEstadoDeHabilidad($te, $stat, $hab->duracion ?: 2);
-                    } else {
-                        $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
-                    }
-                }
-                $target->debuffs = $tb;
-                $target->estados = $te ?: null;
             }
             $target->save();
 
@@ -1317,22 +1335,6 @@ class RaidCombatController extends Controller
                 $target->status = 'derrotado';
             }
 
-            if ($hab) {
-                $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
-                if (! empty($habDebuff)) {
-                    $tb = $target->debuffs ?? [];
-                    $te = $target->estados ?? [];
-                    foreach ($habDebuff as $stat) {
-                        if (self::esTipoEstado($stat)) {
-                            $te = self::aplicarEstadoDeHabilidad($te, $stat, $hab->duracion ?: 2);
-                        } else {
-                            $tb[] = ['stat' => $stat, 'turns' => $hab->duracion ?: 2];
-                        }
-                    }
-                    $target->debuffs = $tb;
-                    $target->estados = $te ?: null;
-                }
-            }
             $target->save();
 
             $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerf, $escudoAntes);
@@ -1646,8 +1648,8 @@ class RaidCombatController extends Controller
 
     private static function fuerzaConfig(?object $char): array
     {
-        $bonos = ($char && method_exists($char, 'sableBonos'))
-            ? $char->sableBonos()
+        $bonos = ($char && method_exists($char, 'equipoBonos'))
+            ? $char->equipoBonos()
             : ['fuerza' => 0, 'generacion_fuerza' => 0];
 
         return [

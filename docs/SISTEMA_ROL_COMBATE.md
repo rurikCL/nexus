@@ -248,6 +248,16 @@ Esta distinción la gestiona el mismo tutor que edita las habilidades: el panel 
 (`Admin.jsx`) muestra dos grupos de checkboxes separados — stats planos vs. estados — para que
 quede explícito cuál de los dos mecanismos activa cada buff/debuff.
 
+**El efecto no depende de la tirada.** Usar una habilidad aplica **siempre** su `buff` al actor y su
+`debuff` al objetivo: la tirada de ataque decide únicamente el **daño**. Una habilidad que falla el
+golpe igual deja su penalización puesta, y lo mismo vale si el objetivo la bloquea con `protegido` o
+la devuelve con `deflectar`/`contraataque` (evita el daño, no el efecto). La única excepción es
+`confundido` (ver 4.6): si el ataque se redirigió contra el propio actor, el objetivo nunca fue
+tocado y no recibe nada. Este criterio es idéntico en los cuatro sistemas y en los dos sentidos —
+también los debuffs de las habilidades del jefe/enemigo caen sobre el jugador aunque el jefe falle
+(`PvpCombatController`, `RaidCombatController` tanto en la acción del jugador como en el turno del
+jefe, `NpcCombatScreen.jsx` y `HordaCombatScreen.jsx`).
+
 ### 3.6 Triángulo de efectividad de Formas
 
 Matriz tipo piedra-papel-tijera sobre las 7 formas:
@@ -373,9 +383,10 @@ inmediatamente después del tick).
 ### 4.6 Interacción con `confundido`
 
 Si `resolverConfundido()` dispara (50%), el atacante redirige su propio ataque contra sí mismo: los
-stats "del rival" usados para la tirada opuesta pasan a ser los del propio atacante, y si el golpe
-conecta, **el debuff de la habilidad no se aplica al rival** (porque el rival nunca fue el objetivo
-real del golpe).
+stats "del rival" usados para la tirada opuesta pasan a ser los del propio atacante, y **el debuff de
+la habilidad no se aplica al rival**, conecte o no el golpe (porque el rival nunca fue el objetivo
+real). Es la única situación en que el debuff de una habilidad no llega a destino: en cualquier otro
+caso se aplica aunque el ataque falle (ver 3.5).
 
 ---
 

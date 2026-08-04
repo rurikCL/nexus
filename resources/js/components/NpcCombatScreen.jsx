@@ -886,20 +886,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         entries.push(hit
           ? { text: esCritico ? `¡CRÍTICO! −${dmgBase} daño` : `¡${useRanged ? 'Te impactan' : 'Golpe'}! −${dmgBase} daño`, type: 'danger' }
           : { text: useRanged ? '¡Esquivas!' : 'Bloqueas el ataque', type: 'success' });
+      }
 
-        if (hit && hab) {
-          const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
-          const habDebuffStats = habDebuff.filter(s => !esTipoEstado(s));
-          const habDebuffEstados = habDebuff.filter(esTipoEstado);
-          const habRondas = hab.duracion ?? 2;
-          if (habDebuffStats.length > 0) {
-            setPlayerDebuffs(prev => [...prev, ...habDebuffStats.map(stat => ({ stat, turns: habRondas }))]);
-            entries.push({ text: `${player.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
-          }
-          if (habDebuffEstados.length > 0) {
-            finalPlayerEstados = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo, habRondas), finalPlayerEstados);
-            entries.push({ text: `${player.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
-          }
+      /* Los debuffs/estados de la habilidad del NPC caen sobre el jugador conecte o no el golpe
+         (mismo criterio que el buff propio, y que el debuff de las habilidades del jugador) —
+         incluye el caso de deflectar/contraataque. Se salta si el NPC confundido se golpeó a sí
+         mismo: ahí el jugador nunca fue el objetivo. */
+      if (hab && !confundidoNpc) {
+        const habDebuff = Array.isArray(hab.debuff) ? hab.debuff : [];
+        const habDebuffStats = habDebuff.filter(s => !esTipoEstado(s));
+        const habDebuffEstados = habDebuff.filter(esTipoEstado);
+        const habRondas = hab.duracion ?? 2;
+        if (habDebuffStats.length > 0) {
+          setPlayerDebuffs(prev => [...prev, ...habDebuffStats.map(stat => ({ stat, turns: habRondas }))]);
+          entries.push({ text: `${player.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
+        }
+        if (habDebuffEstados.length > 0) {
+          finalPlayerEstados = habDebuffEstados.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo, habRondas), finalPlayerEstados);
+          entries.push({ text: `${player.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
         }
       }
       entries = entries.map(e => ({ ...e, ronda, actor: 'npc' }));
@@ -1172,16 +1176,21 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         const descDano = describeDano(dmg, dmgEscudo, dmgPerforante, npcHp.escudo);
         newNpcHp = applyDmg(dmg, npcHp, dmgEscudo, dmgPerforante);
         entries.push({ text: `¡Impacto! ${descDano}`, type: 'success' });
-
-        if (habDebuffStats.length > 0) {
-          entries.push({ text: `${npc.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
-        }
-        if (habDebuffEstados.length > 0) {
-          entries.push({ text: `${npc.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
-        }
       }
     } else {
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
+    }
+
+    /* Los debuffs/estados de la habilidad caen sobre el NPC conecte o no el golpe (mismo criterio
+       que el buff propio) — la tirada decide el daño, no el efecto. Solo se saltan si la confusión
+       redirigió el ataque contra uno mismo: ahí el NPC nunca fue el objetivo real. */
+    if (!confundidoHab) {
+      if (habDebuffStats.length > 0) {
+        entries.push({ text: `${npc.nombre}: ${habDebuffStats.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
+      }
+      if (habDebuffEstados.length > 0) {
+        entries.push({ text: `${npc.nombre}: ${habDebuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+      }
     }
 
     await triggerStrike({ playerIsAttacker: true, ranged: !useAtq, hit: hit && !reflejoHab.activo, effective, resistant, dmg: dmgAplicado });
@@ -1191,7 +1200,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
     }
     habBuffEstados.forEach(tipo => { playerEstadosFinal = aplicarEstadoDeHabilidad(playerEstadosFinal, tipo, habRondas); });
-    if (hit && !confundidoHab && !reflejoHab.activo) {
+    if (!confundidoHab) {
       if (habDebuffStats.length > 0) {
         setNpcDebuffs(prev => [...prev, ...habDebuffStats.map(stat => ({ stat, turns: habRondas }))]);
       }

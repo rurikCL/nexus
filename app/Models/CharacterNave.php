@@ -37,8 +37,13 @@ class CharacterNave extends Model
         'ataque_efectivo', 'velocidad_efectiva', 'maniobrabilidad_efectiva',
     ];
 
-    /** Los 4 slots de mejora — cualquier slot acepta cualquier rol_objeto tipo "mejora_nave". */
-    const MEJORA_SLOTS = ['mejora_1', 'mejora_2', 'mejora_3', 'mejora_4'];
+    /**
+     * Los 4 slots de mejora — cualquier slot acepta cualquier rol_objeto tipo "mejora_nave".
+     * Son nombres de RELACIÓN (mejora1…mejora4), no de columna: `$this->{'mejora_1'}` no
+     * resuelve nada en Eloquent (la columna es `mejora_1_id` y no existe tal relación), así
+     * que con los nombres con guion bajo `sumaBono()` devolvía siempre 0.
+     */
+    const MEJORA_SLOTS = ['mejora1', 'mejora2', 'mejora3', 'mejora4'];
 
     public function character(): BelongsTo
     {

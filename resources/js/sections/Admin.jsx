@@ -76,6 +76,8 @@ const TIPO_OBJETO_OPTS = [
   { value: 'modulo_activacion',  label: 'Módulo de Activación' },
   { value: 'accesorio',          label: 'Accesorio' },
   { value: 'mejora_nave',        label: 'Mejora de Nave' },
+  { value: 'armadura',           label: 'Armadura' },
+  { value: 'mejora_armadura',    label: 'Mejora de Armadura' },
   { value: 'utilizable',         label: 'Utilizable' },
   { value: 'utilizable_mundo',   label: 'Utilizable (Mundo)' },
 ];
@@ -465,7 +467,7 @@ const ENTITY_CONFIG = {
     ],
     fields: [
       { key: 'nombre',      label: 'Nombre',      type: 'text', required: true, span: 2 },
-      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · 'utilizable' se consume para curar (Cura Vida/Cura Escudo) y/o aplicar Buff/Debuff (incluye Revivir) · 'utilizable_mundo' se usa desde el Mapa para desplegar una baliza de ayuda · el resto son componentes de sable de luz" },
+      { key: 'tipo',        label: 'Tipo',        type: 'select', options: TIPO_OBJETO_OPTS, hint: "'arma' hace que dano/tipo_ataque apliquen en combate · 'utilizable' se consume para curar (Cura Vida/Cura Escudo) y/o aplicar Buff/Debuff (incluye Revivir) · 'utilizable_mundo' se usa desde el Mapa para desplegar una baliza de ayuda · 'armadura' se equipa en Mi Personaje → Equipo → Armadura y aporta sus bonos de stats · 'mejora_armadura' se instala en uno de los 4 slots de la armadura equipada · el resto son componentes de sable de luz" },
       { key: 'tipo_ataque', label: 'Tipo de ataque', type: 'select', options: HABILIDAD_TIPO_OPTS, hint: 'solo si tipo = arma · melee = cuerpo a cuerpo · distancia = a distancia' },
       { key: 'dano',        label: 'Daño',        type: 'number', min: 0, hint: 'solo si tipo = arma' },
       { key: 'dano_perforante', label: 'Daño Perforante', type: 'number', min: 0, hint: 'solo si tipo = arma · ignora el escudo, siempre pasa directo a la vida' },
@@ -479,7 +481,7 @@ const ENTITY_CONFIG = {
       { key: 'imagen',      label: 'Imagen',      type: 'file', span: 2 },
       { key: 'descripcion', label: 'Descripción', type: 'textarea', span: 2 },
       { key: 'efecto',      label: 'Efecto',      type: 'textarea', span: 2 },
-      { key: 'bono_ataque',     label: 'Bono Ataque',     type: 'number', min: -999, hint: 'Aplica si este objeto se usa como componente de sable equipado' },
+      { key: 'bono_ataque',     label: 'Bono Ataque',     type: 'number', min: -999, hint: 'Aplica si este objeto es un componente del sable equipado, una armadura equipada o una mejora instalada en ella' },
       { key: 'bono_defensa',    label: 'Bono Defensa',    type: 'number', min: -999 },
       { key: 'bono_punteria',   label: 'Bono Puntería',   type: 'number', min: -999 },
       { key: 'bono_movimiento', label: 'Bono Agilidad', type: 'number', min: -999 },

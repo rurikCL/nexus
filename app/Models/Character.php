@@ -165,12 +165,14 @@ class Character extends Model
         return $this->belongsTo(CharacterNave::class, 'nave_equipada_id');
     }
 
-    /** Capacidad de carga total: base + la que aporte la nave equipada. */
+    /** Capacidad de carga total: base + la que aporte la nave equipada con sus mejoras instaladas. */
     public function capacidadCarga(): int
     {
-        $nave = $this->relationLoaded('naveEquipada') ? $this->naveEquipada : $this->naveEquipada()->with('nave')->first();
+        $nave = $this->relationLoaded('naveEquipada')
+            ? $this->naveEquipada
+            : $this->naveEquipada()->with(array_merge(['nave'], CharacterNave::MEJORA_SLOTS))->first();
 
-        return self::CAPACIDAD_CARGA_BASE + ($nave?->nave?->capacidad_carga ?? 0);
+        return self::CAPACIDAD_CARGA_BASE + ($nave?->capacidadCargaConMejoras() ?? 0);
     }
 
     /** Suma de unidades de todos los objetos poseídos (un objeto comprado 3 veces ocupa 3 espacios). */
@@ -197,6 +199,16 @@ class Character extends Model
     public function sableActivo(): HasOne
     {
         return $this->hasOne(CharacterSable::class)->where('activo', true);
+    }
+
+    public function armaduras(): HasMany
+    {
+        return $this->hasMany(CharacterArmadura::class);
+    }
+
+    public function armaduraActiva(): HasOne
+    {
+        return $this->hasOne(CharacterArmadura::class)->where('activo', true);
     }
 
     public function titulos(): HasMany
@@ -286,14 +298,41 @@ class Character extends Model
         ];
     }
 
+    /** Bonos de la armadura equipada: los de la armadura misma más los de sus 4 mejoras. */
+    public function armaduraBonos(): array
+    {
+        $vacio = array_fill_keys(CharacterArmadura::BONO_STATS, 0);
+
+        $armadura = $this->relationLoaded('armaduraActiva')
+            ? $this->armaduraActiva
+            : $this->armaduraActiva()->with(array_merge(['objeto'], CharacterArmadura::MEJORA_SLOTS))->first();
+
+        return $armadura ? $armadura->bonos : $vacio;
+    }
+
+    /**
+     * Bonos totales del equipo del personaje (sable armado + armadura equipada).
+     * Punto único de suma: cualquier equipable que bonifique stats se agrega aquí.
+     */
+    public function equipoBonos(): array
+    {
+        $sable = $this->sableBonos();
+        $armadura = $this->armaduraBonos();
+
+        return collect($sable)
+            ->map(fn ($valor, $stat) => (int) $valor + (int) ($armadura[$stat] ?? 0))
+            ->all();
+    }
+
     /**
      * Estadísticas efectivas de combate del personaje.
-     * Toma las 7 columnas persistidas en `characters` y les suma los bonos del sable activo.
+     * Toma las 7 columnas persistidas en `characters` y les suma los bonos del equipo
+     * (sable activo + armadura equipada con sus mejoras).
      */
     public function combatStats(): array
     {
         $cap = max(1, (int) Configuracion::valor('cap_stats_items', 15));
-        $bonos = $this->sableBonos();
+        $bonos = $this->equipoBonos();
 
         $stats = [
             'vida' => (int) ($this->vida ?? 8) + (int) ($bonos['vida'] ?? 0),
