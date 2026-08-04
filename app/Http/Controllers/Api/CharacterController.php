@@ -14,7 +14,7 @@ class CharacterController extends Controller
 {
     private const COMBAT_DEFAULTS = [
         'vida' => 7,
-        'escudo' => 4,
+        'escudo' => 0,
         'defensa' => 2,
         'ataque' => 2,
         'movimiento' => 2,
