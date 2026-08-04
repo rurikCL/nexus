@@ -14,6 +14,7 @@ use App\Services\MisionProgresoService;
 use App\Support\Combat\AplicaEstadosCombate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -371,13 +372,19 @@ class PvpCombatController extends Controller
         return implode(' ', array_slice($palabras, 0, $max)).'…';
     }
 
-    /** POST /pvp/{id}/action */
+    /**
+     * POST /pvp/{id}/action
+     * Todo el cuerpo corre dentro de una transacción con `lockForUpdate()`: sin este lock,
+     * una petición de `action()` y una de `emoji()` concurrentes podían leer el mismo `log`
+     * y pisarse al guardar por separado, perdiendo mensajes o desordenando los turnos.
+     */
     public function action(Request $request, int $id): JsonResponse
     {
         $data = $request->validate(['skill' => 'required', 'forma' => 'nullable|integer|min:1|max:7']);
 
+        return DB::transaction(function () use ($request, $id, $data) {
         $user = $request->user();
-        $combat = PvpCombat::with(self::WITHS)->findOrFail($id);
+        $combat = PvpCombat::with(self::WITHS)->lockForUpdate()->findOrFail($id);
 
         if (! $combat->involvedUser($user->id)) {
             return response()->json(['error' => 'No autorizado'], 403);
@@ -970,6 +977,7 @@ class PvpCombatController extends Controller
                 $user->id
             ),
         ]);
+        });
     }
 
     /** POST /pvp/{id}/emoji — expresión cosmética, disponible en cualquier momento (no consume turno) */
