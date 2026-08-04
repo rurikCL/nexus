@@ -731,13 +731,18 @@ export default function HordaCombatScreen({
           const formaMsg = efectivo ? '¡Forma efectiva! +1 daño — ' : (resistente ? 'Resistencia de forma −1 daño — ' : '');
           entries.push({ text: `${esCritico ? '¡CRÍTICO! ' : '¡Impacto! '}${formaMsg}${describeDano(dmg, dmgEscudo, dmgPerf, escudoAntes)}`, type: 'danger' });
           await triggerStrike({ attackerRef: enemyRefs.current[idx], targetRef: playerHudRef, ranged: useRanged, hit: true, crit: esCritico, dmg: dmg + dmgPerf });
-          if (hab && Array.isArray(hab.debuff) && hab.debuff.length > 0) {
-            const debuffStats = hab.debuff.filter(s => !esTipoEstado(s));
-            const debuffEstados = hab.debuff.filter(s => esTipoEstado(s) && s !== 'revivir');
-            if (debuffStats.length > 0) setPlayerDebuffs(prev => [...prev, ...debuffStats.map(stat => ({ stat, turns: hab.duracion ?? 2 }))]);
-            debuffEstados.forEach(tipo => { nuevoPlayerEstados = aplicarEstadoDeHabilidad(nuevoPlayerEstados, tipo); });
-          }
         }
+      }
+
+      /* Los debuffs/estados de la habilidad del enemigo caen sobre el jugador conecte o no el
+         golpe (mismo criterio que el buff propio) — incluye deflectar/contraataque. Se salta si el
+         enemigo confundido se golpeó a sí mismo: ahí el jugador nunca fue el objetivo. */
+      if (hab && !confundido && Array.isArray(hab.debuff) && hab.debuff.length > 0) {
+        const debuffStats = hab.debuff.filter(s => !esTipoEstado(s));
+        const debuffEstados = hab.debuff.filter(s => esTipoEstado(s) && s !== 'revivir');
+        if (debuffStats.length > 0) setPlayerDebuffs(prev => [...prev, ...debuffStats.map(stat => ({ stat, turns: hab.duracion ?? 2 }))]);
+        debuffEstados.forEach(tipo => { nuevoPlayerEstados = aplicarEstadoDeHabilidad(nuevoPlayerEstados, tipo); });
+        entries.push({ text: `${player.nombre || 'Tú'}: −${[...debuffStats, ...debuffEstados].join(', −')}`, type: 'info' });
       }
 
       const nextEnemigos = enemigosState.map((e, i) => (i === idx
@@ -840,7 +845,9 @@ export default function HordaCombatScreen({
       entries.push({ text: 'Bloqueado / Falla', type: 'miss' });
     }
 
-    if (!confundido && !reflejo.activo && nextEnemigos === enemigosState) {
+    /* Estados del enemigo tras la acción (consumo de protegido/marcado/deflectar) cuando la rama de
+       daño no los escribió — p.ej. al fallar el golpe o al ser deflectado. */
+    if (!confundido && nextEnemigos === enemigosState) {
       nextEnemigos = enemigosState.map((e, i) => (i === idx ? { ...e, estados: estadosObjetivo } : e));
     }
 
@@ -984,12 +991,8 @@ export default function HordaCombatScreen({
       } else {
         const escudoAntes = target.escudo;
         const res = applyDmg(dmg, { vida: target.hp, escudo: target.escudo }, dmgEscudo, dmgPerforante);
-        let finalEstados = estadosObjetivo;
-        const debuffStats = habDebuff.filter(s => !esTipoEstado(s));
-        const debuffEstados = habDebuff.filter(s => esTipoEstado(s) && s !== 'revivir');
-        debuffEstados.forEach(tipo => { finalEstados = aplicarEstadoDeHabilidad(finalEstados, tipo); });
         nextEnemigos = enemigosState.map((e, i) => (i === idx
-          ? { ...e, hp: res.vida, escudo: res.escudo, estados: finalEstados, debuffs: debuffStats.length > 0 ? [...(e.debuffs ?? []), ...debuffStats.map(stat => ({ stat, turns: habRondas }))] : e.debuffs }
+          ? { ...e, hp: res.vida, escudo: res.escudo, estados: estadosObjetivo }
           : e));
         entries.push({ text: `¡Impacto! ${describeDano(dmg, dmgEscudo, dmgPerforante, escudoAntes)}`, type: 'success' });
         await triggerStrike({ attackerRef: playerHudRef, targetRef: enemyRefs.current[idx], ranged: !useAtq, hit: true, dmg: dmg + dmgPerforante });
@@ -998,8 +1001,29 @@ export default function HordaCombatScreen({
       entries.push({ text: `${player.nombre || 'Tú'} falla el ataque`, type: 'miss' });
     }
 
-    if (!confundido && !reflejo.activo && nextEnemigos === enemigosState) {
+    /* Estados del enemigo tras la acción (consumo de protegido/marcado/deflectar) cuando ninguna
+       de las ramas de arriba ya los escribió — p.ej. al fallar el golpe o al ser deflectado. */
+    if (!confundido && nextEnemigos === enemigosState) {
       nextEnemigos = enemigosState.map((e, i) => (i === idx ? { ...e, estados: estadosObjetivo } : e));
+    }
+
+    /* Los debuffs/estados de la habilidad caen sobre el enemigo conecte o no el golpe (mismo
+       criterio que el buff propio) — la tirada decide el daño, no el efecto; incluye el caso de
+       deflectar/contraataque. Se salta si la confusión redirigió el ataque contra uno mismo. */
+    const debuffStats = habDebuff.filter(s => !esTipoEstado(s));
+    const debuffEstados = habDebuff.filter(s => esTipoEstado(s) && s !== 'revivir');
+    if (!confundido && (debuffStats.length > 0 || debuffEstados.length > 0)) {
+      nextEnemigos = nextEnemigos.map((e, i) => {
+        if (i !== idx) return e;
+        let est = e.estados;
+        debuffEstados.forEach(tipo => { est = aplicarEstadoDeHabilidad(est, tipo); });
+        return {
+          ...e,
+          estados: est,
+          debuffs: debuffStats.length > 0 ? [...(e.debuffs ?? []), ...debuffStats.map(stat => ({ stat, turns: habRondas }))] : e.debuffs,
+        };
+      });
+      entries.push({ text: `${target.nombre}: −${[...debuffStats, ...debuffEstados].join(', −')}`, type: 'info' });
     }
 
     setEnemigosState(nextEnemigos);

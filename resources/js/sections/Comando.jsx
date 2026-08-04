@@ -77,6 +77,8 @@ export function mapApiCharacterToStoreCharacter(character, fallback = {}) {
     nave_equipada: character.nave_equipada ?? safeFallback.nave_equipada ?? null,
     sable_activo: character.sable_activo ?? safeFallback.sable_activo ?? null,
     sable_bonos: character.sable_bonos ?? safeFallback.sable_bonos ?? {},
+    armadura_activa: character.armadura_activa ?? safeFallback.armadura_activa ?? null,
+    armadura_bonos: character.armadura_bonos ?? safeFallback.armadura_bonos ?? {},
     vida: baseCombat.vida ?? safeFallback.vida ?? character.vida ?? 8,
     escudo: baseCombat.escudo ?? safeFallback.escudo ?? character.escudo ?? 4,
     defensa: baseCombat.defensa ?? safeFallback.defensa ?? character.defensa ?? 2,

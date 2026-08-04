@@ -538,6 +538,8 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       nave_equipada: ch.nave_equipada ?? null,
       sable_activo: ch.sable_activo ?? null,
       sable_bonos: ch.sable_bonos ?? {},
+      armadura_activa: ch.armadura_activa ?? null,
+      armadura_bonos: ch.armadura_bonos ?? {},
       rol_objetos: ch.rol_objetos ?? [],
       titulos: ch.titulos ?? [],
       titulo_activo: ch.titulo_activo ?? null,

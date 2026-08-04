@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Character;
+use App\Models\CharacterArmadura;
 use App\Models\CharacterSable;
 use App\Models\RolHabilidad;
 use App\Models\Sede;
@@ -86,6 +87,7 @@ class MeController extends Controller
             $character->load([
                 'mapLugar', 'mapZona', 'mapPlaneta', 'mapSistema', 'rolObjetos', 'armaEquipada',
                 'sableActivo' => fn ($q) => $q->with(array_keys(CharacterSable::SLOTS)),
+                'armaduraActiva' => fn ($q) => $q->with(array_merge(['objeto'], CharacterArmadura::MEJORA_SLOTS)),
                 'titulos', 'tituloActivo',
                 'medallas.medalla', 'medallaActiva.medalla',
                 'hitos' => fn ($q) => $q->latest(),
@@ -133,6 +135,7 @@ class MeController extends Controller
                 ],
                 'combat_stats' => $character->combatStats(),
                 'sable_bonos' => $character->sableBonos(),
+                'armadura_bonos' => $character->armaduraBonos(),
                 'puntos_libres' => $character->puntos_libres ?? 5,
                 'habilidades_por_forma' => $character->habilidades_por_forma ?? (object) [],
                 'current_forma' => $character->current_forma ?? 1,
@@ -140,6 +143,7 @@ class MeController extends Controller
                 'rol_objetos' => $character->rolObjetos->values(),
                 'arma_equipada' => $character->armaEquipada,
                 'sable_activo' => $character->sableActivo,
+                'armadura_activa' => $character->armaduraActiva,
                 'arma_efectiva' => $character->armaEfectiva(),
                 'titulos' => $character->titulos,
                 'titulo_activo' => $character->tituloActivo,

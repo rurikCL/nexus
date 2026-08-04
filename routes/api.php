@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\ArmaduraController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BalizaController;
 use App\Http\Controllers\Api\BetController;
 use App\Http\Controllers\Api\CatalogoController;
 use App\Http\Controllers\Api\ChallengeController;
@@ -16,7 +18,6 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\InstagramController;
 use App\Http\Controllers\Api\JefeRankingController;
 use App\Http\Controllers\Api\LugarEncuentroController;
-use App\Http\Controllers\Api\BalizaController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MessageController;
@@ -28,8 +29,8 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\NpcChatController;
 use App\Http\Controllers\Api\NpcVendedorController;
 use App\Http\Controllers\Api\PirataEncuentroController;
-use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\ProyectoController;
+use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\PvpCombatController;
 use App\Http\Controllers\Api\RaidCombatController;
 use App\Http\Controllers\Api\RolHabilidadController;
@@ -263,6 +264,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/naves/{ownedId}/registrar-dano', [NaveController::class, 'registrarDano']);
     Route::get('/naves/{ownedId}/mejoras-options', [NaveController::class, 'mejorasOptions']);
     Route::post('/naves/{ownedId}/mejoras/{slot}', [NaveController::class, 'equiparMejora']);
+
+    // Armaduras (equipable con 4 slots de mejora)
+    Route::get('/armaduras/mias', [ArmaduraController::class, 'mias']);
+    Route::post('/armaduras/equipar', [ArmaduraController::class, 'equipar']);
+    Route::post('/armaduras/desequipar', [ArmaduraController::class, 'desequipar']);
+    Route::get('/armaduras/{ownedId}/mejoras-options', [ArmaduraController::class, 'mejorasOptions']);
+    Route::post('/armaduras/{ownedId}/mejoras/{slot}', [ArmaduraController::class, 'equiparMejora']);
 
     // Sesiones de entrenamiento
     Route::get('/sesiones/disponibles', [SesionEntrenamientoController::class, 'disponibles']);

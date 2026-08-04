@@ -802,26 +802,29 @@ class PvpCombatController extends Controller
                                 self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         }
 
-                        /* Debuffs al oponente solo si impacta y no fue un golpe redirigido por confusión */
-                        if (! $confundidoHab) {
-                            foreach ($habDebuff as $stat) {
-                                if (self::esTipoEstado($stat)) {
-                                    $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
-                                } else {
-                                    $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
-                                }
-                            }
-                        }
-
-                        $debuffDesc = (! empty($habDebuff) && ! $confundidoHab)
-                            ? ' (penaliza: '.implode(', ', $habDebuff).')'
-                            : '';
                         $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
-                        $entry['messages'][] = "¡Impacto! {$descDano}{$debuffDesc}";
+                        $entry['messages'][] = "¡Impacto! {$descDano}";
                     }
 
                 } else {
                     $entry['messages'][] = "{$actorChar->name} falla el ataque";
+                }
+
+                /* Debuffs/estados al oponente: se aplican por el solo hecho de usar la habilidad,
+                 * conecte o no el golpe (mismo criterio que el buff propio, que se aplica al gastar
+                 * la fuerza) — la tirada de ataque decide el daño, no el efecto. Incluye el caso de
+                 * deflectar/contraataque: el objetivo evita el daño, no la penalización. Única
+                 * excepción: si la confusión redirigió el golpe contra el propio actor, el oponente
+                 * nunca fue el objetivo real y no recibe nada. */
+                if (! empty($habDebuff) && ! $confundidoHab) {
+                    foreach ($habDebuff as $stat) {
+                        if (self::esTipoEstado($stat)) {
+                            $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
+                        } else {
+                            $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                        }
+                    }
+                    $entry['messages'][] = "{$opponentChar->name} sufre: ".implode(', ', $habDebuff);
                 }
             }
         }
@@ -1193,11 +1196,11 @@ class PvpCombatController extends Controller
         return $stats;
     }
 
-    /** Fuerza máxima (10 + bono del sable) y generación por turno (2 + bono del sable) */
+    /** Fuerza máxima (10 + bono del equipo) y generación por turno (2 + bono del equipo) */
     private static function fuerzaConfig(?object $char): array
     {
-        $bonos = ($char && method_exists($char, 'sableBonos'))
-            ? $char->sableBonos()
+        $bonos = ($char && method_exists($char, 'equipoBonos'))
+            ? $char->equipoBonos()
             : ['fuerza' => 0, 'generacion_fuerza' => 0];
 
         return [

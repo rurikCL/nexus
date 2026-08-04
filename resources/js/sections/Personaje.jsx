@@ -24,6 +24,7 @@ import { BONUS_FIELDS } from './ArmadoSable.jsx';
 const EQUIP_TABS = [
   { value: 'inventario', label: 'Inventario', icon: 'roster' },
   { value: 'sable', label: 'Sable', icon: 'sword' },
+  { value: 'armadura', label: 'Armadura', icon: 'shield' },
   { value: 'nave', label: 'Nave', icon: 'ship' },
 ];
 
@@ -39,16 +40,20 @@ const itemGroup = (tipo) => {
   if (tipo === 'arma') return 'arma';
   if (tipo === 'utilizable' || tipo === 'utilizable_mundo') return 'utilizable';
   if (tipo === 'mejora_nave') return 'mejora_nave';
+  if (tipo === 'armadura') return 'armadura';
+  if (tipo === 'mejora_armadura') return 'mejora_armadura';
   if (SABLE_COMPONENTE_TIPOS.includes(tipo)) return 'sable';
   return 'otro';
 };
 
 const ITEM_TYPES = [
-  { value: 'arma',        label: 'Armas',              icon: 'sword' },
-  { value: 'utilizable',  label: 'Utilizables',         icon: 'box' },
-  { value: 'sable',       label: 'Componentes de Sable', icon: 'zap' },
-  { value: 'mejora_nave', label: 'Mejoras de Nave',     icon: 'ship' },
-  { value: 'otro',        label: 'Otros',               icon: 'star' },
+  { value: 'arma',            label: 'Armas',                 icon: 'sword' },
+  { value: 'utilizable',      label: 'Utilizables',            icon: 'box' },
+  { value: 'sable',           label: 'Componentes de Sable',   icon: 'zap' },
+  { value: 'armadura',        label: 'Armaduras',              icon: 'shield' },
+  { value: 'mejora_armadura', label: 'Mejoras de Armadura',    icon: 'settings' },
+  { value: 'mejora_nave',     label: 'Mejoras de Nave',        icon: 'ship' },
+  { value: 'otro',            label: 'Otros',                  icon: 'star' },
 ];
 
 const fmtCr = (n) => `${Math.round(n ?? 0).toLocaleString('es-CL')} cr`;
@@ -146,8 +151,10 @@ function MejoraSlot({ slot, mejora, onClick, disabled }) {
   );
 }
 
-function MejoraBadges({ mejora }) {
-  const badges = NAVE_BONUS_FIELDS.filter(b => mejora[b.key]);
+/* `fields` permite reusar los badges con otro set de bonos (la armadura pasa BONUS_FIELDS,
+   que incluye Fuerza/Generación/Crítico y no los bonos propios de nave). */
+function MejoraBadges({ mejora, fields = NAVE_BONUS_FIELDS }) {
+  const badges = fields.filter(b => mejora[b.key]);
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
       {badges.map(b => (
@@ -174,7 +181,7 @@ function MejoraBadges({ mejora }) {
   );
 }
 
-function MejoraPickerRow({ mejora, selected, onAssign }) {
+function MejoraPickerRow({ mejora, selected, onAssign, fields }) {
   return (
     <div onClick={onAssign} style={{
       display: 'flex', alignItems: 'flex-start', gap: 11,
@@ -205,13 +212,18 @@ function MejoraPickerRow({ mejora, selected, onAssign }) {
         {mejora.efecto && (
           <div style={{ fontSize: 11, color: 'var(--txt-dim)', marginBottom: 6 }}>{mejora.efecto}</div>
         )}
-        <MejoraBadges mejora={mejora} />
+        <MejoraBadges mejora={mejora} fields={fields} />
       </div>
     </div>
   );
 }
 
-function MejoraPickerModal({ open, onClose, mejoras, onAssign, onUnassign, slotIndex, currentId }) {
+function MejoraPickerModal({
+  open, onClose, mejoras, onAssign, onUnassign, slotIndex, currentId,
+  subtitulo = 'Elige una mejora para tu nave',
+  emptyText = 'NO POSEES MEJORAS DE NAVE',
+  bonusFields,
+}) {
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -238,7 +250,7 @@ function MejoraPickerModal({ open, onClose, mejoras, onAssign, onUnassign, slotI
           <span style={{ color: 'var(--holo)' }}><Icon name="box" size={16} /></span>
           <div style={{ flex: 1 }}>
             <div className="nx-display" style={{ fontSize: 14 }}>Seleccionar Mejora</div>
-            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 2 }}>SLOT {slotIndex} — Elige una mejora para tu nave</div>
+            <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 2 }}>SLOT {slotIndex} — {subtitulo}</div>
           </div>
           <button className="nx-btn nx-btn-ghost" style={{ padding: 7 }} onClick={onClose}>
             <Icon name="x" size={15} />
@@ -258,12 +270,12 @@ function MejoraPickerModal({ open, onClose, mejoras, onAssign, onUnassign, slotI
           )}
           {mejoras.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--txt-faint)' }}>
-              <div className="nx-data" style={{ fontSize: 11, letterSpacing: '0.1em' }}>NO POSEES MEJORAS DE NAVE</div>
+              <div className="nx-data" style={{ fontSize: 11, letterSpacing: '0.1em' }}>{emptyText}</div>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
               {mejoras.map(m => (
-                <MejoraPickerRow key={m.id} mejora={m} selected={m.id === currentId} onAssign={() => onAssign(m)} />
+                <MejoraPickerRow key={m.id} mejora={m} selected={m.id === currentId} onAssign={() => onAssign(m)} fields={bonusFields} />
               ))}
             </div>
           )}
@@ -467,6 +479,233 @@ function NaveEquipadaPanel() {
   );
 }
 
+/* Los 4 slots de mejora de una armadura poseída — mismo contrato que NaveMejorasSlots
+   (POST con objeto_id: null para vaciar el slot), contra /api/armaduras. */
+function ArmaduraMejorasSlots({ owned, onChanged }) {
+  const [mejoras, setMejoras] = useState([]);
+  const [busySlot, setBusySlot] = useState(null);
+  const [pickerSlot, setPickerSlot] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  useEffect(() => {
+    fetch(`/api/armaduras/${owned.id}/mejoras-options`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { mejoras: [] })
+      .then(d => setMejoras(d.mejoras ?? []))
+      .catch(() => {});
+  }, [owned.id]);
+
+  const setSlot = async (slot, objetoId) => {
+    setBusySlot(slot);
+    try {
+      const res = await fetch(`/api/armaduras/${owned.id}/mejoras/${slot}`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ objeto_id: objetoId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? data.error ?? 'No se pudo actualizar la mejora.');
+      setPickerSlot(null);
+      onChanged?.();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo actualizar la mejora', { tone: 'error' });
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--holo-line)' }}>
+      <div className="nx-kicker" style={{ fontSize: 9, marginBottom: 8 }}>Mejoras instaladas (4 slots)</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        {[1, 2, 3, 4].map(slot => (
+          <MejoraSlot
+            key={slot} slot={slot} mejora={owned[`mejora${slot}`]}
+            disabled={busySlot === slot}
+            onClick={() => setPickerSlot(slot)}
+          />
+        ))}
+      </div>
+      {mejoras.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--txt-faint)', marginTop: 8 }}>
+          No posees mejoras de armadura en tu inventario. Consíguelas con un vendedor.
+        </div>
+      )}
+
+      <MejoraPickerModal
+        open={pickerSlot != null}
+        onClose={() => setPickerSlot(null)}
+        mejoras={mejoras}
+        slotIndex={pickerSlot}
+        currentId={pickerSlot ? (owned[`mejora${pickerSlot}`]?.id ?? null) : null}
+        onAssign={(m) => setSlot(pickerSlot, m.id)}
+        onUnassign={() => setSlot(pickerSlot, null)}
+        subtitulo="Elige una mejora para tu armadura"
+        emptyText="NO POSEES MEJORAS DE ARMADURA"
+        bonusFields={BONUS_FIELDS}
+      />
+    </div>
+  );
+}
+
+/* Armadura equipada + sus 4 slots de mejora. Los bonos de la armadura se suman a los
+   del sable activo (ver Character::equipoBonos en el backend). */
+function ArmaduraEquipadaPanel() {
+  const [armaduras, setArmaduras] = useState([]);
+  const [disponibles, setDisponibles] = useState([]);
+  const [activaId, setActivaId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
+
+  const authHeaders = () => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nx-token')}` });
+
+  const load = () => {
+    setLoading(true);
+    fetch('/api/armaduras/mias', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        setArmaduras(d.armaduras ?? []);
+        setDisponibles(d.disponibles ?? []);
+        setActivaId(d.armadura_activa_id ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const runAction = async (id, path, body, successMsg) => {
+    setBusy(id);
+    try {
+      const res = await fetch(`/api${path}`, {
+        method: 'POST', headers: authHeaders(),
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? data.error ?? 'No se pudo completar la acción.');
+      if (successMsg) toast(successMsg, { tone: 'success', icon: 'check' });
+      load();
+    } catch (err) {
+      toast(err.message ?? 'No se pudo completar la acción', { tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const equipar    = (objeto) => runAction(objeto.id, '/armaduras/equipar', { objeto_id: objeto.id }, `${objeto.nombre} equipada`);
+  const desequipar = ()       => runAction('unequip', '/armaduras/desequipar', null, 'Armadura desequipada');
+
+  const activa = armaduras.find(a => a.id === activaId);
+  const otras  = disponibles.filter(o => o.id !== activa?.objeto_id);
+
+  /* Bonos del conjunto completo (armadura + mejoras instaladas), tal como los calcula
+     el backend en el accessor `bonos` de CharacterArmadura. */
+  const bonosList = BONUS_FIELDS
+    .map((b) => ({ ...b, value: activa?.bonos?.[b.key.replace(/^bono_/, '')] ?? 0 }))
+    .filter((b) => b.value !== 0);
+
+  return (
+    <Panel kicker="Equipo" title="Armadura Equipada" icon="shield">
+      {loading ? (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>Cargando armaduras...</div>
+      ) : disponibles.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
+          No posees ninguna armadura. Consigue una con un vendedor, en un cofre o como recompensa de misión.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {activa ? (
+            <div className="nx-panel solid" style={{ padding: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                  background: 'color-mix(in srgb, var(--holo) 18%, rgba(4,9,18,0.9))',
+                  border: '1px solid var(--holo-line)', overflow: 'hidden',
+                }}>
+                  {activa.objeto?.imagen
+                    ? <img src={mediaUrl(activa.objeto.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Icon name="shield" size={22} style={{ color: 'var(--holo)' }} />}
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="nx-display" style={{ fontSize: 13, color: 'var(--txt)' }}>{activa.objeto?.nombre}</div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    <Chip tone="green" icon="check">Equipada</Chip>
+                    {activa.objeto?.rareza && <Chip tone="dim">{activa.objeto.rareza.replace('_', ' ')}</Chip>}
+                  </div>
+                </div>
+              </div>
+
+              {activa.objeto?.efecto && (
+                <div style={{ fontSize: 11, color: 'var(--txt-dim)', marginTop: 10 }}>{activa.objeto.efecto}</div>
+              )}
+
+              {bonosList.length > 0 && (
+                <>
+                  <div className="nx-kicker" style={{ fontSize: 9, marginTop: 12, marginBottom: 6 }}>Bonos del conjunto</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {bonosList.map((b) => (
+                      <span key={b.key} style={{
+                        fontSize: 9, fontFamily: 'var(--font-data)', letterSpacing: '0.06em',
+                        padding: '2px 7px', borderRadius: 4,
+                        background: `${b.color}18`, border: `1px solid ${b.color}40`,
+                        color: b.color, whiteSpace: 'nowrap', lineHeight: 1.5,
+                      }}>
+                        {b.value > 0 ? '+' : ''}{b.value} {b.label}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <Btn kind="ghost" sm onClick={desequipar} disabled={busy === 'unequip'} style={{ marginTop: 12 }}>
+                Desequipar
+              </Btn>
+
+              <ArmaduraMejorasSlots owned={activa} onChanged={load} />
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--txt-faint)' }}>
+              No tienes ninguna armadura equipada. Elige una de las tuyas abajo.
+            </div>
+          )}
+
+          {otras.length > 0 && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div className="nx-kicker" style={{ fontSize: 9 }}>Otras armaduras propias</div>
+              {otras.map(objeto => {
+                const instancia = armaduras.find(a => a.objeto_id === objeto.id);
+                const instaladas = instancia ? [1, 2, 3, 4].filter(i => instancia[`mejora${i}`]).length : 0;
+                return (
+                  <div key={objeto.id} className="nx-panel" style={{ padding: 11, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: 8, background: 'rgba(56,205,240,0.08)',
+                      display: 'grid', placeItems: 'center', flexShrink: 0, overflow: 'hidden',
+                    }}>
+                      {objeto.imagen
+                        ? <img src={mediaUrl(objeto.imagen)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <Icon name="shield" size={16} style={{ color: 'var(--holo)' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{objeto.nombre}</div>
+                      {instaladas > 0 && (
+                        <div className="nx-data" style={{ fontSize: 9, color: 'var(--txt-faint)', marginTop: 2 }}>
+                          {instaladas}/4 mejoras instaladas
+                        </div>
+                      )}
+                    </div>
+                    <Btn kind="accent" sm onClick={() => equipar(objeto)} disabled={busy === objeto.id}>
+                      {busy === objeto.id ? '...' : 'Equipar'}
+                    </Btn>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function WeaponCard({ objeto, selected, onClick }) {
   const isUnarmed = !objeto;
   const img = objeto ? mediaUrl(objeto.imagen) : null;
@@ -594,7 +833,12 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
   const COMBAT_LABEL = { vida: 'Vida', escudo: 'Escudo', defensa: 'Defensa', ataque: 'Ataque', movimiento: 'Agilidad', iniciativa: 'Iniciativa', punteria: 'Puntería' };
   const COMBAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
   const baseCombat = ch.combat_base_stats ?? {};
-  const itemBonuses = ch.sable_bonos ?? {};
+  /* Bonos de todo el equipo (sable armado + armadura equipada con sus mejoras), igual que
+     Character::equipoBonos() en el backend — así el total mostrado cuadra con combat_stats. */
+  const itemBonuses = COMBAT_STATS.reduce((acc, s) => {
+    acc[s] = (ch.sable_bonos?.[s] ?? 0) + (ch.armadura_bonos?.[s] ?? 0);
+    return acc;
+  }, {});
   const sab = NX.SABERS[ch.saber] || NX.SABERS.azul;
   const [saving, setSaving] = useState(false);
 
@@ -1231,6 +1475,8 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
               </Panel>
             )}
 
+            {equipTab === 'armadura' && <ArmaduraEquipadaPanel />}
+
             {equipTab === 'nave' && <NaveEquipadaPanel />}
 
             {equipTab === 'inventario' && (
@@ -1287,7 +1533,9 @@ export function PersonajeView({ S, user, go, onCharacterCreated }) {
                   <div style={{ fontSize: 12, color: 'var(--txt-faint)', padding: '6px 0' }}>
                     {invTab === 'sable' && 'No posees componentes de sable. Se instalan desde «Armado de Sable».'}
                     {invTab === 'mejora_nave' && 'No posees mejoras de nave. Se instalan desde tu nave equipada.'}
-                    {invTab !== 'sable' && invTab !== 'mejora_nave' && 'No posees objetos de este tipo.'}
+                    {invTab === 'armadura' && 'No posees armaduras. Se equipan desde la pestaña «Armadura».'}
+                    {invTab === 'mejora_armadura' && 'No posees mejoras de armadura. Se instalan desde tu armadura equipada.'}
+                    {!['sable', 'mejora_nave', 'armadura', 'mejora_armadura'].includes(invTab) && 'No posees objetos de este tipo.'}
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
