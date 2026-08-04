@@ -98,6 +98,19 @@ function extractIniciativaRonda(entry) {
   return m ? Number(m[1]) : null;
 }
 
+/* El backend pega los mensajes de fin de ronda ("Ronda N — Iniciativa: ..." + "¡X actúa
+   primero!") a la MISMA entrada de la acción que cerró la ronda (ver PvpCombatController::
+   action). Se separan para poder revelarlos en su momento -después de la animación de la
+   acción y de sus banners-, en vez de volcarlos junto al resto. Es el mismo corte que hace
+   `logRounds` para dibujarlos como tarjetas distintas. */
+function splitEntryMessages(entry) {
+  const msgs = entry.messages ?? [];
+  const idx = msgs.findIndex((m) => /^Ronda \d+ —/.test(m));
+  return idx === -1
+    ? { accionMsgs: msgs, iniMsgs: [] }
+    : { accionMsgs: msgs.slice(0, idx), iniMsgs: msgs.slice(idx) };
+}
+
 /* Texto flotante mostrado sobre el objetivo al terminar el golpe de energía */
 function resultTextFor(hit, ranged, crit, dmg, effective = false, resistant = false) {
   if (!hit) return { variant: ranged ? 'dodge' : 'block', text: ranged ? 'ESQUIVADO' : 'BLOQUEADO' };
@@ -254,6 +267,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
      iniciativa ya se ve `is_my_turn=true` desde el primer fetch y podría atacar durante el
      banner. */
   const [introLock, setIntroLock] = useState(() => combat.status === 'active' && (combat.log?.length ?? 0) <= 1);
+  /* Bloquea las acciones mientras se está reproduciendo la secuencia de una entrada del log
+     (mensaje → animación → valores → pausa → banners de fin de ronda). Necesario desde que los
+     valores nuevos se aplican ANTES de la pausa y de los banners: sin esto, el setCombat que
+     actualiza las cards ya deja `is_my_turn=true` y los botones se habilitarían en medio de la
+     secuencia. Equivale al `actionLock` de NpcCombatScreen y al `animBusy` de RaidCombatScreen. */
+  const [animBusy, setAnimBusy] = useState(false);
   /* Combate recién creado: arranca detenido en un botón "Comenzar" — evita que, si el rival
      actúa primero, su golpe se resuelva tan rápido tras entrar a la pantalla que no dé tiempo
      a notarlo. Un combate retomado (ya con historial) arranca ya "iniciado". */
@@ -350,84 +369,55 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     return revealQueueRef.current;
   };
 
-  /* Anima con dados las tiradas de las entradas nuevas antes de revelar el estado actualizado */
-  const revealWithDiceNow = async (newCombat) => {
-    const prevLen = combatLogLenRef.current;
-    const newEntries = (newCombat.log ?? []).slice(prevLen);
-    combatLogLenRef.current = (newCombat.log ?? []).length;
-    const statusEffects = [];
-    let lastAttack = null;
-    let lastHeal = null;
-    let lastFlee = null;
-    let lastEmoji = null;
-    for (const entry of newEntries) {
-      /* Revela el mensaje de esta entrada YA — antes de su animación — en vez de esperar a
-         que todo el lote termine (que hacía que el texto apareciera recién al final del
-         turno). El resto del estado (hp/escudo/turno) se aplica al final, con setCombat. */
-      setCombat(prev => ({ ...prev, log: [...(prev.log ?? []), entry] }));
+  /* Reproduce la animación de UNA entrada del log: dados → golpe/huida → burst de estados →
+     texto flotante de curación. Se llama DENTRO del bucle de entradas (una vez por entrada),
+     igual que RaidCombatScreen::playEntry — antes estaba hoisteado fuera del bucle y solo
+     animaba la última acción del lote. */
+  const playPvpEntry = async (entry, accionMsgs, newCombat) => {
+    const accionEntry = { ...entry, messages: accionMsgs };
 
-      const iniciativaGanador = extractIniciativaGanador(entry);
-      if (iniciativaGanador) {
-        const nuevaRonda = extractIniciativaRonda(entry);
-        if (nuevaRonda) {
-          setTurnoRonda(nuevaRonda); // banner "Turno N" — antes de mostrar el de Iniciativa
-          await sleep(pausaMs);
-        }
-        setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: iniciativaGanador });
-        await sleep(pausaMs);
-        setIniciativaMsg(null);
-      }
-      const groups = extractRollGroups(entry, { myId: userId });
-      for (const g of groups) await rollDice(g);
-      for (const eff of entry.effects ?? []) {
-        if (eff?.type === 'buff' || eff?.type === 'heal') statusEffects.push(eff);
-      }
-      const classified = classifyPvpAttack(entry, newCombat, userId);
-      if (classified) lastAttack = classified;
-      const healed = classifyPvpHeal(entry, userId);
-      if (healed) lastHeal = healed;
-      const fled = classifyPvpFlee(entry, userId);
-      if (fled) lastFlee = fled;
-      const emoted = classifyPvpEmoji(entry, userId);
-      if (emoted && !emoted.actorIsMe) lastEmoji = emoted;
+    const groups = extractRollGroups(accionEntry, { myId: userId });
+    for (const g of groups) await rollDice(g);
+
+    const emoted = classifyPvpEmoji(entry, userId);
+    if (emoted && !emoted.actorIsMe) {
+      setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: emoted.emoji });
     }
 
-    if (lastEmoji) {
-      setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: lastEmoji.emoji });
-    }
-
-    if (lastAttack && stageRef.current) {
-      const attackerRef = lastAttack.actorIsMe ? myHudRef : oppHudRef;
-      const targetRef    = lastAttack.actorIsMe ? oppHudRef : myHudRef;
-      const actorSide = lastAttack.actorIsMe
+    const attack = classifyPvpAttack(accionEntry, newCombat, userId);
+    if (attack && stageRef.current) {
+      const attackerRef = attack.actorIsMe ? myHudRef : oppHudRef;
+      const targetRef   = attack.actorIsMe ? oppHudRef : myHudRef;
+      const actorSide = attack.actorIsMe
         ? (newCombat.i_am_attacker ? newCombat.attacker : newCombat.defender)
         : (newCombat.i_am_attacker ? newCombat.defender : newCombat.attacker);
       const arma = actorSide?.arma_equipada;
-      const color = (arma?.es_sable && NX.SABERS[arma.color_hoja]) || (lastAttack.actorIsMe ? '#38cdf0' : '#ff2d45');
+      const color = (arma?.es_sable && NX.SABERS[arma.color_hoja]) || (attack.actorIsMe ? '#38cdf0' : '#ff2d45');
       await new Promise((resolve) => {
         setStrike({
           key: `${Date.now()}-${Math.random()}`,
-          type: lastAttack.ranged ? 'ranged' : 'melee',
-          outcome: lastAttack.hit ? 'hit' : (lastAttack.ranged ? 'dodge' : 'block'),
+          type: attack.ranged ? 'ranged' : 'melee',
+          outcome: attack.hit ? 'hit' : (attack.ranged ? 'dodge' : 'block'),
           color,
           attackerRef,
           targetRef,
           from: getRelativeCenter(attackerRef.current, stageRef.current),
           to: getRelativeCenter(targetRef.current, stageRef.current),
-          result: resultTextFor(lastAttack.hit, lastAttack.ranged, lastAttack.crit, lastAttack.dmg, lastAttack.effective, lastAttack.resistant),
+          result: resultTextFor(attack.hit, attack.ranged, attack.crit, attack.dmg, attack.effective, attack.resistant),
           onResolve: resolve,
         });
       });
     }
 
-    if (lastFlee && stageRef.current) {
-      const actorRef = lastFlee.actorIsMe ? myHudRef : oppHudRef;
+    const fled = classifyPvpFlee(accionEntry, userId);
+    if (fled && stageRef.current) {
+      const actorRef = fled.actorIsMe ? myHudRef : oppHudRef;
       if (actorRef.current) {
         await new Promise((resolve) => {
           setFleeFx({
             key: `${Date.now()}-${Math.random()}`,
-            outcome: lastFlee.success ? 'success' : 'fail',
-            dir: lastFlee.actorIsMe ? -1 : 1,
+            outcome: fled.success ? 'success' : 'fail',
+            dir: fled.actorIsMe ? -1 : 1,
             actorRef,
             onResolve: resolve,
           });
@@ -435,7 +425,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       }
     }
 
-    for (const eff of statusEffects) {
+    for (const eff of entry.effects ?? []) {
+      if (eff?.type !== 'buff' && eff?.type !== 'heal') continue;
       const targetRef = eff.target_user_id === userId ? myHudRef : oppHudRef;
       if (!targetRef.current) continue;
       await new Promise((resolve) => {
@@ -448,23 +439,84 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       });
     }
 
-    if (lastHeal && stageRef.current) {
-      const healRef = lastHeal.healedIsMe ? myHudRef : oppHudRef;
+    const healed = classifyPvpHeal(accionEntry, userId);
+    if (healed && stageRef.current) {
+      const healRef = healed.healedIsMe ? myHudRef : oppHudRef;
       if (healRef.current) {
         const pos = getRelativeCenter(healRef.current, stageRef.current);
         setFloatTexts((prev) => [...prev, {
           id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y,
-          variant: 'heal', text: `Curación: ${lastHeal.heal}`,
+          variant: 'heal', text: `Curación: ${healed.heal}`,
         }]);
       }
     }
+  };
 
-    /* Fase de combate: tras resolver el efecto (mensaje ya mostrado arriba, sonido/animación
-       ya reproducidos, valores a punto de actualizarse abajo) se espera 2s antes de continuar —
-       misma pausa que el resto de los sistemas de combate. */
-    if (newEntries.length > 0) await sleep(pausaMs);
+  /* Revela las entradas nuevas del log respetando, por cada una, el mismo orden que el resto de
+     los sistemas de combate (ver NpcCombatScreen::doPlayerAttack + endTurnAfter y
+     RaidCombatScreen::playEntries):
+       mensaje de la acción → animación (dados + golpe/estados) → valores nuevos (hp/escudo/
+       buffs/cards) → pausa de fase → si cerró la ronda: banner "Turno N" → banner "Iniciativa"
+       → mensajes de fin de ronda.
+     El log del servidor se aplica entero al final para normalizar lo revelado por partes. */
+  const revealWithDiceNow = async (newCombat) => {
+    const prevLen = combatLogLenRef.current;
+    const newEntries = (newCombat.log ?? []).slice(prevLen);
+    combatLogLenRef.current = (newCombat.log ?? []).length;
 
-    setCombat(newCombat);
+    if (newEntries.length === 0) {
+      setCombat(newCombat);
+
+      return;
+    }
+
+    setAnimBusy(true);
+    try {
+      for (let i = 0; i < newEntries.length; i++) {
+        const entry = newEntries[i];
+        const { accionMsgs, iniMsgs } = splitEntryMessages(entry);
+
+        /* 1) Mensaje de la acción — antes de su animación. Los mensajes de fin de ronda que
+              vengan pegados a esta misma entrada quedan fuera: se revelan en el paso 5. */
+        if (accionMsgs.length > 0) {
+          setCombat(prev => ({ ...prev, log: [...(prev.log ?? []), { ...entry, messages: accionMsgs }] }));
+        }
+
+        /* 2) Animación de ESTA entrada */
+        await playPvpEntry(entry, accionMsgs, newCombat);
+
+        /* 3) Valores nuevos (hp/escudo/buffs/estados/cards) recién ahora, con la animación ya
+              reproducida — antes se aplicaban al final, después de la pausa, así que las barras
+              se movían tarde. El servidor solo manda el estado final del lote, así que se aplica
+              con la última entrada; el log se mantiene con lo revelado hasta acá. */
+        if (i === newEntries.length - 1) {
+          setCombat(prev => ({ ...newCombat, log: prev.log }));
+        }
+
+        /* 4) Pausa de fase de combate */
+        await sleep(pausaMs);
+
+        /* 5) Cerró la ronda: banners y solo entonces sus mensajes */
+        if (iniMsgs.length > 0) {
+          const nuevaRonda = extractIniciativaRonda(entry);
+          if (nuevaRonda) {
+            setTurnoRonda(nuevaRonda); // banner "Turno N" — antes del de Iniciativa
+            await sleep(pausaMs);
+          }
+          const ganador = extractIniciativaGanador(entry);
+          if (ganador) {
+            setIniciativaMsg({ key: `${Date.now()}-${Math.random()}`, texto: ganador });
+            await sleep(pausaMs);
+            setIniciativaMsg(null);
+          }
+          setCombat(prev => ({ ...prev, log: [...(prev.log ?? []), { ...entry, messages: iniMsgs }] }));
+        }
+      }
+
+      setCombat(newCombat);
+    } finally {
+      setAnimBusy(false);
+    }
   };
 
   /* Fondo */
@@ -569,7 +621,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const isPending   = combat.status === 'pending';
   const isDeclined  = combat.status === 'declined';
   const isCancelled = combat.status === 'cancelled';
-  const isOver = combat.status !== 'active' && !isPending;
+  /* La pantalla de término espera a que la secuencia en curso termine: los valores nuevos (y con
+     ellos el status final) se aplican antes de la pausa de fase, así que sin este `!animBusy` el
+     panel de VICTORIA/DERROTA tapaba la animación del golpe final. Mismo criterio que el
+     `showEndScreen = finished && !animBusy` de RaidCombatScreen. */
+  const isOver = combat.status !== 'active' && !isPending && !animBusy;
   const iWon   = (combat.status === 'attacker_won'  &&  combat.i_am_attacker)
               || (combat.status === 'defender_won'  && !combat.i_am_attacker)
               || (combat.status === 'fled_attacker' && !combat.i_am_attacker)
@@ -782,7 +838,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   };
 
   const myHabilidades = me.habilidades ?? [];
-  const lockActions = combat.status !== 'active' || !combat.is_my_turn || armed || introLock;
+  const lockActions = combat.status !== 'active' || !combat.is_my_turn || armed || introLock || animBusy;
 
   /* Agrupa el log del servidor (una entrada por turno) en tarjetas de ronda → tarjetas de turno */
   const logRounds = useMemo(() => {
@@ -929,7 +985,9 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
       </div>
     ) : (
       <>
-        {lockActions && (
+        {/* "Esperando al rival" va por el turno real, NO por lockActions: ese ahora incluye
+            animBusy, y durante la animación de mi propia acción el cartel no corresponde. */}
+        {(!combat.is_my_turn || introLock) && !animBusy && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px 0 4px' }}>
             <span style={{ color: 'rgba(150,200,255,0.4)', fontSize: 11, fontFamily: 'var(--font-data)', letterSpacing: '0.15em', animation: 'nx-pulse 1.5s infinite' }}>
               ESPERANDO A {(opp.name ?? '').toUpperCase()}…
