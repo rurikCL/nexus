@@ -245,6 +245,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/map/dungeons/{lugarId}/unirse', [DungeonController::class, 'unirse']);
     Route::get('/map/dungeons/runs/{runId}', [DungeonController::class, 'estado']);
     Route::post('/map/dungeons/runs/{runId}/listo', [DungeonController::class, 'listo']);
+    Route::post('/map/dungeons/runs/{runId}/comenzar', [DungeonController::class, 'comenzar']);
     Route::post('/map/dungeons/runs/{runId}/salir', [DungeonController::class, 'salir']);
     Route::post('/map/dungeons/runs/{runId}/mover', [DungeonController::class, 'mover']);
     Route::post('/map/dungeons/runs/{runId}/huir', [DungeonController::class, 'huir']);

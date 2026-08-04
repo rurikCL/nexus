@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class DungeonController extends Controller
 {
-    /** Mínimo de jugadores en el lobby para poder confirmar "listo", igual que RaidCombatController::MIN_JUGADORES. */
+    /** Mínimo de jugadores listos para que el líder pueda comenzar el run, igual que RaidCombatController::MIN_JUGADORES. */
     private const MIN_JUGADORES = 2;
 
     /** POST /map/dungeons/{lugarId}/unirse — entra al lobby del dungeon de ese portal (lo crea si no hay uno esperando; el listado no tiene tope, ver listo()). */
@@ -93,86 +93,139 @@ class DungeonController extends Controller
     }
 
     /**
-     * POST /map/dungeons/runs/{run}/listo — confirma (o desmarca) listo; arranca el run en
-     * cuanto hay suficiente equipo confirmado. El listado del lobby (unirse()) no tiene tope,
-     * así que el cupo real (cuposEquipo()) se hace cumplir acá, solo sobre quienes se marcan
-     * "listo" — de lo contrario alguien que solo entró a mirar podría bloquear el arranque para
-     * siempre sin marcarse listo. Se corre en transacción con lockForUpdate porque varios
-     * jugadores pueden tocar "listo" casi al mismo tiempo: sin el lock, dos podrían leer el
-     * mismo conteo de listos y ambos pasar el tope.
+     * POST /map/dungeons/runs/{run}/listo — confirma (o desmarca) listo. NO arranca el run: eso
+     * lo decide el líder con comenzar(), así que un tercer/cuarto jugador alcanza a sumarse en vez
+     * de quedar afuera por un arranque automático apenas hay dos confirmados.
+     * El listado del lobby (unirse()) no tiene tope, así que el cupo real (cuposEquipo()) se hace
+     * cumplir acá, sobre quienes se marcan "listo". Se corre en transacción con lockForUpdate
+     * porque varios jugadores pueden tocar "listo" casi al mismo tiempo: sin el lock, dos podrían
+     * leer el mismo conteo de listos y ambos pasar el tope.
      */
     public function listo(Request $request, int $runId): JsonResponse
     {
         $user = $request->user();
 
         return DB::transaction(function () use ($user, $runId) {
-        $run = DungeonRun::with('jugadores')->lockForUpdate()->findOrFail($runId);
+            $run = DungeonRun::with('jugadores')->lockForUpdate()->findOrFail($runId);
 
-        if (! $run->enEspera()) {
-            return response()->json(['error' => 'Este dungeon ya arrancó.'], 422);
-        }
-
-        $jugador = $run->jugadores->firstWhere('user_id', $user->id);
-        if (! $jugador || ! $jugador->activo()) {
-            return response()->json(['error' => 'No participas en este dungeon.'], 403);
-        }
-
-        $cupos = $run->template->cuposEquipo();
-        $listosActuales = $run->jugadores->where('estado', 'activo')->where('listo', true)->count();
-        $nuevoListo = ! $jugador->listo;
-
-        if ($nuevoListo && $listosActuales >= $cupos) {
-            return response()->json(['error' => "El equipo ya está completo ({$cupos} jugadores listos)."], 422);
-        }
-
-        $jugador->update(['listo' => $nuevoListo]);
-        $run->refresh()->load('jugadores');
-
-        // El arranque solo se evalúa al CONFIRMAR listo, nunca al cancelarlo — si no, cancelar
-        // tu propio "listo" podría arrancar el run igual (y expulsarte a ti) si el resto ya cumplía el mínimo.
-        if ($nuevoListo) {
-            $activos = $run->jugadores->where('estado', 'activo');
-            $listos = $activos->where('listo', true);
-
-            if ($listos->count() >= self::MIN_JUGADORES) {
-                // Quien se quedó mirando sin confirmar "listo" no entra a este run — puede unirse a otro lobby cuando quiera.
-                $activos->reject(fn ($j) => $j->listo)->each(fn ($j) => $j->delete());
-                $run = DungeonGeneratorService::generar($run->fresh()->load('jugadores'));
+            if (! $run->enEspera()) {
+                return response()->json(['error' => 'Este dungeon ya arrancó.'], 422);
             }
-        }
 
-        return response()->json($this->formatEstadoOLobby($run->fresh(), $user));
+            $jugador = $run->jugadores->firstWhere('user_id', $user->id);
+            if (! $jugador || ! $jugador->activo()) {
+                return response()->json(['error' => 'No participas en este dungeon.'], 403);
+            }
+
+            $cupos = $run->template->cuposEquipo();
+            $listosActuales = $run->jugadores->where('estado', 'activo')->where('listo', true)->count();
+            $nuevoListo = ! $jugador->listo;
+
+            if ($nuevoListo && $listosActuales >= $cupos) {
+                return response()->json(['error' => "El equipo ya está completo ({$cupos} jugadores listos)."], 422);
+            }
+
+            $jugador->update(['listo' => $nuevoListo]);
+
+            return response()->json($this->formatEstadoOLobby($run->fresh(), $user));
         });
     }
 
-    /** POST /map/dungeons/runs/{run}/salir — abandona el lobby o el run en curso. */
+    /**
+     * POST /map/dungeons/runs/{run}/comenzar — solo el líder (creado_por_id): arranca el run con
+     * los jugadores que marcaron "listo". Quien no confirmó queda fuera y se le libera la fila del
+     * lobby (su próximo poll recibe 403 y el frontend lo manda a un lobby nuevo).
+     * Mismo lock que listo(): sin él, un "listo" entrando en paralelo podría quedar fuera del
+     * conteo con el que se genera el run, o entrar al equipo después de generarlo.
+     */
+    public function comenzar(Request $request, int $runId): JsonResponse
+    {
+        $user = $request->user();
+
+        return DB::transaction(function () use ($user, $runId) {
+            $run = DungeonRun::with('jugadores')->lockForUpdate()->findOrFail($runId);
+
+            if (! $run->enEspera()) {
+                return response()->json(['error' => 'Este dungeon ya arrancó.'], 422);
+            }
+            if ($run->creado_por_id !== $user->id) {
+                return response()->json(['error' => 'Solo el líder del equipo puede comenzar el dungeon.'], 403);
+            }
+
+            $activos = $run->jugadores->where('estado', 'activo');
+            $listos = $activos->where('listo', true);
+            $cupos = $run->template->cuposEquipo();
+
+            if ($listos->count() < self::MIN_JUGADORES) {
+                return response()->json([
+                    'error' => "Hacen falta al menos ".self::MIN_JUGADORES." jugadores listos para comenzar.",
+                ], 422);
+            }
+            if ($listos->count() > $cupos) {
+                return response()->json(['error' => "El equipo no puede pasar de {$cupos} jugadores."], 422);
+            }
+            if (! $listos->contains(fn ($j) => $j->user_id === $user->id)) {
+                return response()->json(['error' => 'Tienes que marcarte listo para comenzar.'], 422);
+            }
+
+            // Quien no confirmó "listo" no entra a este run — queda libre para unirse a otro lobby.
+            $activos->reject(fn ($j) => $j->listo)->each(fn ($j) => $j->delete());
+
+            $run = DungeonGeneratorService::generar($run->fresh()->load('jugadores'));
+
+            return response()->json($this->formatEstadoOLobby($run->fresh(), $user));
+        });
+    }
+
+    /**
+     * POST /map/dungeons/runs/{run}/salir — abandona el lobby o el run en curso.
+     * En transacción con lock: dos jugadores saliendo a la vez podían ver cada uno "queda 1" y
+     * dejar el run huérfano sin borrarlo (más probable ahora que el frontend llama a este endpoint
+     * automáticamente al salir del portal, ver DungeonPortal).
+     */
     public function salir(Request $request, int $runId): JsonResponse
     {
         $user = $request->user();
-        $run = DungeonRun::with('jugadores')->findOrFail($runId);
-        $jugador = $run->jugadores->firstWhere('user_id', $user->id);
 
-        if (! $jugador) {
-            return response()->json(['error' => 'No participas en este dungeon.'], 403);
-        }
+        return DB::transaction(function () use ($user, $runId) {
+            $run = DungeonRun::with('jugadores')->lockForUpdate()->findOrFail($runId);
+            $jugador = $run->jugadores->firstWhere('user_id', $user->id);
 
-        if ($run->enEspera()) {
-            $jugador->delete();
-            if ($run->jugadores()->count() === 0) {
-                $run->delete();
+            if (! $jugador) {
+                return response()->json(['error' => 'No participas en este dungeon.'], 403);
+            }
+
+            if ($run->enEspera()) {
+                $eraLider = $run->creado_por_id === $user->id;
+                $jugador->delete();
+
+                if ($run->jugadores()->count() === 0) {
+                    $run->delete();
+
+                    return response()->json(['ok' => true]);
+                }
+
+                /* Si el que se fue era el líder, el liderazgo pasa al que lleva más tiempo en el
+                   lobby — de lo contrario nadie podría apretar "Comenzar" (ver comenzar()). */
+                if ($eraLider) {
+                    $siguiente = $run->jugadores()->orderBy('id')->first();
+                    if ($siguiente) {
+                        $run->update(['creado_por_id' => $siguiente->user_id]);
+                    }
+                }
+
+                return response()->json(['ok' => true]);
+            }
+
+            $jugador->update(['estado' => 'abandonado']);
+
+            if ($run->jugadores()->where('estado', 'activo')->count() === 0) {
+                $run->salas()->delete();
+                $run->update(['estado' => 'abandonado']);
             }
 
             return response()->json(['ok' => true]);
-        }
-
-        $jugador->update(['estado' => 'abandonado']);
-
-        if ($run->jugadores()->where('estado', 'activo')->count() === 0) {
-            $run->salas()->delete();
-            $run->update(['estado' => 'abandonado']);
-        }
-
-        return response()->json(['ok' => true]);
+        });
     }
 
     /**
@@ -739,10 +792,15 @@ class DungeonController extends Controller
                     'listo' => $jp->listo,
                     'estado' => $jp->estado,
                     'soy_yo' => $jp->user_id === $userId,
+                    'es_lider' => $jp->user_id === $run->creado_por_id,
                 ];
             })->values(),
             'cupos_equipo' => $run->template->cuposEquipo(),
             'min_jugadores' => self::MIN_JUGADORES,
+            /* Solo el líder ve/usa el botón "Comenzar" (ver comenzar()). Si el líder abandona el
+               lobby, salir() traspasa el liderazgo al que lleva más tiempo esperando. */
+            'lider_user_id' => $run->creado_por_id,
+            'soy_lider' => $run->creado_por_id === $userId,
             'loot' => [
                 'cofres' => $this->formatRecompensasPreview($template->recompensas),
                 'enemigos' => $template->enemigos->map(fn ($e) => [

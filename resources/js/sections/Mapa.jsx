@@ -2759,10 +2759,10 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
       const d = await apiFetch(`/map/dungeons/runs/${runId}`);
       setData(d);
     } catch (e) {
-      /* 403: el equipo arrancó sin que este jugador llegara a confirmar "listo" (quedó fuera
-         del run al no marcarse a tiempo) — unirse() de nuevo lo manda a un lobby nuevo. */
+      /* 403: el líder arrancó el run y este jugador no había marcado "Listo", así que quedó
+         fuera del equipo — unirse() de nuevo lo manda a un lobby nuevo. */
       if (e?.message === '403') {
-        toast('El equipo arrancó sin ti: no llegaste a marcar "Listo" a tiempo.', { tone: 'info', icon: 'info' });
+        toast('El líder comenzó sin ti: no habías marcado "Listo".', { tone: 'info', icon: 'info' });
         unirse();
       }
     }
@@ -2822,6 +2822,20 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
       setData(await apiPost(`/map/dungeons/runs/${runId}/listo`, {}));
     } catch (e) {
       toast(e?.body?.error || e?.message || 'No se pudo actualizar tu estado.', { tone: 'error', icon: 'x' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /* Solo el líder: arranca el run con los que marcaron "Listo" (ver DungeonController::comenzar).
+     Los que no confirmaron quedan fuera — su próximo poll recibe 403 y refresh() los reingresa. */
+  const comenzarDungeon = async () => {
+    if (!runId || busy) return;
+    setBusy(true);
+    try {
+      setData(await apiPost(`/map/dungeons/runs/${runId}/comenzar`, {}));
+    } catch (e) {
+      toast(e?.body?.error || e?.message || 'No se pudo comenzar el dungeon.', { tone: 'error', icon: 'x' });
     } finally {
       setBusy(false);
     }
@@ -3002,6 +3016,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
     const me = jugadores.find((j) => j.soy_yo);
     const listosCount = jugadores.filter((j) => j.listo).length;
     const equipoCompleto = listosCount >= data.cupos_equipo;
+    const liderNombre = jugadores.find((j) => j.es_lider)?.name ?? null;
+    const puedeComenzar = data.soy_lider && listosCount >= data.min_jugadores && me?.listo;
     const presentesZona = lugar.presentes_personajes ?? [];
     const balizasZona = lugar.balizas_activas ?? [];
     return (
@@ -3017,7 +3033,10 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
               <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
               <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
-                {listosCount}/{data.cupos_equipo} listos (mínimo {data.min_jugadores}). Cualquiera puede quedarse a mirar sin marcar "Listo" — el equipo arranca apenas alcanza el mínimo de confirmados.
+                {listosCount}/{data.cupos_equipo} listos (mínimo {data.min_jugadores}). Cualquiera puede quedarse a mirar sin marcar "Listo".{' '}
+                {data.soy_lider
+                  ? 'Eres el líder: cuando el equipo esté armado, apreta "Comenzar" — quien no haya marcado "Listo" queda fuera.'
+                  : `${liderNombre ? `${liderNombre} lidera` : 'El líder'} el equipo y decide cuándo comenzar.`}
               </div>
               <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
                 {jugadores.map((j) => {
@@ -3048,16 +3067,27 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         }}>{j.name}{j.soy_yo ? ' (tú)' : ''}</span>
                       </div>
-                      <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        {j.es_lider && <Chip tone="gold" icon="crown">Líder</Chip>}
+                        <Chip tone={j.listo ? 'green' : 'dim'}>{j.listo ? 'Listo' : 'Esperando'}</Chip>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <Btn kind="ghost" onClick={salirDungeon} disabled={busy}>Abandonar</Btn>
                 <Btn kind="accent" icon="check" onClick={toggleListo} disabled={busy || (!me?.listo && equipoCompleto)}>
                   {me?.listo ? 'Listo (cancelar)' : equipoCompleto ? 'Equipo completo' : 'Estoy listo'}
                 </Btn>
+                {/* Solo el líder arranca el run; el resto espera su decisión (ver comenzar()). */}
+                {data.soy_lider && (
+                  <Btn kind="primary" icon="swords" onClick={comenzarDungeon} disabled={busy || !puedeComenzar}>
+                    {listosCount < data.min_jugadores
+                      ? `Comenzar (faltan ${data.min_jugadores - listosCount})`
+                      : !me?.listo ? 'Marcate listo' : `Comenzar (${listosCount})`}
+                  </Btn>
+                )}
               </div>
             </div>
 
