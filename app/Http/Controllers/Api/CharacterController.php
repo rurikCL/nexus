@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 class CharacterController extends Controller
 {
     private const COMBAT_DEFAULTS = [
-        'vida' => 8,
+        'vida' => 7,
         'escudo' => 4,
         'defensa' => 2,
         'ataque' => 2,
