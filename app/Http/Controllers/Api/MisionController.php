@@ -8,6 +8,7 @@ use App\Models\MapNpc;
 use App\Models\Mision;
 use App\Models\Objetivo;
 use App\Models\Recompensa;
+use App\Models\RolObjeto;
 use App\Models\User;
 use App\Traits\ConvertsToWebp;
 use App\Services\MisionProgresoService;
@@ -72,6 +73,36 @@ class MisionController extends Controller
         return null;
     }
 
+    private function validateObjetoObjetivos(array $objetivos): ?JsonResponse
+    {
+        foreach ($objetivos as $index => $objetivo) {
+            if (($objetivo['tipo'] ?? null) !== 'objeto') {
+                continue;
+            }
+
+            $unidad = trim((string) ($objetivo['unidad'] ?? ''));
+            if ($unidad === '') {
+                return response()->json([
+                    'message' => 'Los objetivos de tipo Objeto requieren un objeto asignado.',
+                    'errors' => [
+                        "objetivos.{$index}.unidad" => ['Debes seleccionar un objeto para este objetivo.'],
+                    ],
+                ], 422);
+            }
+
+            if (! RolObjeto::whereKey((int) $unidad)->exists()) {
+                return response()->json([
+                    'message' => 'El objeto seleccionado para el objetivo no existe.',
+                    'errors' => [
+                        "objetivos.{$index}.unidad" => ['El objeto seleccionado no existe.'],
+                    ],
+                ], 422);
+            }
+        }
+
+        return null;
+    }
+
     // ── GET /api/misiones/npcs-mision ────────────────────────────────────────
     public function npcsMision(Request $request): JsonResponse
     {
@@ -125,7 +156,7 @@ class MisionController extends Controller
             ->where('activa', true)
             ->orderBy('orden')
             ->get()
-            ->map(function ($m) use ($user, $characterHitos) {
+            ->map(function ($m) use ($user, $characterHitos, $character) {
                 $base = $this->formatMision($m);
 
                 $participantes = $m->users->map(fn ($u) => [
@@ -147,7 +178,7 @@ class MisionController extends Controller
 
                 $miPivot = $m->users->firstWhere('id', $user->id);
                 $miProgresoJson = $miPivot?->pivot->progreso_json ? json_decode($miPivot->pivot->progreso_json, true) : [];
-                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $miProgresoJson, $characterHitos);
+                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $miProgresoJson, $characterHitos, $character);
                 $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
                 $requeridos = $m->hito_requerimiento
                     ? array_filter(array_map('trim', explode(',', $m->hito_requerimiento)))
@@ -200,12 +231,12 @@ class MisionController extends Controller
                 $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
 
                 return array_merge($base, [
-                    'objetivos' => MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $user->character ? $user->character->hitos()->pluck('hito')->all() : []),
+                    'objetivos' => MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $user->character ? $user->character->hitos()->pluck('hito')->all() : [], $user->character),
                     'status' => $pivot?->status ?? 'pendiente',
                     'progreso' => $pivot?->progreso ?? 0,
                     'progreso_json' => $progresoJson,
                     'aceptada' => $pivot !== null,
-                    'puede_completar' => $pivot?->status !== 'completada' && $this->puedeCompletarCon($user, $m, $progresoJson),
+                    'puede_completar' => $pivot?->status !== 'completada' && MisionProgresoService::puedeCompletarCon($user, $m, $progresoJson),
                     'npc' => $m->npc ? [
                         'id' => $m->npc->id,
                         'nombre' => $m->npc->nombre,
@@ -237,7 +268,7 @@ class MisionController extends Controller
             ->where('activa', true)
             ->orderBy('orden')
             ->get()
-            ->map(function ($m) use ($user, $characterHitos) {
+            ->map(function ($m) use ($user, $characterHitos, $character) {
                 $base = $this->formatMision($m);
 
                 $pivot = $m->users()->where('user_id', $user->id)->first()?->pivot;
@@ -248,7 +279,7 @@ class MisionController extends Controller
                     : [];
                 $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
-                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $characterHitos);
+                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $characterHitos, $character);
 
                 $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
                 $completada = $pivot?->status === 'completada';
@@ -281,7 +312,7 @@ class MisionController extends Controller
             ->where('activa', true)
             ->orderBy('orden')
             ->get()
-            ->map(function ($m) use ($user, $characterHitos) {
+            ->map(function ($m) use ($user, $characterHitos, $character) {
                 $base = $this->formatMision($m);
 
                 $pivot = $m->users()->where('user_id', $user->id)->first()?->pivot;
@@ -293,7 +324,7 @@ class MisionController extends Controller
                     : [];
                 $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
-                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $characterHitos);
+                $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($m, $progresoJson, $characterHitos, $character);
 
                 $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
                 $completada = $pivot?->status === 'completada';
@@ -363,6 +394,9 @@ class MisionController extends Controller
         }
 
         if ($error = $this->validateNpcObjetivos($data['objetivos'] ?? [])) {
+            return $error;
+        }
+        if ($error = $this->validateObjetoObjetivos($data['objetivos'] ?? [])) {
             return $error;
         }
 
@@ -439,6 +473,9 @@ class MisionController extends Controller
         }
 
         if ($error = $this->validateNpcObjetivos($data['objetivos'] ?? [])) {
+            return $error;
+        }
+        if ($error = $this->validateObjetoObjetivos($data['objetivos'] ?? [])) {
             return $error;
         }
 
@@ -751,7 +788,7 @@ class MisionController extends Controller
             $pivot = $mision->users()->where('user_id', $user->id)->first()?->pivot;
             $progresoJson = $pivot?->progreso_json ? json_decode($pivot->progreso_json, true) : [];
             $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
-            $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
+            $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos, $character);
 
             $objetivosFaltantes = $objetivosConProgreso
                 ->filter(fn ($o) => ! $o['completado'])
@@ -886,6 +923,12 @@ class MisionController extends Controller
                 : MapNpc::whereIn('id', $mision->objetivos->where('tipo', 'npc')->pluck('unidad')->filter()->unique()->map(fn ($id) => (int) $id)->all())
                     ->pluck('nombre', 'id');
 
+            $objetoIds = $mision->objetivos->where('tipo', 'objeto')
+                ->pluck('unidad')->filter()->unique()->map(fn ($id) => (int) $id);
+            $objetoLabels = $objetoIds->isEmpty()
+                ? collect()
+                : RolObjeto::whereIn('id', $objetoIds->all())->pluck('nombre', 'id');
+
             $base['objetivos'] = $mision->objetivos->map(fn ($o) => [
                 'id' => $o->id,
                 'nombre' => $o->nombre,
@@ -893,9 +936,11 @@ class MisionController extends Controller
                 'tipo' => $o->tipo,
                 'meta' => $o->meta,
                 'unidad' => $o->unidad,
-                'unidad_label' => $o->tipo === 'npc'
-                    ? ($npcLabels[(int) $o->unidad] ?? $o->unidad)
-                    : null,
+                'unidad_label' => match ($o->tipo) {
+                    'npc' => $npcLabels[(int) $o->unidad] ?? $o->unidad,
+                    'objeto' => $objetoLabels[(int) $o->unidad] ?? $o->unidad,
+                    default => null,
+                },
                 'progreso_tipo' => $o->progreso_tipo ?? 'conteo',
             ])->values();
         }
@@ -928,7 +973,7 @@ class MisionController extends Controller
             : [];
         $cumpleHitos = empty(array_diff($requeridos, $characterHitos));
 
-        $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
+        $objetivosConProgreso = MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos, $character);
 
         $objetivosCompletos = $objetivosConProgreso->every(fn ($o) => $o['completado']);
         $completada = $pivot?->status === 'completada';
@@ -950,6 +995,6 @@ class MisionController extends Controller
         $character = auth()->user()?->character;
         $characterHitos = $character ? $character->hitos()->pluck('hito')->all() : [];
 
-        return MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos);
+        return MisionProgresoService::buildObjetivosConProgreso($mision, $progresoJson, $characterHitos, $character);
     }
 }

@@ -2789,7 +2789,7 @@ export default function AdminView() {
    MISIONES ADMIN — CRUD completo con objetivos y recompensas inline
 ───────────────────────────────────────────────────────────── */
 const TIPO_MISION_OPTS  = ['temporada', 'comunidad', 'individual', 'global'];
-const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'hito', 'npc', 'automatico'];
+const TIPO_OBJETIVO_OPTS = ['general', 'entrenamiento', 'combate', 'tarea', 'viaje', 'dialogo', 'menu', 'hito', 'npc', 'objeto', 'automatico'];
 const TIPO_RECOMPENSA_OPTS = ['creditos', 'titulo', 'insignia', 'objeto', 'habilidad', 'punto_habilidad'];
 const TIPO_RECOMPENSA_LABEL = { punto_habilidad: 'Punto Habilidad' };
 
@@ -3424,6 +3424,13 @@ function MisionesAdmin() {
                             </option>
                           ))}
                         </select>
+                      ) : o.tipo === 'objeto' ? (
+                        <select className="nx-select" value={o.unidad ?? ''} onChange={e => setObj(i, 'unidad', e.target.value)}>
+                          <option value="">— Seleccionar objeto —</option>
+                          {objetos.map(ob => (
+                            <option key={ob.id} value={String(ob.id)}>{ob.label}</option>
+                          ))}
+                        </select>
                       ) : (
                         <input className="nx-input" value={o.unidad ?? ''} onChange={e => setObj(i, 'unidad', e.target.value)} placeholder="victorias" />
                       )}
@@ -3445,6 +3452,11 @@ function MisionesAdmin() {
                       {o.tipo === 'npc' && (
                         <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
                           Se completa automáticamente al hablar con este NPC.
+                        </div>
+                      )}
+                      {o.tipo === 'objeto' && (
+                        <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
+                          Se completa mientras el personaje tenga al menos "Meta" unidades de este objeto en su inventario (se revisa en vivo, no se consume).
                         </div>
                       )}
                     </div>
