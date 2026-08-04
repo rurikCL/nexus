@@ -317,10 +317,15 @@ class MapController extends Controller
                 fn ($o) => ($progresoJson[(string) $o->id] ?? 0) >= $o->meta
             );
 
+            // Solo el NPC que DA la misión dice su lore de introducción -al NPC receptor
+            // (npc_termina_id) no le corresponde, aunque comparta la misma $mision->npc_lore-.
+            $esOferente = $mision->npc_id === $npc->id;
+
             $npc->setAttribute('mision_disponible', [
                 'id' => $mision->id,
                 'nombre' => $mision->nombre,
                 'mision' => $mision->mision,
+                'npc_lore' => $esOferente ? $mision->npc_lore : null,
                 'descripcion' => $mision->descripcion,
                 'foto_mision' => $mision->foto_mision,
                 'hito_requerimiento' => $mision->hito_requerimiento,

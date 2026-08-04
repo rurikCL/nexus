@@ -2803,7 +2803,7 @@ const MOMENTO_RECOMPENSA_OPTS = [
   { v: 'participacion', l: 'Recompensa por participar' },
 ];
 const EMPTY_MISION = {
-  nombre: '', mision: '', descripcion: '', foto_mision: '',
+  nombre: '', mision: '', descripcion: '', npc_lore: '', foto_mision: '',
   tipo_mision: 'individual', temporada_id: '', npc_id: '', npc_termina_id: '',
   puntos_requeridos: 100, activa: true, notificar: false, orden: 0,
   fecha_inicio: '', fecha_termino: '',
@@ -2816,6 +2816,7 @@ function misionFromApi(m) {
     nombre:             m.nombre            ?? '',
     mision:             m.mision            ?? '',
     descripcion:        m.descripcion       ?? '',
+    npc_lore:           m.npc_lore          ?? '',
     foto_mision:        m.foto_mision       ?? '',
     tipo_mision:        m.tipo_mision       ?? 'individual',
     temporada_id:       m.temporada_id      ?? '',
@@ -3245,6 +3246,14 @@ function MisionesAdmin() {
           <div>
             <label className="nx-label">Descripción</label>
             <textarea className="nx-textarea" rows={3} value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Contexto e instrucciones detalladas..." />
+          </div>
+
+          <div>
+            <label className="nx-label">Lore del NPC (al iniciar conversación)</label>
+            <textarea className="nx-textarea" rows={3} value={form.npc_lore} onChange={e => set('npc_lore', e.target.value)} placeholder="Lo que dice el NPC (npc_id) al abrir el chat, mientras esta misión siga sin tomar ni terminar..." />
+            <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>
+              Si lo escribes con el mismo formato de "Interacción" del NPC (una opción por línea: <span className="nx-data">- pregunta: respuesta</span>) se muestra como botón de pregunta en vez de decirse automáticamente al abrir el chat.
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 80px', gap: 14 }}>

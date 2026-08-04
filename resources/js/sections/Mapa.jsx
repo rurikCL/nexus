@@ -3930,6 +3930,27 @@ function TiendaModal({ npc, tipo, lugarImagen, onClose, onCreditsChange }) {
   );
 }
 
+/* Parsea el formato "- keyword[misionId]: respuesta" (una opción por línea) que usa
+   npc.interaccion para generar botones de pregunta — y que también puede usar el npc_lore de
+   una misión cuando el admin quiere que sea un botón en vez de un mensaje automático. */
+function parseInteraccionOptions(texto) {
+  if (!texto) return [];
+  return texto.split('\n')
+    .filter(l => l.trim().startsWith('-'))
+    .map(l => {
+      const clean = l.replace(/^-\s*/, '').trim();
+      const match = clean.match(/^(.*?)(?:\[(\d+)\])?\s*:\s*(.*)$/);
+      if (!match) return null;
+      return {
+        keyword:  match[1].trim(),
+        misionId: match[2] ? parseInt(match[2]) : null,
+        response: match[3].trim(),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, onRaidJoin, onMisionChange, onCreditsChange, onUserUpdate }) {
   const isMobile = useIsMobile();
   const isAI = npc.tipo_interaccion === 'agente_ia' && Boolean(npc.prompt);
@@ -3998,6 +4019,16 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
   const showNpcMsg = (text) => setTypingInMsg({ text, visibleChars: 0 });
 
+  /* Encadena varios mensajes del NPC uno tras otro (ej. lore de misión + saludo) — showNpcMsg
+     no encola (un typingInMsg nuevo pisa al anterior), así que el siguiente recién se dispara
+     cuando el typewriter del anterior habría terminado de escribirse. */
+  const showNpcMsgSequence = (textos, onDone) => {
+    const [siguiente, ...resto] = textos;
+    if (siguiente === undefined) { onDone?.(); return; }
+    showNpcMsg(siguiente);
+    setTimeout(() => showNpcMsgSequence(resto, onDone), siguiente.length * npcTextDelay + 400);
+  };
+
   const npcTipo      = (npc.tipo ?? '').toLowerCase();
   const isAliado     = npcTipo === 'aliado';
   const isHostil     = npcTipo === 'hostil';
@@ -4030,28 +4061,31 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
     }
   }, [isHostil, npc.nombre, npcTipo]);
 
-  /* Parsea "- keyword[misionId]: respuesta" o "- keyword: respuesta" */
-  const npcOptions = useMemo(() => {
-    if (!npc.interaccion) return [];
-    return npc.interaccion.split('\n')
-      .filter(l => l.trim().startsWith('-'))
-      .map(l => {
-        const clean = l.replace(/^-\s*/, '').trim();
-        const match = clean.match(/^(.*?)(?:\[(\d+)\])?\s*:\s*(.*)$/);
-        if (!match) return null;
-        return {
-          keyword:  match[1].trim(),
-          misionId: match[2] ? parseInt(match[2]) : null,
-          response: match[3].trim(),
-        };
-      })
-      .filter(Boolean)
-      .slice(0, 4);
-  }, [npc.interaccion]);
+  const npcOptions = useMemo(() => parseInteraccionOptions(npc.interaccion), [npc.interaccion]);
+
+  /* npc_lore de la misión que este NPC ofrece -solo mientras el jugador no la tomó ni la
+     terminó (mision_disponible.estado null = nunca aceptada)-. Si el admin lo escribió con el
+     mismo formato "- pregunta: respuesta" que npc.interaccion, se agrega como botón más de
+     pregunta en vez de mostrarse automáticamente al abrir el chat (ver misionLoreOptions). */
+  const misionLoreOptions = useMemo(
+    () => (misionInfo?.estado ? [] : parseInteraccionOptions(misionInfo?.npc_lore)),
+    [misionInfo?.estado, misionInfo?.npc_lore]
+  );
+  const misionLore = (!misionInfo?.estado && misionInfo?.npc_lore && misionLoreOptions.length === 0)
+    ? misionInfo.npc_lore
+    : null;
+
+  /* Opciones de pregunta a mostrar como botones: las de npc.interaccion + las del npc_lore de
+     misión (si tenía formato de pregunta), tope combinado de 4 -mismo límite que antes tenía
+     npcOptions solo-. */
+  const todasOpciones = useMemo(
+    () => [...npcOptions, ...misionLoreOptions].slice(0, 4),
+    [npcOptions, misionLoreOptions]
+  );
 
   /* El panel de opciones (diálogo estático) debe aparecer si hay algo que mostrar en él:
      opciones de diálogo, misión disponible, o los botones de Comprar/Atacar. */
-  const hasSidebarContent = npcOptions.length > 0 || Boolean(misionInfo)
+  const hasSidebarContent = todasOpciones.length > 0 || Boolean(misionInfo)
     || isVendedor || isVendedorNaves || (!isAliado && npc.ataque > 0);
 
   /* Referencias [Objeto] / @[NPC] presentes en los textos del NPC: se resuelven
@@ -4062,7 +4096,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
   useEffect(() => {
     const npcTexts = [
       npc.saludo,
-      ...npcOptions.map(o => o.response),
+      ...todasOpciones.map(o => o.response),
       ...messages.filter(m => m.from === 'npc').map(m => m.text),
     ].filter(Boolean);
 
@@ -4095,16 +4129,18 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
         });
       })
       .catch(() => {});
-  }, [npc.saludo, npcOptions, messages]);
+  }, [npc.saludo, todasOpciones, messages]);
 
   useEffect(() => {
     if (isAI) return;
-    if (npc.saludo) {
+    const textos = [misionLore, npc.saludo].filter(Boolean);
+    if (textos.length > 0) {
       setTyping(true);
       setTimeout(() => {
-        showNpcMsg(npc.saludo);
-        setTyping(false);
-        if (hasSidebarContent) setPhase('dialog');
+        showNpcMsgSequence(textos, () => {
+          setTyping(false);
+          if (hasSidebarContent) setPhase('dialog');
+        });
       }, 800);
     } else if (hasSidebarContent) {
       setPhase('dialog');
@@ -4124,12 +4160,12 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
             ts:   new Date(m.created_at).getTime(),
           })));
         }
-        if (d.show_greeting && npc.saludo) {
-          setTyping(true);
-          setTimeout(() => {
-            showNpcMsg(npc.saludo);
-            setTyping(false);
-          }, 800);
+        if (d.show_greeting) {
+          const textos = [misionLore, npc.saludo].filter(Boolean);
+          if (textos.length > 0) {
+            setTyping(true);
+            setTimeout(() => showNpcMsgSequence(textos, () => setTyping(false)), 800);
+          }
         }
       })
       .catch(() => setRemaining(15));
@@ -4649,7 +4685,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   <span>{isJefe ? 'UNIRSE AL ASALTO' : `ATACAR${isNeutral ? ' (−rep)' : ''}`}</span>
                 </button>
               )}
-              {npcOptions.map((opt, i) => (
+              {todasOpciones.map((opt, i) => (
                 <button key={i} onClick={() => {
                   if (typing) return;
                   playSound('click_npc');

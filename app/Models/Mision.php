@@ -15,6 +15,7 @@ class Mision extends Model
         'nombre',
         'mision',
         'descripcion',
+        'npc_lore',
         'foto_mision',
         'tipo_mision',
         'temporada_id',
