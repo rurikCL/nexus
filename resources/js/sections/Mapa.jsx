@@ -2734,13 +2734,10 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
     onDungeonRunChange?.(runId ? { id: runId, estado } : null);
   }, [runId, estado, onDungeonRunChange]);
 
-  const refresh = useCallback(async () => {
-    if (!runId) return;
-    try {
-      const d = await apiFetch(`/map/dungeons/runs/${runId}`);
-      setData(d);
-    } catch { /* poll silencioso */ }
-  }, [runId]);
+  /* Espejo de runId/estado en un ref para leerlo desde el cleanup de abajo sin que ese efecto
+     tenga que re-suscribirse (y re-disparar unirse()) cada vez que cambian. */
+  const salidaRef = useRef({ runId: null, estado: null });
+  useEffect(() => { salidaRef.current = { runId, estado }; }, [runId, estado]);
 
   const unirse = useCallback(() => {
     setLoading(true);
@@ -2754,6 +2751,21 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
       })
       .finally(() => setLoading(false));
   }, [lugar.id]);
+
+  const refresh = useCallback(async () => {
+    if (!runId) return;
+    try {
+      const d = await apiFetch(`/map/dungeons/runs/${runId}`);
+      setData(d);
+    } catch (e) {
+      /* 403: el equipo arrancó sin que este jugador llegara a confirmar "listo" (quedó fuera
+         del run al no marcarse a tiempo) — unirse() de nuevo lo manda a un lobby nuevo. */
+      if (e?.message === '403') {
+        toast('El equipo arrancó sin ti: no llegaste a marcar "Listo" a tiempo.', { tone: 'info', icon: 'info' });
+        unirse();
+      }
+    }
+  }, [runId, unirse]);
 
   /* Rescate para quien quedó con OTRO dungeon en_curso/esperando bloqueando la entrada a este
      (p.ej. tras salir del portal sin abandonarlo, o datos huérfanos previos a este bloqueo) —
@@ -2772,8 +2784,20 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
     }
   };
 
-  /* Al entrar al portal: unirse es idempotente — retoma el lobby o la sala donde ya estabas. */
-  useEffect(() => { unirse(); }, [unirse]);
+  /* Al entrar al portal: unirse es idempotente — retoma el lobby o la sala donde ya estabas.
+     Al salir del portal (cambiar de zona, cerrar el mapa) SIN apretar "Abandonar", si el run
+     seguía 'esperando' se libera el cupo igual — de lo contrario el jugador queda fantasma en
+     el lobby (contando para el equipo) aunque ya no esté mirando la pantalla. Si el run ya está
+     'en_curso' no se toca: abandonar un dungeon en marcha requiere el botón explícito. */
+  useEffect(() => {
+    unirse();
+    return () => {
+      const { runId: rId, estado: est } = salidaRef.current;
+      if (rId && est === 'esperando') {
+        apiPost(`/map/dungeons/runs/${rId}/salir`, {}).catch(() => {});
+      }
+    };
+  }, [unirse]);
 
   /* Mientras se arma el equipo, refresca para ver quién se une / marca listo. */
   useEffect(() => {
@@ -2975,6 +2999,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
   if (estado === 'esperando') {
     const jugadores = data.jugadores ?? [];
     const me = jugadores.find((j) => j.soy_yo);
+    const listosCount = jugadores.filter((j) => j.listo).length;
+    const equipoCompleto = listosCount >= data.cupos_equipo;
     const presentesZona = lugar.presentes_personajes ?? [];
     const balizasZona = lugar.balizas_activas ?? [];
     return (
@@ -2990,7 +3016,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
               <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
               <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
-                Mínimo {data.min_jugadores} jugadores · hasta {data.cupos_equipo} cupos. El equipo arranca cuando todos marquen "Listo".
+                {listosCount}/{data.cupos_equipo} listos (mínimo {data.min_jugadores}). Cualquiera puede quedarse a mirar sin marcar "Listo" — el equipo arranca apenas alcanza el mínimo de confirmados.
               </div>
               <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
                 {jugadores.map((j) => {
@@ -3028,8 +3054,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <Btn kind="ghost" onClick={salirDungeon} disabled={busy}>Abandonar</Btn>
-                <Btn kind="accent" icon="check" onClick={toggleListo} disabled={busy}>
-                  {me?.listo ? 'Listo (cancelar)' : 'Estoy listo'}
+                <Btn kind="accent" icon="check" onClick={toggleListo} disabled={busy || (!me?.listo && equipoCompleto)}>
+                  {me?.listo ? 'Listo (cancelar)' : equipoCompleto ? 'Equipo completo' : 'Estoy listo'}
                 </Btn>
               </div>
             </div>

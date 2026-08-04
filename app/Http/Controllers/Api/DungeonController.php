@@ -20,6 +20,7 @@ use App\Services\RecompensaRollService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -35,7 +36,7 @@ class DungeonController extends Controller
     /** Mínimo de jugadores en el lobby para poder confirmar "listo", igual que RaidCombatController::MIN_JUGADORES. */
     private const MIN_JUGADORES = 2;
 
-    /** POST /map/dungeons/{lugarId}/unirse — entra al lobby del dungeon de ese portal (lo crea si no hay uno esperando con cupo). */
+    /** POST /map/dungeons/{lugarId}/unirse — entra al lobby del dungeon de ese portal (lo crea si no hay uno esperando; el listado no tiene tope, ver listo()). */
     public function unirse(Request $request, int $lugarId): JsonResponse
     {
         $user = $request->user();
@@ -67,10 +68,10 @@ class DungeonController extends Controller
             return response()->json($this->formatEstadoOLobby($jugadorActivo->run, $user));
         }
 
+        /* El listado del lobby no tiene tope: cualquiera puede entrar a mirar/esperar. El cupo
+           real del equipo (cuposEquipo()) se aplica en listo(), sobre quienes confirman "listo". */
         $run = DungeonRun::where('dungeon_template_id', $template->id)
             ->where('estado', 'esperando')
-            ->withCount('jugadores')
-            ->having('jugadores_count', '<', $template->cuposEquipo())
             ->first();
 
         if (! $run) {
@@ -91,11 +92,21 @@ class DungeonController extends Controller
         return response()->json($this->formatLobby($run->fresh(), $user->id));
     }
 
-    /** POST /map/dungeons/runs/{run}/listo — confirma (o desmarca) listo; arranca el run en cuanto todo el equipo lo está. */
+    /**
+     * POST /map/dungeons/runs/{run}/listo — confirma (o desmarca) listo; arranca el run en
+     * cuanto hay suficiente equipo confirmado. El listado del lobby (unirse()) no tiene tope,
+     * así que el cupo real (cuposEquipo()) se hace cumplir acá, solo sobre quienes se marcan
+     * "listo" — de lo contrario alguien que solo entró a mirar podría bloquear el arranque para
+     * siempre sin marcarse listo. Se corre en transacción con lockForUpdate porque varios
+     * jugadores pueden tocar "listo" casi al mismo tiempo: sin el lock, dos podrían leer el
+     * mismo conteo de listos y ambos pasar el tope.
+     */
     public function listo(Request $request, int $runId): JsonResponse
     {
         $user = $request->user();
-        $run = DungeonRun::with('jugadores')->findOrFail($runId);
+
+        return DB::transaction(function () use ($user, $runId) {
+        $run = DungeonRun::with('jugadores')->lockForUpdate()->findOrFail($runId);
 
         if (! $run->enEspera()) {
             return response()->json(['error' => 'Este dungeon ya arrancó.'], 422);
@@ -106,17 +117,32 @@ class DungeonController extends Controller
             return response()->json(['error' => 'No participas en este dungeon.'], 403);
         }
 
-        $jugador->update(['listo' => ! $jugador->listo]);
+        $cupos = $run->template->cuposEquipo();
+        $listosActuales = $run->jugadores->where('estado', 'activo')->where('listo', true)->count();
+        $nuevoListo = ! $jugador->listo;
+
+        if ($nuevoListo && $listosActuales >= $cupos) {
+            return response()->json(['error' => "El equipo ya está completo ({$cupos} jugadores listos)."], 422);
+        }
+
+        $jugador->update(['listo' => $nuevoListo]);
         $run->refresh()->load('jugadores');
 
-        $activos = $run->jugadores->where('estado', 'activo');
-        $todosListos = $activos->count() >= self::MIN_JUGADORES && $activos->every(fn ($j) => $j->listo);
+        // El arranque solo se evalúa al CONFIRMAR listo, nunca al cancelarlo — si no, cancelar
+        // tu propio "listo" podría arrancar el run igual (y expulsarte a ti) si el resto ya cumplía el mínimo.
+        if ($nuevoListo) {
+            $activos = $run->jugadores->where('estado', 'activo');
+            $listos = $activos->where('listo', true);
 
-        if ($todosListos) {
-            $run = DungeonGeneratorService::generar($run);
+            if ($listos->count() >= self::MIN_JUGADORES) {
+                // Quien se quedó mirando sin confirmar "listo" no entra a este run — puede unirse a otro lobby cuando quiera.
+                $activos->reject(fn ($j) => $j->listo)->each(fn ($j) => $j->delete());
+                $run = DungeonGeneratorService::generar($run->fresh()->load('jugadores'));
+            }
         }
 
         return response()->json($this->formatEstadoOLobby($run->fresh(), $user));
+        });
     }
 
     /** POST /map/dungeons/runs/{run}/salir — abandona el lobby o el run en curso. */
