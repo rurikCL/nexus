@@ -5,9 +5,9 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintVignetteBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
-  INK, PRINT_ACCENT, formaAccent, paintDropShadow,
+  INK, PRINT_ACCENT, formaAccent, paintDropShadow, frameEdge,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -224,7 +224,7 @@ export async function drawCharacterCard(character, user) {
   ctx.fillRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2);
   ctx.restore();
 
-  paintGridBackground(ctx, pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
+  paintVignetteBackground(ctx, pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22, frameEdge(side));
 
   ctx.save();
   ctx.beginPath();
@@ -575,7 +575,7 @@ export async function drawCharacterCard(character, user) {
     drawImageRounded(ctx, qrImg, innerX, footY + (footH - qrSize) / 2, qrSize, qrSize, 8, null);
   }
   ctx.textAlign = 'left';
-  ctx.fillStyle = INK.faint;
+  ctx.fillStyle = INK.muted;
   ctx.font = '400 10px "JetBrains Mono"';
   const aliasX = innerX + (qrImg ? qrSize + 12 : 0);
   ctx.fillText('ALIAS', aliasX, footY + footH / 2 - 10);
@@ -587,7 +587,7 @@ export async function drawCharacterCard(character, user) {
 
   const idStr = `EJC-${String(user?.id ?? character.id ?? 0).padStart(3, '0')}`;
   ctx.textAlign = 'right';
-  ctx.fillStyle = INK.faint;
+  ctx.fillStyle = INK.muted;
   ctx.font = '400 10px "JetBrains Mono"';
   ctx.fillText('ID PERSONAJE', innerRight, footY + footH / 2 - 10);
   ctx.fillStyle = INK.strong;
