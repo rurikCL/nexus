@@ -790,20 +790,26 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     paintJefeAdornments(ctx, pad, cardH, frame.line);
   }
 
-  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line, halo: true });
+  /* Cabecera sobre panel con sombra — mismo criterio que las cajas del cuerpo
+     (paintBoxBg), para que el nombre/tipo se lean sobre cualquier arte de fondo. */
+  const headerBoxTop = pad + 6;
+  const headerBoxBottom = pad + 108;
+  paintBoxBg(ctx, innerX, headerBoxTop, innerW, headerBoxBottom - headerBoxTop, 14);
+
+  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
 
   ctx.textAlign = 'left';
-  withHalo(ctx, () => drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1), 6);
+  drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1);
   ctx.fillStyle = frame.line;
   ctx.font = '700 16px "JetBrains Mono"';
-  withHalo(ctx, () => ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', innerX + 30, pad + 96), 6);
+  ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', innerX + 30, pad + 96);
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
   if (sub) {
     ctx.textAlign = 'right';
     ctx.fillStyle = INK.body;
     const size = fitText(ctx, sub, innerW - 160, '14px "JetBrains Mono"', 11);
     ctx.font = `${size}px "JetBrains Mono"`;
-    withHalo(ctx, () => ctx.fillText(sub, innerRight - 6, pad + 96), 6);
+    ctx.fillText(sub, innerRight - 6, pad + 96);
   }
 
   const forma = Number(entity.forma) || 0;
