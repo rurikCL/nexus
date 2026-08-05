@@ -117,6 +117,55 @@ function paintStatPills(ctx, entries, x, y, maxWidth, emptyText, emptyColor) {
   return cy + STAT_PILL_H;
 }
 
+/** Envuelve un dibujo con un halo blanco doble-pasada — mismo criterio que `conHalo` en
+ * CharacterCard.jsx, para que el texto/ícono se lea sobre cualquier arte de fondo. */
+function withHalo(ctx, draw, blur = 10) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,255,255,0.95)';
+  ctx.shadowBlur = blur;
+  draw();
+  draw();
+  ctx.restore();
+}
+
+/** Fondo de arte a sangre para las cartas de NPC/Jefe/Enemigo — la imagen de la entidad ocupa
+ * toda la carta (mismo criterio que la foto de personaje en CharacterCard.jsx): recorte
+ * "cover" anclado arriba, velo blanco encima para que las cajas de datos mantengan contraste,
+ * y el borde del marco se repinta después porque la imagen lo tapa. Sin imagen, cae a un
+ * degradé radial con el ícono del tipo como marca de agua, igual que el resto del catálogo. */
+function paintEntityBackgroundArt(ctx, img, iconName, pad, cardH, frame) {
+  const x = pad, y = pad, w = CARD_W - pad * 2, h = cardH - pad * 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 22);
+  ctx.clip();
+
+  if (img) {
+    const scale = Math.max(w / img.width, h / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, x + (w - dw) / 2, y, dw, dh);
+    ctx.fillStyle = 'rgba(255,255,255,0.34)';
+    ctx.fillRect(x, y, w, h);
+  } else {
+    const g = ctx.createRadialGradient(x + w / 2, y + h / 2, 20, x + w / 2, y + h / 2, w / 1.1);
+    g.addColorStop(0, `${frame.line}2e`);
+    g.addColorStop(1, INK.paper);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 0.4;
+    drawIcon(ctx, iconName, x + w / 2, y + h / 2, 220, frame.line, 1.6);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 22);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = frame.line;
+  ctx.stroke();
+}
+
 /** Pinta el marco (fondo + borde) de la carta y devuelve las coordenadas internas útiles. */
 function paintFrame(ctx, frame, cardH = CARD_H) {
   const pad = 22;
@@ -150,12 +199,13 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
 }
 
 /** Encabezado común: nombre (arriba-izq.) + medallón circular (arriba-der.). */
-function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor }) {
+function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor, halo = false }) {
   ctx.textAlign = 'left';
   const displayName = (title ?? '???').toUpperCase();
   fitText(ctx, displayName, innerRight - innerX - 66, '30px Orbitron');
   ctx.fillStyle = INK.strong;
-  ctx.fillText(displayName, innerX, pad + 54);
+  const drawTitle = () => ctx.fillText(displayName, innerX, pad + 54);
+  if (halo) withHalo(ctx, drawTitle, 12); else drawTitle();
 
   if (badgeText !== null && badgeText !== undefined) {
     paintDropShadow(ctx, innerRight - 47, pad + 17, 46, 46, 23, { blur: 7, offsetY: 2 });
@@ -202,13 +252,14 @@ async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, 
 }
 
 /** Línea de tipo centrada, con separadores horizontales (como la "type line" de una carta Magic). */
-function paintTypeLine(ctx, label, typeY, innerX, innerRight) {
+function paintTypeLine(ctx, label, typeY, innerX, innerRight, { halo = false } = {}) {
   /* va directo sobre el fondo (sin panel detrás), donde la viñeta ya suma tono:
      usa la tinta de cuerpo, no la secundaria, para no perderse. */
   ctx.textAlign = 'center';
   ctx.fillStyle = INK.body;
   ctx.font = '600 15px "JetBrains Mono"';
-  ctx.fillText(label.toUpperCase(), CARD_W / 2, typeY);
+  const drawLabel = () => ctx.fillText(label.toUpperCase(), CARD_W / 2, typeY);
+  if (halo) withHalo(ctx, drawLabel, 8); else drawLabel();
   ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
@@ -324,11 +375,12 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
   });
 }
 
-function paintColofon(ctx, text, cardH = CARD_H) {
+function paintColofon(ctx, text, cardH = CARD_H, { halo = false } = {}) {
   ctx.textAlign = 'center';
   ctx.fillStyle = INK.muted;
   ctx.font = '400 12px "JetBrains Mono"';
-  ctx.fillText(text, CARD_W / 2, cardH - 22 - 8);
+  const draw = () => ctx.fillText(text, CARD_W / 2, cardH - 22 - 8);
+  if (halo) withHalo(ctx, draw, 6); else draw();
 }
 
 /** Ícono de reloj de arena, dibujado centrado en (cx, cy) — usado en los marcadores de cooldown del borde. */
@@ -723,50 +775,54 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   canvas.height = cardH;
   const ctx = canvas.getContext('2d');
 
+  const icon = NPC_TIPO_ICON[entity.tipo] ?? 'user';
+  const artImg = await loadImage(mediaUrl(entity.imagen ?? entity.imagen_mini));
+
   const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH);
   const innerW = innerRight - innerX;
+
+  /* La imagen de la entidad ocupa toda la carta como fondo, igual que la foto de
+     personaje en CharacterCard.jsx — el marco/borde en degradé se mantiene igual. */
+  paintEntityBackgroundArt(ctx, artImg, icon, pad, cardH, frame);
 
   if (entity.tipo === 'jefe') {
     paintJefeWatermark(ctx, cardH, frame.line);
     paintJefeAdornments(ctx, pad, cardH, frame.line);
   }
 
-  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
+  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line, halo: true });
 
   ctx.textAlign = 'left';
-  const icon = NPC_TIPO_ICON[entity.tipo] ?? 'user';
-  drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1);
+  withHalo(ctx, () => drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1), 6);
   ctx.fillStyle = frame.line;
   ctx.font = '700 16px "JetBrains Mono"';
-  ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', innerX + 30, pad + 96);
+  withHalo(ctx, () => ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', innerX + 30, pad + 96), 6);
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
   if (sub) {
     ctx.textAlign = 'right';
     ctx.fillStyle = INK.body;
     const size = fitText(ctx, sub, innerW - 160, '14px "JetBrains Mono"', 11);
     ctx.font = `${size}px "JetBrains Mono"`;
-    ctx.fillText(sub, innerRight - 6, pad + 96);
+    withHalo(ctx, () => ctx.fillText(sub, innerRight - 6, pad + 96), 6);
+  }
+
+  const forma = Number(entity.forma) || 0;
+  const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
+  if (formaInfo?.img) {
+    /* Insignia de forma: antes iba en un banner junto al arte principal; con el arte
+       ahora a sangre en toda la carta, queda como sello flotante en la esquina. */
+    const badgeW = 78;
+    const badgeH = 108;
+    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerRight - badgeW, pad + 74, badgeW, badgeH, frame.line, INK.paper);
   }
 
   const artY = pad + 118;
   const artH = 260;
-  const forma = Number(entity.forma) || 0;
-  const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
-  if (formaInfo?.img) {
-    const formaGap = 12;
-    const formaW = 96;
-    const mainW = innerW - formaW - formaGap;
-    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, mainW, artH, frame.line, INK.paper);
-    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerX + mainW + formaGap, artY, formaW, artH, frame.line, INK.paper);
-  } else {
-    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line, INK.paper);
-  }
-
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'
     ? `Jefe de Asalto · ${Math.max(2, entity.raid_slots || 4)} cupos`
     : (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? '');
-  paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight);
+  paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight, { halo: true });
 
   let statsY = typeY + 30;
   statsY = paintVidaEscudoBox(ctx, {
@@ -881,14 +937,14 @@ export function applyNivelACombate(entity, nivel, esJefe) {
 export async function drawNpcCard(npc) {
   const canvas = await drawNpcLikeCard(npc);
   const ctx = canvas.getContext('2d');
-  paintColofon(ctx, npc.tipo === 'jefe' ? 'Jefes · Catálogo NÉXUS' : 'NPCs · Catálogo NÉXUS', canvas.height);
+  paintColofon(ctx, npc.tipo === 'jefe' ? 'Jefes · Catálogo NÉXUS' : 'NPCs · Catálogo NÉXUS', canvas.height, { halo: true });
   return canvas;
 }
 
 export async function drawEnemigoCard(enemigo) {
   const canvas = await drawNpcLikeCard(enemigo, { forcedFrameKey: 'danger', kicker: 'Encuentro Salvaje' });
   const ctx = canvas.getContext('2d');
-  paintColofon(ctx, 'Enemigos · Catálogo NÉXUS', canvas.height);
+  paintColofon(ctx, 'Enemigos · Catálogo NÉXUS', canvas.height, { halo: true });
   return canvas;
 }
 
