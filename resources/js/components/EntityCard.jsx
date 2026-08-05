@@ -133,25 +133,25 @@ function getNpcLikeLocation(entity) {
   const planeta = lugar?.zona?.planeta ?? null;
 
   return {
-    planeta: planeta?.nombre ?? null,
-    lugar: lugar?.nombre ?? null,
+    planeta: planeta ? { nombre: planeta.nombre ?? null, imagen: planeta.imagen ?? null } : null,
+    lugar: lugar ? { nombre: lugar.nombre ?? null, imagen: lugar.imagen ?? null } : null,
   };
 }
 
-function paintHeaderLocationChips(ctx, items, right, y, maxWidth, accentColor) {
+async function paintHeaderLocationCards(ctx, items, right, y, maxWidth, accentColor) {
   const visibleItems = items.filter((item) => item?.value);
   if (!visibleItems.length) return 0;
 
   const gap = 8;
-  const chipH = 28;
+  const chipH = 36;
   const count = visibleItems.length;
   const chipW = count === 1
-    ? Math.min(170, Math.max(98, maxWidth))
-    : Math.max(88, Math.min(128, (maxWidth - gap) / 2));
+    ? Math.min(190, Math.max(118, maxWidth))
+    : Math.max(108, Math.min(144, (maxWidth - gap) / 2));
   const totalW = chipW * count + gap * (count - 1);
   let x = right - totalW;
 
-  visibleItems.forEach((item) => {
+  for (const item of visibleItems) {
     ctx.beginPath();
     ctx.roundRect(x, y, chipW, chipH, 8);
     ctx.fillStyle = 'rgba(7, 12, 24, 0.58)';
@@ -160,19 +160,39 @@ function paintHeaderLocationChips(ctx, items, right, y, maxWidth, accentColor) {
     ctx.strokeStyle = `${accentColor}aa`;
     ctx.stroke();
 
+    const imgSize = 24;
+    const imgX = x + 6;
+    const imgY = y + (chipH - imgSize) / 2;
+    const img = item.img ? await loadImage(mediaUrl(item.img)) : null;
+    if (img) {
+      drawImageRounded(ctx, img, imgX, imgY, imgSize, imgSize, 6, null, 0, 'center', 'cover', 'rgba(0,0,0,0)');
+    } else {
+      ctx.beginPath();
+      ctx.roundRect(imgX, imgY, imgSize, imgSize, 6);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `${accentColor}88`;
+      ctx.stroke();
+      ctx.fillStyle = accentColor;
+      ctx.font = '700 11px "JetBrains Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText('•', imgX + imgSize / 2, imgY + 16);
+    }
+
     ctx.textAlign = 'left';
     ctx.fillStyle = '#c6d4eb';
-    ctx.font = '700 8px "JetBrains Mono"';
-    ctx.fillText(item.label, x + 8, y + 10);
+    ctx.font = '700 7px "JetBrains Mono"';
+    ctx.fillText(item.label, imgX + imgSize + 6, y + 11);
 
-    const valueMaxW = chipW - 16;
-    const valueSize = fitText(ctx, item.value, valueMaxW, '700 11px "JetBrains Mono"', 8);
+    const valueMaxW = chipW - (imgSize + 20);
+    const valueSize = fitText(ctx, item.value, valueMaxW, '700 12px "JetBrains Mono"', 8);
     ctx.fillStyle = '#ffffff';
     ctx.font = `700 ${valueSize}px "JetBrains Mono"`;
-    ctx.fillText(item.value, x + 8, y + 22);
+    ctx.fillText(item.value, imgX + imgSize + 6, y + 25);
 
     x += chipW + gap;
-  });
+  }
 
   return chipH;
 }
@@ -963,9 +983,9 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   withInkShadow(() => ctx.fillText(nameText, textRight, nameY), 12);
 
   if (hasLocation) {
-    paintHeaderLocationChips(ctx, [
-      { label: 'PLANETA', value: locationInfo.planeta },
-      { label: 'LUGAR', value: locationInfo.lugar },
+    await paintHeaderLocationCards(ctx, [
+      { label: 'PLANETA', value: locationInfo.planeta?.nombre, img: locationInfo.planeta?.imagen },
+      { label: 'LUGAR', value: locationInfo.lugar?.nombre, img: locationInfo.lugar?.imagen },
     ], textRight, nameY + 10, textMaxW, frame.line);
   }
 

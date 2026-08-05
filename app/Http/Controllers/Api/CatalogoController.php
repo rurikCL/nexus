@@ -41,15 +41,15 @@ class CatalogoController extends Controller
     ];
 
     private const NPC_UBICACION_RELATIONS = [
-        'lugar:id,nombre,ZonaID',
+        'lugar:id,nombre,imagen,ZonaID',
         'lugar.zona:id,nombre,PlanetaID',
-        'lugar.zona.planeta:id,nombre',
+        'lugar.zona.planeta:id,nombre,imagen',
     ];
 
     private const ENEMIGO_UBICACION_RELATIONS = [
-        'lugares:id,nombre,ZonaID',
+        'lugares:id,nombre,imagen,ZonaID',
         'lugares.zona:id,nombre,PlanetaID',
-        'lugares.zona.planeta:id,nombre',
+        'lugares.zona.planeta:id,nombre,imagen',
     ];
 
     public function objetos(): JsonResponse
