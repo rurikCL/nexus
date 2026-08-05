@@ -4,7 +4,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintVidaEscudoBox, paintBoxBg,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintBoxBg,
   COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge,
 } from '../utils/printableCard.js';
 
@@ -28,14 +28,6 @@ const FRAME = {
   orange:  { bg1: '#ffe3cd', bg2: '#fff4ea', line: '#e2650b' },
   toxic:   { bg1: '#e9f5c8', bg2: '#f6fce8', line: '#5f9109' },
 };
-
-/* Panel oscuro para la cabecera de las cartas de NPC/Jefe/Enemigo — a diferencia de
-   `paintBoxBg` (pensado para ir sobre papel claro), este va sobre el arte a sangre y
-   necesita un fondo bien oscuro para que el nombre destaque; por eso el título se
-   pinta en blanco (ver `HEADER_TITLE_COLOR`) en vez de `INK.strong`. */
-const HEADER_DARK_STYLE = { top: 'rgba(6,12,24,0.86)', bottom: 'rgba(6,12,24,0.64)', border: 'rgba(255,255,255,0.18)' };
-const HEADER_TITLE_COLOR = '#f4f7fb';
-const HEADER_SUB_COLOR = 'rgba(244,247,251,0.82)';
 
 const stackCounts = (value) => {
   const counts = {};
@@ -800,33 +792,70 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     paintJefeAdornments(ctx, pad, cardH, frame.line);
   }
 
-  /* Cabecera sobre panel con sombra — mismo criterio que las cajas del cuerpo
-     (paintBoxBg), pero oscuro (HEADER_DARK_STYLE) y con más aire alrededor del
-     texto, para que el nombre/tipo destaquen sobre cualquier arte de fondo. */
-  const headerBoxTop = pad + 2;
-  const headerBoxBottom = pad + 122;
-  paintBoxBg(ctx, innerX, headerBoxTop, innerW, headerBoxBottom - headerBoxTop, 14, 1, HEADER_DARK_STYLE);
+  /* Cabecera estilo carta de personaje: columna de fichas a la izquierda y bloque
+     tipográfico a la derecha, todo sobre el arte con halo para mantener legibilidad. */
+  const headerTop = pad + 8;
+  const headerPad = 10;
+  const pipR = 17;
+  const pipGapY = 6;
+  const pipColH = pipR * 2 * 3 + pipGapY * 2;
+  const headerBottom = headerTop + pipColH + headerPad * 2;
 
-  /* Espacio interno de la cabecera: sus elementos (nombre, medallón, tipo/facción) se
-     desplazan `headerPadX` hacia adentro para no pegarse al borde del panel. */
-  const headerPadX = 18;
-  const headerInnerX = innerX + headerPadX;
-  const headerInnerRight = innerRight - headerPadX;
+  const pipCx = innerX + headerPad + pipR;
+  const pipValueX = pipCx + pipR + 7;
+  const leftLabelW = 72;
 
-  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line, titleColor: HEADER_TITLE_COLOR, padX: headerPadX });
+  const drawStatPip = (cy, iconName, color, value, label) => {
+    ctx.beginPath();
+    ctx.arc(pipCx, cy, pipR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fill();
+    ctx.lineWidth = 2.1;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    drawIcon(ctx, iconName, pipCx - 9, cy - 9, 18, color, 2);
 
-  ctx.textAlign = 'left';
-  drawIcon(ctx, icon, headerInnerX + 11, pad + 90, 22, frame.line, 2.1);
-  ctx.fillStyle = frame.line;
-  ctx.font = '700 16px "JetBrains Mono"';
-  ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', headerInnerX + 30, pad + 96);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = color;
+    ctx.font = '800 21px Orbitron';
+    withHalo(ctx, () => ctx.fillText(String(value), pipValueX, cy + 7), 7);
+
+    ctx.fillStyle = INK.muted;
+    ctx.font = '700 9px "JetBrains Mono"';
+    withHalo(ctx, () => ctx.fillText(label, pipValueX + 30, cy + 4), 5);
+  };
+
+  const rankCy = headerTop + headerPad + pipR;
+  const vidaCy = rankCy + pipR * 2 + pipGapY;
+  const escudoCy = vidaCy + pipR * 2 + pipGapY;
+
+  drawStatPip(rankCy, 'star', '#c08a06', nivel, 'NIVEL');
+  drawStatPip(vidaCy, COMBAT_STAT_META.vida.icon, COMBAT_STAT_META.vida.color, entity.vida ?? 0, 'VIDA');
+  drawStatPip(escudoCy, COMBAT_STAT_META.escudo.icon, COMBAT_STAT_META.escudo.color, entity.escudo ?? 0, 'ESCUDO');
+
+  const textRight = innerRight - headerPad;
+  const textLeft = pipValueX + leftLabelW + 12;
+  const textMaxW = textRight - textLeft;
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
+
+  ctx.textAlign = 'right';
+  const kickerText = (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC').toUpperCase();
+  const kickerSize = fitText(ctx, kickerText, textMaxW, '13px "JetBrains Mono"', 9);
+  ctx.fillStyle = frame.line;
+  ctx.font = `700 ${kickerSize}px "JetBrains Mono"`;
+  withHalo(ctx, () => ctx.fillText(kickerText, textRight, headerTop + headerPad + 10), 6);
+
+  const nameText = (entity.nombre ?? '???').toUpperCase();
+  const nameSize = fitText(ctx, nameText, textMaxW, '44px Orbitron', 20);
+  ctx.fillStyle = INK.strong;
+  ctx.font = `800 ${nameSize}px Orbitron`;
+  withHalo(ctx, () => ctx.fillText(nameText, textRight, headerTop + headerPad + 20 + nameSize * 0.74), 12);
+
   if (sub) {
-    ctx.textAlign = 'right';
-    ctx.fillStyle = HEADER_SUB_COLOR;
-    const size = fitText(ctx, sub, innerW - 160 - headerPadX * 2, '14px "JetBrains Mono"', 11);
-    ctx.font = `${size}px "JetBrains Mono"`;
-    ctx.fillText(sub, headerInnerRight, pad + 96);
+    const subSize = fitText(ctx, sub, textMaxW, '13px "JetBrains Mono"', 10);
+    ctx.fillStyle = INK.muted;
+    ctx.font = `italic ${subSize}px "JetBrains Mono"`;
+    withHalo(ctx, () => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1), 6);
   }
 
   const forma = Number(entity.forma) || 0;
@@ -839,7 +868,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerRight - badgeW, pad + 74, badgeW, badgeH, frame.line, INK.paper);
   }
 
-  const artY = pad + 118;
+  const artY = headerBottom + 10;
   const artH = 260;
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'
@@ -847,14 +876,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     : (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? '');
   paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight, { halo: true });
 
-  let statsY = typeY + 30;
-  statsY = paintVidaEscudoBox(ctx, {
-    x: innerX, y: statsY, w: innerW,
-    vidaVal: entity.vida ?? 0, escudoVal: entity.escudo ?? 0,
-    vidaMeta: COMBAT_STAT_META.vida, escudoMeta: COMBAT_STAT_META.escudo,
-    drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
-  });
-  statsY += 18;
+  const statsY = typeY + 32;
 
   /* ── dos columnas: izquierda = saludo inicial + habilidades (apiladas), derecha = atributos de combate ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
