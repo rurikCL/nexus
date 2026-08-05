@@ -2545,6 +2545,10 @@ function recompensaIcon(tipo) {
 }
 
 function RecompensaChip({ recompensa }) {
+  /* `probabilidad` ya viene normalizada por el backend (ver formatRecompensasPreview): es la
+     chance real de llevarse ESTA recompensa, no el peso crudo de map_recompensas.porcentaje. */
+  const prob = recompensa.probabilidad;
+  const seguro = prob >= 100;
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -2553,6 +2557,17 @@ function RecompensaChip({ recompensa }) {
     }}>
       <span>{recompensaIcon(recompensa.tipo)}</span>
       <span>{recompensa.label}</span>
+      {prob != null && (
+        <span
+          title={seguro ? 'Se entrega siempre' : `${prob}% de probabilidad`}
+          style={{
+            fontSize: 10, fontFamily: 'var(--font-data)', letterSpacing: '0.04em', flexShrink: 0,
+            paddingLeft: 5, marginLeft: 1, borderLeft: '1px solid var(--holo-line)',
+            color: seguro ? 'var(--green-500)' : prob >= 50 ? 'var(--holo)' : 'var(--txt-faint)',
+          }}>
+          {seguro ? '100%' : `${prob}%`}
+        </span>
+      )}
     </div>
   );
 }
@@ -2560,19 +2575,25 @@ function RecompensaChip({ recompensa }) {
 /* Cuadro a la derecha del lobby: botín posible del template (cofres), de cada tipo
    de enemigo común del pool, y del jefe — vista previa de solo lectura, sin otorgar nada
    (ver DungeonController::formatRecompensasPreview). */
-function DungeonLootPreview({ loot }) {
+function DungeonLootPreview({ loot, maxHeight = null }) {
   if (!loot) return null;
   const cofres = loot.cofres ?? [];
   const enemigos = loot.enemigos ?? [];
   const jefe = loot.jefe;
 
+  /* `maxHeight` lo pasa el lobby con el alto real de su panel (ver DungeonPortal) para que las
+     dos columnas queden a la par; el scroll vive en el contenido, no en el panel, así la
+     cabecera "BOTÍN POSIBLE" queda fija. Sin ese dato (mobile, una sola columna) cae al tope
+     fijo de antes. */
   return (
     <div className="nx-panel solid nx-panel-glow" style={{
       padding: 20, textAlign: 'left', width: '100%',
-      maxHeight: 560, overflowY: 'auto',
+      display: 'flex', flexDirection: 'column',
+      maxHeight: maxHeight ?? 560,
     }}>
-      <div className="nx-kicker" style={{ marginBottom: 14 }}>BOTÍN POSIBLE</div>
+      <div className="nx-kicker" style={{ marginBottom: 14, flexShrink: 0 }}>BOTÍN POSIBLE</div>
 
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', margin: '0 -6px', padding: '0 6px' }}>
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 11, color: 'var(--holo)', fontFamily: 'var(--font-data)', letterSpacing: '0.1em', marginBottom: 8 }}>
           COFRES DEL DUNGEON
@@ -2650,6 +2671,7 @@ function DungeonLootPreview({ loot }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -2739,6 +2761,23 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
      tenga que re-suscribirse (y re-disparar unirse()) cada vez que cambian. */
   const salidaRef = useRef({ runId: null, estado: null });
   useEffect(() => { salidaRef.current = { runId, estado }; }, [runId, estado]);
+
+  /* Alto real del panel del lobby, para que la columna de botín quede a la par en vez de crecer
+     con la cantidad de recompensas (ver DungeonLootPreview). Se mide con ResizeObserver porque el
+     panel cambia de alto solo: entra/sale gente del lobby, aparecen botones, etc. */
+  const lobbyPanelRef = useRef(null);
+  const [lobbyPanelH, setLobbyPanelH] = useState(null);
+  useEffect(() => {
+    const el = lobbyPanelRef.current;
+    if (!el) { setLobbyPanelH(null); return; }
+    const ro = new ResizeObserver(([entry]) => {
+      const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
+      if (h > 0) setLobbyPanelH(h);
+    });
+    ro.observe(el);
+    setLobbyPanelH(el.getBoundingClientRect().height || null);
+    return () => ro.disconnect();
+  }, [estado]);
 
   const unirse = useCallback(() => {
     setLoading(true);
@@ -3029,7 +3068,7 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
         }}>
           {/* columna izquierda (2/3): lobby del equipo + jugadores presentes en la zona */}
           <div>
-            <div className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center' }}>
+            <div ref={lobbyPanelRef} className="nx-panel solid nx-panel-glow" style={{ padding: 24, textAlign: 'center' }}>
               <div className="nx-kicker" style={{ marginBottom: 6 }}>DUNGEON · LOBBY</div>
               <div className="nx-display" style={{ fontSize: 20, marginBottom: 6 }}>{data.run.template.nombre}</div>
               <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 20 }}>
@@ -3124,7 +3163,8 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
           </div>
 
           {/* columna derecha (1/3): botín posible */}
-          <DungeonLootPreview loot={data.loot} />
+          {/* En mobile la grilla es de una sola columna: ahí el botín fluye a su alto natural. */}
+          <DungeonLootPreview loot={data.loot} maxHeight={isMobile ? null : lobbyPanelH} />
         </div>
 
         {dialogPlayer && (

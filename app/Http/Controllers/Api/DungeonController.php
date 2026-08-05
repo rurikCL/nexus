@@ -820,16 +820,42 @@ class DungeonController extends Controller
     }
 
     /** Vista previa (sin otorgar) del botín configurado — ver RecompensaRollService::aplicar para el equivalente que sí lo entrega. */
+    /**
+     * Vista previa de un pool de recompensas, con la probabilidad REAL de cada una.
+     *
+     * `map_recompensas.porcentaje` no es una probabilidad independiente: es un peso relativo
+     * dentro del sorteo de UNA sola recompensa no-crédito por victoria, mientras los créditos se
+     * entregan siempre (ver RecompensaRollService::resolverYOtorgar/elegirPonderada). Mostrar el
+     * porcentaje crudo sería engañoso -dos recompensas con peso 30 son 50% cada una, no 30%-, así
+     * que acá se normaliza sobre el total del pool.
+     */
     private function formatRecompensasPreview(Collection $recompensas): array
     {
-        return $recompensas->map(fn (MapRecompensa $r) => match ($r->tipo) {
-            'creditos' => ['tipo' => 'creditos', 'label' => "{$r->valor} créditos"],
-            'objeto' => ['tipo' => 'objeto', 'label' => $r->objeto->nombre ?? 'Objeto'],
-            'habilidad' => ['tipo' => 'habilidad', 'label' => $r->habilidad->nombre ?? 'Habilidad'],
-            'punto_habilidad' => ['tipo' => 'punto_habilidad', 'label' => "{$r->valor} punto" . ((int) $r->valor === 1 ? '' : 's') . ' de habilidad'],
-            'titulo' => ['tipo' => 'titulo', 'label' => $r->nombre ?? 'Título'],
-            'insignia' => ['tipo' => 'insignia', 'label' => $r->medalla->nombre ?? 'Insignia'],
-            default => ['tipo' => $r->tipo, 'label' => $r->nombre ?? $r->tipo],
+        $noCreditos = $recompensas->where('tipo', '!=', 'creditos');
+        $totalPeso = (int) $noCreditos->sum(fn (MapRecompensa $r) => max(0, (int) $r->porcentaje));
+        $primeraNoCredito = $noCreditos->first();
+
+        return $recompensas->map(function (MapRecompensa $r) use ($totalPeso, $primeraNoCredito) {
+            $base = match ($r->tipo) {
+                'creditos' => ['tipo' => 'creditos', 'label' => "{$r->valor} créditos"],
+                'objeto' => ['tipo' => 'objeto', 'label' => $r->objeto->nombre ?? 'Objeto'],
+                'habilidad' => ['tipo' => 'habilidad', 'label' => $r->habilidad->nombre ?? 'Habilidad'],
+                'punto_habilidad' => ['tipo' => 'punto_habilidad', 'label' => "{$r->valor} punto" . ((int) $r->valor === 1 ? '' : 's') . ' de habilidad'],
+                'titulo' => ['tipo' => 'titulo', 'label' => $r->nombre ?? 'Título'],
+                'insignia' => ['tipo' => 'insignia', 'label' => $r->medalla->nombre ?? 'Insignia'],
+                default => ['tipo' => $r->tipo, 'label' => $r->nombre ?? $r->tipo],
+            };
+
+            if ($r->tipo === 'creditos') {
+                $probabilidad = 100; // los créditos se entregan siempre
+            } elseif ($totalPeso > 0) {
+                $probabilidad = (int) round(max(0, (int) $r->porcentaje) / $totalPeso * 100);
+            } else {
+                // Sin pesos configurados, elegirPonderada() cae en la primera del pool.
+                $probabilidad = $r->is($primeraNoCredito) ? 100 : 0;
+            }
+
+            return array_merge($base, ['probabilidad' => $probabilidad]);
         })->values()->all();
     }
 
