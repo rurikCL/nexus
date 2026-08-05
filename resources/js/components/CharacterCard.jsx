@@ -5,7 +5,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintVignetteBackground, paintVidaEscudoBox, paintBoxBg,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintVignetteBackground, paintEdgeFade, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
   INK, PRINT_ACCENT, formaAccent, paintDropShadow, frameEdge,
 } from '../utils/printableCard.js';
@@ -35,6 +35,9 @@ const TIER_RANGO_IMG = {
    un tinte plano) y llevan un borde más marcado para no perderse contra la
    imagen. Ver INK.glass* en printableCard.js para el piso de opacidad. */
 const GLASS = { top: INK.glass1, bottom: INK.glass2, border: INK.glassHair };
+
+/* Tono al que va el degradé del fondo (la foto a sangre) en los bordes de la carta. */
+const PHOTO_EDGE = '#05080e';
 
 /* Igual criterio que FRAME en EntityCard.jsx: tintes claros para papel + acento
    vivo en el borde (los fondos casi negros de pantalla se imprimen embarrados). */
@@ -226,8 +229,19 @@ export async function drawCharacterCard(character, user) {
     ctx.restore();
   }
 
-  /* viñeta al 55%: enmarca la foto con el color del lado sin llegar a teñirla */
-  paintVignetteBackground(ctx, 0, 0, CARD_W, CARD_H, 34, frameEdge(side), 0.55);
+  /* Degradé hacia el borde de la carta. Con foto va a negro y por lado: enmarca la
+     imagen sin meterle un velo de color encima, con una banda uniforme en todo el
+     perímetro en vez de una viñeta que cargue las esquinas. El tono es un casi-negro
+     azulado y no #000 puro — en un degradé impreso, el 100% K plano tiende a
+     broncearse y a bandear en las transiciones.
+     Sin foto no hay imagen que enmarcar, así que usa la misma viñeta con el tinte
+     del lado que el resto del catálogo (ver paintVignetteBackground/frameEdge):
+     el negro sobre el fondo claro plano solo lo ensuciaría. */
+  if (photoImg) {
+    paintEdgeFade(ctx, 0, 0, CARD_W, CARD_H, 34, PHOTO_EDGE);
+  } else {
+    paintVignetteBackground(ctx, 0, 0, CARD_W, CARD_H, 34, frameEdge(side));
+  }
 
   ctx.save();
   ctx.beginPath();

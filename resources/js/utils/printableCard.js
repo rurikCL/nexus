@@ -250,6 +250,40 @@ export function paintVignetteBackground(ctx, x, y, w, h, radius, edgeColor, stre
   ctx.restore();
 }
 
+/** Desvanecido de `color` desde cada uno de los 4 bordes hacia adentro — una banda
+    por lado, así el borde se oscurece parejo en todo el perímetro. Es distinto de
+    `paintVignetteBackground`: esa es una viñeta elíptica, que por geometría carga
+    mucho más las esquinas que el medio de los lados; esto da un marco uniforme,
+    que es lo que se busca cuando el fondo es una foto a sangre y el degradé tiene
+    que "morir" contra el filo de la carta. En las esquinas las bandas se suman,
+    por eso el alfa por lado se queda por debajo del tono final buscado. */
+export function paintEdgeFade(ctx, x, y, w, h, radius, color, { band, alpha = 0.62 } = {}) {
+  const size = band ?? Math.round(Math.min(w, h) * 0.24);
+  const a = (mul) => Math.round(alpha * mul * 255).toString(16).padStart(2, '0');
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+
+  const lados = [
+    [x, y, x, y + size, [x, y, w, size]],                     // arriba
+    [x, y + h, x, y + h - size, [x, y + h - size, w, size]],  // abajo
+    [x, y, x + size, y, [x, y, size, h]],                     // izquierda
+    [x + w, y, x + w - size, y, [x + w - size, y, size, h]],  // derecha
+  ];
+  for (const [x0, y0, x1, y1, rect] of lados) {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, `${color}${a(1)}`);
+    g.addColorStop(0.35, `${color}${a(0.45)}`);
+    g.addColorStop(0.7, `${color}${a(0.12)}`);
+    g.addColorStop(1, `${color}00`);
+    ctx.fillStyle = g;
+    ctx.fillRect(...rect);
+  }
+
+  ctx.restore();
+}
+
 const SHIELD_PATH = 'M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z';
 
 /** Dibuja un corazón relleno (pip de Vida) con esquina superior-izquierda en (x, y). */
