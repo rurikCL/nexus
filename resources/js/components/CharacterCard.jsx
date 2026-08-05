@@ -30,6 +30,12 @@ const TIER_RANGO_IMG = {
   granmaestro: '/assets/GRANDMASTER.webp',
 };
 
+/* Estilo de los paneles de datos de esta carta: van encima de la foto a sangre,
+   así que son más translúcidos que los del resto del catálogo (que se apoyan en
+   un tinte plano) y llevan un borde más marcado para no perderse contra la
+   imagen. Ver INK.glass* en printableCard.js para el piso de opacidad. */
+const GLASS = { top: INK.glass1, bottom: INK.glass2, border: INK.glassHair };
+
 /* Igual criterio que FRAME en EntityCard.jsx: tintes claros para papel + acento
    vivo en el borde (los fondos casi negros de pantalla se imprimen embarrados). */
 const SIDE_FRAME = {
@@ -107,25 +113,6 @@ function drawForceIcon(ctx, cx, cy, size, color) {
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.restore();
-}
-
-/** Degradé claro sobre los bordes de la foto — mantiene el centro limpio y funde las
-    esquinas con el fondo claro de la carta (la versión oscura de pantalla se imprimía
-    como un marco negro que se comía la tinta). */
-function paintPhotoVignette(ctx, x, y, w, h, radius) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, radius);
-  ctx.clip();
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const r = Math.max(w, h) * 0.75;
-  const g = ctx.createRadialGradient(cx, cy, r * 0.35, cx, cy, r);
-  g.addColorStop(0, 'rgba(255,255,255,0)');
-  g.addColorStop(1, 'rgba(255,255,255,0.45)');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, y, w, h);
   ctx.restore();
 }
 
@@ -207,24 +194,40 @@ export async function drawCharacterCard(character, user) {
   const innerRight = CARD_W - pad - 22;
   const innerW = innerRight - innerX;
 
-  /* ── marco exterior ── */
+  const classAccent = formaAccent(classInfo);
+
+  /* ── fondo: la foto del personaje a sangre, cubriendo la carta completa ──
+     A diferencia del resto de las cartas del catálogo (que llevan el retrato en
+     una caja de arte), acá la imagen ES el fondo: se recorta al radio exterior de
+     la carta y se ancla arriba, porque en un retrato la cara suele quedar en el
+     tercio superior y `cover` recortaría por el centro. Los paneles de datos van
+     encima en versión "vidrio" (ver GLASS). */
   ctx.fillStyle = side.bg2;
   ctx.beginPath();
   ctx.roundRect(0, 0, CARD_W, CARD_H, 34);
   ctx.fill();
 
-  const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
-  bg.addColorStop(0, side.bg1);
-  bg.addColorStop(1, side.bg2);
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
-  ctx.clip();
-  ctx.fillStyle = bg;
-  ctx.fillRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2);
-  ctx.restore();
+  if (photoImg) {
+    drawImageRounded(ctx, photoImg, 0, 0, CARD_W, CARD_H, 34, null, 0, 'top', 'cover', side.bg2);
+  } else {
+    /* sin foto: degradé del acento de la forma + su ícono gigante como marca de agua */
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(0, 0, CARD_W, CARD_H, 34);
+    ctx.clip();
+    const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
+    bg.addColorStop(0, side.bg1);
+    bg.addColorStop(1, side.bg2);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
+    ctx.globalAlpha = 0.5;
+    drawIcon(ctx, classInfo.icon, CARD_W / 2, CARD_H * 0.42, 340, classAccent, 1.4);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
-  paintVignetteBackground(ctx, pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22, frameEdge(side));
+  /* viñeta al 55%: enmarca la foto con el color del lado sin llegar a teñirla */
+  paintVignetteBackground(ctx, 0, 0, CARD_W, CARD_H, 34, frameEdge(side), 0.55);
 
   ctx.save();
   ctx.beginPath();
@@ -234,14 +237,14 @@ export async function drawCharacterCard(character, user) {
   ctx.stroke();
   ctx.restore();
 
-  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 14, margen superior 12 ── */
+  /* ── cabecera: panel de vidrio, borde 2px redondeado, padding 14, margen superior 12 ── */
   const headerPad = 14;
   const logoR = 30;
   const headerMarginTop = 12;
   const headerTop = pad + headerMarginTop;
   const headerH = Math.max(logoR * 2 + headerPad * 2, 64);
   const headerBottom = headerTop + headerH;
-  paintBoxBg(ctx, innerX, headerTop, innerW, headerH, 10, 2);
+  paintBoxBg(ctx, innerX, headerTop, innerW, headerH, 10, 2, GLASS);
 
   const logoCx = innerX + innerW - headerPad - logoR;
   const logoCy = headerTop + headerH / 2;
@@ -313,45 +316,20 @@ export async function drawCharacterCard(character, user) {
     ctx.fillText(tierLabel.charAt(0), logoCx, logoCy + 9);
   }
 
-  /* ── foto de personaje, con degradé oscuro en los bordes ── */
-  const photoTop = headerBottom + 14;
-  const photoH = 400;
-  const classAccent = formaAccent(classInfo);
-  paintDropShadow(ctx, innerX, photoTop, innerW, photoH, 16);
-  if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}99`, 3, 'top', 'cover');
-  } else {
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
-    ctx.clip();
-    const artBg = ctx.createRadialGradient(
-      innerX + innerW / 2, photoTop + photoH / 2, 20,
-      innerX + innerW / 2, photoTop + photoH / 2, innerW / 1.3,
-    );
-    artBg.addColorStop(0, `${classAccent}2e`);
-    artBg.addColorStop(1, INK.paper);
-    ctx.fillStyle = artBg;
-    ctx.fillRect(innerX, photoTop, innerW, photoH);
-    ctx.globalAlpha = 0.55;
-    drawIcon(ctx, classInfo.icon, innerX + innerW / 2, photoTop + photoH / 2, 150, classAccent, 1.6);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-    ctx.beginPath();
-    ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = `${side.line}99`;
-    ctx.stroke();
-  }
-  paintPhotoVignette(ctx, innerX, photoTop, innerW, photoH, 16);
+  /* ── ventana de arte: la franja entre la cabecera y los paneles de datos, donde
+     la foto de fondo queda a la vista sin nada encima. No se dibuja nada acá; se
+     reserva el alto para que los paneles de abajo caigan en la misma posición que
+     antes (así el resto de la maqueta no se mueve). ── */
+  const artTop = headerBottom + 14;
+  const artH = 400;
 
-  /* ── medalla activa: esquina inferior izquierda de la foto ── */
+  /* ── medalla activa: esquina inferior izquierda de la ventana de arte ── */
   if (medallaActiva) {
     const medallaSize = 56;
     const medallaMargin = 12;
     drawMedallaBadge(
       ctx, medallaImg, medallaActiva.rareza,
-      innerX + medallaMargin + medallaSize / 2, photoTop + photoH - medallaMargin - medallaSize / 2,
+      innerX + medallaMargin + medallaSize / 2, artTop + artH - medallaMargin - medallaSize / 2,
       medallaSize,
     );
   }
@@ -360,11 +338,12 @@ export async function drawCharacterCard(character, user) {
   const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
   const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
 
-  let y = photoTop + photoH + 14;
+  let y = artTop + artH + 14;
   y = paintVidaEscudoBox(ctx, {
     x: innerX, y, w: innerW, vidaVal, escudoVal,
     vidaMeta: STAT_META.vida, escudoMeta: STAT_META.escudo,
     drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
+    boxStyle: GLASS,
   });
   y += 14;
 
@@ -378,7 +357,7 @@ export async function drawCharacterCard(character, user) {
   const saberBoxTop = y;
   const saberBoxH = boxPad2 * 2 + rightColContentH;
   const saberBoxBottom = saberBoxTop + saberBoxH;
-  paintBoxBg(ctx, innerX, saberBoxTop, innerW, saberBoxH, 10);
+  paintBoxBg(ctx, innerX, saberBoxTop, innerW, saberBoxH, 10, 1, GLASS);
 
   const colGap2 = 14;
   const formaColW = innerW * 0.22;
@@ -530,7 +509,7 @@ export async function drawCharacterCard(character, user) {
   const extraBoxTop = saberBoxBottom + 14;
   const extraBoxH = 76;
   const extraBoxBottom = extraBoxTop + extraBoxH;
-  paintBoxBg(ctx, innerX, extraBoxTop, innerW, extraBoxH, 10);
+  paintBoxBg(ctx, innerX, extraBoxTop, innerW, extraBoxH, 10, 1, GLASS);
 
   const cellW = innerW / EXTRA_ORDER.length;
   EXTRA_ORDER.forEach((item, i) => {
@@ -554,7 +533,9 @@ export async function drawCharacterCard(character, user) {
       labelSize -= 1;
       ctx.font = `600 ${labelSize}px "JetBrains Mono"`;
     }
-    ctx.fillStyle = INK.muted;
+    /* tinta de cuerpo, no secundaria: son los rótulos más chicos de la carta (hasta
+       7px) y van sobre vidrio con la foto detrás, donde INK.muted se pierde. */
+    ctx.fillStyle = INK.body;
     ctx.fillText(label, cx, extraBoxTop + 64);
 
     if (i > 0) {
@@ -567,17 +548,22 @@ export async function drawCharacterCard(character, user) {
     }
   });
 
-  /* ── pie: 3 columnas — QR + alias | logo de esgrima | ID de personaje ── */
+  /* ── pie: 3 columnas — QR + alias | logo de esgrima | ID de personaje ──
+     Ahora va dentro de su propio panel de vidrio: antes se apoyaba en el fondo
+     plano de la carta, pero con la foto a sangre detrás el texto y los módulos del
+     QR quedarían sobre la imagen, sin contraste garantizado. ── */
   const footY = extraBoxBottom + 16;
   const footH = 60;
+  const footPad = 12;
+  paintBoxBg(ctx, innerX, footY, innerW, footH, 10, 1, GLASS);
   const qrSize = 48;
   if (qrImg) {
-    drawImageRounded(ctx, qrImg, innerX, footY + (footH - qrSize) / 2, qrSize, qrSize, 8, null);
+    drawImageRounded(ctx, qrImg, innerX + footPad, footY + (footH - qrSize) / 2, qrSize, qrSize, 8, null, 0, 'center', 'contain', 'rgba(0,0,0,0)');
   }
   ctx.textAlign = 'left';
   ctx.fillStyle = INK.muted;
   ctx.font = '400 10px "JetBrains Mono"';
-  const aliasX = innerX + (qrImg ? qrSize + 12 : 0);
+  const aliasX = innerX + footPad + (qrImg ? qrSize + 12 : 0);
   ctx.fillText('ALIAS', aliasX, footY + footH / 2 - 10);
   ctx.fillStyle = INK.strong;
   ctx.font = '700 17px Orbitron';
@@ -589,10 +575,10 @@ export async function drawCharacterCard(character, user) {
   ctx.textAlign = 'right';
   ctx.fillStyle = INK.muted;
   ctx.font = '400 10px "JetBrains Mono"';
-  ctx.fillText('ID PERSONAJE', innerRight, footY + footH / 2 - 10);
+  ctx.fillText('ID PERSONAJE', innerRight - footPad, footY + footH / 2 - 10);
   ctx.fillStyle = INK.strong;
   ctx.font = '700 17px Orbitron';
-  ctx.fillText(idStr, innerRight, footY + footH / 2 + 10);
+  ctx.fillText(idStr, innerRight - footPad, footY + footH / 2 + 10);
 
   return canvas;
 }
