@@ -5,7 +5,7 @@ import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintEdgeFade, paintBoxBg,
-  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge,
+  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge, drawHeartPip, drawShieldPip,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -804,6 +804,9 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     paintJefeAdornments(ctx, pad, cardH, frame.line);
   }
 
+  const forma = Number(entity.forma) || 0;
+  const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
+
   /* Cabecera estilo carta de personaje: columna de fichas a la izquierda y bloque
      tipográfico a la derecha, todo sobre el arte con halo para mantener legibilidad. */
   const headerTop = pad + 8;
@@ -813,7 +816,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const maxPipR = Math.max(rankPipR, statPipR);
   const pipGapY = 6;
   const pipColH = rankPipR * 2 + statPipR * 4 + pipGapY * 2;
-  const headerBottom = headerTop + pipColH + headerPad * 2;
+  const baseHeaderBottom = headerTop + pipColH + headerPad * 2;
 
   const pipCx = innerX + headerPad + maxPipR;
   const pipValueX = pipCx + maxPipR + 8;
@@ -831,6 +834,11 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const textRight = innerRight - headerPad;
   const textLeft = pipValueX + leftLabelW + 12;
   const textMaxW = textRight - textLeft;
+  const leftColRight = textLeft - 12;
+
+  const formaBadgeGap = formaInfo?.img ? 10 : 0;
+  const formaBadgeH = formaInfo?.img ? 82 : 0;
+  const headerBottom = baseHeaderBottom + formaBadgeGap + formaBadgeH;
 
   /* Placa translúcida detrás del bloque tipográfico para mejorar lectura del texto
      sin perder la imagen de fondo. */
@@ -847,7 +855,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   ctx.strokeStyle = 'rgba(255,255,255,0.22)';
   ctx.stroke();
 
-  const drawStatPip = (cy, iconName, color, value, label, pipR, { valueSize = 21, labelSize = 9 } = {}) => {
+  const drawStatPip = (cy, iconName, color, value, label, pipR, { valueSize = 21, labelSize = 9, shape = 'icon' } = {}) => {
     ctx.beginPath();
     ctx.arc(pipCx, cy, pipR, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.72)';
@@ -857,8 +865,13 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     ctx.stroke();
 
     const iconSize = Math.round(pipR * 1.05);
-    const iconOffsetY = iconName === 'shield' ? -1.2 : -0.4;
-    drawIcon(ctx, iconName, pipCx - iconSize / 2, cy - iconSize / 2 + iconOffsetY, iconSize, color, 2);
+    if (shape === 'heart') {
+      drawHeartPip(ctx, pipCx - iconSize / 2, cy - iconSize / 2, iconSize, color);
+    } else if (shape === 'shield') {
+      drawShieldPip(ctx, pipCx - iconSize / 2, cy - iconSize / 2, iconSize, color);
+    } else {
+      drawIcon(ctx, iconName, pipCx, cy, iconSize, color, 2);
+    }
 
     ctx.textAlign = 'left';
     ctx.fillStyle = color;
@@ -875,8 +888,8 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const escudoCy = vidaCy + statPipR + pipGapY + statPipR;
 
   drawStatPip(rankCy, 'star', '#c08a06', nivel, 'NIVEL', rankPipR, { valueSize: 20, labelSize: 9 });
-  drawStatPip(vidaCy, COMBAT_STAT_META.vida.icon, COMBAT_STAT_META.vida.color, entity.vida ?? 0, 'VIDA', statPipR, { valueSize: 27, labelSize: 10 });
-  drawStatPip(escudoCy, COMBAT_STAT_META.escudo.icon, COMBAT_STAT_META.escudo.color, entity.escudo ?? 0, 'ESCUDO', statPipR, { valueSize: 27, labelSize: 10 });
+  drawStatPip(vidaCy, 'heart', COMBAT_STAT_META.vida.color, entity.vida ?? 0, 'VIDA', statPipR, { valueSize: 27, labelSize: 10, shape: 'heart' });
+  drawStatPip(escudoCy, 'shield', COMBAT_STAT_META.escudo.color, entity.escudo ?? 0, 'ESCUDO', statPipR, { valueSize: 27, labelSize: 10, shape: 'shield' });
 
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
 
@@ -900,18 +913,17 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     withInkShadow(() => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1), 7);
   }
 
-  const forma = Number(entity.forma) || 0;
-  const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
   if (formaInfo?.img) {
-    /* Insignia de forma: antes iba en un banner junto al arte principal; con el arte
-       ahora a sangre en toda la carta, queda como sello flotante en la esquina. */
-    const badgeW = 78;
-    const badgeH = 108;
-    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerRight - badgeW, pad + 74, badgeW, badgeH, frame.line, INK.paper);
+    /* La forma vive ahora en la columna izquierda, debajo de los stats, para no competir
+       con el bloque tipográfico principal de la cabecera. */
+    const badgeX = innerX + 4;
+    const badgeY = baseHeaderBottom + formaBadgeGap;
+    const badgeW = Math.max(78, leftColRight - badgeX - 4);
+    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, badgeX, badgeY, badgeW, formaBadgeH, frame.line, 'rgba(255,255,255,0.12)');
   }
 
   const artY = headerBottom + 10;
-  const artH = 260;
+  const artH = Math.max(162, 260 - (headerBottom - baseHeaderBottom));
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'
     ? `Jefe de Asalto · ${Math.max(2, entity.raid_slots || 4)} cupos`
