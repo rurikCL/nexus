@@ -207,24 +207,26 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
 }
 
 /** Encabezado común: nombre (arriba-izq.) + medallón circular (arriba-der.). */
-function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor, halo = false, titleColor = INK.strong }) {
+function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor, halo = false, titleColor = INK.strong, padX = 0 }) {
+  const x = innerX + padX;
+  const right = innerRight - padX;
   ctx.textAlign = 'left';
   const displayName = (title ?? '???').toUpperCase();
-  fitText(ctx, displayName, innerRight - innerX - 66, '30px Orbitron');
+  fitText(ctx, displayName, right - x - 66, '30px Orbitron');
   ctx.fillStyle = titleColor;
-  const drawTitle = () => ctx.fillText(displayName, innerX, pad + 54);
+  const drawTitle = () => ctx.fillText(displayName, x, pad + 54);
   if (halo) withHalo(ctx, drawTitle, 12); else drawTitle();
 
   if (badgeText !== null && badgeText !== undefined) {
-    paintDropShadow(ctx, innerRight - 47, pad + 17, 46, 46, 23, { blur: 7, offsetY: 2 });
+    paintDropShadow(ctx, right - 47, pad + 17, 46, 46, 23, { blur: 7, offsetY: 2 });
     ctx.beginPath();
-    ctx.arc(innerRight - 24, pad + 40, 23, 0, Math.PI * 2);
+    ctx.arc(right - 24, pad + 40, 23, 0, Math.PI * 2);
     ctx.fillStyle = badgeColor;
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = INK.onAccent;
     ctx.font = '800 18px Orbitron';
-    ctx.fillText(String(badgeText).slice(0, 3).toUpperCase(), innerRight - 24, pad + 47);
+    ctx.fillText(String(badgeText).slice(0, 3).toUpperCase(), right - 24, pad + 47);
   }
 }
 
@@ -805,20 +807,26 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const headerBoxBottom = pad + 122;
   paintBoxBg(ctx, innerX, headerBoxTop, innerW, headerBoxBottom - headerBoxTop, 14, 1, HEADER_DARK_STYLE);
 
-  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line, titleColor: HEADER_TITLE_COLOR });
+  /* Espacio interno de la cabecera: sus elementos (nombre, medallón, tipo/facción) se
+     desplazan `headerPadX` hacia adentro para no pegarse al borde del panel. */
+  const headerPadX = 18;
+  const headerInnerX = innerX + headerPadX;
+  const headerInnerRight = innerRight - headerPadX;
+
+  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line, titleColor: HEADER_TITLE_COLOR, padX: headerPadX });
 
   ctx.textAlign = 'left';
-  drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1);
+  drawIcon(ctx, icon, headerInnerX + 11, pad + 90, 22, frame.line, 2.1);
   ctx.fillStyle = frame.line;
   ctx.font = '700 16px "JetBrains Mono"';
-  ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', innerX + 30, pad + 96);
+  ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', headerInnerX + 30, pad + 96);
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
   if (sub) {
     ctx.textAlign = 'right';
     ctx.fillStyle = HEADER_SUB_COLOR;
-    const size = fitText(ctx, sub, innerW - 160, '14px "JetBrains Mono"', 11);
+    const size = fitText(ctx, sub, innerW - 160 - headerPadX * 2, '14px "JetBrains Mono"', 11);
     ctx.font = `${size}px "JetBrains Mono"`;
-    ctx.fillText(sub, innerRight - 6, pad + 96);
+    ctx.fillText(sub, headerInnerRight, pad + 96);
   }
 
   const forma = Number(entity.forma) || 0;
