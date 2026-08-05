@@ -808,16 +808,46 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
      tipográfico a la derecha, todo sobre el arte con halo para mantener legibilidad. */
   const headerTop = pad + 8;
   const headerPad = 10;
-  const pipR = 17;
+  const rankPipR = 17;
+  const statPipR = 21;
+  const maxPipR = Math.max(rankPipR, statPipR);
   const pipGapY = 6;
-  const pipColH = pipR * 2 * 3 + pipGapY * 2;
+  const pipColH = rankPipR * 2 + statPipR * 4 + pipGapY * 2;
   const headerBottom = headerTop + pipColH + headerPad * 2;
 
-  const pipCx = innerX + headerPad + pipR;
-  const pipValueX = pipCx + pipR + 7;
-  const leftLabelW = 72;
+  const pipCx = innerX + headerPad + maxPipR;
+  const pipValueX = pipCx + maxPipR + 8;
+  const leftLabelW = 86;
 
-  const drawStatPip = (cy, iconName, color, value, label) => {
+  const withInkShadow = (draw, blur = 8) => {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+    ctx.shadowBlur = blur;
+    ctx.shadowOffsetY = 1;
+    draw();
+    ctx.restore();
+  };
+
+  const textRight = innerRight - headerPad;
+  const textLeft = pipValueX + leftLabelW + 12;
+  const textMaxW = textRight - textLeft;
+
+  /* Placa translúcida detrás del bloque tipográfico para mejorar lectura del texto
+     sin perder la imagen de fondo. */
+  const textPlateY = headerTop + headerPad - 7;
+  const textPlateH = pipColH + 14;
+  const textPlateGrad = ctx.createLinearGradient(0, textPlateY, 0, textPlateY + textPlateH);
+  textPlateGrad.addColorStop(0, 'rgba(5, 9, 18, 0.58)');
+  textPlateGrad.addColorStop(1, 'rgba(5, 9, 18, 0.42)');
+  ctx.beginPath();
+  ctx.roundRect(textLeft - 8, textPlateY, textMaxW + 14, textPlateH, 12);
+  ctx.fillStyle = textPlateGrad;
+  ctx.fill();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.stroke();
+
+  const drawStatPip = (cy, iconName, color, value, label, pipR, { valueSize = 21, labelSize = 9 } = {}) => {
     ctx.beginPath();
     ctx.arc(pipCx, cy, pipR, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.72)';
@@ -825,49 +855,49 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     ctx.lineWidth = 2.1;
     ctx.strokeStyle = color;
     ctx.stroke();
-    drawIcon(ctx, iconName, pipCx - 9, cy - 9, 18, color, 2);
+
+    const iconSize = Math.round(pipR * 1.05);
+    const iconOffsetY = iconName === 'shield' ? -1.2 : -0.4;
+    drawIcon(ctx, iconName, pipCx - iconSize / 2, cy - iconSize / 2 + iconOffsetY, iconSize, color, 2);
 
     ctx.textAlign = 'left';
     ctx.fillStyle = color;
-    ctx.font = '800 21px Orbitron';
-    withHalo(ctx, () => ctx.fillText(String(value), pipValueX, cy + 7), 7);
+    ctx.font = `800 ${valueSize}px Orbitron`;
+    withInkShadow(() => ctx.fillText(String(value), pipValueX, cy + valueSize * 0.35), 7);
 
-    ctx.fillStyle = INK.muted;
-    ctx.font = '700 9px "JetBrains Mono"';
-    withHalo(ctx, () => ctx.fillText(label, pipValueX + 30, cy + 4), 5);
+    ctx.fillStyle = '#e7edf8';
+    ctx.font = `700 ${labelSize}px "JetBrains Mono"`;
+    withInkShadow(() => ctx.fillText(label, pipValueX + 36, cy + 4), 5);
   };
 
-  const rankCy = headerTop + headerPad + pipR;
-  const vidaCy = rankCy + pipR * 2 + pipGapY;
-  const escudoCy = vidaCy + pipR * 2 + pipGapY;
+  const rankCy = headerTop + headerPad + rankPipR;
+  const vidaCy = rankCy + rankPipR + pipGapY + statPipR;
+  const escudoCy = vidaCy + statPipR + pipGapY + statPipR;
 
-  drawStatPip(rankCy, 'star', '#c08a06', nivel, 'NIVEL');
-  drawStatPip(vidaCy, COMBAT_STAT_META.vida.icon, COMBAT_STAT_META.vida.color, entity.vida ?? 0, 'VIDA');
-  drawStatPip(escudoCy, COMBAT_STAT_META.escudo.icon, COMBAT_STAT_META.escudo.color, entity.escudo ?? 0, 'ESCUDO');
+  drawStatPip(rankCy, 'star', '#c08a06', nivel, 'NIVEL', rankPipR, { valueSize: 20, labelSize: 9 });
+  drawStatPip(vidaCy, COMBAT_STAT_META.vida.icon, COMBAT_STAT_META.vida.color, entity.vida ?? 0, 'VIDA', statPipR, { valueSize: 27, labelSize: 10 });
+  drawStatPip(escudoCy, COMBAT_STAT_META.escudo.icon, COMBAT_STAT_META.escudo.color, entity.escudo ?? 0, 'ESCUDO', statPipR, { valueSize: 27, labelSize: 10 });
 
-  const textRight = innerRight - headerPad;
-  const textLeft = pipValueX + leftLabelW + 12;
-  const textMaxW = textRight - textLeft;
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
 
   ctx.textAlign = 'right';
   const kickerText = (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC').toUpperCase();
-  const kickerSize = fitText(ctx, kickerText, textMaxW, '13px "JetBrains Mono"', 9);
-  ctx.fillStyle = frame.line;
+  const kickerSize = fitText(ctx, kickerText, textMaxW, '14px "JetBrains Mono"', 10);
+  ctx.fillStyle = '#d7e5ff';
   ctx.font = `700 ${kickerSize}px "JetBrains Mono"`;
-  withHalo(ctx, () => ctx.fillText(kickerText, textRight, headerTop + headerPad + 10), 6);
+  withInkShadow(() => ctx.fillText(kickerText, textRight, headerTop + headerPad + 11), 8);
 
   const nameText = (entity.nombre ?? '???').toUpperCase();
-  const nameSize = fitText(ctx, nameText, textMaxW, '44px Orbitron', 20);
-  ctx.fillStyle = INK.strong;
+  const nameSize = fitText(ctx, nameText, textMaxW, '46px Orbitron', 24);
+  ctx.fillStyle = '#ffffff';
   ctx.font = `800 ${nameSize}px Orbitron`;
-  withHalo(ctx, () => ctx.fillText(nameText, textRight, headerTop + headerPad + 20 + nameSize * 0.74), 12);
+  withInkShadow(() => ctx.fillText(nameText, textRight, headerTop + headerPad + 20 + nameSize * 0.74), 12);
 
   if (sub) {
-    const subSize = fitText(ctx, sub, textMaxW, '13px "JetBrains Mono"', 10);
-    ctx.fillStyle = INK.muted;
+    const subSize = fitText(ctx, sub, textMaxW, '14px "JetBrains Mono"', 10);
+    ctx.fillStyle = '#e8eef9';
     ctx.font = `italic ${subSize}px "JetBrains Mono"`;
-    withHalo(ctx, () => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1), 6);
+    withInkShadow(() => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1), 7);
   }
 
   const forma = Number(entity.forma) || 0;
