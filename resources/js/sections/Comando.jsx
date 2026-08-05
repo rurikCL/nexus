@@ -94,16 +94,16 @@ export function mapApiCharacterToStoreCharacter(character, fallback = {}) {
 }
 
 export const SIDES = {
-  luminoso: { label: 'Lado Luminoso', color: '#3aa0ff', img: '/assets/lado-luminoso.png', desc: 'Disciplina, honor y protección' },
-  oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.png',   desc: 'Pasión, ambición y poder' },
+  luminoso: { label: 'Lado Luminoso', color: '#3aa0ff', img: '/assets/lado-luminoso.webp', desc: 'Disciplina, honor y protección' },
+  oscuro:   { label: 'Lado Oscuro',   color: '#ff2d45', img: '/assets/lado-oscuro.webp',   desc: 'Pasión, ambición y poder' },
 };
 
 export const TIER_RANGO_IMG = {
-  iniciado:    '/assets/INITIATE_sm.png',
-  padawan:     '/assets/PADAWAN_sm.png',
-  caballero:   '/assets/KNIGHT_sm.png',
-  maestro:     '/assets/MASTER_sm.png',
-  granmaestro: '/assets/GRANDMASTER_sm.png',
+  iniciado:    '/assets/INITIATE_sm.webp',
+  padawan:     '/assets/PADAWAN_sm.webp',
+  caballero:   '/assets/KNIGHT_sm.webp',
+  maestro:     '/assets/MASTER_sm.webp',
+  granmaestro: '/assets/GRANDMASTER_sm.webp',
 };
 
 export function mediaUrl(path) {
@@ -983,7 +983,7 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
                         <>
                           <Icon name="user" size={34} />
                           <img
-                            src="/assets/esgrimaGemini.png" alt="" aria-hidden="true"
+                            src="/assets/esgrimaGemini.webp" alt="" aria-hidden="true"
                             style={{
                               position: 'absolute', right: 3, bottom: 3, width: 20, height: 20,
                               objectFit: 'contain', pointerEvents: 'none',
@@ -1239,16 +1239,16 @@ export function CharacterCreation({ user, S, onCharacterCreated }) {
 
 /* ===================== MI PERSONAJE ===================== */
 export const CLASES_JEDI = [
-  { id: 'Sentinela', label: 'Centinela', desc: 'Equilibrio entre combate y sabiduría', color: '#E6B325', img: '/assets/CENTINELA.png' },
-  { id: 'Guardian',  label: 'Guardián',  desc: 'Maestros del combate con sable de luz', color: '#38cdf0', img: '/assets/GUARDIAN.png'  },
-  { id: 'Consul',    label: 'Cónsul',    desc: 'Fuerza y diplomacia sobre la acción',   color: '#10b981', img: '/assets/CONSUL.png'    },
+  { id: 'Sentinela', label: 'Centinela', desc: 'Equilibrio entre combate y sabiduría', color: '#E6B325', img: '/assets/CENTINELA.webp' },
+  { id: 'Guardian',  label: 'Guardián',  desc: 'Maestros del combate con sable de luz', color: '#38cdf0', img: '/assets/GUARDIAN.webp'  },
+  { id: 'Consul',    label: 'Cónsul',    desc: 'Fuerza y diplomacia sobre la acción',   color: '#10b981', img: '/assets/CONSUL.webp'    },
 ];
 
 export const RANGOS_JEDI = [
-  { id: 'iniciado',  label: 'Iniciado',  img: '/assets/INITIATE.png'  },
-  { id: 'padawan',   label: 'Padawan',   img: '/assets/PADAWAN.png'   },
-  { id: 'caballero', label: 'Caballero', img: '/assets/KNIGHT.png'    },
-  { id: 'maestro',   label: 'Maestro',   img: '/assets/MASTER.png'    },
+  { id: 'iniciado',  label: 'Iniciado',  img: '/assets/INITIATE.webp'  },
+  { id: 'padawan',   label: 'Padawan',   img: '/assets/PADAWAN.webp'   },
+  { id: 'caballero', label: 'Caballero', img: '/assets/KNIGHT.webp'    },
+  { id: 'maestro',   label: 'Maestro',   img: '/assets/MASTER.webp'    },
 ];
 
 

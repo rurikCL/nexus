@@ -147,7 +147,7 @@ export function Avatar({ c, size = 40, ring, style }) {
       fontSize: size * 0.4, boxShadow: ring ? `0 0 0 2px ${c.color}66, 0 0 16px -4px ${c.color}` : 'none', ...style }}>
       {c.initials}
       {c.side && size >= 36 && (
-        <img src={c.side === 'oscuro' ? '/assets/lado-oscuro.png' : '/assets/lado-luminoso.png'} alt="" style={{
+        <img src={c.side === 'oscuro' ? '/assets/lado-oscuro.webp' : '/assets/lado-luminoso.webp'} alt="" style={{
           position: 'absolute', bottom: -2, right: -2, width: size * 0.42, height: size * 0.42,
           filter: c.side === 'oscuro' ? 'drop-shadow(0 1px 3px rgba(255,45,69,.7))' : 'drop-shadow(0 1px 3px rgba(58,160,255,.7))' }} />
       )}

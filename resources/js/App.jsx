@@ -897,7 +897,7 @@ export default function App({ user, onLogout, onUserUpdate, onTransmision }) {
       >
         {/* Logo */}
         <div style={{ padding: '14px', borderBottom: '1px solid var(--holo-line)', display: 'flex', alignItems: 'center', gap: 9, height: 57, flexShrink: 0 }}>
-          <img src="/assets/isotipo.png" alt="" style={{ width: 28, height: 28, flexShrink: 0, filter: 'drop-shadow(0 0 10px rgba(230,179,37,.4))' }} />
+          <img src="/assets/isotipo.webp" alt="" style={{ width: 28, height: 28, flexShrink: 0, filter: 'drop-shadow(0 0 10px rgba(230,179,37,.4))' }} />
           <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity .15s' }}>
             <div className="nx-display" style={{ fontSize: 15, letterSpacing: '0.08em', color: 'var(--txt)' }}>NÉXUS</div>
             <div className="nx-data" style={{ fontSize: 8, color: 'var(--holo)', letterSpacing: '0.22em' }}>HOLOCRON DE COMBATE</div>

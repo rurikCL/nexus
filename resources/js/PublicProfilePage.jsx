@@ -81,7 +81,7 @@ export default function PublicProfilePage({ handle }) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#04070f' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <img src="/assets/isotipo.png" alt="" style={{ width: 44, opacity: 0.7, animation: 'nx-pulse 1.4s infinite' }} />
+          <img src="/assets/isotipo.webp" alt="" style={{ width: 44, opacity: 0.7, animation: 'nx-pulse 1.4s infinite' }} />
           <div className="nx-data" style={{ fontSize: 11, color: 'var(--holo)', letterSpacing: '0.2em' }}>CARGANDO PERFIL...</div>
         </div>
       </div>

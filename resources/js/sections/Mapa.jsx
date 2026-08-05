@@ -652,7 +652,7 @@ function GalaxiaView({ onSelectSistema, side }) {
         }}>
           <div style={{ textAlign: 'center' }}>
             <img
-              src={NAVE_FALLBACK_BY_SIDE[side] ?? '/assets/naveJedi.png'}
+              src={NAVE_FALLBACK_BY_SIDE[side] ?? '/assets/naveJedi.webp'}
               alt="Nave"
               style={{ width: 200, height: 'auto', objectFit: 'contain', margin: '0 auto 28px', display: 'block', filter: 'drop-shadow(0 0 24px rgba(56,205,240,0.85))', animation: 'nx-hover-bob 1.4s ease-in-out infinite' }}
             />
@@ -690,8 +690,8 @@ function HyperspaceLines() {
 
 /* ─── ANIMACIONES DE VIAJE ───────────────────────────────── */
 const NAVE_FALLBACK_BY_SIDE = {
-  luminoso: '/assets/naveJedi.png',
-  oscuro:   '/assets/naveSith.png',
+  luminoso: '/assets/naveJedi.webp',
+  oscuro:   '/assets/naveSith.webp',
 };
 
 function SpaceshipAnim({ side }) {
@@ -755,8 +755,8 @@ function SpaceshipAnim({ side }) {
 }
 
 const VEHICLE_IMAGES_BY_SIDE = {
-  luminoso: ['/assets/transporteJedi.png', '/assets/motoJedi.png'],
-  oscuro:   ['/assets/transporteSith.png', '/assets/motoSith.png'],
+  luminoso: ['/assets/transporteJedi.webp', '/assets/motoJedi.webp'],
+  oscuro:   ['/assets/transporteSith.webp', '/assets/motoSith.webp'],
 };
 
 function VehicleAnim({ side }) {

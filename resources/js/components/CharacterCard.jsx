@@ -23,11 +23,11 @@ const TIER_COLOR = {
 };
 /* Mismos assets que RANGOS_JEDI en Comando.jsx (apartado "Rango" de Mi Personaje). */
 const TIER_RANGO_IMG = {
-  iniciado:    '/assets/INITIATE.png',
-  padawan:     '/assets/PADAWAN.png',
-  caballero:   '/assets/KNIGHT.png',
-  maestro:     '/assets/MASTER.png',
-  granmaestro: '/assets/GRANDMASTER.png',
+  iniciado:    '/assets/INITIATE.webp',
+  padawan:     '/assets/PADAWAN.webp',
+  caballero:   '/assets/KNIGHT.webp',
+  maestro:     '/assets/MASTER.webp',
+  granmaestro: '/assets/GRANDMASTER.webp',
 };
 
 /* Igual criterio que FRAME en EntityCard.jsx: tintes claros para papel + acento

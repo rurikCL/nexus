@@ -165,7 +165,7 @@ export default function TutorialWizard({ user, onComplete }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img
-            src="/assets/isotipo.png" alt=""
+            src="/assets/isotipo.webp" alt=""
             style={{ width: 28, filter: 'drop-shadow(0 0 8px var(--holo))', animation: 'nx-pulse 2.5s infinite' }}
           />
           <div>
@@ -269,7 +269,7 @@ function StepBienvenida({ user }) {
     <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32 }}>
       <div style={{ position: 'relative', display: 'inline-block', marginTop: 8 }}>
         <img
-          src="/assets/isotipo.png" alt=""
+          src="/assets/isotipo.webp" alt=""
           style={{ width: 80, filter: 'drop-shadow(0 0 24px var(--holo))', animation: 'nx-pulse 2.5s infinite' }}
         />
         {/* Orbit ring */}

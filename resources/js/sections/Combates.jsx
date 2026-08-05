@@ -43,7 +43,10 @@ function sumPenalties(pens) {
   if (pens.includes('descalificado')) return Infinity;
   return pens.reduce((s, k) => s + (PENALTY_TYPES.find(p => p.key === k)?.pts ?? 0), 0);
 }
-const charImg = (c) => `/assets/${c.cls.charAt(0).toUpperCase() + c.cls.slice(1)}.png`;
+/* Imagen de la forma del personaje. Se resuelve desde NX.CLASSES en vez de armar la ruta a mano
+   (antes: `/assets/${Cls}.png`): así el archivo y su formato viven en un solo lugar y no se rompe
+   al cambiarlos —lo que pasó al pasar las formas a .webp—. */
+const charImg = (c) => NX.CLASSES.find(k => k.id === c?.cls)?.img ?? null;
 
 function ScorePicker({ value, onChange, labels, color, sm }) {
   return (

@@ -154,7 +154,7 @@ export function wrapText(ctx, text, cx, y, maxWidth, lineHeight, maxLines = Infi
   return cy;
 }
 
-const CARD_LOGO_URL = '/assets/esgrimaGemini.png';
+const CARD_LOGO_URL = '/assets/esgrimaGemini.webp';
 let cardLogoPromise = null;
 
 /** Sello del logo de esgrima en la esquina inferior derecha de la carta completa — carga la imagen una sola vez y la cachea entre llamadas. */

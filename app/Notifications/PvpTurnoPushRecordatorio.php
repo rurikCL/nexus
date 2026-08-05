@@ -48,6 +48,9 @@ class PvpTurnoPushRecordatorio extends Notification implements ShouldQueue
         return (new WebPushMessage)
             ->title('Sigue esperando tu jugada')
             ->body("vs {$this->opponentName} — Tu combate PvP sigue activo")
+            /* Icono de notificación PUSH: se queda en PNG a propósito. Lo renderiza la capa de
+               notificaciones del sistema operativo, no el navegador, y el soporte de WebP ahí no
+               es universal (Safari/iOS). El resto de los usos de isotipo en la app sí usan .webp. */
             ->icon('/assets/isotipo.png')
             ->data(['url' => '/mapa'])
             ->tag('nexus-pvp-combat-'.$this->combatId);

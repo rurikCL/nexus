@@ -362,7 +362,7 @@ export function PublicProfile({ c, S, onClose, onChallenge }) {
           <div style={{ position: 'relative', zIndex: 1 }}>
             <div className="nx-avatar nx-hex" style={{ width: 110, height: 122, background: `linear-gradient(135deg, ${c.color}, ${c.color}88)`, fontSize: 40, border: 'none' }}>{c.initials}</div>
             <div className="nx-hex" style={{ position: 'absolute', inset: -2, border: `1.5px solid ${c.saber}`, boxShadow: `0 0 22px -6px ${c.saber}`, pointerEvents: 'none' }} />
-            {c.gold && <img src="/assets/isotipo.png" alt="" style={{ position: 'absolute', bottom: -6, right: -10, width: 40, height: 40, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }} />}
+            {c.gold && <img src="/assets/isotipo.webp" alt="" style={{ position: 'absolute', bottom: -6, right: -10, width: 40, height: 40, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,.6))' }} />}
           </div>
           <div style={{ position: 'relative', zIndex: 1, flex: 1, minWidth: 220 }}>
             {c.sector && (

@@ -49,7 +49,7 @@ function CardShell({ children }) {
       <div className="nx-panel nx-panel-glow nx-fade" style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 420, margin: '0 16px', padding: 0 }}>
         {/* Logo */}
         <div style={{ padding: '28px 32px 22px', borderBottom: '1px solid var(--holo-line)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <img src="/assets/isotipo.png" alt="NÉXUS" style={{ width: 52, height: 52, filter: 'drop-shadow(0 0 18px rgba(230,179,37,.5))' }} />
+          <img src="/assets/isotipo.webp" alt="NÉXUS" style={{ width: 52, height: 52, filter: 'drop-shadow(0 0 18px rgba(230,179,37,.5))' }} />
           <div style={{ textAlign: 'center' }}>
             <div className="nx-display" style={{ fontSize: 22, letterSpacing: '0.1em', color: 'var(--txt)' }}>NÉXUS</div>
             <div className="nx-data" style={{ fontSize: 10, color: 'var(--holo)', letterSpacing: '0.28em', marginTop: 3 }}>HOLOCRON DE COMBATE</div>
