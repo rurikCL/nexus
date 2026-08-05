@@ -5,9 +5,9 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintVignetteBackground, paintVidaEscudoBox, paintBoxBg,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintVignetteBackground, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
-  INK, PRINT_ACCENT, formaAccent, paintDropShadow, frameEdge,
+  INK, PRINT_ACCENT, formaAccent, paintDropShadow, frameEdge, drawHeartPip, drawShieldPip,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -110,25 +110,6 @@ function drawForceIcon(ctx, cx, cy, size, color) {
   ctx.restore();
 }
 
-/** Degradé claro sobre los bordes de la foto — mantiene el centro limpio y funde las
-    esquinas con el fondo claro de la carta (la versión oscura de pantalla se imprimía
-    como un marco negro que se comía la tinta). */
-function paintPhotoVignette(ctx, x, y, w, h, radius) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, radius);
-  ctx.clip();
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const r = Math.max(w, h) * 0.75;
-  const g = ctx.createRadialGradient(cx, cy, r * 0.35, cx, cy, r);
-  g.addColorStop(0, 'rgba(255,255,255,0)');
-  g.addColorStop(1, 'rgba(255,255,255,0.45)');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, y, w, h);
-  ctx.restore();
-}
-
 /* Mismos tonos que MEDALLA_RAREZA_COLOR en ui.jsx (canvas 2D no puede resolver
    var(--css)), en la variante oscurecida para impresión. */
 const MEDALLA_RAREZA_COLOR = {
@@ -213,18 +194,63 @@ export async function drawCharacterCard(character, user) {
   ctx.roundRect(0, 0, CARD_W, CARD_H, 34);
   ctx.fill();
 
+  const artX = pad;
+  const artY = pad;
+  const artW = CARD_W - pad * 2;
+  const artH = CARD_H - pad * 2;
+  const classAccent = formaAccent(classInfo);
+
   const bg = ctx.createLinearGradient(0, 0, 0, CARD_H);
   bg.addColorStop(0, side.bg1);
   bg.addColorStop(1, side.bg2);
   ctx.save();
   ctx.beginPath();
-  ctx.roundRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
+  ctx.roundRect(artX, artY, artW, artH, 22);
   ctx.clip();
   ctx.fillStyle = bg;
-  ctx.fillRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2);
+  ctx.fillRect(artX, artY, artW, artH);
   ctx.restore();
 
-  paintVignetteBackground(ctx, pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22, frameEdge(side));
+  paintVignetteBackground(ctx, artX, artY, artW, artH, 22, frameEdge(side));
+
+  /* ── arte: la foto del personaje ocupa TODA la carta como fondo ──────────────
+     Encima va un velo blanco: la paleta de la carta es de papel (texto oscuro sobre
+     superficies blancas translúcidas, ver INK), así que sin aclarar el arte los cuadros
+     de datos pierden contraste sobre un retrato oscuro. */
+  if (photoImg) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(artX, artY, artW, artH, 22);
+    ctx.clip();
+
+    const scale = Math.max(artW / photoImg.width, artH / photoImg.height);
+    const dw = photoImg.width * scale;
+    const dh = photoImg.height * scale;
+    /* Anclado arriba: en un retrato la cabeza es lo que no se puede recortar. */
+    ctx.drawImage(photoImg, artX + (artW - dw) / 2, artY, dw, dh);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.34)';
+    ctx.fillRect(artX, artY, artW, artH);
+    ctx.restore();
+  } else {
+    /* Sin foto: degradé radial con el acento de la forma, como antes. */
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(artX, artY, artW, artH, 22);
+    ctx.clip();
+    const artBg = ctx.createRadialGradient(
+      artX + artW / 2, artY + artH / 2, 20,
+      artX + artW / 2, artY + artH / 2, artW / 1.1,
+    );
+    artBg.addColorStop(0, `${classAccent}2e`);
+    artBg.addColorStop(1, INK.paper);
+    ctx.fillStyle = artBg;
+    ctx.fillRect(artX, artY, artW, artH);
+    ctx.globalAlpha = 0.4;
+    drawIcon(ctx, classInfo.icon, artX + artW / 2, artY + artH / 2, 220, classAccent, 1.6);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.beginPath();
@@ -234,148 +260,154 @@ export async function drawCharacterCard(character, user) {
   ctx.stroke();
   ctx.restore();
 
-  /* ── cabecera: fondo negro semitransparente, borde 2px redondeado, padding 14, margen superior 12 ── */
-  const headerPad = 14;
-  const logoR = 30;
-  const headerMarginTop = 12;
-  const headerTop = pad + headerMarginTop;
-  const headerH = Math.max(logoR * 2 + headerPad * 2, 64);
+  /* ── cabecera ────────────────────────────────────────────────────────────────
+     Dos columnas sobre el arte, al estilo de las cartas de juego: a la izquierda una
+     pila de fichas (rango → vida → escudo), a la derecha el título asignado, el nombre
+     en grande y el grito de guerra. */
+  const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
+  const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
+
+  const headerPad = 16;
+  const headerTop = pad + 12;
+  const pipR = 24;                       // radio de cada ficha de la columna izquierda
+  const pipGapY = 9;
+  const pipColH = pipR * 2 * 3 + pipGapY * 2;
+  const headerH = pipColH + headerPad * 2;
   const headerBottom = headerTop + headerH;
-  paintBoxBg(ctx, innerX, headerTop, innerW, headerH, 10, 2);
+  /* Sin caja: la cabecera va directo sobre el arte. Como el texto es oscuro y el arte puede
+     ser cualquier cosa, cada texto se dibuja con un halo blanco (ver conHalo) que cumple el
+     papel de separación que antes hacía el cuadro. */
 
-  const logoCx = innerX + innerW - headerPad - logoR;
-  const logoCy = headerTop + headerH / 2;
-  const nameMaxW = logoCx - logoR - 14 - (innerX + headerPad);
+  /* Envuelve un dibujo de texto con un halo blanco, para que se lea sobre cualquier arte. */
+  const conHalo = (dibujar, blur = 10) => {
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,255,255,0.95)';
+    ctx.shadowBlur = blur;
+    dibujar();
+    dibujar();   // dos pasadas: un solo shadowBlur queda muy tenue bajo texto grande
+    ctx.restore();
+  };
 
-  ctx.textAlign = 'left';
-  const nameText = `${tierLabel} ${character.name ?? '???'}`;
-  fitText(ctx, nameText, nameMaxW, '26px Orbitron');
-  ctx.fillStyle = INK.strong;
-  const nameY = headerTop + headerPad + 26;
-  ctx.fillText(nameText, innerX + headerPad, nameY);
+  /* Columna izquierda: ficha circular con el ícono + el total al lado. */
+  const pipCx = innerX + headerPad + pipR;
+  const pipValueX = pipCx + pipR + 9;
+  const leftLabelW = 96;                 // espacio para "GRANMAESTRO" y para los totales
+  /* `dibujarForma` recibe (x, y, size) con la esquina superior-izquierda: se usan las mismas
+     siluetas de corazón/escudo que ya tenía la carta (drawHeartPip/drawShieldPip), no ICON_PATHS
+     —ahí no hay un corazón, y STAT_META.vida trae un rayo—. */
+  const drawStatPip = (cy, dibujarForma, color, value) => {
+    ctx.beginPath();
+    ctx.arc(pipCx, cy, pipR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    const formaSize = 28;   // ícono dentro de la ficha
+    dibujarForma(pipCx - formaSize / 2, cy - formaSize / 2, formaSize);
 
-  /* ── sub-línea: título activo (izq., dorado) + grito de guerra (der., en cursiva/cita) ── */
-  const bio = character.bio ?? '';
-  const tituloText = (character.titulo_activo?.nombre ?? '').toUpperCase();
-  if (tituloText || bio) {
-    const subY = nameY + 20;
-    const subGap = 14;
-    const subColW = (nameMaxW - subGap) / 2;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = color;
+    ctx.font = '800 30px Orbitron';
+    conHalo(() => ctx.fillText(String(value), pipValueX, cy + 11), 8);
+  };
 
-    if (tituloText) {
-      ctx.textAlign = 'left';
-      const tituloSize = fitText(ctx, tituloText, subColW, '13px "JetBrains Mono"', 9);
-      ctx.font = `700 ${tituloSize}px "JetBrains Mono"`;
-      ctx.fillStyle = '#c08a06';
-      ctx.fillText(tituloText, innerX + headerPad, subY);
-    }
+  const rankCy = headerTop + headerPad + pipR;
+  const vidaCy = rankCy + pipR * 2 + pipGapY;
+  const escudoCy = vidaCy + pipR * 2 + pipGapY;
 
-    if (bio) {
-      const cryText = `“${bio}”`;
-      const cryColX = innerX + headerPad + nameMaxW;
-      ctx.textAlign = 'right';
-      const crySize = fitText(ctx, cryText, subColW, '13px "JetBrains Mono"', 9);
-      ctx.font = `${crySize}px "JetBrains Mono"`;
-      ctx.fillStyle = INK.muted;
-      ctx.fillText(cryText, cryColX, subY);
-    }
-  }
-
+  /* Ficha de rango: la imagen del tier recortada en el círculo, con aro del color del tier. */
   if (rankImg) {
-    paintDropShadow(ctx, logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2, logoR, { blur: 7, offsetY: 2 });
     ctx.save();
     ctx.beginPath();
-    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
+    ctx.arc(pipCx, rankCy, pipR, 0, Math.PI * 2);
     ctx.clip();
     ctx.fillStyle = INK.paper;
-    ctx.fillRect(logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2);
-    const scale = Math.max((logoR * 2) / rankImg.width, (logoR * 2) / rankImg.height);
-    const dw = rankImg.width * scale;
-    const dh = rankImg.height * scale;
-    ctx.drawImage(rankImg, logoCx - dw / 2, logoCy - dh / 2, dw, dh);
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
-    ctx.save();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = tierColor;
-    ctx.stroke();
+    ctx.fillRect(pipCx - pipR, rankCy - pipR, pipR * 2, pipR * 2);
+    const rs = Math.max((pipR * 2) / rankImg.width, (pipR * 2) / rankImg.height);
+    ctx.drawImage(rankImg, pipCx - (rankImg.width * rs) / 2, rankCy - (rankImg.height * rs) / 2, rankImg.width * rs, rankImg.height * rs);
     ctx.restore();
   } else {
-    paintDropShadow(ctx, logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2, logoR, { blur: 7, offsetY: 2 });
     ctx.beginPath();
-    ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
+    ctx.arc(pipCx, rankCy, pipR, 0, Math.PI * 2);
     ctx.fillStyle = tierColor;
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = INK.onAccent;
-    ctx.font = '800 26px Orbitron';
-    ctx.fillText(tierLabel.charAt(0), logoCx, logoCy + 9);
+    ctx.font = '800 22px Orbitron';
+    ctx.fillText(tierLabel.charAt(0), pipCx, rankCy + 8);
+  }
+  ctx.beginPath();
+  ctx.arc(pipCx, rankCy, pipR, 0, Math.PI * 2);
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = tierColor;
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = tierColor;
+  /* Ancho reservado a la etiqueta del rango: define dónde arranca el bloque de texto de la
+     derecha, así no se pisan (con "GRANMAESTRO", el más largo, entra justo). */
+  const tierMaxW = leftLabelW;
+  const tierSize = fitText(ctx, tierLabel.toUpperCase(), tierMaxW, '13px "JetBrains Mono"', 9);
+  ctx.font = `700 ${tierSize}px "JetBrains Mono"`;
+  conHalo(() => ctx.fillText(tierLabel.toUpperCase(), pipValueX, rankCy + 5), 7);
+
+  drawStatPip(vidaCy, (x, y, s) => drawHeartPip(ctx, x, y, s, STAT_META.vida.color), STAT_META.vida.color, vidaVal);
+  drawStatPip(escudoCy, (x, y, s) => drawShieldPip(ctx, x, y, s, STAT_META.escudo.color), STAT_META.escudo.color, escudoVal);
+
+  /* Columna derecha: título asignado → nombre → grito de guerra, alineados a la derecha. */
+  const textRight = innerX + innerW - headerPad;
+  const textLeft = pipValueX + leftLabelW + 16;
+  const textMaxW = textRight - textLeft;
+  const bio = character.bio ?? '';
+  const tituloText = (character.titulo_activo?.nombre ?? '').toUpperCase();
+
+  ctx.textAlign = 'right';
+  if (tituloText) {
+    const tSize = fitText(ctx, tituloText, textMaxW, '15px "JetBrains Mono"', 9);
+    ctx.font = `700 ${tSize}px "JetBrains Mono"`;
+    ctx.fillStyle = INK.muted;
+    conHalo(() => ctx.fillText(tituloText, textRight, headerTop + headerPad + 13), 7);
   }
 
-  /* ── foto de personaje, con degradé oscuro en los bordes ── */
-  const photoTop = headerBottom + 14;
-  const photoH = 400;
-  const classAccent = formaAccent(classInfo);
-  paintDropShadow(ctx, innerX, photoTop, innerW, photoH, 16);
-  if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}99`, 3, 'top', 'cover');
-  } else {
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
-    ctx.clip();
-    const artBg = ctx.createRadialGradient(
-      innerX + innerW / 2, photoTop + photoH / 2, 20,
-      innerX + innerW / 2, photoTop + photoH / 2, innerW / 1.3,
-    );
-    artBg.addColorStop(0, `${classAccent}2e`);
-    artBg.addColorStop(1, INK.paper);
-    ctx.fillStyle = artBg;
-    ctx.fillRect(innerX, photoTop, innerW, photoH);
-    ctx.globalAlpha = 0.55;
-    drawIcon(ctx, classInfo.icon, innerX + innerW / 2, photoTop + photoH / 2, 150, classAccent, 1.6);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-    ctx.beginPath();
-    ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = `${side.line}99`;
-    ctx.stroke();
-  }
-  paintPhotoVignette(ctx, innerX, photoTop, innerW, photoH, 16);
+  const nameText = (character.name ?? '???').toUpperCase();
+  const nameSize = fitText(ctx, nameText, textMaxW, '58px Orbitron', 24);
+  ctx.font = `800 ${nameSize}px Orbitron`;
+  ctx.fillStyle = INK.strong;
+  conHalo(() => ctx.fillText(nameText, textRight, headerTop + headerPad + 24 + nameSize * 0.74), 14);
 
-  /* ── medalla activa: esquina inferior izquierda de la foto ── */
-  if (medallaActiva) {
-    const medallaSize = 56;
-    const medallaMargin = 12;
-    drawMedallaBadge(
-      ctx, medallaImg, medallaActiva.rareza,
-      innerX + medallaMargin + medallaSize / 2, photoTop + photoH - medallaMargin - medallaSize / 2,
-      medallaSize,
-    );
+  if (bio) {
+    const cryText = `“${bio}”`;
+    const cSize = fitText(ctx, cryText, textMaxW, '15px "JetBrains Mono"', 9);
+    ctx.font = `italic ${cSize}px "JetBrains Mono"`;
+    ctx.fillStyle = INK.muted;
+    conHalo(() => ctx.fillText(cryText, textRight, headerTop + headerPad + pipColH - 2), 7);
   }
 
-  /* ── vida (corazones) y escudo (energía) ── */
-  const vidaVal = Math.max(0, Math.round(Number(baseCombat.vida ?? character.vida ?? COMBAT_DEFAULTS.vida) || 0));
-  const escudoVal = Math.max(0, Math.round(Number(baseCombat.escudo ?? character.escudo ?? COMBAT_DEFAULTS.escudo) || 0));
-
-  let y = photoTop + photoH + 14;
-  y = paintVidaEscudoBox(ctx, {
-    x: innerX, y, w: innerW, vidaVal, escudoVal,
-    vidaMeta: STAT_META.vida, escudoMeta: STAT_META.escudo,
-    drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
-  });
-  y += 14;
-
-  /* ── cuadro grande: forma del usuario | sable equipado | bonos del sable | valores finales (base + bonos) ── */
+  /* ── cuadro grande: forma del usuario | sable equipado | bonos del sable | valores finales (base + bonos) ──
+     Los tres bloques de datos se anclan al PIE de la carta: entre la cabecera y ellos queda la
+     ventana donde se ve el arte de fondo. */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
   const bonusRowH = 30;
   const boxPad2 = 14;
   const headerLabelH = 22;
   const totalRows = ATTR_ORDER.length;
   const rightColContentH = headerLabelH + totalRows * bonusRowH;
-  const saberBoxTop = y;
+  const footH = 60;
+  const footY = CARD_H - pad - 16 - footH;
+  const extraBoxH = 76;
+  const extraBoxTopAnchored = footY - 16 - extraBoxH;
+  const saberBoxTop = extraBoxTopAnchored - 14 - (boxPad2 * 2 + rightColContentH);
+
+  /* ── medalla activa: esquina inferior izquierda de la ventana de arte ── */
+  if (medallaActiva) {
+    const medallaSize = 60;
+    drawMedallaBadge(
+      ctx, medallaImg, medallaActiva.rareza,
+      innerX + 12 + medallaSize / 2, saberBoxTop - 16 - medallaSize / 2,
+      medallaSize,
+    );
+  }
   const saberBoxH = boxPad2 * 2 + rightColContentH;
   const saberBoxBottom = saberBoxTop + saberBoxH;
   paintBoxBg(ctx, innerX, saberBoxTop, innerW, saberBoxH, 10);
@@ -395,9 +427,11 @@ export async function drawCharacterCard(character, user) {
   const formaBoxY = saberBoxTop + boxPad2;
   const formaBoxW = formaColW - boxPad2;
   const formaBoxH = rightColContentH;
-  paintDropShadow(ctx, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, { blur: 7, offsetY: 2 });
   if (formaImg) {
-    drawImageRounded(ctx, formaImg, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, `${classAccent}99`);
+    /* Sin borde, a pedido: el estandarte de la forma va limpio contra el cuadro. */
+    /* Sin fondo ni borde: el bgColor por defecto de drawImageRounded es INK.paper (blanco),
+       así que se pasa transparente para que el estandarte quede calado sobre el arte. */
+    drawImageRounded(ctx, formaImg, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, null, 3, 'center', 'contain', 'rgba(0,0,0,0)');
   } else {
     ctx.save();
     ctx.beginPath();
@@ -414,25 +448,11 @@ export async function drawCharacterCard(character, user) {
     ctx.stroke();
   }
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10);
-  ctx.clip();
-  const capH = 44;
-  const capY = formaBoxY + formaBoxH - capH;
-  /* franja de legibilidad para el rótulo de la forma: blanca (antes negra), porque
-     tanto el estandarte de la forma como la carta impresa son claros. */
-  const capGrad = ctx.createLinearGradient(0, capY, 0, formaBoxY + formaBoxH);
-  capGrad.addColorStop(0, 'rgba(255,255,255,0)');
-  capGrad.addColorStop(1, 'rgba(255,255,255,0.92)');
-  ctx.fillStyle = capGrad;
-  ctx.fillRect(formaBoxX, capY, formaBoxW, capH);
-  ctx.restore();
-
+  /* El rótulo va con halo en vez de una franja blanca de fondo (ver conHalo). */
   ctx.textAlign = 'center';
   ctx.fillStyle = INK.muted;
   ctx.font = '700 9px "JetBrains Mono"';
-  ctx.fillText(classInfo.num.toUpperCase(), formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 26);
+  conHalo(() => ctx.fillText(classInfo.num.toUpperCase(), formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 26), 6);
 
   let formaNameSize = 15;
   ctx.font = `800 ${formaNameSize}px Orbitron`;
@@ -441,7 +461,7 @@ export async function drawCharacterCard(character, user) {
     ctx.font = `800 ${formaNameSize}px Orbitron`;
   }
   ctx.fillStyle = INK.strong;
-  ctx.fillText(classInfo.name, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 10);
+  conHalo(() => ctx.fillText(classInfo.name, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 10), 8);
 
   drawSaberBlade(
     ctx,
@@ -527,8 +547,7 @@ export async function drawCharacterCard(character, user) {
     { label: 'Bono Fuerza', color: PRINT_ACCENT.fuerza, icon: 'force', value: saberBonos.fuerza ?? 0 },
     { label: 'Regen. Fuerza', color: PRINT_ACCENT.fuerzaGen, icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
   ];
-  const extraBoxTop = saberBoxBottom + 14;
-  const extraBoxH = 76;
+  const extraBoxTop = extraBoxTopAnchored;
   const extraBoxBottom = extraBoxTop + extraBoxH;
   paintBoxBg(ctx, innerX, extraBoxTop, innerW, extraBoxH, 10);
 
@@ -568,9 +587,9 @@ export async function drawCharacterCard(character, user) {
   });
 
   /* ── pie: 3 columnas — QR + alias | logo de esgrima | ID de personaje ── */
-  const footY = extraBoxBottom + 16;
-  const footH = 60;
+  /* footY/footH se calcularon con el anclaje al pie, más arriba. */
   const qrSize = 48;
+  /* Pie sin cuadro: cada texto se sostiene con su halo (ver conHalo). */
   if (qrImg) {
     drawImageRounded(ctx, qrImg, innerX, footY + (footH - qrSize) / 2, qrSize, qrSize, 8, null);
   }
@@ -578,10 +597,10 @@ export async function drawCharacterCard(character, user) {
   ctx.fillStyle = INK.muted;
   ctx.font = '400 10px "JetBrains Mono"';
   const aliasX = innerX + (qrImg ? qrSize + 12 : 0);
-  ctx.fillText('ALIAS', aliasX, footY + footH / 2 - 10);
+  conHalo(() => ctx.fillText('ALIAS', aliasX, footY + footH / 2 - 10), 6);
   ctx.fillStyle = INK.strong;
   ctx.font = '700 17px Orbitron';
-  ctx.fillText(`@${handle.toUpperCase()}`, aliasX, footY + footH / 2 + 10);
+  conHalo(() => ctx.fillText(`@${handle.toUpperCase()}`, aliasX, footY + footH / 2 + 10), 8);
 
   await paintLogoAt(ctx, innerX + innerW / 2, footY + footH / 2, 44);
 
@@ -589,10 +608,10 @@ export async function drawCharacterCard(character, user) {
   ctx.textAlign = 'right';
   ctx.fillStyle = INK.muted;
   ctx.font = '400 10px "JetBrains Mono"';
-  ctx.fillText('ID PERSONAJE', innerRight, footY + footH / 2 - 10);
+  conHalo(() => ctx.fillText('ID PERSONAJE', innerRight, footY + footH / 2 - 10), 6);
   ctx.fillStyle = INK.strong;
   ctx.font = '700 17px Orbitron';
-  ctx.fillText(idStr, innerRight, footY + footH / 2 + 10);
+  conHalo(() => ctx.fillText(idStr, innerRight, footY + footH / 2 + 10), 8);
 
   return canvas;
 }

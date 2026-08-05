@@ -241,7 +241,7 @@ export function paintVignetteBackground(ctx, x, y, w, h, radius, edgeColor) {
 const SHIELD_PATH = 'M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z';
 
 /** Dibuja un corazón relleno (pip de Vida) con esquina superior-izquierda en (x, y). */
-function drawHeartPip(ctx, x, y, size, color) {
+export function drawHeartPip(ctx, x, y, size, color) {
   const topCurveHeight = size * 0.3;
   ctx.save();
   ctx.fillStyle = color;
@@ -257,7 +257,7 @@ function drawHeartPip(ctx, x, y, size, color) {
 }
 
 /** Dibuja un escudo de energía (pip de Escudo) con esquina superior-izquierda en (x, y). */
-function drawShieldPip(ctx, x, y, size, color) {
+export function drawShieldPip(ctx, x, y, size, color) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(size / 24, size / 24);
