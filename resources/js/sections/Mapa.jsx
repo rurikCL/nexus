@@ -2599,7 +2599,7 @@ function DungeonLootPreview({ loot, maxHeight = null }) {
           COFRES DEL DUNGEON
         </div>
         {cofres.length === 0 ? (
-          <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin botín configurado</div>
+          <div style={{ fontSize: 11, color: 'var(--txt-faint)' }}>Sin botín</div>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {cofres.map((r, i) => <RecompensaChip key={i} recompensa={r} />)}
@@ -2629,7 +2629,7 @@ function DungeonLootPreview({ loot, maxHeight = null }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{e.nombre}</div>
                     {(e.recompensas ?? []).length === 0 ? (
-                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2 }}>Sin botín configurado</div>
+                      <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 2 }}>Sin botín</div>
                     ) : (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
                         {e.recompensas.map((r, i) => <RecompensaChip key={i} recompensa={r} />)}
@@ -2661,7 +2661,7 @@ function DungeonLootPreview({ loot, maxHeight = null }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--txt)' }}>{jefe.nombre}</div>
               {(jefe.recompensas ?? []).length === 0 ? (
-                <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>Sin botín configurado</div>
+                <div style={{ fontSize: 10, color: 'var(--txt-faint)', marginTop: 4 }}>Sin botín</div>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
                   {jefe.recompensas.map((r, i) => <RecompensaChip key={i} recompensa={r} />)}
