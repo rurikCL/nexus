@@ -283,9 +283,34 @@ function pipRowHeight(count, maxWidth, size, gap, maxPips = 30) {
   return h;
 }
 
-/** Panel blanco con degradé semitransparente + borde sutil, recortado a un rectángulo
-    redondeado — aclara el tinte del marco para separar el contenido sin gastar tinta. */
+/** Sombra exterior suave para un rectángulo redondeado (o un círculo, pasando
+    `radius = w / 2`): dibuja SOLO la sombra, recortando la silueta del propio
+    cuadro con regla evenodd. Así el panel de arriba puede seguir siendo
+    translúcido — si se pintara un relleno opaco como proyector de sombra, las
+    cajas taparían la rejilla del fondo y la marca de agua de las cartas de Jefe.
+    Tono gris-azulado y desplazamiento corto: en papel una sombra negra amplia se
+    imprime como una mancha, no como profundidad. */
+export function paintDropShadow(ctx, x, y, w, h, radius = 10, { blur = 9, offsetY = 3, color = 'rgba(15,32,54,0.30)' } = {}) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip('evenodd');
+  ctx.shadowColor = color;
+  ctx.shadowBlur = blur;
+  ctx.shadowOffsetY = offsetY;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Panel blanco con degradé semitransparente + borde sutil y sombra exterior,
+    recortado a un rectángulo redondeado — aclara el tinte del marco para separar
+    el contenido sin gastar tinta, y la sombra lo despega del fondo. */
 export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
+  paintDropShadow(ctx, x, y, w, h, radius);
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);

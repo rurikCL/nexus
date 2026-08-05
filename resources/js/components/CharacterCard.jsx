@@ -7,7 +7,7 @@ import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
-  INK, PRINT_ACCENT, formaAccent,
+  INK, PRINT_ACCENT, formaAccent, paintDropShadow,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -140,6 +140,7 @@ function drawMedallaBadge(ctx, img, rareza, cx, cy, size) {
   const r = size / 2;
   const color = MEDALLA_RAREZA_COLOR[rareza] ?? MEDALLA_RAREZA_COLOR.basica;
 
+  paintDropShadow(ctx, cx - r, cy - r, size, size, r, { blur: 7, offsetY: 2 });
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -281,6 +282,7 @@ export async function drawCharacterCard(character, user) {
   }
 
   if (rankImg) {
+    paintDropShadow(ctx, logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2, logoR, { blur: 7, offsetY: 2 });
     ctx.save();
     ctx.beginPath();
     ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
@@ -300,6 +302,7 @@ export async function drawCharacterCard(character, user) {
     ctx.stroke();
     ctx.restore();
   } else {
+    paintDropShadow(ctx, logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2, logoR, { blur: 7, offsetY: 2 });
     ctx.beginPath();
     ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
     ctx.fillStyle = tierColor;
@@ -314,6 +317,7 @@ export async function drawCharacterCard(character, user) {
   const photoTop = headerBottom + 14;
   const photoH = 400;
   const classAccent = formaAccent(classInfo);
+  paintDropShadow(ctx, innerX, photoTop, innerW, photoH, 16);
   if (photoImg) {
     drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}99`, 3, 'top', 'cover');
   } else {
@@ -391,6 +395,7 @@ export async function drawCharacterCard(character, user) {
   const formaBoxY = saberBoxTop + boxPad2;
   const formaBoxW = formaColW - boxPad2;
   const formaBoxH = rightColContentH;
+  paintDropShadow(ctx, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, { blur: 7, offsetY: 2 });
   if (formaImg) {
     drawImageRounded(ctx, formaImg, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, `${classAccent}99`);
   } else {

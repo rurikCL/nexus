@@ -5,7 +5,7 @@ import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
-  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent,
+  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -158,6 +158,7 @@ function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColo
   ctx.fillText(displayName, innerX, pad + 54);
 
   if (badgeText !== null && badgeText !== undefined) {
+    paintDropShadow(ctx, innerRight - 47, pad + 17, 46, 46, 23, { blur: 7, offsetY: 2 });
     ctx.beginPath();
     ctx.arc(innerRight - 24, pad + 40, 23, 0, Math.PI * 2);
     ctx.fillStyle = badgeColor;
@@ -172,6 +173,7 @@ function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColo
 /** Caja de arte: imagen (si hay) o gradiente + ícono de respaldo. */
 async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, artH, borderColor, bgColor) {
   const img = await loadImage(mediaUrl(imgSrc));
+  paintDropShadow(ctx, innerX, artY, innerW, artH, 16);
   if (img) {
     drawImageRounded(ctx, img, innerX, artY, innerW, artH, 16, `${borderColor}99`, 3, 'center', 'contain', bgColor ?? INK.paper);
     return;
@@ -643,6 +645,7 @@ async function paintHabilidadIconCell(ctx, hab, x, y, size, borderColor) {
   const iconColor = FRAME[TIPO_HAB_FRAME[hab?.tipo] ?? 'info']?.line ?? PRINT_ACCENT.energia;
   const img = await loadImage(mediaUrl(hab?.icono_url ?? hab?.icono));
 
+  paintDropShadow(ctx, x, y, size, size, 14, { blur: 7, offsetY: 2 });
   if (img) {
     drawImageRounded(ctx, img, x, y, size, size, 14, `${borderColor}99`, 2.4, 'center', 'cover');
     return;
@@ -1049,6 +1052,7 @@ const ART_MOTIF = {
  * imagen ilustrada por ítem. */
 function paintArtBox(ctx, x, y, w, h, frame, icon, motifFn) {
   const radius = 12;
+  paintDropShadow(ctx, x, y, w, h, radius, { blur: 7, offsetY: 2 });
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
