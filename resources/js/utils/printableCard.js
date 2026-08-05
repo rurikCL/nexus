@@ -185,37 +185,55 @@ export async function paintLogoAt(ctx, cx, cy, size = 40) {
   ctx.restore();
 }
 
-/** Fondo cuadriculado con degradé — mismo criterio visual que las tarjetas de zona/planeta
-    del Mapa Estelar (Mapa.jsx), pero en versión papel: un realce blanco radial que aclara el
-    centro del tinte del marco + rejilla de líneas finas de 48px encima, recortado al
-    rectángulo (x, y, w, h). */
-export function paintGridBackground(ctx, x, y, w, h, radius = 0, spacing = 48) {
+/** Mezcla dos colores `#rrggbb` en proporción `t` (0 = a, 1 = b) y devuelve otro
+    `#rrggbb` — canvas 2D no resuelve color-mix(), así que los tonos derivados de
+    una paleta se calculan acá. Devuelve hex (no rgba) a propósito: el resto del
+    módulo compone la opacidad concatenando el sufijo alfa (`${color}52`). */
+export function mixHex(a, b, t) {
+  const parse = (hex) => {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const [r1, g1, b1] = parse(a);
+  const [r2, g2, b2] = parse(b);
+  const ch = (c1, c2) => Math.round(c1 + (c2 - c1) * t).toString(16).padStart(2, '0');
+  return `#${ch(r1, r2)}${ch(g1, g2)}${ch(b1, b2)}`;
+}
+
+/** Tono de borde de la viñeta de una carta: el tinte del marco llevado hacia su
+    acento, lo bastante oscuro para leerse como degradé sin volverse una mancha
+    de tinta en la esquina. */
+export const frameEdge = (frame) => mixHex(frame.bg1, frame.line, 0.62);
+
+/** Fondo de carta con viñeta: centro claro y degradé hacia un tono más oscuro del
+    acento en los bordes. El degradé es elíptico (se escala al alto/ancho de la
+    carta) para que los cuatro bordes se oscurezcan por igual en vez de hacerlo
+    solo las esquinas, como haría un radial circular sobre un rectángulo 5:7.
+    `edgeColor` es el tono de borde ya resuelto por el llamador (ver `frameEdge`). */
+export function paintVignetteBackground(ctx, x, y, w, h, radius, edgeColor) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.clip();
 
-  const glow = ctx.createRadialGradient(x + w * 0.6, y + h * 0.4, 0, x + w * 0.6, y + h * 0.4, Math.max(w, h) * 0.75);
-  glow.addColorStop(0, 'rgba(255,255,255,0.72)');
-  glow.addColorStop(0.7, 'rgba(255,255,255,0.16)');
-  glow.addColorStop(1, 'rgba(255,255,255,0.08)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(x, y, w, h);
+  const cx = x + w / 2;
+  const cy = y + h / 2;
 
-  ctx.strokeStyle = 'rgba(20,48,80,0.10)';
-  ctx.lineWidth = 1;
-  for (let gx = x; gx <= x + w; gx += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(gx + 0.5, y);
-    ctx.lineTo(gx + 0.5, y + h);
-    ctx.stroke();
-  }
-  for (let gy = y; gy <= y + h; gy += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(x, gy + 0.5);
-    ctx.lineTo(x + w, gy + 0.5);
-    ctx.stroke();
-  }
+  ctx.translate(cx, cy);
+  ctx.scale(1, h / w);
+  const r = w * 0.72;
+  /* La rampa deja limpio el centro (donde van los textos que no llevan panel
+     detrás: línea de tipo, colofón) y concentra la carga cerca del borde: ~20%
+     en el medio de cada lado y ~72% en las esquinas. Subirla más se imprime como
+     un bloque de tinta en vez de un degradé. */
+  const shade = ctx.createRadialGradient(0, 0, r * 0.18, 0, 0, r);
+  shade.addColorStop(0, `${edgeColor}00`);
+  shade.addColorStop(0.45, `${edgeColor}0a`);
+  shade.addColorStop(0.69, `${edgeColor}33`);
+  shade.addColorStop(0.85, `${edgeColor}66`);
+  shade.addColorStop(1, `${edgeColor}b8`);
+  ctx.fillStyle = shade;
+  ctx.fillRect(-w, -h, w * 2, h * 2);
 
   ctx.restore();
 }
@@ -283,9 +301,34 @@ function pipRowHeight(count, maxWidth, size, gap, maxPips = 30) {
   return h;
 }
 
-/** Panel blanco con degradé semitransparente + borde sutil, recortado a un rectángulo
-    redondeado — aclara el tinte del marco para separar el contenido sin gastar tinta. */
+/** Sombra exterior suave para un rectángulo redondeado (o un círculo, pasando
+    `radius = w / 2`): dibuja SOLO la sombra, recortando la silueta del propio
+    cuadro con regla evenodd. Así el panel de arriba puede seguir siendo
+    translúcido — si se pintara un relleno opaco como proyector de sombra, las
+    cajas taparían la rejilla del fondo y la marca de agua de las cartas de Jefe.
+    Tono gris-azulado y desplazamiento corto: en papel una sombra negra amplia se
+    imprime como una mancha, no como profundidad. */
+export function paintDropShadow(ctx, x, y, w, h, radius = 10, { blur = 9, offsetY = 3, color = 'rgba(15,32,54,0.30)' } = {}) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip('evenodd');
+  ctx.shadowColor = color;
+  ctx.shadowBlur = blur;
+  ctx.shadowOffsetY = offsetY;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Panel blanco con degradé semitransparente + borde sutil y sombra exterior,
+    recortado a un rectángulo redondeado — aclara el tinte del marco para separar
+    el contenido sin gastar tinta, y la sombra lo despega del fondo. */
 export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
+  paintDropShadow(ctx, x, y, w, h, radius);
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
