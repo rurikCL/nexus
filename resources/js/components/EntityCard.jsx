@@ -128,6 +128,55 @@ function withHalo(ctx, draw, blur = 10) {
   ctx.restore();
 }
 
+function getNpcLikeLocation(entity) {
+  const lugar = entity?.lugar ?? entity?.lugares?.[0] ?? null;
+  const planeta = lugar?.zona?.planeta ?? null;
+
+  return {
+    planeta: planeta?.nombre ?? null,
+    lugar: lugar?.nombre ?? null,
+  };
+}
+
+function paintHeaderLocationChips(ctx, items, right, y, maxWidth, accentColor) {
+  const visibleItems = items.filter((item) => item?.value);
+  if (!visibleItems.length) return 0;
+
+  const gap = 8;
+  const chipH = 28;
+  const count = visibleItems.length;
+  const chipW = count === 1
+    ? Math.min(170, Math.max(98, maxWidth))
+    : Math.max(88, Math.min(128, (maxWidth - gap) / 2));
+  const totalW = chipW * count + gap * (count - 1);
+  let x = right - totalW;
+
+  visibleItems.forEach((item) => {
+    ctx.beginPath();
+    ctx.roundRect(x, y, chipW, chipH, 8);
+    ctx.fillStyle = 'rgba(7, 12, 24, 0.58)';
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = `${accentColor}aa`;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#c6d4eb';
+    ctx.font = '700 8px "JetBrains Mono"';
+    ctx.fillText(item.label, x + 8, y + 10);
+
+    const valueMaxW = chipW - 16;
+    const valueSize = fitText(ctx, item.value, valueMaxW, '700 11px "JetBrains Mono"', 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${valueSize}px "JetBrains Mono"`;
+    ctx.fillText(item.value, x + 8, y + 22);
+
+    x += chipW + gap;
+  });
+
+  return chipH;
+}
+
 /** Fondo de arte a sangre para las cartas de NPC/Jefe/Enemigo — la imagen de la entidad ocupa
  * toda la carta (mismo criterio que la foto de personaje en CharacterCard.jsx): recorte
  * "cover" anclado arriba, velo blanco encima para que las cajas de datos mantengan contraste,
@@ -806,6 +855,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
 
   const forma = Number(entity.forma) || 0;
   const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
+  const formaImg = formaInfo?.img ? await loadImage(formaInfo.img) : null;
 
   /* Cabecera estilo carta de personaje: columna de fichas a la izquierda y bloque
      tipográfico a la derecha, todo sobre el arte con halo para mantener legibilidad. */
@@ -835,15 +885,20 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const textLeft = pipValueX + leftLabelW + 12;
   const textMaxW = textRight - textLeft;
   const leftColRight = textLeft - 12;
+  const locationInfo = getNpcLikeLocation(entity);
+  const hasLocation = Boolean(locationInfo.planeta || locationInfo.lugar);
 
   const formaBadgeGap = formaInfo?.img ? 10 : 0;
   const formaBadgeH = formaInfo?.img ? 82 : 0;
-  const headerBottom = baseHeaderBottom + formaBadgeGap + formaBadgeH;
+  const headerBottom = Math.max(
+    baseHeaderBottom + (hasLocation ? 32 : 0),
+    baseHeaderBottom + formaBadgeGap + formaBadgeH,
+  );
 
   /* Placa translúcida detrás del bloque tipográfico para mejorar lectura del texto
      sin perder la imagen de fondo. */
   const textPlateY = headerTop + headerPad - 7;
-  const textPlateH = pipColH + 14;
+  const textPlateH = pipColH + 14 + (hasLocation ? 32 : 0);
   const textPlateGrad = ctx.createLinearGradient(0, textPlateY, 0, textPlateY + textPlateH);
   textPlateGrad.addColorStop(0, 'rgba(5, 9, 18, 0.58)');
   textPlateGrad.addColorStop(1, 'rgba(5, 9, 18, 0.42)');
@@ -904,22 +959,37 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const nameSize = fitText(ctx, nameText, textMaxW, '46px Orbitron', 24);
   ctx.fillStyle = '#ffffff';
   ctx.font = `800 ${nameSize}px Orbitron`;
-  withInkShadow(() => ctx.fillText(nameText, textRight, headerTop + headerPad + 20 + nameSize * 0.74), 12);
+  const nameY = headerTop + headerPad + 20 + nameSize * 0.74;
+  withInkShadow(() => ctx.fillText(nameText, textRight, nameY), 12);
+
+  if (hasLocation) {
+    paintHeaderLocationChips(ctx, [
+      { label: 'PLANETA', value: locationInfo.planeta },
+      { label: 'LUGAR', value: locationInfo.lugar },
+    ], textRight, nameY + 10, textMaxW, frame.line);
+  }
 
   if (sub) {
     const subSize = fitText(ctx, sub, textMaxW, '14px "JetBrains Mono"', 10);
     ctx.fillStyle = '#e8eef9';
     ctx.font = `italic ${subSize}px "JetBrains Mono"`;
-    withInkShadow(() => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1), 7);
+    withInkShadow(() => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1 + (hasLocation ? 30 : 0)), 7);
   }
 
   if (formaInfo?.img) {
-    /* La forma vive ahora en la columna izquierda, debajo de los stats, para no competir
-       con el bloque tipográfico principal de la cabecera. */
-    const badgeX = innerX + 4;
+    /* La forma vive ahora en la columna izquierda, debajo de los stats, limpia y sin
+       marco, alineada al mismo eje vertical de los pips de stats. */
+    const badgeW = Math.max(78, leftColRight - innerX - 8);
+    const badgeX = pipCx - badgeW / 2;
     const badgeY = baseHeaderBottom + formaBadgeGap;
-    const badgeW = Math.max(78, leftColRight - badgeX - 4);
-    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, badgeX, badgeY, badgeW, formaBadgeH, frame.line, 'rgba(255,255,255,0.12)');
+    if (formaImg) {
+      drawImageRounded(ctx, formaImg, badgeX, badgeY, badgeW, formaBadgeH, 10, null, 0, 'center', 'contain', 'rgba(0,0,0,0)');
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      drawIcon(ctx, formaInfo.icon ?? 'sword', pipCx, badgeY + formaBadgeH / 2, 40, frame.line, 2.2);
+      ctx.restore();
+    }
   }
 
   const artY = headerBottom + 10;

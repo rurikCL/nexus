@@ -22,7 +22,7 @@ use Illuminate\Http\JsonResponse;
 class CatalogoController extends Controller
 {
     private const NPC_CAMPOS = [
-        'id', 'nombre', 'tipo', 'profesion', 'faccion', 'imagen_mini', 'imagen', 'saludo',
+        'id', 'LugarID', 'nombre', 'tipo', 'profesion', 'faccion', 'imagen_mini', 'imagen', 'saludo',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria',
         'dano', 'dano_escudo', 'dano_perforante',
         'forma', 'nivel', 'raid_slots', 'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
@@ -31,6 +31,15 @@ class CatalogoController extends Controller
     private const HABILIDAD_SLOTS = [
         'habilidad1:id,nombre,icono,tipo', 'habilidad2:id,nombre,icono,tipo',
         'habilidad3:id,nombre,icono,tipo', 'habilidad4:id,nombre,icono,tipo',
+    ];
+
+    private const UBICACION_RELATIONS = [
+        'lugar:id,nombre,ZonaID',
+        'lugar.zona:id,nombre,PlanetaID',
+        'lugar.zona.planeta:id,nombre',
+        'lugares:id,nombre,ZonaID',
+        'lugares.zona:id,nombre,PlanetaID',
+        'lugares.zona.planeta:id,nombre',
     ];
 
     public function objetos(): JsonResponse
@@ -46,7 +55,7 @@ class CatalogoController extends Controller
     {
         $npcs = MapNpc::where('visible', true)
             ->select(self::NPC_CAMPOS)
-            ->with(self::HABILIDAD_SLOTS)
+            ->with(array_merge(self::HABILIDAD_SLOTS, self::UBICACION_RELATIONS))
             ->orderBy('tipo')->orderBy('nombre')
             ->get();
 
@@ -57,7 +66,7 @@ class CatalogoController extends Controller
     {
         $enemigos = MapEnemigo::where('visible', true)
             ->select(self::NPC_CAMPOS)
-            ->with(self::HABILIDAD_SLOTS)
+            ->with(array_merge(self::HABILIDAD_SLOTS, self::UBICACION_RELATIONS))
             ->orderBy('tipo')->orderBy('nombre')
             ->get();
 
