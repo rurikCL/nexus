@@ -31,6 +31,14 @@ export const INK = {
   surface2: 'rgba(255,255,255,0.52)',   // cajas internas (borde inferior)
   hair:     'rgba(15,32,54,0.20)',      // bordes y divisores
   hairSoft: 'rgba(15,32,54,0.10)',      // divisores de fila
+  /* Variante "vidrio" para paneles que van encima de una foto a sangre (carta de
+     personaje): translúcidos de verdad, pero con un piso de opacidad — sobre una
+     foto oscura, por debajo de ~0.60 la tinta de datos deja de tener contraste
+     suficiente impresa. El borde es más marcado porque el hairline normal se
+     pierde contra una imagen. */
+  glass1:   'rgba(255,255,255,0.78)',
+  glass2:   'rgba(255,255,255,0.66)',
+  glassHair: 'rgba(15,32,54,0.30)',
 };
 
 export function mediaUrl(path) {
@@ -209,8 +217,11 @@ export const frameEdge = (frame) => mixHex(frame.bg1, frame.line, 0.62);
     acento en los bordes. El degradé es elíptico (se escala al alto/ancho de la
     carta) para que los cuatro bordes se oscurezcan por igual en vez de hacerlo
     solo las esquinas, como haría un radial circular sobre un rectángulo 5:7.
-    `edgeColor` es el tono de borde ya resuelto por el llamador (ver `frameEdge`). */
-export function paintVignetteBackground(ctx, x, y, w, h, radius, edgeColor) {
+    `edgeColor` es el tono de borde ya resuelto por el llamador (ver `frameEdge`).
+    `strength` escala la opacidad de toda la rampa: la carta de personaje la baja
+    porque su fondo es una foto a sangre y el tinte de facción a full la teñiría
+    entera en vez de solo enmarcarla. */
+export function paintVignetteBackground(ctx, x, y, w, h, radius, edgeColor, strength = 1) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
@@ -226,14 +237,49 @@ export function paintVignetteBackground(ctx, x, y, w, h, radius, edgeColor) {
      detrás: línea de tipo, colofón) y concentra la carga cerca del borde: ~20%
      en el medio de cada lado y ~72% en las esquinas. Subirla más se imprime como
      un bloque de tinta en vez de un degradé. */
+  const a = (v) => Math.round(v * strength).toString(16).padStart(2, '0');
   const shade = ctx.createRadialGradient(0, 0, r * 0.18, 0, 0, r);
   shade.addColorStop(0, `${edgeColor}00`);
-  shade.addColorStop(0.45, `${edgeColor}0a`);
-  shade.addColorStop(0.69, `${edgeColor}33`);
-  shade.addColorStop(0.85, `${edgeColor}66`);
-  shade.addColorStop(1, `${edgeColor}b8`);
+  shade.addColorStop(0.45, `${edgeColor}${a(0x0a)}`);
+  shade.addColorStop(0.69, `${edgeColor}${a(0x33)}`);
+  shade.addColorStop(0.85, `${edgeColor}${a(0x66)}`);
+  shade.addColorStop(1, `${edgeColor}${a(0xb8)}`);
   ctx.fillStyle = shade;
   ctx.fillRect(-w, -h, w * 2, h * 2);
+
+  ctx.restore();
+}
+
+/** Desvanecido de `color` desde cada uno de los 4 bordes hacia adentro — una banda
+    por lado, así el borde se oscurece parejo en todo el perímetro. Es distinto de
+    `paintVignetteBackground`: esa es una viñeta elíptica, que por geometría carga
+    mucho más las esquinas que el medio de los lados; esto da un marco uniforme,
+    que es lo que se busca cuando el fondo es una foto a sangre y el degradé tiene
+    que "morir" contra el filo de la carta. En las esquinas las bandas se suman,
+    por eso el alfa por lado se queda por debajo del tono final buscado. */
+export function paintEdgeFade(ctx, x, y, w, h, radius, color, { band, alpha = 0.62 } = {}) {
+  const size = band ?? Math.round(Math.min(w, h) * 0.24);
+  const a = (mul) => Math.round(alpha * mul * 255).toString(16).padStart(2, '0');
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.clip();
+
+  const lados = [
+    [x, y, x, y + size, [x, y, w, size]],                     // arriba
+    [x, y + h, x, y + h - size, [x, y + h - size, w, size]],  // abajo
+    [x, y, x + size, y, [x, y, size, h]],                     // izquierda
+    [x + w, y, x + w - size, y, [x + w - size, y, size, h]],  // derecha
+  ];
+  for (const [x0, y0, x1, y1, rect] of lados) {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, `${color}${a(1)}`);
+    g.addColorStop(0.35, `${color}${a(0.45)}`);
+    g.addColorStop(0.7, `${color}${a(0.12)}`);
+    g.addColorStop(1, `${color}00`);
+    ctx.fillStyle = g;
+    ctx.fillRect(...rect);
+  }
 
   ctx.restore();
 }
@@ -326,16 +372,19 @@ export function paintDropShadow(ctx, x, y, w, h, radius = 10, { blur = 9, offset
 
 /** Panel blanco con degradé semitransparente + borde sutil y sombra exterior,
     recortado a un rectángulo redondeado — aclara el tinte del marco para separar
-    el contenido sin gastar tinta, y la sombra lo despega del fondo. */
-export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
+    el contenido sin gastar tinta, y la sombra lo despega del fondo.
+    `style` permite subir la transparencia para los paneles que van sobre una foto
+    a sangre (ver GLASS en CharacterCard.jsx). */
+export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1, style = {}) {
+  const { top = INK.surface1, bottom = INK.surface2, border = INK.hair } = style;
   paintDropShadow(ctx, x, y, w, h, radius);
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.clip();
   const g = ctx.createLinearGradient(x, y, x, y + h);
-  g.addColorStop(0, INK.surface1);
-  g.addColorStop(1, INK.surface2);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
   ctx.fillStyle = g;
   ctx.fillRect(x, y, w, h);
   ctx.restore();
@@ -344,7 +393,7 @@ export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.lineWidth = borderWidth;
-  ctx.strokeStyle = INK.hair;
+  ctx.strokeStyle = border;
   ctx.stroke();
   ctx.restore();
 }
@@ -355,7 +404,7 @@ export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
     de ui.jsx, que este módulo no importa). Devuelve el Y inferior del cuadro. */
 export function paintVidaEscudoBox(ctx, {
   x, y, w, vidaVal, escudoVal, vidaMeta, escudoMeta, drawIcon,
-  pipSize = 18, pipGap = 5, boxPad = 14, colGap = 16,
+  pipSize = 18, pipGap = 5, boxPad = 14, colGap = 16, boxStyle = {},
 }) {
   const halfW = w / 2;
   const leftX = x + boxPad;
@@ -371,7 +420,7 @@ export function paintVidaEscudoBox(ctx, {
   const escudoH = pipRowHeight(escudoVal, rightW, pipSize, pipGap);
   const boxBottom = pipY + Math.max(vidaH, escudoH) + boxPad;
 
-  paintBoxBg(ctx, x, boxTop, w, boxBottom - boxTop, 10);
+  paintBoxBg(ctx, x, boxTop, w, boxBottom - boxTop, 10, 1, boxStyle);
 
   ctx.textAlign = 'left';
   drawIcon(vidaMeta.icon, leftX + 11, cy - 6, 20, vidaMeta.color, 2);
@@ -393,7 +442,7 @@ export function paintVidaEscudoBox(ctx, {
     draw: (px, py, s) => drawShieldPip(ctx, px, py, s, escudoMeta.color),
   });
 
-  ctx.strokeStyle = INK.hair;
+  ctx.strokeStyle = boxStyle.border ?? INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x + halfW, boxTop + 6);
