@@ -29,6 +29,14 @@ const FRAME = {
   toxic:   { bg1: '#e9f5c8', bg2: '#f6fce8', line: '#5f9109' },
 };
 
+/* Panel oscuro para la cabecera de las cartas de NPC/Jefe/Enemigo — a diferencia de
+   `paintBoxBg` (pensado para ir sobre papel claro), este va sobre el arte a sangre y
+   necesita un fondo bien oscuro para que el nombre destaque; por eso el título se
+   pinta en blanco (ver `HEADER_TITLE_COLOR`) en vez de `INK.strong`. */
+const HEADER_DARK_STYLE = { top: 'rgba(6,12,24,0.86)', bottom: 'rgba(6,12,24,0.64)', border: 'rgba(255,255,255,0.18)' };
+const HEADER_TITLE_COLOR = '#f4f7fb';
+const HEADER_SUB_COLOR = 'rgba(244,247,251,0.82)';
+
 const stackCounts = (value) => {
   const counts = {};
   if (Array.isArray(value)) {
@@ -199,11 +207,11 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
 }
 
 /** Encabezado común: nombre (arriba-izq.) + medallón circular (arriba-der.). */
-function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor, halo = false }) {
+function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor, halo = false, titleColor = INK.strong }) {
   ctx.textAlign = 'left';
   const displayName = (title ?? '???').toUpperCase();
   fitText(ctx, displayName, innerRight - innerX - 66, '30px Orbitron');
-  ctx.fillStyle = INK.strong;
+  ctx.fillStyle = titleColor;
   const drawTitle = () => ctx.fillText(displayName, innerX, pad + 54);
   if (halo) withHalo(ctx, drawTitle, 12); else drawTitle();
 
@@ -791,12 +799,13 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   }
 
   /* Cabecera sobre panel con sombra — mismo criterio que las cajas del cuerpo
-     (paintBoxBg), para que el nombre/tipo se lean sobre cualquier arte de fondo. */
-  const headerBoxTop = pad + 6;
-  const headerBoxBottom = pad + 108;
-  paintBoxBg(ctx, innerX, headerBoxTop, innerW, headerBoxBottom - headerBoxTop, 14);
+     (paintBoxBg), pero oscuro (HEADER_DARK_STYLE) y con más aire alrededor del
+     texto, para que el nombre/tipo destaquen sobre cualquier arte de fondo. */
+  const headerBoxTop = pad + 2;
+  const headerBoxBottom = pad + 122;
+  paintBoxBg(ctx, innerX, headerBoxTop, innerW, headerBoxBottom - headerBoxTop, 14, 1, HEADER_DARK_STYLE);
 
-  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
+  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line, titleColor: HEADER_TITLE_COLOR });
 
   ctx.textAlign = 'left';
   drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1);
@@ -806,7 +815,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
   if (sub) {
     ctx.textAlign = 'right';
-    ctx.fillStyle = INK.body;
+    ctx.fillStyle = HEADER_SUB_COLOR;
     const size = fitText(ctx, sub, innerW - 160, '14px "JetBrains Mono"', 11);
     ctx.font = `${size}px "JetBrains Mono"`;
     ctx.fillText(sub, innerRight - 6, pad + 96);
