@@ -2295,25 +2295,42 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
               <div style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
                 🔄 CAMBIAR ESTANCIA — Tirada INI+2d6 ≥ 10: si superas, conservas el turno
               </div>
+              {/* Cada forma con su ilustración y color propio (NX.CLASSES), igual que los pickers
+                  de Raid y Horda. La activa va a color pleno con glow; las formas sin slots de
+                  habilidad quedan más apagadas todavía, como ya lo indicaba el texto. */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {FORMA_LABELS_SHORT.map((label, i) => {
+                {NX.CLASSES.map((c, i) => {
                   const f = i + 1;
+                  const label = FORMA_LABELS_SHORT[i];
                   const active = f === currentForma;
                   const hasSlots = Array.isArray(porForma[String(f)]) && porForma[String(f)].some(Boolean);
+                  // Sin slots = forma no aprendida: no seleccionable.
                   return (
-                    <button key={f} onClick={() => {
-                      void playClickOpcion();
-                      if (active) { setStancePicker(false); return; }
-                      void doChangeForma(f, label);
-                    }} style={{
-                      padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                      background: active ? 'rgba(139,92,246,0.25)' : hasSlots ? 'rgba(139,92,246,0.06)' : 'rgba(255,255,255,0.03)',
-                      border: `1px solid ${active ? '#a78bfa' : hasSlots ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                      opacity: active ? 1 : 0.85,
-                    }}>
-                      <div style={{ fontSize: 13, fontFamily: 'var(--font-data)', color: active ? '#a78bfa' : '#fff', fontWeight: 700 }}>F{f}</div>
-                      <div style={{ fontSize: 8, color: 'rgba(200,180,255,0.6)', marginTop: 3, lineHeight: 1.3 }}>{label}</div>
-                      {!hasSlots && <div style={{ fontSize: 7, color: 'rgba(150,150,150,0.5)', marginTop: 2 }}>sin slots</div>}
+                    <button key={c.id} disabled={!hasSlots && !active}
+                      onClick={() => {
+                        void playClickOpcion();
+                        if (active) { setStancePicker(false); return; }
+                        void doChangeForma(f, label);
+                      }}
+                      title={hasSlots || active ? `${c.num} — ${c.name}` : `${c.num} — ${c.name} · sin habilidades asignadas`}
+                      style={{
+                        padding: '8px 5px', borderRadius: 8, textAlign: 'center',
+                        cursor: !hasSlots && !active ? 'not-allowed' : 'pointer',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                        background: active ? `color-mix(in srgb, ${c.accent} 18%, transparent)` : hasSlots ? 'rgba(139,92,246,0.06)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${active ? c.accent : hasSlots ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                        transition: 'all 0.15s',
+                      }}>
+                      <img src={c.img} alt="" style={{
+                        width: 40, height: 40, objectFit: 'contain', flexShrink: 0,
+                        filter: active
+                          ? `drop-shadow(0 0 6px ${c.accent})`
+                          : hasSlots ? 'brightness(0.7) saturate(0.7)' : 'brightness(0.45) saturate(0.3)',
+                        transition: 'filter 0.15s',
+                      }} />
+                      <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', color: active ? c.accent : '#fff', fontWeight: 700 }}>F{f}</div>
+                      <div style={{ fontSize: 8, color: 'rgba(200,180,255,0.6)', lineHeight: 1.3 }}>{label}</div>
+                      {!hasSlots && <div style={{ fontSize: 7, color: 'rgba(150,150,150,0.5)' }}>sin slots</div>}
                     </button>
                   );
                 })}

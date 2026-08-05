@@ -1348,17 +1348,42 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
       {stancePicker && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9600, background: 'rgba(2,5,12,0.85)', display: 'grid', placeItems: 'center' }}
           onMouseDown={() => setStancePicker(false)}>
-          <div className="nx-panel solid nx-panel-glow" style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }} onMouseDown={e => e.stopPropagation()}>
-            {NX.CLASSES.map((c, i) => (
-              <button key={c.id} onClick={() => clickStance(i + 1)} style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8, cursor: 'pointer',
-                border: `1px solid ${me?.current_forma === i + 1 ? c.accent : 'var(--holo-line)'}`,
-                background: me?.current_forma === i + 1 ? `color-mix(in srgb, ${c.accent} 14%, transparent)` : 'rgba(255,255,255,0.02)',
-              }}>
-                <img src={c.img} alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
-                <span style={{ fontSize: 9, color: c.accent, fontFamily: 'var(--font-data)' }}>{c.num}</span>
-              </button>
-            ))}
+          <div className="nx-panel solid nx-panel-glow" style={{ padding: 18 }} onMouseDown={e => e.stopPropagation()}>
+            <div style={{ fontSize: 10, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.12em', marginBottom: 12, textAlign: 'center' }}>
+              🔄 CAMBIAR ESTANCIA — Tirada INI+2d6 ≥ 10: si superas, conservas el turno
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              {NX.CLASSES.map((c, i) => {
+                const f = i + 1;
+                const active = me?.current_forma === f;
+                /* Sin habilidades asignadas = forma no aprendida: no seleccionable (el backend
+                   también lo rechaza, ver la rama 'stance'). */
+                const aprendida = (me?.formas_aprendidas ?? []).includes(f);
+                return (
+                  <button key={c.id} disabled={!aprendida && !active}
+                    onClick={() => {
+                      if (active) { setStancePicker(false); return; }
+                      clickStance(f);
+                    }}
+                    title={aprendida || active ? `${c.num} — ${c.name}` : `${c.num} — ${c.name} · sin habilidades asignadas`}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8,
+                      cursor: !aprendida && !active ? 'not-allowed' : 'pointer',
+                      border: `1px solid ${active ? c.accent : aprendida ? 'var(--holo-line)' : 'rgba(255,255,255,0.06)'}`,
+                      background: active ? `color-mix(in srgb, ${c.accent} 14%, transparent)` : aprendida ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.01)',
+                    }}>
+                    <img src={c.img} alt="" style={{
+                      width: 34, height: 34, objectFit: 'contain',
+                      filter: active
+                        ? `drop-shadow(0 0 6px ${c.accent})`
+                        : aprendida ? 'brightness(0.7) saturate(0.7)' : 'brightness(0.4) saturate(0.2)',
+                    }} />
+                    <span style={{ fontSize: 9, color: c.accent, fontFamily: 'var(--font-data)', opacity: aprendida || active ? 1 : 0.4 }}>{c.num}</span>
+                    {!aprendida && !active && <span style={{ fontSize: 7, color: 'rgba(150,150,150,0.5)' }}>sin slots</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

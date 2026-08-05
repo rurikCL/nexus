@@ -470,6 +470,11 @@ class PvpCombatController extends Controller
             if ($forma < 1 || $forma > 7) {
                 return response()->json(['error' => 'Forma inválida'], 422);
             }
+            /* Solo se puede cambiar a una forma aprendida (con slots de habilidad asignados). El
+               frontend ya las deshabilita, pero esto es lo autoritativo. */
+            if (! in_array($forma, $actorChar->formasAprendidas(), true)) {
+                return response()->json(['error' => 'No tienes habilidades asignadas en esa forma.'], 422);
+            }
             if ($isAttacker) {
                 $combat->attacker_current_forma = $forma;
             } else {
@@ -1128,6 +1133,9 @@ class PvpCombatController extends Controller
             'escudo_max' => self::getMaxEscudo($ch, $modo),
             'habilidades' => $habilidades,
             'current_forma' => $currentForma,
+            /* Formas a las que este jugador puede cambiar de estancia — el resto se muestran
+               deshabilitadas en el picker (ver Character::formasAprendidas). */
+            'formas_aprendidas' => $ch?->formasAprendidas() ?? [],
             'arma_equipada' => $ch?->armaEfectiva(),
             'es_nave' => $modo === 'naval',
         ];

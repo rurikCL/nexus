@@ -1254,7 +1254,7 @@ export const RANGOS_JEDI = [
 
 /* ===================== HABILIDADES ===================== */
 export const FORMA_LABELS = ['Shii-Cho', 'Makashi', 'Soresu', 'Ataru', 'Shien / Djem So', 'Niman', 'Juyo / Vaapad'];
-export const FORMA_IMGS   = ['/assets/Forma1.png', '/assets/Forma2.png', '/assets/Forma3.png', '/assets/Forma4.png', '/assets/Forma5.png', '/assets/Forma6.png', '/assets/Forma7.png'];
+export const FORMA_IMGS   = ['/assets/Forma1.webp', '/assets/Forma2.webp', '/assets/Forma3.webp', '/assets/Forma4.webp', '/assets/Forma5.webp', '/assets/Forma6.webp', '/assets/Forma7.webp'];
 
 function WeaponCard({ objeto, selected, onClick }) {
   const isUnarmed = !objeto;
