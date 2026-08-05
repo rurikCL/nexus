@@ -4,7 +4,7 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintBoxBg,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintEdgeFade, paintBoxBg,
   COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge,
 } from '../utils/printableCard.js';
 
@@ -133,7 +133,12 @@ function withHalo(ctx, draw, blur = 10) {
  * "cover" anclado arriba, velo blanco encima para que las cajas de datos mantengan contraste,
  * y el borde del marco se repinta después porque la imagen lo tapa. Sin imagen, cae a un
  * degradé radial con el ícono del tipo como marca de agua, igual que el resto del catálogo. */
-function paintEntityBackgroundArt(ctx, img, iconName, pad, cardH, frame) {
+function paintEntityBackgroundArt(ctx, img, iconName, pad, cardH, frame, {
+  borderWidth = 3,
+  edgeFadeColor = '#070f1d',
+  edgeFadeBand,
+  edgeFadeAlpha = 0.7,
+} = {}) {
   const x = pad, y = pad, w = CARD_W - pad * 2, h = cardH - pad * 2;
   ctx.save();
   ctx.beginPath();
@@ -145,8 +150,6 @@ function paintEntityBackgroundArt(ctx, img, iconName, pad, cardH, frame) {
     const dw = img.width * scale;
     const dh = img.height * scale;
     ctx.drawImage(img, x + (w - dw) / 2, y, dw, dh);
-    ctx.fillStyle = 'rgba(255,255,255,0.34)';
-    ctx.fillRect(x, y, w, h);
   } else {
     const g = ctx.createRadialGradient(x + w / 2, y + h / 2, 20, x + w / 2, y + h / 2, w / 1.1);
     g.addColorStop(0, `${frame.line}2e`);
@@ -159,15 +162,19 @@ function paintEntityBackgroundArt(ctx, img, iconName, pad, cardH, frame) {
   }
   ctx.restore();
 
+  /* Degradado oscuro parejo desde cada borde hacia adentro, para mantener el color
+     original del arte en el centro y oscurecer el perímetro de toda la carta. */
+  paintEdgeFade(ctx, x, y, w, h, 22, edgeFadeColor, { band: edgeFadeBand, alpha: edgeFadeAlpha });
+
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, 22);
-  ctx.lineWidth = 3;
+  ctx.lineWidth = borderWidth;
   ctx.strokeStyle = frame.line;
   ctx.stroke();
 }
 
 /** Pinta el marco (fondo + borde) de la carta y devuelve las coordenadas internas útiles. */
-function paintFrame(ctx, frame, cardH = CARD_H) {
+function paintFrame(ctx, frame, cardH = CARD_H, { borderWidth = 3 } = {}) {
   const pad = 22;
   ctx.fillStyle = frame.bg2;
   ctx.beginPath();
@@ -190,7 +197,7 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(pad, pad, CARD_W - pad * 2, cardH - pad * 2, 22);
-  ctx.lineWidth = 3;
+  ctx.lineWidth = borderWidth;
   ctx.strokeStyle = frame.line;
   ctx.stroke();
   ctx.restore();
@@ -343,7 +350,7 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(innerPad, innerPad, CARD_W - innerPad * 2, cardH - innerPad * 2, 26);
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2.4;
   ctx.strokeStyle = `${color}cc`;
   ctx.stroke();
   ctx.restore();
@@ -359,7 +366,7 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
   corners.forEach(({ ax, ay, dx, dy }) => {
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 3.1;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(ax + dx * armLen, ay);
@@ -780,12 +787,17 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const icon = NPC_TIPO_ICON[entity.tipo] ?? 'user';
   const artImg = await loadImage(mediaUrl(entity.imagen ?? entity.imagen_mini));
 
-  const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH);
+  const npcBorderWidth = 4.8;
+  const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH, { borderWidth: npcBorderWidth });
   const innerW = innerRight - innerX;
 
   /* La imagen de la entidad ocupa toda la carta como fondo, igual que la foto de
      personaje en CharacterCard.jsx — el marco/borde en degradé se mantiene igual. */
-  paintEntityBackgroundArt(ctx, artImg, icon, pad, cardH, frame);
+  paintEntityBackgroundArt(ctx, artImg, icon, pad, cardH, frame, {
+    borderWidth: npcBorderWidth,
+    edgeFadeBand: 64,
+    edgeFadeAlpha: 0.78,
+  });
 
   if (entity.tipo === 'jefe') {
     paintJefeWatermark(ctx, cardH, frame.line);
