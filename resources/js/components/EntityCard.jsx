@@ -5,7 +5,7 @@ import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
-  COMBAT_STAT_META,
+  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -13,16 +13,20 @@ const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
 
 /* Paletas de marco reutilizadas por las 4 variantes de carta — mismo criterio
    que SIDE_FRAME en CharacterCard.jsx (canvas 2D no puede resolver var(--css)
-   ni color-mix(), así que todo va en hex). */
+   ni color-mix(), así que todo va en hex).
+   Están pensadas para papel, no para pantalla: `bg1`/`bg2` son tintes claros
+   del acento (poca cobertura de tinta, sin negros que la mayoría de las
+   impresoras domésticas embarran) y `line` es el acento vivo que da identidad
+   al marco y tiene contraste sobre ese fondo. */
 const FRAME = {
-  neutral: { bg1: '#111b2e', bg2: '#050a15', line: '#8aa0c0' },
-  info:    { bg1: '#0a1a3a', bg2: '#040c1e', line: '#38cdf0' },
-  ok:      { bg1: '#0a2a1c', bg2: '#03130b', line: '#10b981' },
-  danger:  { bg1: '#2a0a0f', bg2: '#0f0304', line: '#ff2d45' },
-  gold:    { bg1: '#2a2008', bg2: '#120e02', line: '#E6B325' },
-  purple:  { bg1: '#1c0a2a', bg2: '#0a0312', line: '#b15cff' },
-  orange:  { bg1: '#2a1608', bg2: '#120a03', line: '#FF6B00' },
-  toxic:   { bg1: '#1c2a08', bg2: '#0a1203', line: '#84cc16' },
+  neutral: { bg1: '#e4ebf5', bg2: '#f4f7fb', line: '#4b6a90' },
+  info:    { bg1: '#d5ecfa', bg2: '#eff8fe', line: '#0a7ec2' },
+  ok:      { bg1: '#d6f2e4', bg2: '#eefaf4', line: '#0f9d63' },
+  danger:  { bg1: '#ffdfe3', bg2: '#fff1f3', line: '#e01f3d' },
+  gold:    { bg1: '#fdeec6', bg2: '#fff9e9', line: '#c08a06' },
+  purple:  { bg1: '#e9defd', bg2: '#f6f1fe', line: '#7a35e0' },
+  orange:  { bg1: '#ffe3cd', bg2: '#fff4ea', line: '#e2650b' },
+  toxic:   { bg1: '#e9f5c8', bg2: '#f6fce8', line: '#5f9109' },
 };
 
 const stackCounts = (value) => {
@@ -97,10 +101,10 @@ function paintStatPills(ctx, entries, x, y, maxWidth, emptyText, emptyColor) {
 
     ctx.beginPath();
     ctx.roundRect(cx, cy, pillW, STAT_PILL_H, 8);
-    ctx.fillStyle = `${entry.color}18`;
+    ctx.fillStyle = `${entry.color}1f`;
     ctx.fill();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = `${entry.color}50`;
+    ctx.strokeStyle = `${entry.color}80`;
     ctx.stroke();
 
     drawIcon(ctx, entry.icon ?? 'zap', cx + 8 + STAT_PILL_ICON_SIZE / 2, cy + STAT_PILL_H / 2, STAT_PILL_ICON_SIZE, entry.color, 1.8);
@@ -138,7 +142,7 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
   ctx.beginPath();
   ctx.roundRect(pad, pad, CARD_W - pad * 2, cardH - pad * 2, 22);
   ctx.lineWidth = 3;
-  ctx.strokeStyle = `${frame.line}aa`;
+  ctx.strokeStyle = frame.line;
   ctx.stroke();
   ctx.restore();
 
@@ -150,7 +154,7 @@ function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColo
   ctx.textAlign = 'left';
   const displayName = (title ?? '???').toUpperCase();
   fitText(ctx, displayName, innerRight - innerX - 66, '30px Orbitron');
-  ctx.fillStyle = '#eaf2ff';
+  ctx.fillStyle = INK.strong;
   ctx.fillText(displayName, innerX, pad + 54);
 
   if (badgeText !== null && badgeText !== undefined) {
@@ -159,7 +163,7 @@ function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColo
     ctx.fillStyle = badgeColor;
     ctx.fill();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#04070f';
+    ctx.fillStyle = INK.onAccent;
     ctx.font = '800 18px Orbitron';
     ctx.fillText(String(badgeText).slice(0, 3).toUpperCase(), innerRight - 24, pad + 47);
   }
@@ -169,7 +173,7 @@ function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColo
 async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, artH, borderColor, bgColor) {
   const img = await loadImage(mediaUrl(imgSrc));
   if (img) {
-    drawImageRounded(ctx, img, innerX, artY, innerW, artH, 16, `${borderColor}66`, 3, 'center', 'contain', bgColor ?? '#0a1428');
+    drawImageRounded(ctx, img, innerX, artY, innerW, artH, 16, `${borderColor}99`, 3, 'center', 'contain', bgColor ?? INK.paper);
     return;
   }
   ctx.save();
@@ -180,28 +184,28 @@ async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, 
     innerX + innerW / 2, artY + artH / 2, 20,
     innerX + innerW / 2, artY + artH / 2, innerW / 1.3,
   );
-  g.addColorStop(0, `${iconColor}22`);
-  g.addColorStop(1, '#04070f');
+  g.addColorStop(0, `${iconColor}2e`);
+  g.addColorStop(1, INK.paper);
   ctx.fillStyle = g;
   ctx.fillRect(innerX, artY, innerW, artH);
-  ctx.globalAlpha = 0.4;
+  ctx.globalAlpha = 0.55;
   drawIcon(ctx, iconName, innerX + innerW / 2, artY + artH / 2, 150, iconColor, 1.6);
   ctx.globalAlpha = 1;
   ctx.restore();
   ctx.beginPath();
   ctx.roundRect(innerX, artY, innerW, artH, 16);
   ctx.lineWidth = 3;
-  ctx.strokeStyle = `${borderColor}66`;
+  ctx.strokeStyle = `${borderColor}99`;
   ctx.stroke();
 }
 
 /** Línea de tipo centrada, con separadores horizontales (como la "type line" de una carta Magic). */
 function paintTypeLine(ctx, label, typeY, innerX, innerRight) {
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(150,200,255,0.55)';
+  ctx.fillStyle = INK.muted;
   ctx.font = '600 15px "JetBrains Mono"';
   ctx.fillText(label.toUpperCase(), CARD_W / 2, typeY);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(innerX, typeY + 12); ctx.lineTo(innerRight, typeY + 12); ctx.stroke();
@@ -213,7 +217,7 @@ function paintRows(ctx, rows, startY, innerX, innerRight, rowH = 47) {
     const rowY = startY + i * rowH;
     drawIcon(ctx, r.icon, innerX + 13, rowY - 6, 22, r.color, 2);
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(220,230,255,0.8)';
+    ctx.fillStyle = INK.body;
     ctx.font = '600 16px "JetBrains Mono"';
     ctx.fillText(r.label.toUpperCase(), innerX + 34, rowY);
 
@@ -231,7 +235,7 @@ function paintRows(ctx, rows, startY, innerX, innerRight, rowH = 47) {
       ctx.restore();
     }
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.strokeStyle = INK.hairSoft;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(innerX, rowY + 16);
@@ -255,7 +259,7 @@ function paintStatBoxes(ctx, entries, x, y, w, h, gap = 10) {
     ctx.fillStyle = e.color;
     ctx.font = '800 20px Orbitron';
     ctx.fillText(String(e.value), bx + boxW / 2, y + h - 20);
-    ctx.fillStyle = 'rgba(220,230,255,0.65)';
+    ctx.fillStyle = INK.muted;
     ctx.font = '600 10px "JetBrains Mono"';
     ctx.fillText(e.label.toUpperCase(), bx + boxW / 2, y + h - 7);
   });
@@ -268,7 +272,7 @@ function paintStatBoxes(ctx, entries, x, y, w, h, gap = 10) {
 function paintJefeWatermark(ctx, cardH, color) {
   const size = CARD_W * 0.72;
   ctx.save();
-  ctx.globalAlpha = 0.1;
+  ctx.globalAlpha = 0.18;
   drawIcon(ctx, 'crown', CARD_W / 2, cardH * 0.46, size, color, (4 * 24) / size);
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -318,7 +322,7 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
 
 function paintColofon(ctx, text, cardH = CARD_H) {
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(120,150,190,0.55)';
+  ctx.fillStyle = INK.faint;
   ctx.font = '400 12px "JetBrains Mono"';
   ctx.fillText(text, CARD_W / 2, cardH - 22 - 8);
 }
@@ -396,7 +400,7 @@ export async function drawHabilidadCard(habilidad) {
   const forma = Number(habilidad.forma) || 0;
   const classInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
   const frame = FRAME[TIPO_HAB_FRAME[habilidad.tipo]] ?? FRAME.neutral;
-  const badgeColor = classInfo?.accent ?? '#8aa0c0';
+  const badgeColor = formaAccent(classInfo);
 
   const canvas = document.createElement('canvas');
   canvas.width = CARD_W;
@@ -418,7 +422,7 @@ export async function drawHabilidadCard(habilidad) {
   ctx.font = '700 16px "JetBrains Mono"';
   ctx.fillText(TIPO_HAB_LABEL[habilidad.tipo] ?? habilidad.tipo ?? '', innerX + 30, pad + 96);
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(220,230,255,0.7)';
+  ctx.fillStyle = INK.body;
   ctx.font = '600 14px "JetBrains Mono"';
   ctx.fillText(habilidad.objetivo === 'self' ? 'Sobre uno mismo' : 'Sobre el enemigo', innerRight - 6, pad + 96);
 
@@ -438,14 +442,14 @@ export async function drawHabilidadCard(habilidad) {
   paintTypeLine(ctx, classInfo ? `${classInfo.num} · ${classInfo.name}` : 'Habilidad Universal', typeY, innerX, innerRight);
 
   const rows = [];
-  rows.push({ icon: 'zap', label: 'Costo Fuerza', color: '#E6B325', value: habilidad.costo_fuerza ?? 0 });
-  if (habilidad.damage) rows.push({ icon: 'sword', label: 'Daño', color: '#ff7043', value: habilidad.damage });
-  if (habilidad.damage_escudo) rows.push({ icon: 'shield', label: 'Daño a Escudo', color: '#26e3e3', value: habilidad.damage_escudo });
-  if (habilidad.damage_perforante) rows.push({ icon: 'fire', label: 'Daño Perforante', color: '#8aa0c0', value: habilidad.damage_perforante });
+  rows.push({ icon: 'zap', label: 'Costo Fuerza', color: PRINT_ACCENT.costo, value: habilidad.costo_fuerza ?? 0 });
+  if (habilidad.damage) rows.push({ icon: 'sword', label: 'Daño', color: PRINT_ACCENT.dano, value: habilidad.damage });
+  if (habilidad.damage_escudo) rows.push({ icon: 'shield', label: 'Daño a Escudo', color: PRINT_ACCENT.danoEscudo, value: habilidad.damage_escudo });
+  if (habilidad.damage_perforante) rows.push({ icon: 'fire', label: 'Daño Perforante', color: PRINT_ACCENT.danoPerforante, value: habilidad.damage_perforante });
   rows.push({
     icon: 'clock',
     label: 'Cooldown',
-    color: '#38cdf0',
+    color: PRINT_ACCENT.cooldown,
     value: habilidad.cooldown ?? 0,
     suffixIcon: 'arrow',
     suffixRotation: COOLDOWN_ARROW[habilidad.cooldown]?.rotation ?? 0,
@@ -462,7 +466,7 @@ export async function drawHabilidadCard(habilidad) {
     stat,
     count,
     label: COMBAT_STAT_META[stat]?.label ?? stat.toUpperCase(),
-    color: COMBAT_STAT_META[stat]?.color ?? '#cfe3ff',
+    color: COMBAT_STAT_META[stat]?.color ?? INK.strong,
     icon: COMBAT_STAT_META[stat]?.icon ?? 'zap',
   }));
   const buffEntries = toEntries(buffCounts);
@@ -484,18 +488,18 @@ export async function drawHabilidadCard(habilidad) {
   paintBoxBg(ctx, innerX, bdTop, innerW, bdBoxH, 12);
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(16,185,129,0.95)';
+  ctx.fillStyle = PRINT_ACCENT.buff;
   ctx.font = '700 11px "JetBrains Mono"';
   ctx.fillText('BUFF', innerX + bdColPad, bdTop + bdBoxPad + 4);
-  paintStatPills(ctx, buffEntries, innerX + bdColPad, bdTop + bdBoxPad + bdTitleH, bdPillsMaxW, 'Sin Buff', 'rgba(220,230,255,0.55)');
+  paintStatPills(ctx, buffEntries, innerX + bdColPad, bdTop + bdBoxPad + bdTitleH, bdPillsMaxW, 'Sin Buff', INK.muted);
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(255,93,117,0.95)';
+  ctx.fillStyle = PRINT_ACCENT.debuff;
   ctx.font = '700 11px "JetBrains Mono"';
   ctx.fillText('DEBUFF', bdRightX + bdColPad, bdTop + bdBoxPad + 4);
-  paintStatPills(ctx, debuffEntries, bdRightX + bdColPad, bdTop + bdBoxPad + bdTitleH, bdPillsMaxW, 'Sin Debuff', 'rgba(220,230,255,0.55)');
+  paintStatPills(ctx, debuffEntries, bdRightX + bdColPad, bdTop + bdBoxPad + bdTitleH, bdPillsMaxW, 'Sin Debuff', INK.muted);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(innerX + bdColW + bdColGap / 2, bdTop + 6);
@@ -508,13 +512,13 @@ export async function drawHabilidadCard(habilidad) {
 
   let cursorY = infoTop + 18;
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(150,200,255,0.55)';
+  ctx.fillStyle = INK.muted;
   ctx.font = '600 11px "JetBrains Mono"';
   ctx.fillText('EFECTO', CARD_W / 2, cursorY);
   cursorY += 20;
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(220,230,255,0.82)';
+  ctx.fillStyle = INK.body;
   ctx.font = '400 17px "JetBrains Mono"';
   wrapText(ctx, habilidad.efecto || 'Sin descripción de efecto.', CARD_W / 2, cursorY, innerW - 16, 23, 4);
 
@@ -538,19 +542,20 @@ const TIPO_OBJ_ICON = {
   estabilizador: 'shield', empunadura: 'anvil', modulo_activacion: 'settings', accesorio: 'box', mejora_nave: 'ship',
   armadura: 'shield', mejora_armadura: 'settings',
 };
+/* Bonos de objeto — mismos matices que COMBAT_STAT_META/PRINT_ACCENT, en versión papel. */
 const BONUS_META = {
-  bono_ataque:            { label: 'ATQ',  color: '#ff7043', icon: 'sword' },
-  bono_defensa:           { label: 'DEF',  color: '#38cdf0', icon: 'shield' },
-  bono_punteria:          { label: 'PNT',  color: '#10b981', icon: 'eye' },
-  bono_movimiento:        { label: 'AGI',  color: '#a78bfa', icon: 'zap' },
-  bono_iniciativa:        { label: 'INI',  color: '#E6B325', icon: 'star' },
-  bono_vida:              { label: 'VID',  color: '#ff2d45', icon: 'zap' },
-  bono_escudo:            { label: 'ESC',  color: '#26e3e3', icon: 'shield' },
-  bono_dano:              { label: 'DMG',  color: '#ff5f2e', icon: 'flame' },
-  bono_dano_perforante:   { label: 'DMGP', color: '#8aa0c0', icon: 'fire' },
-  bono_critico:           { label: 'CRT',  color: '#f43f5e', icon: 'target' },
-  bono_fuerza:            { label: 'FZ',   color: '#22c55e', icon: 'dumbbell' },
-  bono_generacion_fuerza: { label: 'GEN',  color: '#84cc16', icon: 'trending' },
+  bono_ataque:            { label: 'ATQ',  color: COMBAT_STAT_META.ataque.color,     icon: 'sword' },
+  bono_defensa:           { label: 'DEF',  color: COMBAT_STAT_META.defensa.color,    icon: 'shield' },
+  bono_punteria:          { label: 'PNT',  color: COMBAT_STAT_META.punteria.color,   icon: 'eye' },
+  bono_movimiento:        { label: 'AGI',  color: COMBAT_STAT_META.movimiento.color, icon: 'zap' },
+  bono_iniciativa:        { label: 'INI',  color: COMBAT_STAT_META.iniciativa.color, icon: 'star' },
+  bono_vida:              { label: 'VID',  color: COMBAT_STAT_META.vida.color,       icon: 'zap' },
+  bono_escudo:            { label: 'ESC',  color: COMBAT_STAT_META.escudo.color,     icon: 'shield' },
+  bono_dano:              { label: 'DMG',  color: PRINT_ACCENT.danoBonus,            icon: 'flame' },
+  bono_dano_perforante:   { label: 'DMGP', color: PRINT_ACCENT.danoPerforante,       icon: 'fire' },
+  bono_critico:           { label: 'CRT',  color: '#c81e4a',                         icon: 'target' },
+  bono_fuerza:            { label: 'FZ',   color: PRINT_ACCENT.fuerza,               icon: 'dumbbell' },
+  bono_generacion_fuerza: { label: 'GEN',  color: PRINT_ACCENT.fuerzaGen,            icon: 'trending' },
 };
 
 export async function drawObjetoCard(objeto) {
@@ -576,7 +581,7 @@ export async function drawObjetoCard(objeto) {
   ctx.font = '700 16px "JetBrains Mono"';
   ctx.fillText(TIPO_OBJ_LABEL[objeto.tipo] ?? objeto.tipo ?? '', innerX + 30, pad + 96);
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(220,230,255,0.7)';
+  ctx.fillStyle = INK.body;
   ctx.font = '600 14px "JetBrains Mono"';
   ctx.fillText(`₡ ${objeto.costo ?? 0}`, innerRight - 6, pad + 96);
 
@@ -588,9 +593,9 @@ export async function drawObjetoCard(objeto) {
   paintTypeLine(ctx, RAREZA_LABEL[objeto.rareza] ?? objeto.rareza ?? 'Objeto', typeY, innerX, innerRight);
 
   const rows = [];
-  if (objeto.dano) rows.push({ icon: 'sword', label: objeto.tipo_ataque ? `Daño (${objeto.tipo_ataque})` : 'Daño', color: '#ff7043', value: objeto.dano });
-  if (objeto.dano_perforante) rows.push({ icon: 'fire', label: 'Daño Perforante', color: '#8aa0c0', value: objeto.dano_perforante });
-  if (objeto.energia_maxima) rows.push({ icon: 'zap', label: 'Energía Máxima', color: '#38cdf0', value: objeto.energia_maxima });
+  if (objeto.dano) rows.push({ icon: 'sword', label: objeto.tipo_ataque ? `Daño (${objeto.tipo_ataque})` : 'Daño', color: PRINT_ACCENT.dano, value: objeto.dano });
+  if (objeto.dano_perforante) rows.push({ icon: 'fire', label: 'Daño Perforante', color: PRINT_ACCENT.danoPerforante, value: objeto.dano_perforante });
+  if (objeto.energia_maxima) rows.push({ icon: 'zap', label: 'Energía Máxima', color: PRINT_ACCENT.energia, value: objeto.energia_maxima });
   for (const key of Object.keys(BONUS_META)) {
     const v = objeto[key];
     if (v) rows.push({ icon: BONUS_META[key].icon, label: `Bono ${BONUS_META[key].label}`, color: BONUS_META[key].color, value: v > 0 ? `+${v}` : v });
@@ -602,16 +607,21 @@ export async function drawObjetoCard(objeto) {
 
   const rulesY = rowsEndY + 26;
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(220,230,255,0.82)';
+  ctx.fillStyle = INK.body;
   ctx.font = '400 17px "JetBrains Mono"';
   const text = [objeto.descripcion, objeto.efecto].filter(Boolean).join(' — ') || 'Sin descripción.';
   wrapText(ctx, text, CARD_W / 2, rulesY, innerW - 8, 23, 4);
 
   if (objeto.color_hoja) {
+    /* el punto de color de hoja lleva contorno: los sables claros (blanco, ámbar)
+       serían invisibles impresos sobre el fondo claro de la carta. */
     ctx.beginPath();
     ctx.arc(innerX + 16, CARD_H - pad - 46, 8, 0, Math.PI * 2);
-    ctx.fillStyle = NX.SABERS[objeto.color_hoja] ?? '#38cdf0';
+    ctx.fillStyle = NX.SABERS[objeto.color_hoja] ?? PRINT_ACCENT.energia;
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(15,32,54,0.5)';
+    ctx.stroke();
   }
 
   paintColofon(ctx, objeto.activo === false ? 'Descontinuado · Catálogo NÉXUS' : 'Objetos · Catálogo NÉXUS');
@@ -630,11 +640,11 @@ const NPC_TIPO_ICON  = { aliado: 'user', neutral: 'user', hostil: 'flame', entre
  * tamaño de miniatura. */
 async function paintHabilidadIconCell(ctx, hab, x, y, size, borderColor) {
   const iconName = TIPO_HAB_ICON[hab?.tipo] ?? 'zap';
-  const iconColor = FRAME[TIPO_HAB_FRAME[hab?.tipo] ?? 'info']?.line ?? '#38cdf0';
+  const iconColor = FRAME[TIPO_HAB_FRAME[hab?.tipo] ?? 'info']?.line ?? PRINT_ACCENT.energia;
   const img = await loadImage(mediaUrl(hab?.icono_url ?? hab?.icono));
 
   if (img) {
-    drawImageRounded(ctx, img, x, y, size, size, 14, `${borderColor}66`, 2.4, 'center', 'cover');
+    drawImageRounded(ctx, img, x, y, size, size, 14, `${borderColor}99`, 2.4, 'center', 'cover');
     return;
   }
 
@@ -643,18 +653,18 @@ async function paintHabilidadIconCell(ctx, hab, x, y, size, borderColor) {
   ctx.roundRect(x, y, size, size, 14);
   ctx.clip();
   const g = ctx.createRadialGradient(x + size / 2, y + size / 2, size * 0.12, x + size / 2, y + size / 2, size * 0.75);
-  g.addColorStop(0, `${iconColor}22`);
-  g.addColorStop(1, '#04070f');
+  g.addColorStop(0, `${iconColor}2e`);
+  g.addColorStop(1, INK.paper);
   ctx.fillStyle = g;
   ctx.fillRect(x, y, size, size);
-  ctx.globalAlpha = 0.5;
+  ctx.globalAlpha = 0.7;
   drawIcon(ctx, iconName, x + size / 2, y + size / 2, size * 0.46, iconColor, 1.8);
   ctx.globalAlpha = 1;
   ctx.restore();
   ctx.beginPath();
   ctx.roundRect(x, y, size, size, 14);
   ctx.lineWidth = 2.4;
-  ctx.strokeStyle = `${borderColor}66`;
+  ctx.strokeStyle = `${borderColor}99`;
   ctx.stroke();
 }
 
@@ -676,7 +686,7 @@ async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor, cell
     if (!hab) {
       ctx.save();
       ctx.setLineDash([6, 6]);
-      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.strokeStyle = INK.hair;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(cx, cy, cellSize, cellSize, 14);
@@ -687,7 +697,7 @@ async function paintHabilidadesGrid(ctx, habilidades, x, w, y, borderColor, cell
 
     await paintHabilidadIconCell(ctx, hab, cx, cy, cellSize, borderColor);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#eaf2ff';
+    ctx.fillStyle = INK.strong;
     const size = fitText(ctx, hab.nombre ?? '', cellSize + 10, '11px "JetBrains Mono"', 8);
     ctx.font = `600 ${size}px "JetBrains Mono"`;
     ctx.fillText(hab.nombre ?? '', cx + cellSize / 2, cy + cellSize + labelH - 5);
@@ -727,7 +737,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
   if (sub) {
     ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(220,230,255,0.7)';
+    ctx.fillStyle = INK.body;
     const size = fitText(ctx, sub, innerW - 160, '14px "JetBrains Mono"', 11);
     ctx.font = `${size}px "JetBrains Mono"`;
     ctx.fillText(sub, innerRight - 6, pad + 96);
@@ -741,10 +751,10 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     const formaGap = 12;
     const formaW = 96;
     const mainW = innerW - formaW - formaGap;
-    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, mainW, artH, frame.line, '#000');
-    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerX + mainW + formaGap, artY, formaW, artH, frame.line, '#000');
+    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, mainW, artH, frame.line, INK.paper);
+    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerX + mainW + formaGap, artY, formaW, artH, frame.line, INK.paper);
   } else {
-    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line, '#000');
+    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line, INK.paper);
   }
 
   const typeY = artY + artH + 36;
@@ -771,9 +781,9 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
     value: entity[key] ?? 0,
   }));
   const danoEntries = [
-    { icon: 'sword', label: 'Daño', color: '#ff7043', value: entity.dano ?? 0 },
-    { icon: 'shield', label: 'Daño Escudo', color: '#26e3e3', value: entity.dano_escudo ?? 0 },
-    { icon: 'fire', label: 'Daño Perforante', color: '#8aa0c0', value: entity.dano_perforante ?? 0 },
+    { icon: 'sword', label: 'Daño', color: PRINT_ACCENT.dano, value: entity.dano ?? 0 },
+    { icon: 'shield', label: 'Daño Escudo', color: PRINT_ACCENT.danoEscudo, value: entity.dano_escudo ?? 0 },
+    { icon: 'fire', label: 'Daño Perforante', color: PRINT_ACCENT.danoPerforante, value: entity.dano_perforante ?? 0 },
   ];
 
   const statsTop = statsY;
@@ -810,7 +820,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   ctx.fillStyle = frame.line;
   ctx.font = '700 11px "JetBrains Mono"';
   ctx.fillText('SALUDO INICIAL', innerX + attrBoxPad, statsTop);
-  ctx.fillStyle = 'rgba(220,230,255,0.78)';
+  ctx.fillStyle = INK.body;
   ctx.font = '400 15px "JetBrains Mono"';
   const saludoText = entity.saludo ? `“${entity.saludo}”` : 'Sin saludo registrado.';
   wrapText(ctx, saludoText, innerX + attrBoxPad, statsTop + 20, saludoColW - attrBoxPad, saludoLineH, saludoMaxLines);
@@ -818,7 +828,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   if (hasHabilidades) {
     const habLabelY = statsTop + saludoBlockH + 22;
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(150,200,255,0.55)';
+    ctx.fillStyle = INK.muted;
     ctx.font = '600 12px "JetBrains Mono"';
     ctx.fillText('HABILIDADES', innerX + saludoColW / 2, habLabelY);
     await paintHabilidadesGrid(ctx, habilidades, innerX, saludoColW, habLabelY + 20, frame.line, habCellSize, habLabelH, habRowGap, habColGap);
@@ -827,7 +837,7 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   const attrRowsEndY = paintRows(ctx, rows, statsTop, attrColX + attrBoxPad, attrColX + attrColW - attrBoxPad, rowH);
   paintStatBoxes(ctx, danoEntries, attrColX + attrBoxPad, attrRowsEndY + danoGap, attrColW - attrBoxPad * 2, danoBoxH);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(innerX + saludoColW + colGap / 2, attrBoxTop + 6);
@@ -922,7 +932,7 @@ function paintTurnBorderMarkers(ctx, w, h, pad, color, maxTurns) {
    estado/stat tiene su propia mini-ilustración generada por código. */
 function motifBurstLines(ctx, cx, cy, r, color, count = 8) {
   ctx.save();
-  ctx.strokeStyle = `${color}77`;
+  ctx.strokeStyle = `${color}8c`;
   ctx.lineWidth = 3;
   for (let i = 0; i < count; i++) {
     const a = (Math.PI * 2 * i) / count;
@@ -935,7 +945,7 @@ function motifBurstLines(ctx, cx, cy, r, color, count = 8) {
 }
 function motifRings(ctx, cx, cy, r, color, count = 3) {
   ctx.save();
-  ctx.strokeStyle = `${color}55`;
+  ctx.strokeStyle = `${color}70`;
   ctx.lineWidth = 2;
   for (let i = 1; i <= count; i++) {
     ctx.beginPath();
@@ -1001,7 +1011,7 @@ function motifCrossPulse(ctx, cx, cy, r, color, count = 3) {
 }
 function motifStreaks(ctx, cx, cy, r, color, count = 4) {
   ctx.save();
-  ctx.strokeStyle = `${color}77`;
+  ctx.strokeStyle = `${color}8c`;
   ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   for (let i = 0; i < count; i++) {
@@ -1046,8 +1056,8 @@ function paintArtBox(ctx, x, y, w, h, frame, icon, motifFn) {
   const cx = x + w / 2;
   const cy = y + h / 2;
   const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, Math.max(w, h) * 0.7);
-  g.addColorStop(0, `${frame.line}26`);
-  g.addColorStop(1, frame.bg2);
+  g.addColorStop(0, INK.paper);
+  g.addColorStop(1, `${frame.line}26`);
   ctx.fillStyle = g;
   ctx.fillRect(x, y, w, h);
   const r = Math.min(w, h) / 2 - 8;
@@ -1057,7 +1067,7 @@ function paintArtBox(ctx, x, y, w, h, frame, icon, motifFn) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.lineWidth = 2;
-  ctx.strokeStyle = `${frame.line}66`;
+  ctx.strokeStyle = `${frame.line}99`;
   ctx.stroke();
 }
 
@@ -1097,7 +1107,7 @@ async function drawTokenCard({ id, label, icon, frame, maxTurns, bottom }) {
   ctx.beginPath();
   ctx.roundRect(pad, pad, TOKEN_W - pad * 2, TOKEN_H - pad * 2, radius - 6);
   ctx.lineWidth = 3;
-  ctx.strokeStyle = `${frame.line}aa`;
+  ctx.strokeStyle = frame.line;
   ctx.stroke();
   ctx.restore();
 
@@ -1112,7 +1122,7 @@ async function drawTokenCard({ id, label, icon, frame, maxTurns, bottom }) {
   const cx = TOKEN_W / 2;
   const labelY = artY + artH + 40;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#eaf2ff';
+  ctx.fillStyle = INK.strong;
   const fontSize = fitText(ctx, label.toUpperCase(), TOKEN_W - pad * 4, '30px Orbitron', 14);
   ctx.font = `800 ${fontSize}px Orbitron`;
   ctx.fillText(label.toUpperCase(), cx, labelY);
@@ -1132,7 +1142,7 @@ async function drawTokenCard({ id, label, icon, frame, maxTurns, bottom }) {
   } else if (bottom.type === 'desc') {
     paintBoxBg(ctx, bottomX, bottomY, bottomW, bottomBottom - bottomY, 10);
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(220,230,255,0.86)';
+    ctx.fillStyle = INK.body;
     ctx.font = '400 15px "JetBrains Mono"';
     wrapText(ctx, bottom.text, cx, bottomY + 20, bottomW - 16, 19, 7);
   }

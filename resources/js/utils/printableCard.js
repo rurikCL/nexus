@@ -13,6 +13,26 @@ export const TOKEN_H = 532;
 export const TOKEN_W_MM = Math.round(TOKEN_W * 63 / CARD_W); // ≈ 32mm
 export const TOKEN_H_MM = Math.round(TOKEN_H * 88 / CARD_H); // ≈ 45mm
 
+/* ── Paleta de impresión ───────────────────────────────────────────────────
+   Las cartas se generan para papel, no para pantalla: fondos claros (poca
+   cobertura de tinta, sin negros saturados que la mayoría de las impresoras
+   domésticas embarran) y tinta oscura para el texto. Todo color de texto,
+   superficie o divisor de las cartas sale de acá — los acentos de color
+   (frame.line, COMBAT_STAT_META…) son tonos vivos de rango medio, elegidos
+   para tener contraste sobre papel blanco. */
+export const INK = {
+  paper:    '#ffffff',
+  strong:   '#0f2036',                  // títulos y valores destacados
+  body:     'rgba(17,36,56,0.86)',      // texto de datos
+  muted:    'rgba(25,50,76,0.62)',      // etiquetas secundarias
+  faint:    'rgba(30,56,84,0.58)',      // colofón / pies
+  onAccent: '#ffffff',                  // texto sobre un relleno de acento
+  surface1: 'rgba(255,255,255,0.82)',   // cajas internas (borde superior del degradé)
+  surface2: 'rgba(255,255,255,0.52)',   // cajas internas (borde inferior)
+  hair:     'rgba(15,32,54,0.20)',      // bordes y divisores
+  hairSoft: 'rgba(15,32,54,0.10)',      // divisores de fila
+};
+
 export function mediaUrl(path) {
   if (!path) return null;
   if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) return path;
@@ -70,7 +90,7 @@ export function drawIcon(ctx, iconPaths, name, cx, cy, size, color, strokeWidth 
     del fondo donde no cubre; `fit: 'cover'` la recorta para llenar todo el rectángulo.
     `alignY: 'top'` ancla la imagen a la parte superior del rectángulo (centrada en horizontal)
     en vez de centrarla también verticalmente — útil para retratos donde la cara suele quedar arriba. */
-export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, borderWidth = 3, alignY = 'center', fit = 'contain', bgColor = '#0a1428') {
+export function drawImageRounded(ctx, img, x, y, w, h, radius, borderColor, borderWidth = 3, alignY = 'center', fit = 'contain', bgColor = INK.paper) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
@@ -145,9 +165,10 @@ export async function paintCardLogo(ctx, boxRight, boxBottom, size = 34, margin 
   const x = boxRight - size - margin;
   const y = boxBottom - size - margin;
   ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.shadowColor = 'rgba(0,0,0,0.7)';
-  ctx.shadowBlur = 6;
+  // sombra apenas marcada: el logo es dorado y sobre papel blanco necesita un
+  // contorno mínimo, pero un halo negro como el de pantalla se imprime sucio.
+  ctx.shadowColor = 'rgba(15,32,54,0.28)';
+  ctx.shadowBlur = 3;
   ctx.drawImage(img, x, y, size, size);
   ctx.restore();
 }
@@ -158,16 +179,16 @@ export async function paintLogoAt(ctx, cx, cy, size = 40) {
   const img = await cardLogoPromise;
   if (!img) return;
   ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.shadowColor = 'rgba(0,0,0,0.7)';
-  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(15,32,54,0.28)';
+  ctx.shadowBlur = 3;
   ctx.drawImage(img, cx - size / 2, cy - size / 2, size, size);
   ctx.restore();
 }
 
 /** Fondo cuadriculado con degradé — mismo criterio visual que las tarjetas de zona/planeta
-    del Mapa Estelar (Mapa.jsx): resplandor radial cian de fondo + rejilla de líneas finas
-    de 48px encima, recortado al rectángulo (x, y, w, h). */
+    del Mapa Estelar (Mapa.jsx), pero en versión papel: un realce blanco radial que aclara el
+    centro del tinte del marco + rejilla de líneas finas de 48px encima, recortado al
+    rectángulo (x, y, w, h). */
 export function paintGridBackground(ctx, x, y, w, h, radius = 0, spacing = 48) {
   ctx.save();
   ctx.beginPath();
@@ -175,13 +196,13 @@ export function paintGridBackground(ctx, x, y, w, h, radius = 0, spacing = 48) {
   ctx.clip();
 
   const glow = ctx.createRadialGradient(x + w * 0.6, y + h * 0.4, 0, x + w * 0.6, y + h * 0.4, Math.max(w, h) * 0.75);
-  glow.addColorStop(0, 'rgba(56,205,240,0.14)');
-  glow.addColorStop(0.7, 'rgba(4,10,30,0.45)');
-  glow.addColorStop(1, 'rgba(4,10,30,0.45)');
+  glow.addColorStop(0, 'rgba(255,255,255,0.72)');
+  glow.addColorStop(0.7, 'rgba(255,255,255,0.16)');
+  glow.addColorStop(1, 'rgba(255,255,255,0.08)');
   ctx.fillStyle = glow;
   ctx.fillRect(x, y, w, h);
 
-  ctx.strokeStyle = 'rgba(56,205,240,0.16)';
+  ctx.strokeStyle = 'rgba(20,48,80,0.10)';
   ctx.lineWidth = 1;
   for (let gx = x; gx <= x + w; gx += spacing) {
     ctx.beginPath();
@@ -206,8 +227,6 @@ function drawHeartPip(ctx, x, y, size, color) {
   const topCurveHeight = size * 0.3;
   ctx.save();
   ctx.fillStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 4;
   ctx.beginPath();
   ctx.moveTo(x + size / 2, y + topCurveHeight);
   ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + topCurveHeight);
@@ -225,12 +244,10 @@ function drawShieldPip(ctx, x, y, size, color) {
   ctx.translate(x, y);
   ctx.scale(size / 24, size / 24);
   const path = new Path2D(SHIELD_PATH);
-  ctx.fillStyle = `${color}33`;
+  ctx.fillStyle = `${color}30`;
   ctx.fill(path);
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 2;
   ctx.strokeStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 3;
   ctx.stroke(path);
   ctx.restore();
 }
@@ -248,7 +265,7 @@ function drawPipRow(ctx, { count, draw, x, maxWidth, y, size = 20, gap = 6, maxP
   let bottomY = y + rows * (size + gap) - gap;
   if (count > maxPips) {
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(220,230,255,0.75)';
+    ctx.fillStyle = INK.body;
     ctx.font = '700 13px "JetBrains Mono"';
     ctx.fillText(`+${count - maxPips}`, x, bottomY + 13);
     bottomY += 16;
@@ -266,15 +283,16 @@ function pipRowHeight(count, maxWidth, size, gap, maxPips = 30) {
   return h;
 }
 
-/** Fondo negro con degradé semitransparente + borde sutil, recortado a un rectángulo redondeado. */
+/** Panel blanco con degradé semitransparente + borde sutil, recortado a un rectángulo
+    redondeado — aclara el tinte del marco para separar el contenido sin gastar tinta. */
 export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.clip();
   const g = ctx.createLinearGradient(x, y, x, y + h);
-  g.addColorStop(0, 'rgba(0,0,0,0.55)');
-  g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  g.addColorStop(0, INK.surface1);
+  g.addColorStop(1, INK.surface2);
   ctx.fillStyle = g;
   ctx.fillRect(x, y, w, h);
   ctx.restore();
@@ -283,7 +301,7 @@ export function paintBoxBg(ctx, x, y, w, h, radius = 10, borderWidth = 1) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
   ctx.lineWidth = borderWidth;
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = INK.hair;
   ctx.stroke();
   ctx.restore();
 }
@@ -314,12 +332,12 @@ export function paintVidaEscudoBox(ctx, {
 
   ctx.textAlign = 'left';
   drawIcon(vidaMeta.icon, leftX + 11, cy - 6, 20, vidaMeta.color, 2);
-  ctx.fillStyle = 'rgba(220,230,255,0.8)';
+  ctx.fillStyle = INK.body;
   ctx.font = '600 16px "JetBrains Mono"';
   ctx.fillText(vidaMeta.label.toUpperCase(), leftX + 26, cy);
 
   drawIcon(escudoMeta.icon, rightX + 11, cy - 6, 20, escudoMeta.color, 2);
-  ctx.fillStyle = 'rgba(220,230,255,0.8)';
+  ctx.fillStyle = INK.body;
   ctx.font = '600 16px "JetBrains Mono"';
   ctx.fillText(escudoMeta.label.toUpperCase(), rightX + 26, cy);
 
@@ -332,7 +350,7 @@ export function paintVidaEscudoBox(ctx, {
     draw: (px, py, s) => drawShieldPip(ctx, px, py, s, escudoMeta.color),
   });
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x + halfW, boxTop + 6);
@@ -343,18 +361,47 @@ export function paintVidaEscudoBox(ctx, {
 }
 
 /* Metadatos de los 7 atributos de combate compartidos por personajes, NPCs,
-   jefes y enemigos — mismos íconos/colores que BONUS_FIELDS en ArmadoSable.jsx,
-   para mantener el lenguaje visual del resto de la app (ATQ naranja, DEF cian,
-   PNT verde, AGI violeta, INI dorado...). */
+   jefes y enemigos — mismos íconos y mismo lenguaje cromático que BONUS_FIELDS
+   en ArmadoSable.jsx (ATQ naranja, DEF cian, PNT verde, AGI violeta, INI
+   dorado...), pero un paso más oscuros: los tonos de pantalla (#26e3e3,
+   #a78bfa, #E6B325…) son demasiado claros para leerse sobre papel blanco.
+   Ver PRINT_ACCENT más abajo para los tonos de daño/bonos. */
 export const COMBAT_STAT_META = {
-  vida:       { label: 'Vida',       icon: 'zap',    color: '#ff2d45' },
-  escudo:     { label: 'Escudo',     icon: 'shield', color: '#26e3e3' },
-  defensa:    { label: 'Defensa',    icon: 'shield', color: '#38cdf0' },
-  ataque:     { label: 'Ataque',     icon: 'sword',  color: '#ff7043' },
-  movimiento: { label: 'Agilidad',   icon: 'zap',    color: '#a78bfa' },
-  iniciativa: { label: 'Iniciativa', icon: 'star',   color: '#E6B325' },
-  punteria:   { label: 'Puntería',   icon: 'eye',    color: '#10b981' },
+  vida:       { label: 'Vida',       icon: 'zap',    color: '#d81b3c' },
+  escudo:     { label: 'Escudo',     icon: 'shield', color: '#0891b2' },
+  defensa:    { label: 'Defensa',    icon: 'shield', color: '#0a7ec2' },
+  ataque:     { label: 'Ataque',     icon: 'sword',  color: '#e2650b' },
+  movimiento: { label: 'Agilidad',   icon: 'zap',    color: '#7a35e0' },
+  iniciativa: { label: 'Iniciativa', icon: 'star',   color: '#a9760a' },
+  punteria:   { label: 'Puntería',   icon: 'eye',    color: '#0f9d63' },
 };
+
+/* Acentos de impresión para los valores que no son uno de los 7 atributos
+   (daño, daño a escudo, daño perforante, fuerza, costo…). Mismo criterio:
+   tonos vivos de rango medio, legibles sobre blanco. */
+export const PRINT_ACCENT = {
+  dano:           '#e2650b',
+  danoEscudo:     '#0891b2',
+  danoPerforante: '#5b7391',
+  danoBonus:      '#dc4a10',
+  fuerza:         '#16a34a',
+  fuerzaGen:      '#5f9109',
+  energia:        '#0a7ec2',
+  cooldown:       '#0a7ec2',
+  costo:          '#a9760a',
+  buff:           '#0f9d63',
+  debuff:         '#d81b3c',
+};
+
+/* Acento de cada Forma para impresión, indexado por `id` de NX.CLASSES — los
+   `accent` del catálogo son tonos de pantalla (#ffb01f, #E6B325…) demasiado
+   claros para leerse sobre papel blanco o llevar texto blanco encima; estos
+   mantienen el matiz de cada forma un paso más oscuro. */
+export const PRINT_FORMA_ACCENT = {
+  forma1: '#c47f05', forma2: '#0a7ec2', forma3: '#0f9d63', forma4: '#e2650b',
+  forma5: '#7a35e0', forma6: '#a9760a', forma7: '#d81b3c',
+};
+export const formaAccent = (classInfo) => PRINT_FORMA_ACCENT[classInfo?.id] ?? '#4b6a90';
 export const COMBAT_STATS = Object.keys(COMBAT_STAT_META);
 export const COMBAT_STAT_DEFAULTS = { vida: 8, escudo: 4, defensa: 2, ataque: 2, movimiento: 2, iniciativa: 2, punteria: 2 };
 
