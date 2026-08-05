@@ -7,6 +7,7 @@ import {
   CARD_W, CARD_H, mediaUrl, loadImage, ensureFonts,
   drawIcon as drawIconRaw, drawImageRounded, fitText, printCardImage, paintLogoAt, paintGridBackground, paintVidaEscudoBox, paintBoxBg,
   COMBAT_STAT_META as STAT_META, COMBAT_STAT_DEFAULTS as COMBAT_DEFAULTS,
+  INK, PRINT_ACCENT, formaAccent,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -14,10 +15,11 @@ const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
 
 /* Colores planos por tier/tono — los de NX.TIERS/NX.MEDALS son var(--css) y
    canvas 2D no puede resolverlos, así que se duplican en hex (mismo criterio
-   que TIER_COLOR en Comando.jsx). */
+   que TIER_COLOR en Comando.jsx), un paso más oscuros que los de pantalla para
+   que se lean sobre el fondo claro de la carta impresa. */
 const TIER_COLOR = {
-  iniciado: '#8aa0c0', padawan: '#38cdf0', caballero: '#10b981',
-  maestro: '#FF6B00', granmaestro: '#E6B325',
+  iniciado: '#4b6a90', padawan: '#0a7ec2', caballero: '#0f9d63',
+  maestro: '#e2650b', granmaestro: '#c08a06',
 };
 /* Mismos assets que RANGOS_JEDI en Comando.jsx (apartado "Rango" de Mi Personaje). */
 const TIER_RANGO_IMG = {
@@ -28,9 +30,11 @@ const TIER_RANGO_IMG = {
   granmaestro: '/assets/GRANDMASTER.png',
 };
 
+/* Igual criterio que FRAME en EntityCard.jsx: tintes claros para papel + acento
+   vivo en el borde (los fondos casi negros de pantalla se imprimen embarrados). */
 const SIDE_FRAME = {
-  luminoso: { bg1: '#0a1a3a', bg2: '#040c1e', line: '#3aa0ff' },
-  oscuro:   { bg1: '#2a0a0f', bg2: '#0f0304', line: '#ff2d45' },
+  luminoso: { bg1: '#d9e8fb', bg2: '#f1f7fe', line: '#1668c9' },
+  oscuro:   { bg1: '#ffdfe3', bg2: '#fff1f3', line: '#e01f3d' },
 };
 
 /** Dibuja un sable de luz vertical (hoja + puño) — misma composición visual que SaberBlade en Comando.jsx. */
@@ -41,14 +45,15 @@ function drawSaberBlade(ctx, x, y, w, h, color) {
   const bladeW = Math.max(7, Math.min(14, w * 0.42));
   const bladeX = x + (w - bladeW) / 2;
 
-  ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 14;
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.roundRect(bladeX, y, bladeW, bladeH, bladeW / 2);
   ctx.fill();
-  ctx.restore();
+  /* contorno fino en vez del halo de pantalla: sobre papel claro las hojas
+     claras (blanco, ámbar, cian) desaparecerían sin un borde que las defina. */
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = INK.hair;
+  ctx.stroke();
 
   const coreW = Math.max(2, bladeW * 0.38);
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
@@ -74,12 +79,8 @@ function drawSaberBlade(ctx, x, y, w, h, color) {
   ctx.fillStyle = '#161d29';
   ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.14, hiltW - 4, hiltH * 0.12);
 
-  ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 6;
   ctx.fillStyle = color;
   ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.42, hiltW - 4, hiltH * 0.1);
-  ctx.restore();
 
   ctx.fillStyle = '#161d29';
   ctx.fillRect(hiltX + 2, hiltY + hiltH * 0.66, hiltW - 4, hiltH * 0.12);
@@ -90,10 +91,8 @@ function drawSaberBlade(ctx, x, y, w, h, color) {
 function drawForceIcon(ctx, cx, cy, size, color) {
   const r = size / 2;
   ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 5;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.stroke();
@@ -111,7 +110,9 @@ function drawForceIcon(ctx, cx, cy, size, color) {
   ctx.restore();
 }
 
-/** Degradé oscuro sobre los bordes de la foto — mantiene el centro limpio y oscurece hacia las esquinas. */
+/** Degradé claro sobre los bordes de la foto — mantiene el centro limpio y funde las
+    esquinas con el fondo claro de la carta (la versión oscura de pantalla se imprimía
+    como un marco negro que se comía la tinta). */
 function paintPhotoVignette(ctx, x, y, w, h, radius) {
   ctx.save();
   ctx.beginPath();
@@ -121,16 +122,17 @@ function paintPhotoVignette(ctx, x, y, w, h, radius) {
   const cy = y + h / 2;
   const r = Math.max(w, h) * 0.75;
   const g = ctx.createRadialGradient(cx, cy, r * 0.35, cx, cy, r);
-  g.addColorStop(0, 'rgba(0,0,0,0)');
-  g.addColorStop(1, 'rgba(0,0,0,0.78)');
+  g.addColorStop(0, 'rgba(255,255,255,0)');
+  g.addColorStop(1, 'rgba(255,255,255,0.45)');
   ctx.fillStyle = g;
   ctx.fillRect(x, y, w, h);
   ctx.restore();
 }
 
-/* Mismos tonos que MEDALLA_RAREZA_COLOR en ui.jsx (canvas 2D no puede resolver var(--css)). */
+/* Mismos tonos que MEDALLA_RAREZA_COLOR en ui.jsx (canvas 2D no puede resolver
+   var(--css)), en la variante oscurecida para impresión. */
 const MEDALLA_RAREZA_COLOR = {
-  basica: '#8aa0c0', rara: '#38cdf0', epica: '#8b5cf6', legendaria: '#E6B325',
+  basica: '#4b6a90', rara: '#0a7ec2', epica: '#7a35e0', legendaria: '#c08a06',
 };
 
 /** Medalla activa del personaje, en un círculo enmarcado por el color de su rareza. */
@@ -142,7 +144,7 @@ function drawMedallaBadge(ctx, img, rareza, cx, cy, size) {
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.clip();
-  ctx.fillStyle = '#04070f';
+  ctx.fillStyle = INK.paper;
   ctx.fillRect(cx - r, cy - r, size, size);
   if (img) {
     const scale = Math.max(size / img.width, size / img.height);
@@ -155,8 +157,6 @@ function drawMedallaBadge(ctx, img, rareza, cx, cy, size) {
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 10;
   ctx.lineWidth = 3;
   ctx.strokeStyle = color;
   ctx.stroke();
@@ -188,7 +188,7 @@ export async function drawCharacterCard(character, user) {
   const [photoImg, qrDataUrl, rankImg, formaImg, medallaImg] = await Promise.all([
     loadImage(mediaUrl(character.imagen_rpg ?? character.imagen_rpg_url ?? character.photo ?? character.photo_url)),
     handle
-      ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#eaf9ffcc', light: '#00000000' } }).catch(() => null)
+      ? QRCode.toDataURL(publicUrl, { width: 160, margin: 0, color: { dark: '#12283cee', light: '#00000000' } }).catch(() => null)
       : Promise.resolve(null),
     loadImage(TIER_RANGO_IMG[tierKey] ?? TIER_RANGO_IMG.iniciado),
     loadImage(classInfo.img),
@@ -229,7 +229,7 @@ export async function drawCharacterCard(character, user) {
   ctx.beginPath();
   ctx.roundRect(pad, pad, CARD_W - pad * 2, CARD_H - pad * 2, 22);
   ctx.lineWidth = 3;
-  ctx.strokeStyle = `${side.line}aa`;
+  ctx.strokeStyle = side.line;
   ctx.stroke();
   ctx.restore();
 
@@ -249,7 +249,7 @@ export async function drawCharacterCard(character, user) {
   ctx.textAlign = 'left';
   const nameText = `${tierLabel} ${character.name ?? '???'}`;
   fitText(ctx, nameText, nameMaxW, '26px Orbitron');
-  ctx.fillStyle = '#eaf2ff';
+  ctx.fillStyle = INK.strong;
   const nameY = headerTop + headerPad + 26;
   ctx.fillText(nameText, innerX + headerPad, nameY);
 
@@ -265,7 +265,7 @@ export async function drawCharacterCard(character, user) {
       ctx.textAlign = 'left';
       const tituloSize = fitText(ctx, tituloText, subColW, '13px "JetBrains Mono"', 9);
       ctx.font = `700 ${tituloSize}px "JetBrains Mono"`;
-      ctx.fillStyle = '#E6B325';
+      ctx.fillStyle = '#c08a06';
       ctx.fillText(tituloText, innerX + headerPad, subY);
     }
 
@@ -275,7 +275,7 @@ export async function drawCharacterCard(character, user) {
       ctx.textAlign = 'right';
       const crySize = fitText(ctx, cryText, subColW, '13px "JetBrains Mono"', 9);
       ctx.font = `${crySize}px "JetBrains Mono"`;
-      ctx.fillStyle = 'rgba(220,230,255,0.6)';
+      ctx.fillStyle = INK.muted;
       ctx.fillText(cryText, cryColX, subY);
     }
   }
@@ -285,7 +285,7 @@ export async function drawCharacterCard(character, user) {
     ctx.beginPath();
     ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#04070f';
+    ctx.fillStyle = INK.paper;
     ctx.fillRect(logoCx - logoR, logoCy - logoR, logoR * 2, logoR * 2);
     const scale = Math.max((logoR * 2) / rankImg.width, (logoR * 2) / rankImg.height);
     const dw = rankImg.width * scale;
@@ -295,8 +295,6 @@ export async function drawCharacterCard(character, user) {
     ctx.beginPath();
     ctx.arc(logoCx, logoCy, logoR, 0, Math.PI * 2);
     ctx.save();
-    ctx.shadowColor = tierColor;
-    ctx.shadowBlur = 8;
     ctx.lineWidth = 3;
     ctx.strokeStyle = tierColor;
     ctx.stroke();
@@ -307,7 +305,7 @@ export async function drawCharacterCard(character, user) {
     ctx.fillStyle = tierColor;
     ctx.fill();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#04070f';
+    ctx.fillStyle = INK.onAccent;
     ctx.font = '800 26px Orbitron';
     ctx.fillText(tierLabel.charAt(0), logoCx, logoCy + 9);
   }
@@ -315,8 +313,9 @@ export async function drawCharacterCard(character, user) {
   /* ── foto de personaje, con degradé oscuro en los bordes ── */
   const photoTop = headerBottom + 14;
   const photoH = 400;
+  const classAccent = formaAccent(classInfo);
   if (photoImg) {
-    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}66`, 3, 'top', 'cover');
+    drawImageRounded(ctx, photoImg, innerX, photoTop, innerW, photoH, 16, `${side.line}99`, 3, 'top', 'cover');
   } else {
     ctx.save();
     ctx.beginPath();
@@ -326,18 +325,18 @@ export async function drawCharacterCard(character, user) {
       innerX + innerW / 2, photoTop + photoH / 2, 20,
       innerX + innerW / 2, photoTop + photoH / 2, innerW / 1.3,
     );
-    artBg.addColorStop(0, `${classInfo.accent}22`);
-    artBg.addColorStop(1, '#04070f');
+    artBg.addColorStop(0, `${classAccent}2e`);
+    artBg.addColorStop(1, INK.paper);
     ctx.fillStyle = artBg;
     ctx.fillRect(innerX, photoTop, innerW, photoH);
-    ctx.globalAlpha = 0.4;
-    drawIcon(ctx, classInfo.icon, innerX + innerW / 2, photoTop + photoH / 2, 150, classInfo.accent, 1.6);
+    ctx.globalAlpha = 0.55;
+    drawIcon(ctx, classInfo.icon, innerX + innerW / 2, photoTop + photoH / 2, 150, classAccent, 1.6);
     ctx.globalAlpha = 1;
     ctx.restore();
     ctx.beginPath();
     ctx.roundRect(innerX, photoTop, innerW, photoH, 16);
     ctx.lineWidth = 3;
-    ctx.strokeStyle = `${side.line}66`;
+    ctx.strokeStyle = `${side.line}99`;
     ctx.stroke();
   }
   paintPhotoVignette(ctx, innerX, photoTop, innerW, photoH, 16);
@@ -393,20 +392,20 @@ export async function drawCharacterCard(character, user) {
   const formaBoxW = formaColW - boxPad2;
   const formaBoxH = rightColContentH;
   if (formaImg) {
-    drawImageRounded(ctx, formaImg, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, `${classInfo.accent}66`);
+    drawImageRounded(ctx, formaImg, formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10, `${classAccent}99`);
   } else {
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10);
     ctx.clip();
-    ctx.fillStyle = '#04070f';
+    ctx.fillStyle = INK.paper;
     ctx.fillRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH);
-    drawIcon(ctx, classInfo.icon, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH / 2, 40, classInfo.accent, 1.8);
+    drawIcon(ctx, classInfo.icon, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH / 2, 40, classAccent, 1.8);
     ctx.restore();
     ctx.beginPath();
     ctx.roundRect(formaBoxX, formaBoxY, formaBoxW, formaBoxH, 10);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = `${classInfo.accent}66`;
+    ctx.strokeStyle = `${classAccent}99`;
     ctx.stroke();
   }
 
@@ -416,15 +415,17 @@ export async function drawCharacterCard(character, user) {
   ctx.clip();
   const capH = 44;
   const capY = formaBoxY + formaBoxH - capH;
+  /* franja de legibilidad para el rótulo de la forma: blanca (antes negra), porque
+     tanto el estandarte de la forma como la carta impresa son claros. */
   const capGrad = ctx.createLinearGradient(0, capY, 0, formaBoxY + formaBoxH);
-  capGrad.addColorStop(0, 'rgba(0,0,0,0)');
-  capGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
+  capGrad.addColorStop(0, 'rgba(255,255,255,0)');
+  capGrad.addColorStop(1, 'rgba(255,255,255,0.92)');
   ctx.fillStyle = capGrad;
   ctx.fillRect(formaBoxX, capY, formaBoxW, capH);
   ctx.restore();
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(220,230,255,0.7)';
+  ctx.fillStyle = INK.muted;
   ctx.font = '700 9px "JetBrains Mono"';
   ctx.fillText(classInfo.num.toUpperCase(), formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 26);
 
@@ -434,7 +435,7 @@ export async function drawCharacterCard(character, user) {
     formaNameSize -= 1;
     ctx.font = `800 ${formaNameSize}px Orbitron`;
   }
-  ctx.fillStyle = '#eaf2ff';
+  ctx.fillStyle = INK.strong;
   ctx.fillText(classInfo.name, formaBoxX + formaBoxW / 2, formaBoxY + formaBoxH - 10);
 
   drawSaberBlade(
@@ -445,10 +446,10 @@ export async function drawCharacterCard(character, user) {
   );
 
   const saberIconSize = 13;
-  drawIcon(ctx, 'sword', bonosColX + saberIconSize / 2, saberBoxTop + boxPad2 + 4, saberIconSize, '#38cdf0', 2);
+  drawIcon(ctx, 'sword', bonosColX + saberIconSize / 2, saberBoxTop + boxPad2 + 4, saberIconSize, PRINT_ACCENT.energia, 2);
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#38cdf0';
+  ctx.fillStyle = PRINT_ACCENT.energia;
   let saberNameSize = 11;
   const saberNameX = bonosColX + saberIconSize + 6;
   const saberNameMaxW = bonosColW - saberIconSize - 6 - 8;
@@ -461,7 +462,7 @@ export async function drawCharacterCard(character, user) {
 
   const finalPad = 14;
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#38cdf0';
+  ctx.fillStyle = PRINT_ACCENT.energia;
   ctx.font = '700 11px "JetBrains Mono"';
   ctx.fillText('FINAL', finalColX + finalColW - finalPad, saberBoxTop + boxPad2 + 8);
 
@@ -470,7 +471,7 @@ export async function drawCharacterCard(character, user) {
     const rowY = rowsStartY + i * bonusRowH;
     drawIcon(ctx, icon, bonosColX + 9, rowY - 5, 16, color, 2);
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(220,230,255,0.8)';
+    ctx.fillStyle = INK.body;
     ctx.font = '600 13px "JetBrains Mono"';
     ctx.fillText(label.toUpperCase(), bonosColX + 22, rowY);
 
@@ -497,7 +498,7 @@ export async function drawCharacterCard(character, user) {
     drawFinalValue(i, meta.color, finalValue);
   });
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(formaX + formaColW + colGap2 / 2, saberBoxTop + 8);
@@ -516,10 +517,10 @@ export async function drawCharacterCard(character, user) {
 
   /* ── cuadro horizontal: daño, daño perforante, bono fuerza y regen. fuerza ── */
   const EXTRA_ORDER = [
-    { label: 'Daño', color: '#ff5f2e', icon: 'flame', value: sableDano },
-    { label: 'Daño Perforante', color: '#8aa0c0', icon: 'fire', value: sableDanoPerforante },
-    { label: 'Bono Fuerza', color: '#22c55e', icon: 'force', value: saberBonos.fuerza ?? 0 },
-    { label: 'Regen. Fuerza', color: '#84cc16', icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
+    { label: 'Daño', color: PRINT_ACCENT.danoBonus, icon: 'flame', value: sableDano },
+    { label: 'Daño Perforante', color: PRINT_ACCENT.danoPerforante, icon: 'fire', value: sableDanoPerforante },
+    { label: 'Bono Fuerza', color: PRINT_ACCENT.fuerza, icon: 'force', value: saberBonos.fuerza ?? 0 },
+    { label: 'Regen. Fuerza', color: PRINT_ACCENT.fuerzaGen, icon: 'trending', value: saberBonos.generacion_fuerza ?? 0 },
   ];
   const extraBoxTop = saberBoxBottom + 14;
   const extraBoxH = 76;
@@ -548,11 +549,11 @@ export async function drawCharacterCard(character, user) {
       labelSize -= 1;
       ctx.font = `600 ${labelSize}px "JetBrains Mono"`;
     }
-    ctx.fillStyle = 'rgba(220,230,255,0.7)';
+    ctx.fillStyle = INK.muted;
     ctx.fillText(label, cx, extraBoxTop + 64);
 
     if (i > 0) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.strokeStyle = INK.hair;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(innerX + cellW * i, extraBoxTop + 8);
@@ -569,11 +570,11 @@ export async function drawCharacterCard(character, user) {
     drawImageRounded(ctx, qrImg, innerX, footY + (footH - qrSize) / 2, qrSize, qrSize, 8, null);
   }
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(150,200,255,0.5)';
+  ctx.fillStyle = INK.faint;
   ctx.font = '400 10px "JetBrains Mono"';
   const aliasX = innerX + (qrImg ? qrSize + 12 : 0);
   ctx.fillText('ALIAS', aliasX, footY + footH / 2 - 10);
-  ctx.fillStyle = '#eaf2ff';
+  ctx.fillStyle = INK.strong;
   ctx.font = '700 17px Orbitron';
   ctx.fillText(`@${handle.toUpperCase()}`, aliasX, footY + footH / 2 + 10);
 
@@ -581,10 +582,10 @@ export async function drawCharacterCard(character, user) {
 
   const idStr = `EJC-${String(user?.id ?? character.id ?? 0).padStart(3, '0')}`;
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(150,200,255,0.5)';
+  ctx.fillStyle = INK.faint;
   ctx.font = '400 10px "JetBrains Mono"';
   ctx.fillText('ID PERSONAJE', innerRight, footY + footH / 2 - 10);
-  ctx.fillStyle = '#eaf2ff';
+  ctx.fillStyle = INK.strong;
   ctx.font = '700 17px Orbitron';
   ctx.fillText(idStr, innerRight, footY + footH / 2 + 10);
 
