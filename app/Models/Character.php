@@ -367,6 +367,27 @@ class Character extends Model
     }
 
     /**
+     * Formas con al menos un slot de habilidad asignado, o sea las que el personaje tiene
+     * "aprendidas". Son las únicas a las que puede cambiar de estancia: una forma sin slots no
+     * aporta habilidades, así que se trata como no aprendida y no es seleccionable.
+     *
+     * @return list<int> números de forma (1-7), ordenados
+     */
+    public function formasAprendidas(): array
+    {
+        $porForma = is_array($this->habilidades_por_forma) ? $this->habilidades_por_forma : [];
+
+        return collect($porForma)
+            ->filter(fn ($slots) => is_array($slots) && count(array_filter($slots)) > 0)
+            ->keys()
+            ->map(fn ($forma) => (int) $forma)
+            ->filter(fn (int $forma) => $forma >= 1 && $forma <= 7)
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Iniciativa que entra en la tirada de cambio de estancia (ver App\Support\Combat\TiradaEstancia),
      * con los topes FIJOS de esa mecánica -deliberadamente NO usan Configuracion, a diferencia de
      * combatStats()-: 4 por asignación, 5 sumando equipo. El tope de 7 con buffs se aplica en cada
