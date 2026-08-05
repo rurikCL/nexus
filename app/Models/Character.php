@@ -11,6 +11,15 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Character extends Model
 {
+    /* Topes FIJOS de Iniciativa para la tirada de cambio de estancia (INI + 2d6 >= 10). A
+       propósito no salen de Configuracion como los de combatStats(): esta mecánica se balancea
+       aparte. Ver iniciativaEstancia() y App\Support\Combat\TiradaEstancia. */
+    public const INI_ESTANCIA_CAP_ASIGNACION = 4;
+    public const INI_ESTANCIA_CAP_EQUIPO = 5;
+    public const INI_ESTANCIA_CAP_BUFF = 7;
+    /** Total (INI + 2d6) a alcanzar para que el cambio de estancia no consuma el turno. */
+    public const INI_ESTANCIA_OBJETIVO = 10;
+
     protected $fillable = [
         'user_id', 'name', 'handle', 'bio', 'lore', 'photo', 'imagen_rpg', 'cls', 'saber_color', 'side',
         'sector', 'sponsor', 'joined_year', 'credits', 'reputation', 'gold',
@@ -355,6 +364,22 @@ class Character extends Model
         }
 
         return $stats;
+    }
+
+    /**
+     * Iniciativa que entra en la tirada de cambio de estancia (ver App\Support\Combat\TiradaEstancia),
+     * con los topes FIJOS de esa mecánica -deliberadamente NO usan Configuracion, a diferencia de
+     * combatStats()-: 4 por asignación, 5 sumando equipo. El tope de 7 con buffs se aplica en cada
+     * sistema de combate, que es donde viven los buffs (por eso este valor es "pre-buff").
+     */
+    public function iniciativaEstancia(): int
+    {
+        $base = min(self::INI_ESTANCIA_CAP_ASIGNACION, (int) ($this->iniciativa ?? 2));
+
+        return min(
+            self::INI_ESTANCIA_CAP_EQUIPO,
+            $base + (int) ($this->equipoBonos()['iniciativa'] ?? 0)
+        );
     }
 
     public function statsTemporadas(): HasManyThrough

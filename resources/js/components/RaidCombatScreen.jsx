@@ -607,7 +607,13 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
     const actorId = isPlayerActor ? entry.actor_id : 'npc';
     const targetId = isPlayerActor ? 'npc' : (entry.target_user_id ?? null);
 
-    if (dice.length >= 2) {
+    /* Tirada de cambio de estancia: es un solo 2d6, así que extractDice no la levanta como par —
+       viene estructurada en entry.estancia desde el backend. */
+    if (entry.estancia) {
+      await rollDice([
+        { key: 'est', color: '#a78bfa', label: 'ESTANCIA', values: [entry.estancia.dado1, entry.estancia.dado2] },
+      ]);
+    } else if (dice.length >= 2) {
       const actorName = isPlayerActor
         ? (raid.jugadores.find(j => j.user_id === entry.actor_id)?.name ?? 'Jugador')
         : raid.npc.nombre;

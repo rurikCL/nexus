@@ -12,6 +12,7 @@ use App\Notifications\PvpCombatNotification;
 use App\Notifications\PvpTurnoPushRecordatorio;
 use App\Services\MisionProgresoService;
 use App\Support\Combat\AplicaEstadosCombate;
+use App\Support\Combat\TiradaEstancia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -439,6 +440,8 @@ class PvpCombatController extends Controller
         $log = $combat->log ?? [];
         $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
         $skill = $data['skill'];
+        /* Lo activa una tirada de estancia exitosa (ver la rama 'stance'): el turno no se pasa. */
+        $conservaTurno = false;
 
         /* ─── Paralizado: pierde el turno sin importar el skill enviado ─── */
         if ($estaParalizado) {
@@ -473,6 +476,23 @@ class PvpCombatController extends Controller
                 $combat->defender_current_forma = $forma;
             }
             $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
+
+            /* INI + 2d6 >= 10: si supera, el cambio de estancia no consume el turno. La forma
+               queda cambiada en cualquier caso — es la acción del turno. Una sola tirada por
+               turno: si ya tiró (o sea, sigue actuando gracias a un cambio anterior), este
+               segundo cambio no tira y cierra el turno. */
+            if ($combat->estancia_tirada) {
+                $entry['messages'][] = TiradaEstancia::mensajeSinTirada($actorChar->name);
+            } else {
+                $tirada = TiradaEstancia::resolver(
+                    $actorChar->iniciativaEstancia(),
+                    TiradaEstancia::deltaBuffs($myBuffs, $myDebuffs)
+                );
+                $entry['messages'][] = TiradaEstancia::mensaje($actorChar->name, $tirada);
+                $entry['estancia'] = $tirada;
+                $combat->estancia_tirada = true;
+                $conservaTurno = $tirada['exito'];
+            }
 
             /* ─── Ataque básico (sable armado > arma equipada > desarmado) ──── */
         } elseif ($skill === 'unarmed') {
@@ -840,8 +860,11 @@ class PvpCombatController extends Controller
         $attackerFuerzaFinal = $isAttacker ? $myFuerza : ($combat->attacker_fuerza ?? 0);
         $defenderFuerzaFinal = $isAttacker ? ($combat->defender_fuerza ?? 0) : $myFuerza;
 
-        /* ─── Cambio de turno / rondas ──────────────────────────────────── */
-        if ($combat->status === 'active') {
+        /* ─── Cambio de turno / rondas ──────────────────────────────────────
+           `$conservaTurno` lo activa una tirada de estancia exitosa: el jugador vuelve a actuar,
+           así que no se pasa el turno ni se cierra la ronda. */
+        if ($combat->status === 'active' && ! $conservaTurno) {
+            $combat->estancia_tirada = false; // arranca un turno nuevo: se habilita otra tirada
             if ($combat->ronda_turno === 0) {
                 /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
                 $combat->ronda_turno = 1;

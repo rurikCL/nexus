@@ -15,7 +15,7 @@ class RaidCombat extends Model
     protected $fillable = [
         'npc_id', 'dungeon_run_id', 'status',
         'npc_hp', 'npc_escudo', 'npc_forma', 'npc_buffs', 'npc_debuffs', 'npc_cooldowns', 'npc_estados',
-        'turn_order', 'turn_index', 'turn_started_at', 'ronda', 'log',
+        'turn_order', 'turn_index', 'turn_started_at', 'ronda', 'estancia_tirada', 'log',
         'lugar_id', 'zona_id', 'planeta_id', 'sistema_id',
     ];
 
@@ -29,6 +29,7 @@ class RaidCombat extends Model
         'npc_estados' => 'array',
         'turn_order' => 'array',
         'turn_index' => 'integer',
+        'estancia_tirada' => 'boolean',
         'turn_started_at' => 'datetime',
         'ronda' => 'integer',
         'log' => 'array',

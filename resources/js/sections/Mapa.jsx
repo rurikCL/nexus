@@ -3498,6 +3498,11 @@ function getPlayerCombatStats(character) {
     movimiento: combat?.movimiento ?? ((character?.movimiento ?? 2) + (bonos.movimiento ?? 0)),
     iniciativa: combat?.iniciativa ?? ((character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
     punteria:   combat?.punteria   ?? ((character?.punteria   ?? 2) + (bonos.punteria ?? 0)),
+    /* Iniciativa pre-buff de la tirada de cambio de estancia (topes fijos 4/5 ya aplicados por
+       el backend). Fallback local con la misma fórmula si el personaje viene de un cache viejo
+       sin el campo — ver resources/js/utils/estancia.js. */
+    iniciativa_estancia: character?.iniciativa_estancia
+      ?? Math.min(5, Math.min(4, character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.imagen_rpg_url ?? character?.photo_url ?? null,
     maxFuerza:      10 + (bonos.fuerza ?? 0),
