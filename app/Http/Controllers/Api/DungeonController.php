@@ -780,7 +780,7 @@ class DungeonController extends Controller
 
         return [
             'run' => $this->formatRunResumen($run),
-            'jugadores' => $run->jugadores->map(function (DungeonRunPlayer $jp) use ($userId) {
+            'jugadores' => $run->jugadores->map(function (DungeonRunPlayer $jp) use ($userId, $run) {
                 $imagenMapa = $jp->user->character?->imagenMapa();
 
                 return [
