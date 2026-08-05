@@ -4,8 +4,8 @@ import { ICON_PATHS, toast } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import {
   CARD_W, CARD_H, TOKEN_W, TOKEN_H, TOKEN_W_MM, TOKEN_H_MM, mediaUrl, loadImage, ensureFonts,
-  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintVidaEscudoBox, paintBoxBg,
-  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge,
+  drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintEdgeFade, paintBoxBg,
+  COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge, drawHeartPip, drawShieldPip,
 } from '../utils/printableCard.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
@@ -117,8 +117,133 @@ function paintStatPills(ctx, entries, x, y, maxWidth, emptyText, emptyColor) {
   return cy + STAT_PILL_H;
 }
 
+/** Envuelve un dibujo con un halo blanco doble-pasada — mismo criterio que `conHalo` en
+ * CharacterCard.jsx, para que el texto/ícono se lea sobre cualquier arte de fondo. */
+function withHalo(ctx, draw, blur = 10) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,255,255,0.95)';
+  ctx.shadowBlur = blur;
+  draw();
+  draw();
+  ctx.restore();
+}
+
+function getNpcLikeLocation(entity) {
+  const lugar = entity?.lugar ?? entity?.lugares?.[0] ?? null;
+  const planeta = lugar?.zona?.planeta ?? null;
+
+  return {
+    planeta: planeta ? { nombre: planeta.nombre ?? null, imagen: planeta.imagen ?? null } : null,
+    lugar: lugar ? { nombre: lugar.nombre ?? null, imagen: lugar.imagen ?? null } : null,
+  };
+}
+
+async function paintHeaderLocationCards(ctx, items, right, y, maxWidth, accentColor) {
+  const visibleItems = items.filter((item) => item?.value);
+  if (!visibleItems.length) return 0;
+
+  const gap = 8;
+  const chipH = 36;
+  const count = visibleItems.length;
+  const chipW = count === 1
+    ? Math.min(190, Math.max(118, maxWidth))
+    : Math.max(108, Math.min(144, (maxWidth - gap) / 2));
+  const totalW = chipW * count + gap * (count - 1);
+  let x = right - totalW;
+
+  for (const item of visibleItems) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, chipW, chipH, 8);
+    ctx.fillStyle = 'rgba(7, 12, 24, 0.58)';
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = `${accentColor}aa`;
+    ctx.stroke();
+
+    const imgSize = 24;
+    const imgX = x + 6;
+    const imgY = y + (chipH - imgSize) / 2;
+    const img = item.img ? await loadImage(mediaUrl(item.img)) : null;
+    if (img) {
+      drawImageRounded(ctx, img, imgX, imgY, imgSize, imgSize, 6, null, 0, 'center', 'cover', 'rgba(0,0,0,0)');
+    } else {
+      ctx.beginPath();
+      ctx.roundRect(imgX, imgY, imgSize, imgSize, 6);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `${accentColor}88`;
+      ctx.stroke();
+      ctx.fillStyle = accentColor;
+      ctx.font = '700 11px "JetBrains Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText('•', imgX + imgSize / 2, imgY + 16);
+    }
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#c6d4eb';
+    ctx.font = '700 7px "JetBrains Mono"';
+    ctx.fillText(item.label, imgX + imgSize + 6, y + 11);
+
+    const valueMaxW = chipW - (imgSize + 20);
+    const valueSize = fitText(ctx, item.value, valueMaxW, '700 12px "JetBrains Mono"', 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${valueSize}px "JetBrains Mono"`;
+    ctx.fillText(item.value, imgX + imgSize + 6, y + 25);
+
+    x += chipW + gap;
+  }
+
+  return chipH;
+}
+
+/** Fondo de arte a sangre para las cartas de NPC/Jefe/Enemigo — la imagen de la entidad ocupa
+ * toda la carta (mismo criterio que la foto de personaje en CharacterCard.jsx): recorte
+ * "cover" anclado arriba, velo blanco encima para que las cajas de datos mantengan contraste,
+ * y el borde del marco se repinta después porque la imagen lo tapa. Sin imagen, cae a un
+ * degradé radial con el ícono del tipo como marca de agua, igual que el resto del catálogo. */
+function paintEntityBackgroundArt(ctx, img, iconName, pad, cardH, frame, {
+  borderWidth = 3,
+  edgeFadeColor = '#070f1d',
+  edgeFadeBand,
+  edgeFadeAlpha = 0.7,
+} = {}) {
+  const x = pad, y = pad, w = CARD_W - pad * 2, h = cardH - pad * 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 22);
+  ctx.clip();
+
+  if (img) {
+    const scale = Math.max(w / img.width, h / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, x + (w - dw) / 2, y, dw, dh);
+  } else {
+    const g = ctx.createRadialGradient(x + w / 2, y + h / 2, 20, x + w / 2, y + h / 2, w / 1.1);
+    g.addColorStop(0, `${frame.line}2e`);
+    g.addColorStop(1, INK.paper);
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 0.4;
+    drawIcon(ctx, iconName, x + w / 2, y + h / 2, 220, frame.line, 1.6);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  /* Degradado oscuro parejo desde cada borde hacia adentro, para mantener el color
+     original del arte en el centro y oscurecer el perímetro de toda la carta. */
+  paintEdgeFade(ctx, x, y, w, h, 22, edgeFadeColor, { band: edgeFadeBand, alpha: edgeFadeAlpha });
+
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 22);
+  ctx.lineWidth = borderWidth;
+  ctx.strokeStyle = frame.line;
+  ctx.stroke();
+}
+
 /** Pinta el marco (fondo + borde) de la carta y devuelve las coordenadas internas útiles. */
-function paintFrame(ctx, frame, cardH = CARD_H) {
+function paintFrame(ctx, frame, cardH = CARD_H, { borderWidth = 3 } = {}) {
   const pad = 22;
   ctx.fillStyle = frame.bg2;
   ctx.beginPath();
@@ -141,7 +266,7 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(pad, pad, CARD_W - pad * 2, cardH - pad * 2, 22);
-  ctx.lineWidth = 3;
+  ctx.lineWidth = borderWidth;
   ctx.strokeStyle = frame.line;
   ctx.stroke();
   ctx.restore();
@@ -150,23 +275,26 @@ function paintFrame(ctx, frame, cardH = CARD_H) {
 }
 
 /** Encabezado común: nombre (arriba-izq.) + medallón circular (arriba-der.). */
-function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor }) {
+function paintHeader(ctx, { title, pad, innerX, innerRight, badgeText, badgeColor, halo = false, titleColor = INK.strong, padX = 0 }) {
+  const x = innerX + padX;
+  const right = innerRight - padX;
   ctx.textAlign = 'left';
   const displayName = (title ?? '???').toUpperCase();
-  fitText(ctx, displayName, innerRight - innerX - 66, '30px Orbitron');
-  ctx.fillStyle = INK.strong;
-  ctx.fillText(displayName, innerX, pad + 54);
+  fitText(ctx, displayName, right - x - 66, '30px Orbitron');
+  ctx.fillStyle = titleColor;
+  const drawTitle = () => ctx.fillText(displayName, x, pad + 54);
+  if (halo) withHalo(ctx, drawTitle, 12); else drawTitle();
 
   if (badgeText !== null && badgeText !== undefined) {
-    paintDropShadow(ctx, innerRight - 47, pad + 17, 46, 46, 23, { blur: 7, offsetY: 2 });
+    paintDropShadow(ctx, right - 47, pad + 17, 46, 46, 23, { blur: 7, offsetY: 2 });
     ctx.beginPath();
-    ctx.arc(innerRight - 24, pad + 40, 23, 0, Math.PI * 2);
+    ctx.arc(right - 24, pad + 40, 23, 0, Math.PI * 2);
     ctx.fillStyle = badgeColor;
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = INK.onAccent;
     ctx.font = '800 18px Orbitron';
-    ctx.fillText(String(badgeText).slice(0, 3).toUpperCase(), innerRight - 24, pad + 47);
+    ctx.fillText(String(badgeText).slice(0, 3).toUpperCase(), right - 24, pad + 47);
   }
 }
 
@@ -202,13 +330,14 @@ async function paintArt(ctx, imgSrc, iconName, iconColor, innerX, artY, innerW, 
 }
 
 /** Línea de tipo centrada, con separadores horizontales (como la "type line" de una carta Magic). */
-function paintTypeLine(ctx, label, typeY, innerX, innerRight) {
+function paintTypeLine(ctx, label, typeY, innerX, innerRight, { halo = false } = {}) {
   /* va directo sobre el fondo (sin panel detrás), donde la viñeta ya suma tono:
      usa la tinta de cuerpo, no la secundaria, para no perderse. */
   ctx.textAlign = 'center';
   ctx.fillStyle = INK.body;
   ctx.font = '600 15px "JetBrains Mono"';
-  ctx.fillText(label.toUpperCase(), CARD_W / 2, typeY);
+  const drawLabel = () => ctx.fillText(label.toUpperCase(), CARD_W / 2, typeY);
+  if (halo) withHalo(ctx, drawLabel, 8); else drawLabel();
   ctx.strokeStyle = INK.hair;
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(innerX, typeY - 22); ctx.lineTo(innerRight, typeY - 22); ctx.stroke();
@@ -290,7 +419,7 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(innerPad, innerPad, CARD_W - innerPad * 2, cardH - innerPad * 2, 26);
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2.4;
   ctx.strokeStyle = `${color}cc`;
   ctx.stroke();
   ctx.restore();
@@ -306,7 +435,7 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
   corners.forEach(({ ax, ay, dx, dy }) => {
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 3.1;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(ax + dx * armLen, ay);
@@ -324,11 +453,12 @@ function paintJefeAdornments(ctx, pad, cardH, color) {
   });
 }
 
-function paintColofon(ctx, text, cardH = CARD_H) {
+function paintColofon(ctx, text, cardH = CARD_H, { halo = false } = {}) {
   ctx.textAlign = 'center';
   ctx.fillStyle = INK.muted;
   ctx.font = '400 12px "JetBrains Mono"';
-  ctx.fillText(text, CARD_W / 2, cardH - 22 - 8);
+  const draw = () => ctx.fillText(text, CARD_W / 2, cardH - 22 - 8);
+  if (halo) withHalo(ctx, draw, 6); else draw();
 }
 
 /** Ícono de reloj de arena, dibujado centrado en (cx, cy) — usado en los marcadores de cooldown del borde. */
@@ -723,59 +853,174 @@ async function drawNpcLikeCard(entity, { forcedFrameKey, kicker } = {}) {
   canvas.height = cardH;
   const ctx = canvas.getContext('2d');
 
-  const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH);
+  const icon = NPC_TIPO_ICON[entity.tipo] ?? 'user';
+  const artImg = await loadImage(mediaUrl(entity.imagen ?? entity.imagen_mini));
+
+  const npcBorderWidth = 4.8;
+  const { pad, innerX, innerRight } = paintFrame(ctx, frame, cardH, { borderWidth: npcBorderWidth });
   const innerW = innerRight - innerX;
+
+  /* La imagen de la entidad ocupa toda la carta como fondo, igual que la foto de
+     personaje en CharacterCard.jsx — el marco/borde en degradé se mantiene igual. */
+  paintEntityBackgroundArt(ctx, artImg, icon, pad, cardH, frame, {
+    borderWidth: npcBorderWidth,
+    edgeFadeBand: 64,
+    edgeFadeAlpha: 0.78,
+  });
 
   if (entity.tipo === 'jefe') {
     paintJefeWatermark(ctx, cardH, frame.line);
     paintJefeAdornments(ctx, pad, cardH, frame.line);
   }
 
-  paintHeader(ctx, { title: entity.nombre, pad, innerX, innerRight, badgeText: `★${nivel}`, badgeColor: frame.line });
-
-  ctx.textAlign = 'left';
-  const icon = NPC_TIPO_ICON[entity.tipo] ?? 'user';
-  drawIcon(ctx, icon, innerX + 11, pad + 90, 22, frame.line, 2.1);
-  ctx.fillStyle = frame.line;
-  ctx.font = '700 16px "JetBrains Mono"';
-  ctx.fillText(kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC', innerX + 30, pad + 96);
-  const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
-  if (sub) {
-    ctx.textAlign = 'right';
-    ctx.fillStyle = INK.body;
-    const size = fitText(ctx, sub, innerW - 160, '14px "JetBrains Mono"', 11);
-    ctx.font = `${size}px "JetBrains Mono"`;
-    ctx.fillText(sub, innerRight - 6, pad + 96);
-  }
-
-  const artY = pad + 118;
-  const artH = 260;
   const forma = Number(entity.forma) || 0;
   const formaInfo = forma >= 1 ? NX.CLASSES[forma - 1] : null;
-  if (formaInfo?.img) {
-    const formaGap = 12;
-    const formaW = 96;
-    const mainW = innerW - formaW - formaGap;
-    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, mainW, artH, frame.line, INK.paper);
-    await paintArt(ctx, formaInfo.img, formaInfo.icon ?? 'sword', frame.line, innerX + mainW + formaGap, artY, formaW, artH, frame.line, INK.paper);
-  } else {
-    await paintArt(ctx, entity.imagen ?? entity.imagen_mini, icon, frame.line, innerX, artY, innerW, artH, frame.line, INK.paper);
+  const formaImg = formaInfo?.img ? await loadImage(formaInfo.img) : null;
+
+  /* Cabecera estilo carta de personaje: columna de fichas a la izquierda y bloque
+     tipográfico a la derecha, todo sobre el arte con halo para mantener legibilidad. */
+  const headerTop = pad + 8;
+  const headerPad = 10;
+  const rankPipR = 17;
+  const statPipR = 21;
+  const maxPipR = Math.max(rankPipR, statPipR);
+  const pipGapY = 6;
+  const pipColH = rankPipR * 2 + statPipR * 4 + pipGapY * 2;
+  const baseHeaderBottom = headerTop + pipColH + headerPad * 2;
+
+  const pipCx = innerX + headerPad + maxPipR;
+  const pipValueX = pipCx + maxPipR + 8;
+  const leftLabelW = 86;
+
+  const withInkShadow = (draw, blur = 8) => {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+    ctx.shadowBlur = blur;
+    ctx.shadowOffsetY = 1;
+    draw();
+    ctx.restore();
+  };
+
+  const textRight = innerRight - headerPad;
+  const textLeft = pipValueX + leftLabelW + 12;
+  const textMaxW = textRight - textLeft;
+  const leftColRight = textLeft - 12;
+  const locationInfo = getNpcLikeLocation(entity);
+  const hasLocation = Boolean(locationInfo.planeta || locationInfo.lugar);
+
+  const formaBadgeGap = formaInfo?.img ? 10 : 0;
+  const formaBadgeH = formaInfo?.img ? 82 : 0;
+  const headerBottom = Math.max(
+    baseHeaderBottom + (hasLocation ? 32 : 0),
+    baseHeaderBottom + formaBadgeGap + formaBadgeH,
+  );
+
+  /* Placa translúcida detrás del bloque tipográfico para mejorar lectura del texto
+     sin perder la imagen de fondo. */
+  const textPlateY = headerTop + headerPad - 7;
+  const textPlateH = pipColH + 14 + (hasLocation ? 32 : 0);
+  const textPlateGrad = ctx.createLinearGradient(0, textPlateY, 0, textPlateY + textPlateH);
+  textPlateGrad.addColorStop(0, 'rgba(5, 9, 18, 0.58)');
+  textPlateGrad.addColorStop(1, 'rgba(5, 9, 18, 0.42)');
+  ctx.beginPath();
+  ctx.roundRect(textLeft - 8, textPlateY, textMaxW + 14, textPlateH, 12);
+  ctx.fillStyle = textPlateGrad;
+  ctx.fill();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.stroke();
+
+  const drawStatPip = (cy, iconName, color, value, label, pipR, { valueSize = 21, labelSize = 9, shape = 'icon' } = {}) => {
+    ctx.beginPath();
+    ctx.arc(pipCx, cy, pipR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fill();
+    ctx.lineWidth = 2.1;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    const iconSize = Math.round(pipR * 1.05);
+    if (shape === 'heart') {
+      drawHeartPip(ctx, pipCx - iconSize / 2, cy - iconSize / 2, iconSize, color);
+    } else if (shape === 'shield') {
+      drawShieldPip(ctx, pipCx - iconSize / 2, cy - iconSize / 2, iconSize, color);
+    } else {
+      drawIcon(ctx, iconName, pipCx, cy, iconSize, color, 2);
+    }
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = color;
+    ctx.font = `800 ${valueSize}px Orbitron`;
+    withInkShadow(() => ctx.fillText(String(value), pipValueX, cy + valueSize * 0.35), 7);
+
+    ctx.fillStyle = '#e7edf8';
+    ctx.font = `700 ${labelSize}px "JetBrains Mono"`;
+    withInkShadow(() => ctx.fillText(label, pipValueX + 36, cy + 4), 5);
+  };
+
+  const rankCy = headerTop + headerPad + rankPipR;
+  const vidaCy = rankCy + rankPipR + pipGapY + statPipR;
+  const escudoCy = vidaCy + statPipR + pipGapY + statPipR;
+
+  drawStatPip(rankCy, 'star', '#c08a06', nivel, 'NIVEL', rankPipR, { valueSize: 20, labelSize: 9 });
+  drawStatPip(vidaCy, 'heart', COMBAT_STAT_META.vida.color, entity.vida ?? 0, 'VIDA', statPipR, { valueSize: 27, labelSize: 10, shape: 'heart' });
+  drawStatPip(escudoCy, 'shield', COMBAT_STAT_META.escudo.color, entity.escudo ?? 0, 'ESCUDO', statPipR, { valueSize: 27, labelSize: 10, shape: 'shield' });
+
+  const sub = [entity.profesion, entity.faccion].filter(Boolean).join(' · ');
+
+  ctx.textAlign = 'right';
+  const kickerText = (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? 'NPC').toUpperCase();
+  const kickerSize = fitText(ctx, kickerText, textMaxW, '14px "JetBrains Mono"', 10);
+  ctx.fillStyle = '#d7e5ff';
+  ctx.font = `700 ${kickerSize}px "JetBrains Mono"`;
+  withInkShadow(() => ctx.fillText(kickerText, textRight, headerTop + headerPad + 11), 8);
+
+  const nameText = (entity.nombre ?? '???').toUpperCase();
+  const nameSize = fitText(ctx, nameText, textMaxW, '46px Orbitron', 24);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `800 ${nameSize}px Orbitron`;
+  const nameY = headerTop + headerPad + 20 + nameSize * 0.74;
+  withInkShadow(() => ctx.fillText(nameText, textRight, nameY), 12);
+
+  if (hasLocation) {
+    await paintHeaderLocationCards(ctx, [
+      { label: 'PLANETA', value: locationInfo.planeta?.nombre, img: locationInfo.planeta?.imagen },
+      { label: 'LUGAR', value: locationInfo.lugar?.nombre, img: locationInfo.lugar?.imagen },
+    ], textRight, nameY + 10, textMaxW, frame.line);
   }
 
+  if (sub) {
+    const subSize = fitText(ctx, sub, textMaxW, '14px "JetBrains Mono"', 10);
+    ctx.fillStyle = '#e8eef9';
+    ctx.font = `italic ${subSize}px "JetBrains Mono"`;
+    withInkShadow(() => ctx.fillText(sub, textRight, headerTop + headerPad + pipColH - 1 + (hasLocation ? 30 : 0)), 7);
+  }
+
+  if (formaInfo?.img) {
+    /* La forma vive ahora en la columna izquierda, debajo de los stats, limpia y sin
+       marco, alineada al mismo eje vertical de los pips de stats. */
+    const badgeW = Math.max(78, leftColRight - innerX - 8);
+    const badgeX = pipCx - badgeW / 2;
+    const badgeY = baseHeaderBottom + formaBadgeGap;
+    if (formaImg) {
+      drawImageRounded(ctx, formaImg, badgeX, badgeY, badgeW, formaBadgeH, 10, null, 0, 'center', 'contain', 'rgba(0,0,0,0)');
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      drawIcon(ctx, formaInfo.icon ?? 'sword', pipCx, badgeY + formaBadgeH / 2, 40, frame.line, 2.2);
+      ctx.restore();
+    }
+  }
+
+  const artY = headerBottom + 10;
+  const artH = Math.max(162, 260 - (headerBottom - baseHeaderBottom));
   const typeY = artY + artH + 36;
   const typeLabel = entity.tipo === 'jefe'
     ? `Jefe de Asalto · ${Math.max(2, entity.raid_slots || 4)} cupos`
     : (kicker ?? NPC_TIPO_LABEL[entity.tipo] ?? entity.tipo ?? '');
-  paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight);
+  paintTypeLine(ctx, typeLabel, typeY, innerX, innerRight, { halo: true });
 
-  let statsY = typeY + 30;
-  statsY = paintVidaEscudoBox(ctx, {
-    x: innerX, y: statsY, w: innerW,
-    vidaVal: entity.vida ?? 0, escudoVal: entity.escudo ?? 0,
-    vidaMeta: COMBAT_STAT_META.vida, escudoMeta: COMBAT_STAT_META.escudo,
-    drawIcon: (name, cx, cy, size, color, strokeWidth) => drawIcon(ctx, name, cx, cy, size, color, strokeWidth),
-  });
-  statsY += 18;
+  const statsY = typeY + 32;
 
   /* ── dos columnas: izquierda = saludo inicial + habilidades (apiladas), derecha = atributos de combate ── */
   const ATTR_ORDER = ['ataque', 'defensa', 'punteria', 'movimiento', 'iniciativa'];
@@ -881,14 +1126,14 @@ export function applyNivelACombate(entity, nivel, esJefe) {
 export async function drawNpcCard(npc) {
   const canvas = await drawNpcLikeCard(npc);
   const ctx = canvas.getContext('2d');
-  paintColofon(ctx, npc.tipo === 'jefe' ? 'Jefes · Catálogo NÉXUS' : 'NPCs · Catálogo NÉXUS', canvas.height);
+  paintColofon(ctx, npc.tipo === 'jefe' ? 'Jefes · Catálogo NÉXUS' : 'NPCs · Catálogo NÉXUS', canvas.height, { halo: true });
   return canvas;
 }
 
 export async function drawEnemigoCard(enemigo) {
   const canvas = await drawNpcLikeCard(enemigo, { forcedFrameKey: 'danger', kicker: 'Encuentro Salvaje' });
   const ctx = canvas.getContext('2d');
-  paintColofon(ctx, 'Enemigos · Catálogo NÉXUS', canvas.height);
+  paintColofon(ctx, 'Enemigos · Catálogo NÉXUS', canvas.height, { halo: true });
   return canvas;
 }
 

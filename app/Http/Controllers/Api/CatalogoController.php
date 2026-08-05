@@ -22,6 +22,13 @@ use Illuminate\Http\JsonResponse;
 class CatalogoController extends Controller
 {
     private const NPC_CAMPOS = [
+        'id', 'LugarID', 'nombre', 'tipo', 'profesion', 'faccion', 'imagen_mini', 'imagen', 'saludo',
+        'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria',
+        'dano', 'dano_escudo', 'dano_perforante',
+        'forma', 'nivel', 'raid_slots', 'habilidad_1', 'habilidad_2', 'habilidad_3', 'habilidad_4',
+    ];
+
+    private const ENEMIGO_CAMPOS = [
         'id', 'nombre', 'tipo', 'profesion', 'faccion', 'imagen_mini', 'imagen', 'saludo',
         'vida', 'escudo', 'defensa', 'ataque', 'movimiento', 'iniciativa', 'punteria',
         'dano', 'dano_escudo', 'dano_perforante',
@@ -31,6 +38,18 @@ class CatalogoController extends Controller
     private const HABILIDAD_SLOTS = [
         'habilidad1:id,nombre,icono,tipo', 'habilidad2:id,nombre,icono,tipo',
         'habilidad3:id,nombre,icono,tipo', 'habilidad4:id,nombre,icono,tipo',
+    ];
+
+    private const NPC_UBICACION_RELATIONS = [
+        'lugar:id,nombre,imagen,ZonaID',
+        'lugar.zona:id,nombre,PlanetaID',
+        'lugar.zona.planeta:id,nombre,imagen',
+    ];
+
+    private const ENEMIGO_UBICACION_RELATIONS = [
+        'lugares:id,nombre,imagen,ZonaID',
+        'lugares.zona:id,nombre,PlanetaID',
+        'lugares.zona.planeta:id,nombre,imagen',
     ];
 
     public function objetos(): JsonResponse
@@ -46,7 +65,7 @@ class CatalogoController extends Controller
     {
         $npcs = MapNpc::where('visible', true)
             ->select(self::NPC_CAMPOS)
-            ->with(self::HABILIDAD_SLOTS)
+            ->with(array_merge(self::HABILIDAD_SLOTS, self::NPC_UBICACION_RELATIONS))
             ->orderBy('tipo')->orderBy('nombre')
             ->get();
 
@@ -56,8 +75,8 @@ class CatalogoController extends Controller
     public function enemigos(): JsonResponse
     {
         $enemigos = MapEnemigo::where('visible', true)
-            ->select(self::NPC_CAMPOS)
-            ->with(self::HABILIDAD_SLOTS)
+            ->select(self::ENEMIGO_CAMPOS)
+            ->with(array_merge(self::HABILIDAD_SLOTS, self::ENEMIGO_UBICACION_RELATIONS))
             ->orderBy('tipo')->orderBy('nombre')
             ->get();
 
