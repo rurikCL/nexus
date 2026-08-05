@@ -379,6 +379,14 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
     const groups = extractRollGroups(accionEntry, { myId: userId });
     for (const g of groups) await rollDice(g);
 
+    /* Tirada de cambio de estancia: es un solo 2d6, así que no la levanta extractRollGroups
+       (pide dos tiradas por mensaje) — viene estructurada en entry.estancia desde el backend. */
+    if (entry.estancia) {
+      await rollDice([
+        { key: 'est', color: '#a78bfa', label: 'ESTANCIA', values: [entry.estancia.dado1, entry.estancia.dado2] },
+      ]);
+    }
+
     const emoted = classifyPvpEmoji(entry, userId);
     if (emoted && !emoted.actorIsMe) {
       setEmojiBurst({ id: `${Date.now()}-${Math.random()}`, emoji: emoted.emoji });
@@ -1506,7 +1514,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
               borderRadius: 16, padding: 24, width: 360, maxWidth: '90%',
             }}>
               <div style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
-                🔄 CAMBIAR ESTANCIA — Acabará tu turno
+                🔄 CAMBIAR ESTANCIA — Tirada INI+2d6 ≥ 10: si superas, conservas el turno
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
                 {FORMA_LABELS_SHORT.map((label, i) => {

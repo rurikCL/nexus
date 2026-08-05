@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion, playCombateNpc, playSound } from '../utils/sounds.js';
+import { tirarEstancia, mensajeEstancia, mensajeSinTirada } from '../utils/estancia.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -330,6 +331,10 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
      esto, durante la nueva espera de 2s (rolling ya volvió a false) el jugador podía hacer clic
      en otra acción y ejecutar dos golpes en el mismo turno. */
   const [actionLock,   setActionLock]   = useState(false);
+  /* Una sola tirada de cambio de estancia por turno (ver doChangeForma). Ref y no state:
+     se lee de forma sincrónica en el mismo handler donde se escribe. Se resetea al pasar
+     el turno, en endTurnAfter. */
+  const estanciaTiradaRef = useRef(false);
   const [logCollapsed, setLogCollapsed] = useState(false);
   const [bgImg,        setBgImg]        = useState(lugarImagen ?? null);
   const logRef = useRef(null);
@@ -607,6 +612,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
    */
   const endTurnAfter = async (actor, overrides = {}) => {
     setActionLock(true);
+    estanciaTiradaRef.current = false; // termina el turno: se habilita otra tirada de estancia
     try {
     await sleep(pausaMs);
     const curPlayerHp = overrides.playerHp ?? playerHp;
@@ -1449,6 +1455,50 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     }
   };
 
+  /* Cambio de estancia: tira INI + 2d6 >= 10 (ver utils/estancia.js). Si supera, la acción no
+     consume el turno y el jugador puede volver a actuar; si falla, la forma igual queda cambiada
+     y el turno termina. En el camino exitoso hay que liberar el actionLock a mano — el resto de
+     las acciones lo sueltan dentro de endTurnAfter. */
+  const doChangeForma = async (forma, label) => {
+    if (phase !== 'battle' || currTurn !== 'player' || npcBusy || rolling || armed || actionLock) return;
+    setActionLock(true);
+    setStancePicker(false);
+    setCurrentForma(forma);
+    setLog(prev => [...prev, {
+      text: `🔄 Cambias a Forma ${forma} (${label})`,
+      type: 'info', id: prev.length, ronda, actor: 'player',
+    }]);
+
+    /* Una sola tirada por turno: si ya tiró (sigue actuando gracias a un cambio anterior), este
+       segundo cambio no tira y cierra el turno. */
+    if (estanciaTiradaRef.current) {
+      setLog(prev => [...prev, {
+        text: mensajeSinTirada(player.nombre || 'Tú'),
+        type: 'info', id: prev.length, ronda, actor: 'player',
+      }]);
+      endTurnAfter('player');
+
+      return;
+    }
+
+    const t = tirarEstancia(player.iniciativa_estancia, countBuff('iniciativa') - countPlayerDeb('iniciativa'));
+    estanciaTiradaRef.current = true;
+    await rollDice([
+      { key: 'est', color: '#a78bfa', label: 'ESTANCIA', values: [t.dado1, t.dado2] },
+    ]);
+    setLog(prev => [...prev, {
+      text: mensajeEstancia(player.nombre || 'Tú', t),
+      type: t.exito ? 'success' : 'info', id: prev.length, ronda, actor: 'player',
+    }]);
+
+    if (t.exito) {
+      setActionLock(false);
+
+      return;
+    }
+    endTurnAfter('player');
+  };
+
   const clickSkill = (hab) => {
     void playClickHabilidad();
     if (hab.sonido) void playSound(hab.sonido);
@@ -2243,7 +2293,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
               borderRadius: 16, padding: 24, width: 360, maxWidth: '90%',
             }}>
               <div style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'var(--font-data)', letterSpacing: '0.14em', marginBottom: 16, textAlign: 'center' }}>
-                🔄 CAMBIAR ESTANCIA — Acabará tu turno
+                🔄 CAMBIAR ESTANCIA — Tirada INI+2d6 ≥ 10: si superas, conservas el turno
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                 {FORMA_LABELS_SHORT.map((label, i) => {
@@ -2254,13 +2304,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                     <button key={f} onClick={() => {
                       void playClickOpcion();
                       if (active) { setStancePicker(false); return; }
-                      setCurrentForma(f);
-                      setStancePicker(false);
-                      setLog(prev => [...prev, {
-                        text: `🔄 Cambias a Forma ${f} (${label})`,
-                        type: 'info', id: prev.length, ronda, actor: 'player',
-                      }]);
-                      endTurnAfter('player');
+                      void doChangeForma(f, label);
                     }} style={{
                       padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                       background: active ? 'rgba(139,92,246,0.25)' : hasSlots ? 'rgba(139,92,246,0.06)' : 'rgba(255,255,255,0.03)',

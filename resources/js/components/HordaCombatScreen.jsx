@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion, playCombateNpc, playSound } from '../utils/sounds.js';
+import { tirarEstancia, mensajeEstancia, mensajeSinTirada } from '../utils/estancia.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -430,6 +431,10 @@ export default function HordaCombatScreen({
   /* Cerrojo que cubre la transición de turno completa (pausa de fase + tick de fin de ronda +
      banner de nueva ronda) — ver avanzarTurno. Equivale al `actionLock` de NpcCombatScreen. */
   const [actionLock, setActionLock] = useState(false);
+  /* Una sola tirada de cambio de estancia por turno (ver doChangeForma). Ref y no state: se
+     lee de forma sincrónica en el mismo handler donde se escribe. Se resetea al pasar el
+     turno, en avanzarTurno. */
+  const estanciaTiradaRef = useRef(false);
   /* Pausa (ms) entre acciones/banners del combate — configurable en Configuracion
      (combate_pausa_accion_ms), igual que las otras tres pantallas de combate. Este combate es
      100% cliente (sin servidor autoritativo), así que se lee vía el mismo endpoint admin
@@ -594,6 +599,7 @@ export default function HordaCombatScreen({
    */
   const avanzarTurno = async (enemigosActuales, playerHpActual, playerEstadosActuales) => {
     setActionLock(true);
+    estanciaTiradaRef.current = false; // termina el turno: se habilita otra tirada de estancia
     try {
       await avanzarTurnoInner(enemigosActuales, playerHpActual, playerEstadosActuales);
     } finally {
@@ -1185,12 +1191,35 @@ export default function HordaCombatScreen({
     await avanzarTurno(enemigosState, playerHp, playerEstados);
   };
 
-  const doChangeForma = (forma) => {
+  /* Cambio de estancia: tira INI + 2d6 >= 10 (ver utils/estancia.js). Si supera, la acción no
+     consume el turno y el jugador puede volver a actuar; si falla, la forma igual queda cambiada
+     y el turno termina. */
+  const doChangeForma = async (forma) => {
     if (!isPlayerTurn) return;
     setStancePicker(false);
+    setBusy(true);
     setCurrentForma(forma);
     setLog(prev => [...prev, { text: `${player.nombre || 'Tú'} cambia a Forma ${formaLabel(forma)} (${FORMA_LABELS_SHORT[forma - 1]})`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
-    avanzarTurno(enemigosState, playerHp, playerEstados);
+
+    /* Una sola tirada por turno: si ya tiró (sigue actuando gracias a un cambio anterior), este
+       segundo cambio no tira y cierra el turno. */
+    if (estanciaTiradaRef.current) {
+      setLog(prev => [...prev, { text: mensajeSinTirada(player.nombre || 'Tú'), type: 'info', id: prev.length, ronda, actor: 'player' }]);
+      setBusy(false);
+      await avanzarTurno(enemigosState, playerHp, playerEstados);
+
+      return;
+    }
+
+    const t = tirarEstancia(player.iniciativa_estancia, countBuff('iniciativa') - countDeb('iniciativa'));
+    estanciaTiradaRef.current = true;
+    await rollDice([
+      { key: 'est', color: '#a78bfa', label: 'ESTANCIA', values: [t.dado1, t.dado2] },
+    ]);
+    setLog(prev => [...prev, { text: mensajeEstancia(player.nombre || 'Tú', t), type: t.exito ? 'success' : 'info', id: prev.length, ronda, actor: 'player' }]);
+
+    setBusy(false);
+    if (!t.exito) await avanzarTurno(enemigosState, playerHp, playerEstados);
   };
 
   /* ─── Elección de objetivo ────────────────────────────────────────────────────────────
@@ -1652,7 +1681,7 @@ export default function HordaCombatScreen({
           onMouseDown={() => setStancePicker(false)}>
           <div className="nx-panel solid nx-panel-glow" style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }} onMouseDown={e => e.stopPropagation()}>
             {NX.CLASSES.map((c, i) => (
-              <button key={c.id} onClick={() => doChangeForma(i + 1)} title={FORMA_LABELS_SHORT[i]} style={{
+              <button key={c.id} onClick={() => void doChangeForma(i + 1)} title={FORMA_LABELS_SHORT[i]} style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8, cursor: 'pointer',
                 border: `1px solid ${currentForma === i + 1 ? c.accent : 'var(--holo-line)'}`,
                 background: currentForma === i + 1 ? `color-mix(in srgb, ${c.accent} 14%, transparent)` : 'rgba(255,255,255,0.02)',

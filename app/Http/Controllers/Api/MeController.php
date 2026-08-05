@@ -136,6 +136,10 @@ class MeController extends Controller
                 'combat_stats' => $character->combatStats(),
                 'sable_bonos' => $character->sableBonos(),
                 'armadura_bonos' => $character->armaduraBonos(),
+                /* Iniciativa pre-buff de la tirada de cambio de estancia, con sus topes fijos ya
+                   aplicados (4 asignación / 5 equipo). Los combates cliente-side le suman sus
+                   buffs y topean en 7 — ver resources/js/utils/estancia.js. */
+                'iniciativa_estancia' => $character->iniciativaEstancia(),
                 'puntos_libres' => $character->puntos_libres ?? 5,
                 'habilidades_por_forma' => $character->habilidades_por_forma ?? (object) [],
                 'current_forma' => $character->current_forma ?? 1,

@@ -17,6 +17,7 @@ use App\Models\RolHabilidad;
 use App\Services\MisionProgresoService;
 use App\Services\RecompensaRollService;
 use App\Support\Combat\AplicaEstadosCombate;
+use App\Support\Combat\TiradaEstancia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -407,6 +408,8 @@ class RaidCombatController extends Controller
 
         $log = $raid->log ?? [];
         $entry = ['turn' => count($log) + 1, 'actor' => 'jugador', 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
+        /* Lo activa una tirada de estancia exitosa (ver la rama 'stance'): el turno no avanza. */
+        $conservaTurno = false;
 
         /* Parálisis: pierde el turno sin importar el skill enviado, y queda inmune al próximo intento */
         $paralisisInfo = self::resolverParalisisAlEmpezarTurno($myEstados);
@@ -433,6 +436,23 @@ class RaidCombatController extends Controller
             }
             $myPlayer->current_forma = $forma;
             $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
+
+            /* INI + 2d6 >= 10: si supera, el cambio de estancia no consume el turno. La forma
+               queda cambiada en cualquier caso — es la acción del turno. Una sola tirada por
+               turno: si ya tiró (o sea, sigue actuando gracias a un cambio anterior), este
+               segundo cambio no tira y cierra el turno. */
+            if ($raid->estancia_tirada) {
+                $entry['messages'][] = TiradaEstancia::mensajeSinTirada($actorChar->name);
+            } else {
+                $tirada = TiradaEstancia::resolver(
+                    $actorChar->iniciativaEstancia(),
+                    TiradaEstancia::deltaBuffs($myBuffs, $myDebuffs)
+                );
+                $entry['messages'][] = TiradaEstancia::mensaje($actorChar->name, $tirada);
+                $entry['estancia'] = $tirada;
+                $raid->estancia_tirada = true;
+                $conservaTurno = $tirada['exito'];
+            }
         } elseif ($skill === 'unarmed') {
             $confundido = self::resolverConfundido($myEstados);
             if ($confundido) {
@@ -834,7 +854,12 @@ class RaidCombatController extends Controller
         $entry['snapshot'] = self::snapshotEstado($raid);
         $log[] = $entry;
 
-        if ($raid->status === 'activo') {
+        /* `$conservaTurno` lo activa una tirada de estancia exitosa: el jugador vuelve a actuar,
+           así que no se avanza el puntero de turno. Se refresca `turn_started_at` para que el
+           contador regresivo del turno arranque de nuevo en vez de seguir consumiéndose. */
+        if ($raid->status === 'activo' && $conservaTurno) {
+            $raid->turn_started_at = now();
+        } elseif ($raid->status === 'activo') {
             $this->advanceIndex($raid, $log);
             $this->settleFromCurrentPosition($raid, $log);
         }
@@ -910,6 +935,7 @@ class RaidCombatController extends Controller
         }
 
         $raid->turn_index++;
+        $raid->estancia_tirada = false; // arranca un turno nuevo: se habilita otra tirada de estancia
 
         if ($raid->turn_index >= count($raid->turn_order ?? [])) {
             foreach ($raid->jugadores as $rp) {

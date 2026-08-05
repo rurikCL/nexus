@@ -3337,7 +3337,13 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
         {equipo.length > 0 && (
           <div className="nx-panel solid" style={{ padding: 16 }}>
             <div className="nx-kicker" style={{ marginBottom: 12 }}>EQUIPO</div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {/* Siempre 4 columnas (los cupos del equipo), aunque haya 2 o 3 jugadores: así las
+                tarjetas no se estiran y la disposición no cambia según cuántos sean. */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
+              gap: 12,
+            }}>
               {equipo.map((j) => {
                 const caido = j.hp_actual <= 0;
                 const puedoRevivirlo = caido && j.user_id !== myUserId && j.sala_actual_id === sala.id && !estoyCaido;
@@ -3345,10 +3351,17 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
                   <div key={j.user_id}
                     ref={(el) => { teamRefs.current[j.user_id] = el; }}
                     style={{
-                      flex: '1 1 220px', minWidth: 220,
-                      borderRadius: 10, padding: 6,
-                      border: `1.5px dashed ${hoverTargetId === j.user_id ? '#10b981' : 'transparent'}`,
-                      background: hoverTargetId === j.user_id ? 'rgba(16,185,129,0.10)' : 'transparent',
+                      minWidth: 0,
+                      borderRadius: 10, padding: 8,
+                      /* El borde punteado verde marca el blanco de arrastre de objetos; fuera de
+                         eso cada tarjeta lleva su propio borde, en rojo si el jugador está caído.
+                         Mismo grosor en los tres casos para que no salte el layout al arrastrar. */
+                      border: hoverTargetId === j.user_id
+                        ? '1.5px dashed #10b981'
+                        : `1.5px solid ${caido ? 'rgba(255,45,69,0.4)' : 'var(--holo-line)'}`,
+                      background: hoverTargetId === j.user_id
+                        ? 'rgba(16,185,129,0.10)'
+                        : caido ? 'rgba(255,45,69,0.05)' : 'rgba(255,255,255,0.02)',
                       opacity: caido ? 0.6 : 1,
                       transition: 'all 0.15s',
                     }}
@@ -3360,9 +3373,12 @@ function DungeonPortal({ lugar, userCharacter, myUserId, onAttack, onTrade, onDu
                       photoUrl={mediaUrl(j.photo)}
                     />
                     {puedoRevivirlo && (
+                      /* Etiqueta corta: con el equipo en 4 columnas la tarjeta es angosta y
+                         "Revivir (+2 vida)" desbordaba. El detalle va en el title. */
                       <div style={{ marginTop: 6, textAlign: 'center' }}>
-                        <Btn kind="accent" sm onClick={() => revivirCompanero(j.user_id)} disabled={busy}>
-                          💉 Revivir (+2 vida)
+                        <Btn kind="accent" sm onClick={() => revivirCompanero(j.user_id)} disabled={busy}
+                          title={`Revivir a ${j.name} con +2 de vida`}>
+                          💉 Revivir +2
                         </Btn>
                       </div>
                     )}
@@ -3498,6 +3514,11 @@ function getPlayerCombatStats(character) {
     movimiento: combat?.movimiento ?? ((character?.movimiento ?? 2) + (bonos.movimiento ?? 0)),
     iniciativa: combat?.iniciativa ?? ((character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
     punteria:   combat?.punteria   ?? ((character?.punteria   ?? 2) + (bonos.punteria ?? 0)),
+    /* Iniciativa pre-buff de la tirada de cambio de estancia (topes fijos 4/5 ya aplicados por
+       el backend). Fallback local con la misma fórmula si el personaje viene de un cache viejo
+       sin el campo — ver resources/js/utils/estancia.js. */
+    iniciativa_estancia: character?.iniciativa_estancia
+      ?? Math.min(5, Math.min(4, character?.iniciativa ?? 2) + (bonos.iniciativa ?? 0)),
     nombre:     character?.name ?? 'Tú',
     photo:      character?.imagen_rpg_url ?? character?.photo_url ?? null,
     maxFuerza:      10 + (bonos.fuerza ?? 0),
@@ -3664,8 +3685,14 @@ function CombatHPBar({ vida, maxVida, escudo, maxEscudo, nombre, photoUrl, align
       }}>
         {!photoUrl && <Icon name="user" size={20} style={{ color: 'var(--holo)', opacity: 0.5 }} />}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)', marginBottom: 6, textAlign: align }}>
+      {/* `minWidth: 0` + ellipsis: con el equipo en 4 columnas las tarjetas quedan angostas, y sin
+          esto un nombre largo (con "(tú)"/"💀 Caído") desbordaba la columna en vez de recortarse. */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 11, fontFamily: 'var(--font-data)', fontWeight: 700, color: 'var(--txt)',
+          marginBottom: 6, textAlign: align,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }} title={nombre}>
           {nombre}
         </div>
         {maxEscudo > 0 && (
