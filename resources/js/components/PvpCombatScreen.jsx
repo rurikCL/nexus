@@ -839,6 +839,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
   const myHabilidades = me.habilidades ?? [];
   const lockActions = combat.status !== 'active' || !combat.is_my_turn || armed || introLock || animBusy;
+  /* Estado visual de los botones de acción (básico/estancia/evadir/huir). Antes se pintaban solo
+     con `busy`, así que cuando la acción estaba vedada por `lockActions` (no es mi turno, se está
+     animando el turno, etc.) quedaban funcionalmente muertos pero se veían habilitados y aún
+     respondían al hover. Las habilidades ya usaban su propio `disabled` combinado. */
+  const accionesBloqueadas = lockActions || busy;
 
   /* Agrupa el log del servidor (una entrada por turno) en tarjetas de ronda → tarjetas de turno */
   const logRounds = useMemo(() => {
@@ -1131,12 +1136,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             {/* Ataque básico (arma equipada o desarmado) — las naves no lo tienen */}
             {!me.es_nave && (
               <button onClick={() => !lockActions && !busy && clickOption('unarmed')} disabled={lockActions || busy} style={{
-                minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                minWidth: 0, borderRadius: 8, cursor: accionesBloqueadas ? 'not-allowed' : 'pointer',
                 background: 'rgba(255,140,0,0.07)', border: '1px solid rgba(255,140,0,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+                gap: 2, padding: '3px 6px', opacity: accionesBloqueadas ? 0.35 : 1, transition: 'all 0.14s',
               }}
-                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
+                onMouseEnter={e => { if (!accionesBloqueadas) { e.currentTarget.style.background = 'rgba(255,140,0,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,140,0,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.22)'; }}
               >
                 {me.arma_equipada?.imagen ? (
@@ -1167,12 +1172,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             {/* Estancia (las naves no tienen estancias — solo combate normal) */}
             {!me.es_nave && (
               <button onClick={() => openStancePicker()} disabled={lockActions || busy} style={{
-                minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                minWidth: 0, borderRadius: 8, cursor: accionesBloqueadas ? 'not-allowed' : 'pointer',
                 background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+                gap: 2, padding: '3px 6px', opacity: accionesBloqueadas ? 0.35 : 1, transition: 'all 0.14s',
               }}
-                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
+                onMouseEnter={e => { if (!accionesBloqueadas) { e.currentTarget.style.background = 'rgba(139,92,246,0.18)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.07)'; e.currentTarget.style.borderColor = 'rgba(139,92,246,0.22)'; }}
               >
                 {NX.CLASSES[myCurrentForma - 1]?.img ? (
@@ -1190,12 +1195,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
             {/* Evadir (solo naval): +1 Maniobra y +1 Iniciativa por 3 rondas — sirve cuando la nave no tiene habilidades */}
             {me.es_nave && (
               <button onClick={() => !lockActions && !busy && clickOption('evadir')} disabled={lockActions || busy} style={{
-                minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+                minWidth: 0, borderRadius: 8, cursor: accionesBloqueadas ? 'not-allowed' : 'pointer',
                 background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+                gap: 2, padding: '3px 6px', opacity: accionesBloqueadas ? 0.35 : 1, transition: 'all 0.14s',
               }}
-                onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(16,185,129,0.18)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'; } }}
+                onMouseEnter={e => { if (!accionesBloqueadas) { e.currentTarget.style.background = 'rgba(16,185,129,0.18)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.22)'; }}
               >
                 <span style={{ fontSize: 16, lineHeight: 1 }}>🌀</span>
@@ -1205,12 +1210,12 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
 
             {/* Huir */}
             <button onClick={() => !lockActions && !busy && clickOption('flee')} disabled={lockActions || busy} style={{
-              minWidth: 0, borderRadius: 8, cursor: busy ? 'not-allowed' : 'pointer',
+              minWidth: 0, borderRadius: 8, cursor: accionesBloqueadas ? 'not-allowed' : 'pointer',
               background: 'rgba(255,45,69,0.07)', border: '1px solid rgba(255,45,69,0.22)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 2, padding: '3px 6px', opacity: busy ? 0.35 : 1, transition: 'all 0.14s',
+              gap: 2, padding: '3px 6px', opacity: accionesBloqueadas ? 0.35 : 1, transition: 'all 0.14s',
             }}
-              onMouseEnter={e => { if (!busy) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
+              onMouseEnter={e => { if (!accionesBloqueadas) { e.currentTarget.style.background = 'rgba(255,45,69,0.18)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.5)'; } }}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,45,69,0.07)'; e.currentTarget.style.borderColor = 'rgba(255,45,69,0.22)'; }}
             >
               <span style={{ fontSize: 18, lineHeight: 1 }}>🏃</span>
