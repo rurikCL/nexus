@@ -4,6 +4,7 @@ import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion, playCombateNpc, playSound } from '../utils/sounds.js';
 import { tirarEstancia, mensajeEstancia, mensajeSinTirada } from '../utils/estancia.js';
+import { parseHabilidadDamage, describeHabilidadDamage } from '../utils/habilidadDamage.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -773,6 +774,24 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         }
       }
 
+      /* Habilidad de modificación de fuerza (+FX / -FX): no aplica daño, solo suma/resta
+         fuerza acumulada al jugador (el enemigo no tiene fuerza propia — nunca es objetivo).
+         Corta acá el turno del NPC, sin tirada de ataque. */
+      if (hab) {
+        const parsedNpcDmg = parseHabilidadDamage(hab.damage);
+        if (parsedNpcDmg.kind === 'force') {
+          const fuerzaDelta = parsedNpcDmg.value;
+          const signo = fuerzaDelta >= 0 ? `+${fuerzaDelta}` : `${fuerzaDelta}`;
+          setPlayerFuerza(prev => Math.max(0, prev + fuerzaDelta));
+          setLog(prev => [...prev, { text: `${npc.nombre} usa "${hab.nombre}": ${player.nombre} ${signo} de fuerza`, type: 'info', id: prev.length, ronda, actor: 'npc' }]);
+          setNpcCooldowns(prev => Object.fromEntries(Object.entries(prev).filter(([, v]) => v > 1).map(([k, v]) => [k, v - 1])));
+          setCooldowns(prev => Object.fromEntries(Object.entries(prev).filter(([, v]) => v > 1).map(([k, v]) => [k, v - 1])));
+          setNpcBusy(false);
+          endTurnAfter('npc', { npcEstados: npcEstadosAfterSelfBuff });
+          return;
+        }
+      }
+
       /* Leer stats efectivos ahora (closure over current state at render time) */
       const useRanged = !confundidoNpc && (hab ? hab.tipo !== 'melee' : (effNpcPnt > 0 && Math.random() > 0.5));
 
@@ -835,7 +854,15 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
       let dmgEscudo = 0;
       let dmgPerforante = 0;
       if (hab) {
-        dmg = Number(hab.damage ?? 0);
+        const parsedHabDmg = parseHabilidadDamage(hab.damage);
+        if (parsedHabDmg.kind === 'weapon') {
+          const armaBase = esEnemigo ? Number(npc.dano ?? 0) : ((confundidoNpc ? effNpcAtk : (useRanged ? effNpcPnt : effNpcAtk)) + npcDanoNivel);
+          dmg = Math.max(0, armaBase + parsedHabDmg.value);
+        } else if (parsedHabDmg.kind === 'heal') {
+          dmg = -parsedHabDmg.value;
+        } else {
+          dmg = parsedHabDmg.value;
+        }
         dmgEscudo = Number(hab.damage_escudo ?? 0);
         dmgPerforante = Number(hab.damage_perforante ?? 0);
         dmg = Math.max(0, dmg + formaBonoDano(hab.forma, currentForma));
@@ -991,6 +1018,61 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
 
     const entries = [];
 
+    /* Se parsea una sola vez (los dados, si aplica, tiran una sola vez por uso) y el
+       resultado se reutiliza en las tres ramas de abajo (self / curación a distancia / ataque). */
+    const parsedDmg = parseHabilidadDamage(hab.damage);
+
+    /* ─── Habilidad de modificación de fuerza (+FX / -FX): no aplica daño, solo
+       suma/resta fuerza acumulada al objetivo (self = el jugador; target = el
+       enemigo, que en este combate no tiene fuerza propia) ── */
+    if (parsedDmg.kind === 'force') {
+      const fuerzaDelta = parsedDmg.value;
+      const signo = fuerzaDelta >= 0 ? `+${fuerzaDelta}` : `${fuerzaDelta}`;
+      setLog(prev => [...prev, { text: `${player.nombre} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
+
+      const entriesForce = [];
+      if (habBuffStats.length > 0) entriesForce.push({ text: `${player.nombre}: ${habBuffStats.map(s => `+1 ${s}`).join(', ')}`, type: 'info' });
+      if (habBuffEstados.length > 0) entriesForce.push({ text: `${player.nombre}: ${habBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+
+      let selfEstados = playerEstados;
+      habBuffEstados.forEach(tipo => { selfEstados = aplicarEstadoDeHabilidad(selfEstados, tipo, habRondas); });
+
+      if (hab.objetivo === 'self') {
+        setPlayerFuerza(prev => Math.max(0, prev + fuerzaDelta));
+        entriesForce.push({ text: `${player.nombre}: ${signo} de fuerza`, type: 'info' });
+      } else {
+        entriesForce.push({ text: `${npc.nombre} no acumula fuerza`, type: 'info' });
+      }
+
+      const habDebuffStatsForce = habDebuff.filter(s => !esTipoEstado(s));
+      const habDebuffEstadosForce = habDebuff.filter(esTipoEstado);
+      let npcEstadosFinal = npcEstados;
+      if (habDebuffStatsForce.length > 0) {
+        setNpcDebuffs(prev => [...prev, ...habDebuffStatsForce.map(stat => ({ stat, turns: habRondas }))]);
+        entriesForce.push({ text: `${npc.nombre}: ${habDebuffStatsForce.map(s => `−1 ${s}`).join(', ')} (${habRondas} ronda${habRondas === 1 ? '' : 's'})`, type: 'info' });
+      }
+      if (habDebuffEstadosForce.length > 0) {
+        npcEstadosFinal = habDebuffEstadosForce.reduce((acc, tipo) => aplicarEstadoDeHabilidad(acc, tipo, habRondas), npcEstadosFinal);
+        entriesForce.push({ text: `${npc.nombre}: ${habDebuffEstadosForce.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
+      }
+
+      if (pendingBuffs.length > 0) {
+        await playStatusFx(playerHudRef, 'buff');
+        setPlayerBuffs(prev => [...prev, ...pendingBuffs]);
+      }
+      setPlayerEstados(selfEstados);
+      if (npcEstadosFinal !== npcEstados) setNpcEstados(npcEstadosFinal);
+      setLog(prev => [...prev, ...entriesForce.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+      endTurnAfter('player', { playerEstados: selfEstados, npcEstados: npcEstadosFinal });
+      return;
+    }
+
+    const baseDmg = parsedDmg.kind === 'heal'
+      ? -parsedDmg.value
+      : parsedDmg.kind === 'weapon'
+        ? Math.max(0, (player.arma_equipada?.dano ?? 3) + parsedDmg.value)
+        : parsedDmg.value;
+
     /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
     if (hab.objetivo === 'self') {
       /* Anuncio inmediato — antes de la animación de FX (buff/curación) */
@@ -1003,7 +1085,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
         entries.push({ text: `${player.nombre}: ${habBuffEstados.map(t => ESTADO_LABEL[t] ?? t).join(', ')}`, type: 'info' });
       }
 
-      const selfDmg = hab.damage ?? 0;
+      const selfDmg = baseDmg;
       const selfDmgEscudo = hab.damage_escudo ?? 0;
       let healedHp = { ...playerHp };
       let heal = 0;
@@ -1055,7 +1137,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     }
 
     /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ─ */
-    const targetDmg = hab.damage ?? 0;
+    const targetDmg = baseDmg;
     if (hab.objetivo === 'target' && targetDmg < 0) {
       /* Anuncio inmediato — antes de la animación de FX (curación) */
       setLog(prev => [...prev, { text: `${player.nombre} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
@@ -1147,7 +1229,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
     let effective = false;
     let resistant = false;
     if (hit) {
-      let dmg = hab.damage ?? (useAtq ? effPlayerAtk : effPlayerPnt);
+      let dmg = baseDmg;
       let dmgEscudo = hab.damage_escudo ?? 0;
       let dmgPerforante = hab.damage_perforante ?? 0;
       effective = !confundidoHab && formaEsEfectiva(hab.forma, npc.forma ?? 0);
@@ -1852,6 +1934,8 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                   const noFuerza = playerFuerza < hab.costo_fuerza;
                   const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
                   const isSelf   = hab.objetivo === 'self';
+                  const dmgInfo  = describeHabilidadDamage(hab.damage);
+                  const DMG_PREFIX = { flat: 'DMG', dice: 'DMG', heal: 'CURA', weapon: 'ARMA', force: 'FUERZA' };
 
                   return (
                     <button key={hab.id} onClick={() => !disabled && clickSkill(hab)}
@@ -1905,7 +1989,7 @@ export default function NpcCombatScreen({ npc, player, lugarImagen, planetaNombr
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                             {!isSelf && (
                               <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
-                                DMG {hab.damage}
+                                {DMG_PREFIX[dmgInfo.kind]} {dmgInfo.display}
                                 {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
                               </span>
                             )}

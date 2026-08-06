@@ -419,7 +419,7 @@ const ENTITY_CONFIG = {
       { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
       { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
       { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
-      { key: 'damage',       label: 'Daño base',             type: 'number',    min: -999, hint: 'Negativo = cura esa cantidad de vida en vez de dañar (al usuario si Objetivo=self, al rival si Objetivo=target)' },
+      { key: 'damage',       label: 'Daño base',             type: 'text', hint: 'Admite varios formatos: número plano ("30") = daño base fijo · dados ("2d6") = tirada de N dados de M caras como daño · "C10" = cura 10 de vida (al usuario si Objetivo=self, al rival si Objetivo=target) · "+5"/"-5" = bono/penalización al daño del arma equipada (objeto o sable) en vez de reemplazarlo · "+F5"/"-F5" = no daña, solo suma/resta 5 a la fuerza acumulada del objetivo (self o target)' },
       { key: 'damage_escudo', label: 'Daño a Escudo',         type: 'number',    min: -999, hint: 'Extra que se SUMA al Daño base pero solo golpea escudo (mientras el objetivo tenga escudo). Si el escudo ya está en 0, este extra no se aplica y solo pega el Daño base a la vida. Negativo = restaura esa cantidad de escudo.' },
       { key: 'damage_perforante', label: 'Daño Perforante',   type: 'number',    min: 0, hint: 'Ignora el escudo por completo: siempre pasa directo a la vida, tenga o no tenga escudo el objetivo.' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
@@ -430,7 +430,7 @@ const ENTITY_CONFIG = {
       { key: 'agro',         label: 'Agro (Combate RAID)',   type: 'number', min: -99, hint: 'Puntos de agro del jefe que suma usar esta habilidad (sin importar si conecta, ni qué efecto tenga) — puede ser negativo para reducir el agro propio. Un golpe básico sin habilidad siempre suma +1 fijo (+1 extra si es crítico); esto no aplica ahí.' },
       { key: 'sonido',       label: 'Sonido al usar',        type: 'text', hint: 'Nombre del sonido en el catálogo de Sonidos (rol_sonidos) que se reproduce al usar esta habilidad. Vacío = sin sonido.' },
     ],
-    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
+    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: '0', damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
   },
 
   rol_sonidos: {

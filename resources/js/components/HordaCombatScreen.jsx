@@ -4,6 +4,7 @@ import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion, playCombateNpc, playSound } from '../utils/sounds.js';
 import { tirarEstancia, mensajeEstancia, mensajeSinTirada } from '../utils/estancia.js';
+import { parseHabilidadDamage, describeHabilidadDamage } from '../utils/habilidadDamage.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import RangedStrikeEffect from './RangedStrikeEffect.jsx';
@@ -692,6 +693,25 @@ export default function HordaCombatScreen({
       const cds = enemigo.cooldowns ?? {};
       const disponibles = (b.habilidades ?? []).filter(h => (cds[h.id] ?? 0) <= 0 && h.objetivo !== 'self');
       const hab = (disponibles.length > 0 && Math.random() <= 0.6) ? disponibles[Math.floor(Math.random() * disponibles.length)] : null;
+      const parsedEnemyDmg = hab ? parseHabilidadDamage(hab.damage) : null;
+
+      /* Habilidad de modificación de fuerza (+FX / -FX): no aplica daño, solo suma/resta
+         fuerza acumulada al jugador (el enemigo no tiene fuerza propia — nunca es objetivo,
+         ya que las habilidades "self" quedan excluidas del pool de arriba). Corta acá el
+         turno del enemigo, sin tirada de ataque. */
+      if (hab && parsedEnemyDmg.kind === 'force') {
+        const fuerzaDelta = parsedEnemyDmg.value;
+        const signo = fuerzaDelta >= 0 ? `+${fuerzaDelta}` : `${fuerzaDelta}`;
+        let habCooldownsForce = enemigo.cooldowns ?? {};
+        if (hab.cooldown > 0) habCooldownsForce = { ...habCooldownsForce, [hab.id]: hab.cooldown };
+        const nextEnemigosForce = enemigosState.map((e, i) => (i === idx ? { ...e, cooldowns: habCooldownsForce } : e));
+        setEnemigosState(nextEnemigosForce);
+        setPlayerFuerza(prev => Math.max(0, prev + fuerzaDelta));
+        setLog(prev => [...prev, { text: `${enemigo.nombre} usa "${hab.nombre}": ${player.nombre || 'Tú'} ${signo} de fuerza`, type: 'info', id: prev.length, ronda, actor: 'npc' }]);
+        setEnemyActing(false);
+        await avanzarTurno(nextEnemigosForce, playerHp, playerEstados);
+        return;
+      }
 
       const useRanged = !confundido && (hab ? hab.tipo !== 'melee' : (b.pnt > 0 && Math.random() > 0.5));
       const targetEstadosPrevios = confundido ? enemigo.estados : playerEstados;
@@ -750,7 +770,13 @@ export default function HordaCombatScreen({
         await triggerStrike({ attackerRef: enemyRefs.current[idx], targetRef: confundido ? enemyRefs.current[idx] : playerHudRef, ranged: useRanged, hit: false });
       } else {
         const habForma = hab?.forma ?? 0;
-        const dmgBase = hab ? (hab.damage ?? 0) : b.dano;
+        const dmgBase = hab
+          ? (parsedEnemyDmg.kind === 'weapon'
+            ? Math.max(0, (b.dano ?? 0) + parsedEnemyDmg.value)
+            : parsedEnemyDmg.kind === 'heal'
+              ? -parsedEnemyDmg.value
+              : parsedEnemyDmg.value)
+          : b.dano;
         const dmgEscudoBase = hab ? (hab.damage_escudo ?? 0) : b.dano_escudo;
         const dmgPerfBase = hab ? (hab.damage_perforante ?? 0) : b.dano_perforante;
         const bonoForma = confundido ? 0 : formaBonoDano(habForma, currentForma);
@@ -934,6 +960,40 @@ export default function HordaCombatScreen({
     const habRondas = hab.duracion ?? 2;
     const entries = [];
 
+    /* Se parsea una sola vez (los dados, si aplica, tiran una sola vez por uso). */
+    const parsedDmg = parseHabilidadDamage(hab.damage);
+
+    /* ─── Habilidad de modificación de fuerza (+FX / -FX): no aplica daño, solo
+       suma/resta fuerza acumulada al objetivo (self = el jugador; target = el
+       enemigo elegido, que en Horda no tiene fuerza propia) ── */
+    if (parsedDmg.kind === 'force') {
+      const fuerzaDelta = parsedDmg.value;
+      const signo = fuerzaDelta >= 0 ? `+${fuerzaDelta}` : `${fuerzaDelta}`;
+      const buffStatsForce = habBuff.filter(s => !esTipoEstado(s));
+      const buffEstadosForce = habBuff.filter(esTipoEstado);
+      setLog(prev => [...prev, { text: `${player.nombre || 'Tú'} usa "${hab.nombre}"`, type: 'info', id: prev.length, ronda, actor: 'player' }]);
+
+      let nuevoEstadosForce = playerEstados;
+      buffEstadosForce.filter(t => t !== 'revivir').forEach(tipo => { nuevoEstadosForce = aplicarEstadoDeHabilidad(nuevoEstadosForce, tipo); });
+      if (buffStatsForce.length > 0) setPlayerBuffs(prev => [...prev, ...buffStatsForce.map(stat => ({ stat, turns: habRondas }))]);
+
+      const entriesForce = [];
+      if (hab.objetivo === 'self') {
+        setPlayerFuerza(prev => Math.max(0, prev + fuerzaDelta));
+        entriesForce.push({ text: `${player.nombre || 'Tú'}: ${signo} de fuerza`, type: 'info' });
+      } else {
+        entriesForce.push({ text: 'El objetivo no acumula fuerza', type: 'info' });
+      }
+
+      if (buffStatsForce.length > 0 || buffEstadosForce.length > 0) await playStatusFx(playerHudRef, 'buff');
+
+      setPlayerEstados(nuevoEstadosForce);
+      setLog(prev => [...prev, ...entriesForce.map((e, i) => ({ ...e, id: prev.length + i, ronda, actor: 'player' }))]);
+      setBusy(false);
+      await avanzarTurno(enemigosState, playerHp, nuevoEstadosForce);
+      return;
+    }
+
     if (hab.objetivo === 'self') {
       const buffStats = habBuff.filter(s => !esTipoEstado(s));
       const buffEstados = habBuff.filter(esTipoEstado);
@@ -944,7 +1004,7 @@ export default function HordaCombatScreen({
         type: 'info', id: prev.length, ronda, actor: 'player',
       }]);
 
-      const selfDmg = hab.damage ?? 0;
+      const selfDmg = parsedDmg.kind === 'heal' ? -parsedDmg.value : parsedDmg.value;
       const selfDmgEscudo = hab.damage_escudo ?? 0;
       let newPlayerHp = { ...playerHp };
       if (selfDmg < 0) {
@@ -1026,7 +1086,11 @@ export default function HordaCombatScreen({
     let newPlayerHp = playerHp;
 
     if (hit) {
-      let dmg = hab.damage ?? 0;
+      let dmg = parsedDmg.kind === 'heal'
+        ? -parsedDmg.value
+        : parsedDmg.kind === 'weapon'
+          ? Math.max(0, (player.arma_equipada?.dano ?? 3) + parsedDmg.value)
+          : parsedDmg.value;
       let dmgEscudo = hab.damage_escudo ?? 0;
       let dmgPerforante = hab.damage_perforante ?? 0;
       const efectivo = !confundido && formaEsEfectiva(hab.forma, target.forma);
@@ -1539,6 +1603,8 @@ export default function HordaCombatScreen({
                     const noFuerza = playerFuerza < hab.costo_fuerza;
                     const disabled = !isPlayerTurn || cdLeft > 0 || noFuerza;
                     const isSelf = hab.objetivo === 'self';
+                    const dmgInfo = describeHabilidadDamage(hab.damage);
+                    const DMG_PREFIX = { flat: 'DMG', dice: 'DMG', heal: 'CURA', weapon: 'ARMA', force: 'FUERZA' };
                     const pendiente = targeting?.kind === 'habilidad' && targeting.hab.id === hab.id;
                     return (
                       <button key={hab.id} onClick={() => !disabled && pedirObjetivo({ kind: 'habilidad', hab })} disabled={disabled}
@@ -1574,7 +1640,7 @@ export default function HordaCombatScreen({
                                 ? <span style={{ fontSize: 7, color: '#10b981', fontFamily: 'var(--font-data)' }}>BUFF</span>
                                 : (
                                   <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
-                                    DMG {hab.damage}
+                                    {DMG_PREFIX[dmgInfo.kind]} {dmgInfo.display}
                                     {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
                                   </span>
                                 )}

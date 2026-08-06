@@ -10,6 +10,7 @@ use App\Models\RolHabilidad;
 use App\Models\User;
 use App\Notifications\PvpCombatNotification;
 use App\Notifications\PvpTurnoPushRecordatorio;
+use App\Services\HabilidadDamageParser;
 use App\Services\MisionProgresoService;
 use App\Support\Combat\AplicaEstadosCombate;
 use App\Support\Combat\TiradaEstancia;
@@ -384,425 +385,181 @@ class PvpCombatController extends Controller
         $data = $request->validate(['skill' => 'required', 'forma' => 'nullable|integer|min:1|max:7']);
 
         return DB::transaction(function () use ($request, $id, $data) {
-        $user = $request->user();
-        $combat = PvpCombat::with(self::WITHS)->lockForUpdate()->findOrFail($id);
+            $user = $request->user();
+            $combat = PvpCombat::with(self::WITHS)->lockForUpdate()->findOrFail($id);
 
-        if (! $combat->involvedUser($user->id)) {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-        if ($combat->current_turn !== $user->id) {
-            return response()->json(['error' => 'No es tu turno'], 422);
-        }
-        if ($combat->status !== 'active') {
-            return response()->json(['error' => 'El combate ya terminó'], 422);
-        }
+            if (! $combat->involvedUser($user->id)) {
+                return response()->json(['error' => 'No autorizado'], 403);
+            }
+            if ($combat->current_turn !== $user->id) {
+                return response()->json(['error' => 'No es tu turno'], 422);
+            }
+            if ($combat->status !== 'active') {
+                return response()->json(['error' => 'El combate ya terminó'], 422);
+            }
 
-        $isAttacker = $user->id === $combat->attacker_id;
-        $actorChar = $isAttacker ? $combat->attacker->character : $combat->defender->character;
-        $opponentUser = $isAttacker ? $combat->defender : $combat->attacker;
-        $opponentChar = $opponentUser->character;
+            $isAttacker = $user->id === $combat->attacker_id;
+            $actorChar = $isAttacker ? $combat->attacker->character : $combat->defender->character;
+            $opponentUser = $isAttacker ? $combat->defender : $combat->attacker;
+            $opponentChar = $opponentUser->character;
 
-        $attackerFuerzaCfg = self::fuerzaConfig($combat->attacker->character);
-        $defenderFuerzaCfg = self::fuerzaConfig($combat->defender->character);
+            $attackerFuerzaCfg = self::fuerzaConfig($combat->attacker->character);
+            $defenderFuerzaCfg = self::fuerzaConfig($combat->defender->character);
 
-        /* Estado actual del actor */
-        $myFuerza = ($isAttacker ? $combat->attacker_fuerza : $combat->defender_fuerza) ?? 0;
-        $myCooldowns = ($isAttacker ? $combat->attacker_cooldowns : $combat->defender_cooldowns) ?? [];
-        $myBuffs = ($isAttacker ? $combat->attacker_buffs : $combat->defender_buffs) ?? [];
-        $myDebuffs = ($isAttacker ? $combat->attacker_debuffs : $combat->defender_debuffs) ?? [];
-        $oppBuffs = ($isAttacker ? $combat->defender_buffs : $combat->attacker_buffs) ?? [];
-        $oppDebuffs = ($isAttacker ? $combat->defender_debuffs : $combat->attacker_debuffs) ?? [];
-        $oppLastForma = ($isAttacker ? $combat->defender_last_forma : $combat->attacker_last_forma) ?? 0;
-        $myEstados = ($isAttacker ? $combat->attacker_estados : $combat->defender_estados) ?? [];
-        $oppEstados = ($isAttacker ? $combat->defender_estados : $combat->attacker_estados) ?? [];
-        $myCurrentForma = (int) ($isAttacker ? ($combat->attacker_current_forma ?? 1) : ($combat->defender_current_forma ?? 1));
-        $oppCurrentForma = (int) ($isAttacker ? ($combat->defender_current_forma ?? 1) : ($combat->attacker_current_forma ?? 1));
+            /* Estado actual del actor */
+            $myFuerza = ($isAttacker ? $combat->attacker_fuerza : $combat->defender_fuerza) ?? 0;
+            $myCooldowns = ($isAttacker ? $combat->attacker_cooldowns : $combat->defender_cooldowns) ?? [];
+            $myBuffs = ($isAttacker ? $combat->attacker_buffs : $combat->defender_buffs) ?? [];
+            $myDebuffs = ($isAttacker ? $combat->attacker_debuffs : $combat->defender_debuffs) ?? [];
+            $oppBuffs = ($isAttacker ? $combat->defender_buffs : $combat->attacker_buffs) ?? [];
+            $oppDebuffs = ($isAttacker ? $combat->defender_debuffs : $combat->attacker_debuffs) ?? [];
+            $oppLastForma = ($isAttacker ? $combat->defender_last_forma : $combat->attacker_last_forma) ?? 0;
+            $myEstados = ($isAttacker ? $combat->attacker_estados : $combat->defender_estados) ?? [];
+            $oppEstados = ($isAttacker ? $combat->defender_estados : $combat->attacker_estados) ?? [];
+            $myCurrentForma = (int) ($isAttacker ? ($combat->attacker_current_forma ?? 1) : ($combat->defender_current_forma ?? 1));
+            $oppCurrentForma = (int) ($isAttacker ? ($combat->defender_current_forma ?? 1) : ($combat->attacker_current_forma ?? 1));
 
-        /* Tick de cooldowns al inicio del turno (los buffs/debuffs se tickean por ronda, no por turno) */
-        $myCooldowns = array_filter(
-            array_map(fn ($v) => $v - 1, $myCooldowns),
-            fn ($v) => $v > 0
-        );
-
-        /* Parálisis: si el actor está paralizado pierde el turno automáticamente
-         * (sin importar el skill enviado) y queda inmune a que lo vuelvan a paralizar
-         * en el próximo intento. */
-        $paralisisInfo = self::resolverParalisisAlEmpezarTurno($myEstados);
-        $myEstados = $paralisisInfo['estados'];
-        $estaParalizado = $paralisisInfo['paralizado'];
-
-        /* Stats efectivos con buffs/debuffs */
-        $actorBaseStats = self::getCombatStats($actorChar, $combat->modo);
-        $opponentBaseStats = self::getCombatStats($opponentChar, $combat->modo);
-        $actorStats = self::aplicarBonoFormaStats(self::getEffectiveStats($actorBaseStats, $myBuffs, $myDebuffs), $myCurrentForma);
-        $opponentStats = self::aplicarBonoFormaStats(self::getEffectiveStats($opponentBaseStats, $oppBuffs, $oppDebuffs), $oppCurrentForma);
-
-        $log = $combat->log ?? [];
-        $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
-        $skill = $data['skill'];
-        /* Lo activa una tirada de estancia exitosa (ver la rama 'stance'): el turno no se pasa. */
-        $conservaTurno = false;
-
-        /* ─── Paralizado: pierde el turno sin importar el skill enviado ─── */
-        if ($estaParalizado) {
-            $entry['messages'][] = "{$actorChar->name} está paralizado y pierde el turno";
-
-            /* ─── Huir (requiere ganar tirada de iniciativa contra el rival) ── */
-        } elseif ($skill === 'flee') {
-            $roll = self::rollIniciativa(
-                $actorStats['iniciativa'], $opponentStats['iniciativa'],
-                self::tieneEstado($myEstados, 'aturdido'), self::tieneEstado($oppEstados, 'aturdido')
+            /* Tick de cooldowns al inicio del turno (los buffs/debuffs se tickean por ronda, no por turno) */
+            $myCooldowns = array_filter(
+                array_map(fn ($v) => $v - 1, $myCooldowns),
+                fn ($v) => $v > 0
             );
-            $entry['messages'][] = "{$actorChar->name} intenta huir: "
-                ."2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
-                ."vs 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$opponentStats['iniciativa']}={$roll['def_total']}";
 
-            if ($roll['gana_atacante']) {
-                $combat->status = $isAttacker ? 'fled_attacker' : 'fled_defender';
-                $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
-            } else {
-                $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
-            }
+            /* Parálisis: si el actor está paralizado pierde el turno automáticamente
+             * (sin importar el skill enviado) y queda inmune a que lo vuelvan a paralizar
+             * en el próximo intento. */
+            $paralisisInfo = self::resolverParalisisAlEmpezarTurno($myEstados);
+            $myEstados = $paralisisInfo['estados'];
+            $estaParalizado = $paralisisInfo['paralizado'];
 
-            /* ─── Cambio de estancia ─────────────────────────────────────── */
-        } elseif ($skill === 'stance') {
-            $forma = (int) ($data['forma'] ?? 1);
-            if ($forma < 1 || $forma > 7) {
-                return response()->json(['error' => 'Forma inválida'], 422);
-            }
-            /* Solo se puede cambiar a una forma aprendida (con slots de habilidad asignados). El
-               frontend ya las deshabilita, pero esto es lo autoritativo. */
-            if (! in_array($forma, $actorChar->formasAprendidas(), true)) {
-                return response()->json(['error' => 'No tienes habilidades asignadas en esa forma.'], 422);
-            }
-            if ($isAttacker) {
-                $combat->attacker_current_forma = $forma;
-            } else {
-                $combat->defender_current_forma = $forma;
-            }
-            $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
+            /* Stats efectivos con buffs/debuffs */
+            $actorBaseStats = self::getCombatStats($actorChar, $combat->modo);
+            $opponentBaseStats = self::getCombatStats($opponentChar, $combat->modo);
+            $actorStats = self::aplicarBonoFormaStats(self::getEffectiveStats($actorBaseStats, $myBuffs, $myDebuffs), $myCurrentForma);
+            $opponentStats = self::aplicarBonoFormaStats(self::getEffectiveStats($opponentBaseStats, $oppBuffs, $oppDebuffs), $oppCurrentForma);
 
-            /* INI + 2d6 >= 10: si supera, el cambio de estancia no consume el turno. La forma
-               queda cambiada en cualquier caso — es la acción del turno. Una sola tirada por
-               turno: si ya tiró (o sea, sigue actuando gracias a un cambio anterior), este
-               segundo cambio no tira y cierra el turno. */
-            if ($combat->estancia_tirada) {
-                $entry['messages'][] = TiradaEstancia::mensajeSinTirada($actorChar->name);
-            } else {
-                $tirada = TiradaEstancia::resolver(
-                    $actorChar->iniciativaEstancia(),
-                    TiradaEstancia::deltaBuffs($myBuffs, $myDebuffs)
+            $log = $combat->log ?? [];
+            $entry = ['turn' => count($log) + 1, 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
+            $skill = $data['skill'];
+            /* Lo activa una tirada de estancia exitosa (ver la rama 'stance'): el turno no se pasa. */
+            $conservaTurno = false;
+
+            /* ─── Paralizado: pierde el turno sin importar el skill enviado ─── */
+            if ($estaParalizado) {
+                $entry['messages'][] = "{$actorChar->name} está paralizado y pierde el turno";
+
+                /* ─── Huir (requiere ganar tirada de iniciativa contra el rival) ── */
+            } elseif ($skill === 'flee') {
+                $roll = self::rollIniciativa(
+                    $actorStats['iniciativa'], $opponentStats['iniciativa'],
+                    self::tieneEstado($myEstados, 'aturdido'), self::tieneEstado($oppEstados, 'aturdido')
                 );
-                $entry['messages'][] = TiradaEstancia::mensaje($actorChar->name, $tirada);
-                $entry['estancia'] = $tirada;
-                $combat->estancia_tirada = true;
-                $conservaTurno = $tirada['exito'];
-            }
+                $entry['messages'][] = "{$actorChar->name} intenta huir: "
+                    ."2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
+                    ."vs 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$opponentStats['iniciativa']}={$roll['def_total']}";
 
-            /* ─── Ataque básico (sable armado > arma equipada > desarmado) ──── */
-        } elseif ($skill === 'unarmed') {
-            if ($combat->modo === 'naval') {
-                return response()->json(['error' => 'El ataque cuerpo a cuerpo no está disponible en combate naval'], 422);
-            }
-            $confundido = self::resolverConfundido($myEstados);
-            if ($confundido) {
-                $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
-            }
-            $statsObjetivo = $confundido ? $actorStats : $opponentStats;
-
-            $arma = $actorChar->armaEfectiva();
-            $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
-            $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
-            $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
-            $atkTirada = self::tirarDados();
-            $defTirada = self::tirarDados();
-            $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
-            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $oppEstados, $defTirada['total']);
-            $atkRoll = $atkDado + $atkVal;
-            $defRoll = $defDado + $defVal;
-            $critico = $arma['critico'] ?? 0;
-            $esCritico = $atkDado >= (12 - $critico);
-            $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
-            $entry['messages'][] = "{$actorChar->name} {$accion}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
-
-            $estadosObjetivo = $confundido ? $myEstados : $oppEstados;
-            $protegidoInfo = self::consumirProtegido($estadosObjetivo);
-            $estadosObjetivo = $protegidoInfo['estados'];
-            $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
-            $estadosObjetivo = $marcaInfo['estados'];
-
-            $hit = $esCritico || $atkRoll > $defRoll;
-            if ($protegidoInfo['activo']) {
-                $hit = false;
-                $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
-            } elseif ($marcaInfo['activo']) {
-                $hit = $marcaInfo['forzar_exito'];
-                $entry['messages'][] = $hit
-                    ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
-                    : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
-            }
-
-            $reflejoInfo = ['activo' => false, 'tipo' => null];
-            if ($hit && ! $confundido) {
-                $reflejoInfo = self::consumirDeflectarOContraataque($estadosObjetivo, $esDistancia);
-                $estadosObjetivo = $reflejoInfo['estados'];
-            }
-            if ($confundido) {
-                $myEstados = $estadosObjetivo;
-            } else {
-                $oppEstados = $estadosObjetivo;
-            }
-
-            if ($hit) {
-                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myCurrentForma, 'dano'));
-                $dmgEscudo = self::formaBono($myCurrentForma, 'dano_escudo');
-                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myCurrentForma, 'dano_perforante');
-
-                if ($reflejoInfo['activo']) {
-                    [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
-                    $actorEscudoAntes = $isAttacker ? $combat->attacker_escudo : $combat->defender_escudo;
-                    if ($isAttacker) {
-                        [$combat->attacker_hp, $combat->attacker_escudo] =
-                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
-                    } else {
-                        [$combat->defender_hp, $combat->defender_escudo] =
-                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
-                    }
-                    $descDano = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $actorEscudoAntes);
-                    $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
-                    $entry['messages'][] = "¡{$opponentChar->name} {$verbo} el golpe de {$actorChar->name}! {$descDano}";
+                if ($roll['gana_atacante']) {
+                    $combat->status = $isAttacker ? 'fled_attacker' : 'fled_defender';
+                    $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
                 } else {
-                    $objetivoEsAtacante = $confundido ? $isAttacker : ! $isAttacker;
-                    $oppEscudoAntes = $objetivoEsAtacante ? $combat->attacker_escudo : $combat->defender_escudo;
-                    if ($objetivoEsAtacante) {
-                        [$combat->attacker_hp, $combat->attacker_escudo] =
-                            self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                    } else {
-                        [$combat->defender_hp, $combat->defender_escudo] =
-                            self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                    }
-                    $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
-                    $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) {$descDano}" : "¡Impacto! {$descDano}";
-                }
-            } else {
-                $entry['messages'][] = "{$actorChar->name} falla el golpe";
-            }
-
-            /* ─── Evadir (solo combate naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa, 3 rondas ── */
-        } elseif ($skill === 'evadir') {
-            if ($combat->modo !== 'naval') {
-                return response()->json(['error' => 'Evadir solo está disponible en combate naval'], 422);
-            }
-            foreach (['defensa', 'movimiento', 'iniciativa'] as $stat) {
-                $myBuffs[] = ['stat' => $stat, 'turns' => 3];
-            }
-            $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $user->id];
-            $entry['messages'][] = "{$actorChar->name} evade: +1 Maniobra y +1 Iniciativa (3 rondas)";
-
-            /* ─── Habilidad ───────────────────────────────────────────────── */
-        } else {
-            $skillId = (int) $skill;
-
-            /* Verificar que la habilidad está disponible: slots de la nave (combate naval)
-             * o slots de la forma actual del sable (combate de personaje) */
-            $naveSkillIds = self::getNaveSkillIds($actorChar, $combat->modo);
-            if ($naveSkillIds) {
-                $slotIds = $naveSkillIds;
-            } else {
-                $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
-                $slotIds = array_filter($porForma[(string) $myCurrentForma] ?? []);
-            }
-
-            if (! in_array($skillId, $slotIds)) {
-                return response()->json(['error' => 'Habilidad no disponible en esta forma'], 422);
-            }
-
-            $hab = RolHabilidad::find($skillId);
-            if (! $hab) {
-                return response()->json(['error' => 'Habilidad no encontrada'], 422);
-            }
-            if (($myCooldowns[(string) $skillId] ?? 0) > 0) {
-                return response()->json(['error' => 'Habilidad en cooldown'], 422);
-            }
-            if ($myFuerza < $hab->costo_fuerza) {
-                return response()->json(['error' => "Fuerza insuficiente ({$myFuerza}/{$hab->costo_fuerza})"], 422);
-            }
-
-            /* Gastar fuerza y registrar cooldown (las mejoras de nave pueden reducir el
-             * cooldown de una habilidad específica — ver CharacterNave::bonoCooldownParaHabilidad) */
-            $myFuerza -= $hab->costo_fuerza;
-            $habCooldown = $hab->cooldown;
-            if ($combat->modo === 'naval') {
-                $actorNaveOwned = self::getNaveOwned($actorChar);
-                if ($actorNaveOwned) {
-                    $habCooldown = max(0, $habCooldown + $actorNaveOwned->bonoCooldownParaHabilidad($hab->id));
-                }
-            }
-            if ($habCooldown > 0) {
-                $myCooldowns[(string) $skillId] = $habCooldown;
-            }
-
-            /* Aplicar buff al actor (siempre al usar la habilidad) */
-            $habBuff = is_array($hab->buff) ? $hab->buff : [];
-            $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
-            $habRondas = $hab->duracion ?: 2;
-            foreach ($habBuff as $stat) {
-                if (self::esTipoEstado($stat)) {
-                    $myEstados = self::aplicarEstadoDeHabilidad($myEstados, $stat, $habRondas);
-                } else {
-                    $myBuffs[] = ['stat' => $stat, 'turns' => $habRondas];
-                }
-            }
-
-            /* Registrar la forma usada */
-            if ($isAttacker) {
-                $combat->attacker_last_forma = $hab->forma;
-            } else {
-                $combat->defender_last_forma = $hab->forma;
-            }
-
-            $dmg = (int) ($hab->damage ?? 0);
-            $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
-            $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
-
-            /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
-            if ($hab->objetivo === 'self') {
-                $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
-                $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}{$buffDesc}";
-                if (! empty($habBuff)) {
-                    $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $user->id];
+                    $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
                 }
 
-                if ($dmg < 0) {
-                    $heal = -$dmg;
-                    $maxHp = self::getMaxVida($actorChar, $combat->modo);
-                    if ($isAttacker) {
-                        $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
-                    } else {
-                        $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
-                    }
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $user->id];
-                    $entry['messages'][] = "¡Curación! +{$heal} vida";
+                /* ─── Cambio de estancia ─────────────────────────────────────── */
+            } elseif ($skill === 'stance') {
+                $forma = (int) ($data['forma'] ?? 1);
+                if ($forma < 1 || $forma > 7) {
+                    return response()->json(['error' => 'Forma inválida'], 422);
                 }
-
-                if ($dmgEscudo < 0) {
-                    $healEsc = -$dmgEscudo;
-                    $maxEsc = self::getMaxEscudo($actorChar, $combat->modo);
-                    if ($isAttacker) {
-                        $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
-                    } else {
-                        $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
-                    }
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $user->id];
-                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo";
+                /* Solo se puede cambiar a una forma aprendida (con slots de habilidad asignados). El
+                   frontend ya las deshabilita, pero esto es lo autoritativo. */
+                if (! in_array($forma, $actorChar->formasAprendidas(), true)) {
+                    return response()->json(['error' => 'No tienes habilidades asignadas en esa forma.'], 422);
                 }
-
-                /* Una habilidad "self" puede llevar, además del buff propio, un debuff que
-                 * cae sobre el rival (p.ej. "gano +defensa y paralizo al oponente") — no hay
-                 * tirada de ataque en esta rama, así que se aplica sin condición de impacto. */
-                if (! empty($habDebuff)) {
-                    foreach ($habDebuff as $stat) {
-                        if (self::esTipoEstado($stat)) {
-                            $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
-                        } else {
-                            $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
-                        }
-                    }
-                    $entry['messages'][] = "{$opponentChar->name} sufre: ".implode(', ', $habDebuff);
-                }
-
-                /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ── */
-            } elseif ($dmg < 0) {
-                $heal = -$dmg;
-                $maxHp = self::getMaxVida($opponentChar, $combat->modo);
                 if ($isAttacker) {
-                    $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
+                    $combat->attacker_current_forma = $forma;
                 } else {
-                    $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
+                    $combat->defender_current_forma = $forma;
                 }
-                $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $opponentUser->id];
-                $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$opponentChar->name}";
+                $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
 
-                if ($dmgEscudo < 0) {
-                    $healEsc = -$dmgEscudo;
-                    $maxEsc = self::getMaxEscudo($opponentChar, $combat->modo);
-                    if ($isAttacker) {
-                        $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
-                    } else {
-                        $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
-                    }
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $opponentUser->id];
-                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo a {$opponentChar->name}";
+                /* INI + 2d6 >= 10: si supera, el cambio de estancia no consume el turno. La forma
+                   queda cambiada en cualquier caso — es la acción del turno. Una sola tirada por
+                   turno: si ya tiró (o sea, sigue actuando gracias a un cambio anterior), este
+                   segundo cambio no tira y cierra el turno. */
+                if ($combat->estancia_tirada) {
+                    $entry['messages'][] = TiradaEstancia::mensajeSinTirada($actorChar->name);
+                } else {
+                    $tirada = TiradaEstancia::resolver(
+                        $actorChar->iniciativaEstancia(),
+                        TiradaEstancia::deltaBuffs($myBuffs, $myDebuffs)
+                    );
+                    $entry['messages'][] = TiradaEstancia::mensaje($actorChar->name, $tirada);
+                    $entry['estancia'] = $tirada;
+                    $combat->estancia_tirada = true;
+                    $conservaTurno = $tirada['exito'];
                 }
 
-                /* ─── Habilidad de ataque (objetivo: target, damage >= 0) ──────── */
-            } else {
-                $confundidoHab = self::resolverConfundido($myEstados);
-                if ($confundidoHab) {
+                /* ─── Ataque básico (sable armado > arma equipada > desarmado) ──── */
+            } elseif ($skill === 'unarmed') {
+                if ($combat->modo === 'naval') {
+                    return response()->json(['error' => 'El ataque cuerpo a cuerpo no está disponible en combate naval'], 422);
+                }
+                $confundido = self::resolverConfundido($myEstados);
+                if ($confundido) {
                     $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
                 }
-                $statsObjetivoHab = $confundidoHab ? $actorStats : $opponentStats;
+                $statsObjetivo = $confundido ? $actorStats : $opponentStats;
 
-                $useAtq = $hab->tipo === 'melee';
-                $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
-                $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
+                $arma = $actorChar->armaEfectiva();
+                $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
+                $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
+                $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
+                $atkTirada = self::tirarDados();
+                $defTirada = self::tirarDados();
+                $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
+                $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $oppEstados, $defTirada['total']);
+                $atkRoll = $atkDado + $atkVal;
+                $defRoll = $defDado + $defVal;
+                $critico = $arma['critico'] ?? 0;
+                $esCritico = $atkDado >= (12 - $critico);
+                $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
+                $entry['messages'][] = "{$actorChar->name} {$accion}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
 
-                $atkTiradaHab = self::tirarDados();
-                $defTiradaHab = self::tirarDados();
-                $atkDadoHab = self::mitigarTiradaAturdido($myEstados, $atkTiradaHab['total']);
-                $defDadoHab = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $oppEstados, $defTiradaHab['total']);
-                $atkRoll = $atkDadoHab + $atkVal;
-                $defRoll = $defDadoHab + $defVal;
+                $estadosObjetivo = $confundido ? $myEstados : $oppEstados;
+                $protegidoInfo = self::consumirProtegido($estadosObjetivo);
+                $estadosObjetivo = $protegidoInfo['estados'];
+                $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
+                $estadosObjetivo = $marcaInfo['estados'];
 
-                $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: "
-                    ."2d6({$atkTiradaHab['dado1']}+{$atkTiradaHab['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTiradaHab['dado1']}+{$defTiradaHab['dado2']})+{$defVal}={$defRoll}";
-
-                $estadosObjetivoHab = $confundidoHab ? $myEstados : $oppEstados;
-                $protegidoHab = self::consumirProtegido($estadosObjetivoHab);
-                $estadosObjetivoHab = $protegidoHab['estados'];
-                $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDadoHab);
-                $estadosObjetivoHab = $marcaHab['estados'];
-
-                $hitHab = $atkRoll > $defRoll;
-                if ($protegidoHab['activo']) {
-                    $hitHab = false;
+                $hit = $esCritico || $atkRoll > $defRoll;
+                if ($protegidoInfo['activo']) {
+                    $hit = false;
                     $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
-                } elseif ($marcaHab['activo']) {
-                    $hitHab = $marcaHab['forzar_exito'];
-                    $entry['messages'][] = $hitHab
+                } elseif ($marcaInfo['activo']) {
+                    $hit = $marcaInfo['forzar_exito'];
+                    $entry['messages'][] = $hit
                         ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
                         : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
                 }
 
-                $reflejoHab = ['activo' => false, 'tipo' => null];
-                if ($hitHab && ! $confundidoHab) {
-                    $reflejoHab = self::consumirDeflectarOContraataque($estadosObjetivoHab, ! $useAtq);
-                    $estadosObjetivoHab = $reflejoHab['estados'];
+                $reflejoInfo = ['activo' => false, 'tipo' => null];
+                if ($hit && ! $confundido) {
+                    $reflejoInfo = self::consumirDeflectarOContraataque($estadosObjetivo, $esDistancia);
+                    $estadosObjetivo = $reflejoInfo['estados'];
                 }
-                if ($confundidoHab) {
-                    $myEstados = $estadosObjetivoHab;
+                if ($confundido) {
+                    $myEstados = $estadosObjetivo;
                 } else {
-                    $oppEstados = $estadosObjetivoHab;
+                    $oppEstados = $estadosObjetivo;
                 }
 
-                if ($hitHab) {
-                    $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $oppLastForma);
-                    $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $oppLastForma);
+                if ($hit) {
+                    $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myCurrentForma, 'dano'));
+                    $dmgEscudo = self::formaBono($myCurrentForma, 'dano_escudo');
+                    $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myCurrentForma, 'dano_perforante');
 
-                    if (! $confundidoHab) {
-                        $dmg = max(0, $dmg + self::formaBonoDano((int) $hab->forma, (int) $oppLastForma));
-                        if ($effective) {
-                            $entry['messages'][] = "¡Forma efectiva! +1 daño (Forma {$hab->forma} vs Forma {$oppLastForma})";
-                        } elseif ($resistant) {
-                            $entry['messages'][] = "Resistencia de forma −1 daño (Forma {$hab->forma} vs Forma {$oppLastForma})";
-                        }
-                    }
-                    $dmg += self::formaBono($myCurrentForma, 'dano');
-                    $dmgEscudo += self::formaBono($myCurrentForma, 'dano_escudo');
-                    $dmgPerforante += self::formaBono($myCurrentForma, 'dano_perforante');
-                    $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
-
-                    if ($reflejoHab['activo']) {
+                    if ($reflejoInfo['activo']) {
                         [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
                         $actorEscudoAntes = $isAttacker ? $combat->attacker_escudo : $combat->defender_escudo;
                         if ($isAttacker) {
@@ -813,201 +570,472 @@ class PvpCombatController extends Controller
                                 self::applyDamage($combat->defender_hp, $combat->defender_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
                         }
                         $descDano = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $actorEscudoAntes);
-                        $verbo = $reflejoHab['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
-                        $entry['messages'][] = "¡{$opponentChar->name} {$verbo} el ataque de {$actorChar->name}! {$descDano}";
+                        $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                        $entry['messages'][] = "¡{$opponentChar->name} {$verbo} el golpe de {$actorChar->name}! {$descDano}";
                     } else {
-                        $objetivoEsAtacanteHab = $confundidoHab ? $isAttacker : ! $isAttacker;
-                        $oppEscudoAntes = $objetivoEsAtacanteHab ? $combat->attacker_escudo : $combat->defender_escudo;
-
-                        if ($objetivoEsAtacanteHab) {
+                        $objetivoEsAtacante = $confundido ? $isAttacker : ! $isAttacker;
+                        $oppEscudoAntes = $objetivoEsAtacante ? $combat->attacker_escudo : $combat->defender_escudo;
+                        if ($objetivoEsAtacante) {
                             [$combat->attacker_hp, $combat->attacker_escudo] =
                                 self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         } else {
                             [$combat->defender_hp, $combat->defender_escudo] =
                                 self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         }
-
                         $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
-                        $entry['messages'][] = "¡Impacto! {$descDano}";
+                        $entry['messages'][] = $esCritico ? "¡CRÍTICO! (natural {$atkDado}) {$descDano}" : "¡Impacto! {$descDano}";
                     }
-
                 } else {
-                    $entry['messages'][] = "{$actorChar->name} falla el ataque";
+                    $entry['messages'][] = "{$actorChar->name} falla el golpe";
                 }
 
-                /* Debuffs/estados al oponente: se aplican por el solo hecho de usar la habilidad,
-                 * conecte o no el golpe (mismo criterio que el buff propio, que se aplica al gastar
-                 * la fuerza) — la tirada de ataque decide el daño, no el efecto. Incluye el caso de
-                 * deflectar/contraataque: el objetivo evita el daño, no la penalización. Única
-                 * excepción: si la confusión redirigió el golpe contra el propio actor, el oponente
-                 * nunca fue el objetivo real y no recibe nada. */
-                if (! empty($habDebuff) && ! $confundidoHab) {
-                    foreach ($habDebuff as $stat) {
-                        if (self::esTipoEstado($stat)) {
-                            $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
+                /* ─── Evadir (solo combate naval): +1 Maniobra (defensa+movimiento) y +1 Iniciativa, 3 rondas ── */
+            } elseif ($skill === 'evadir') {
+                if ($combat->modo !== 'naval') {
+                    return response()->json(['error' => 'Evadir solo está disponible en combate naval'], 422);
+                }
+                foreach (['defensa', 'movimiento', 'iniciativa'] as $stat) {
+                    $myBuffs[] = ['stat' => $stat, 'turns' => 3];
+                }
+                $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $user->id];
+                $entry['messages'][] = "{$actorChar->name} evade: +1 Maniobra y +1 Iniciativa (3 rondas)";
+
+                /* ─── Habilidad ───────────────────────────────────────────────── */
+            } else {
+                $skillId = (int) $skill;
+
+                /* Verificar que la habilidad está disponible: slots de la nave (combate naval)
+                 * o slots de la forma actual del sable (combate de personaje) */
+                $naveSkillIds = self::getNaveSkillIds($actorChar, $combat->modo);
+                if ($naveSkillIds) {
+                    $slotIds = $naveSkillIds;
+                } else {
+                    $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
+                    $slotIds = array_filter($porForma[(string) $myCurrentForma] ?? []);
+                }
+
+                if (! in_array($skillId, $slotIds)) {
+                    return response()->json(['error' => 'Habilidad no disponible en esta forma'], 422);
+                }
+
+                $hab = RolHabilidad::find($skillId);
+                if (! $hab) {
+                    return response()->json(['error' => 'Habilidad no encontrada'], 422);
+                }
+                if (($myCooldowns[(string) $skillId] ?? 0) > 0) {
+                    return response()->json(['error' => 'Habilidad en cooldown'], 422);
+                }
+                if ($myFuerza < $hab->costo_fuerza) {
+                    return response()->json(['error' => "Fuerza insuficiente ({$myFuerza}/{$hab->costo_fuerza})"], 422);
+                }
+
+                /* Gastar fuerza y registrar cooldown (las mejoras de nave pueden reducir el
+                 * cooldown de una habilidad específica — ver CharacterNave::bonoCooldownParaHabilidad) */
+                $myFuerza -= $hab->costo_fuerza;
+                $habCooldown = $hab->cooldown;
+                if ($combat->modo === 'naval') {
+                    $actorNaveOwned = self::getNaveOwned($actorChar);
+                    if ($actorNaveOwned) {
+                        $habCooldown = max(0, $habCooldown + $actorNaveOwned->bonoCooldownParaHabilidad($hab->id));
+                    }
+                }
+                if ($habCooldown > 0) {
+                    $myCooldowns[(string) $skillId] = $habCooldown;
+                }
+
+                /* Aplicar buff al actor (siempre al usar la habilidad) */
+                $habBuff = is_array($hab->buff) ? $hab->buff : [];
+                $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
+                $habRondas = $hab->duracion ?: 2;
+                foreach ($habBuff as $stat) {
+                    if (self::esTipoEstado($stat)) {
+                        $myEstados = self::aplicarEstadoDeHabilidad($myEstados, $stat, $habRondas);
+                    } else {
+                        $myBuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                    }
+                }
+
+                /* Registrar la forma usada */
+                if ($isAttacker) {
+                    $combat->attacker_last_forma = $hab->forma;
+                } else {
+                    $combat->defender_last_forma = $hab->forma;
+                }
+
+                $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
+                $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
+                $parsedDmg = HabilidadDamageParser::parse((string) ($hab->damage ?? '0'));
+
+                /* ─── Habilidad de modificación de fuerza (+FX / -FX): no aplica daño,
+                 * solo suma/resta fuerza acumulada al objetivo (self o target) ──────── */
+                if ($parsedDmg['kind'] === 'force') {
+                    $fuerzaDelta = $parsedDmg['value'];
+                    $signoFuerza = $fuerzaDelta >= 0 ? "+{$fuerzaDelta}" : (string) $fuerzaDelta;
+                    if ($hab->objetivo === 'self') {
+                        $myFuerza = max(0, $myFuerza + $fuerzaDelta);
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: {$signoFuerza} de fuerza";
+                    } else {
+                        if ($isAttacker) {
+                            $combat->defender_fuerza = max(0, ($combat->defender_fuerza ?? 0) + $fuerzaDelta);
                         } else {
-                            $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                            $combat->attacker_fuerza = max(0, ($combat->attacker_fuerza ?? 0) + $fuerzaDelta);
+                        }
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: {$opponentChar->name} {$signoFuerza} de fuerza";
+                    }
+                } else {
+                    if ($parsedDmg['kind'] === 'heal') {
+                        $dmg = -$parsedDmg['value'];
+                    } elseif ($parsedDmg['kind'] === 'weapon') {
+                        $armaHab = $actorChar->armaEfectiva();
+                        $dmg = max(0, ($armaHab['dano'] ?? 3) + $parsedDmg['value']);
+                    } else {
+                        $dmg = $parsedDmg['value'];
+                    }
+
+                    /* ─── Habilidad de auto-buff / auto-curación (objetivo: self) ── */
+                    if ($hab->objetivo === 'self') {
+                        $buffDesc = ! empty($habBuff) ? ' (+'.implode(', +', $habBuff).')' : '';
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}{$buffDesc}";
+                        if (! empty($habBuff)) {
+                            $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $user->id];
+                        }
+
+                        if ($dmg < 0) {
+                            $heal = -$dmg;
+                            $maxHp = self::getMaxVida($actorChar, $combat->modo);
+                            if ($isAttacker) {
+                                $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
+                            } else {
+                                $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
+                            }
+                            $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $user->id];
+                            $entry['messages'][] = "¡Curación! +{$heal} vida";
+                        }
+
+                        if ($dmgEscudo < 0) {
+                            $healEsc = -$dmgEscudo;
+                            $maxEsc = self::getMaxEscudo($actorChar, $combat->modo);
+                            if ($isAttacker) {
+                                $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
+                            } else {
+                                $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
+                            }
+                            $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $user->id];
+                            $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo";
+                        }
+
+                        /* Una habilidad "self" puede llevar, además del buff propio, un debuff que
+                         * cae sobre el rival (p.ej. "gano +defensa y paralizo al oponente") — no hay
+                         * tirada de ataque en esta rama, así que se aplica sin condición de impacto. */
+                        if (! empty($habDebuff)) {
+                            foreach ($habDebuff as $stat) {
+                                if (self::esTipoEstado($stat)) {
+                                    $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
+                                } else {
+                                    $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                                }
+                            }
+                            $entry['messages'][] = "{$opponentChar->name} sufre: ".implode(', ', $habDebuff);
+                        }
+
+                        /* ─── Habilidad de curación a distancia (objetivo: target, damage < 0) ── */
+                    } elseif ($dmg < 0) {
+                        $heal = -$dmg;
+                        $maxHp = self::getMaxVida($opponentChar, $combat->modo);
+                        if ($isAttacker) {
+                            $combat->defender_hp = min($maxHp, $combat->defender_hp + $heal);
+                        } else {
+                            $combat->attacker_hp = min($maxHp, $combat->attacker_hp + $heal);
+                        }
+                        $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $opponentUser->id];
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$opponentChar->name}";
+
+                        if ($dmgEscudo < 0) {
+                            $healEsc = -$dmgEscudo;
+                            $maxEsc = self::getMaxEscudo($opponentChar, $combat->modo);
+                            if ($isAttacker) {
+                                $combat->defender_escudo = min($maxEsc, $combat->defender_escudo + $healEsc);
+                            } else {
+                                $combat->attacker_escudo = min($maxEsc, $combat->attacker_escudo + $healEsc);
+                            }
+                            $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $opponentUser->id];
+                            $entry['messages'][] = "¡Escudo restaurado! +{$healEsc} escudo a {$opponentChar->name}";
+                        }
+
+                        /* ─── Habilidad de ataque (objetivo: target, damage >= 0) ──────── */
+                    } else {
+                        $confundidoHab = self::resolverConfundido($myEstados);
+                        if ($confundidoHab) {
+                            $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
+                        }
+                        $statsObjetivoHab = $confundidoHab ? $actorStats : $opponentStats;
+
+                        $useAtq = $hab->tipo === 'melee';
+                        $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
+                        $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
+
+                        $atkTiradaHab = self::tirarDados();
+                        $defTiradaHab = self::tirarDados();
+                        $atkDadoHab = self::mitigarTiradaAturdido($myEstados, $atkTiradaHab['total']);
+                        $defDadoHab = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $oppEstados, $defTiradaHab['total']);
+                        $atkRoll = $atkDadoHab + $atkVal;
+                        $defRoll = $defDadoHab + $defVal;
+
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: "
+                            ."2d6({$atkTiradaHab['dado1']}+{$atkTiradaHab['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTiradaHab['dado1']}+{$defTiradaHab['dado2']})+{$defVal}={$defRoll}";
+
+                        $estadosObjetivoHab = $confundidoHab ? $myEstados : $oppEstados;
+                        $protegidoHab = self::consumirProtegido($estadosObjetivoHab);
+                        $estadosObjetivoHab = $protegidoHab['estados'];
+                        $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDadoHab);
+                        $estadosObjetivoHab = $marcaHab['estados'];
+
+                        $hitHab = $atkRoll > $defRoll;
+                        if ($protegidoHab['activo']) {
+                            $hitHab = false;
+                            $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
+                        } elseif ($marcaHab['activo']) {
+                            $hitHab = $marcaHab['forzar_exito'];
+                            $entry['messages'][] = $hitHab
+                                ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
+                                : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
+                        }
+
+                        $reflejoHab = ['activo' => false, 'tipo' => null];
+                        if ($hitHab && ! $confundidoHab) {
+                            $reflejoHab = self::consumirDeflectarOContraataque($estadosObjetivoHab, ! $useAtq);
+                            $estadosObjetivoHab = $reflejoHab['estados'];
+                        }
+                        if ($confundidoHab) {
+                            $myEstados = $estadosObjetivoHab;
+                        } else {
+                            $oppEstados = $estadosObjetivoHab;
+                        }
+
+                        if ($hitHab) {
+                            $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $oppLastForma);
+                            $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $oppLastForma);
+
+                            if (! $confundidoHab) {
+                                $dmg = max(0, $dmg + self::formaBonoDano((int) $hab->forma, (int) $oppLastForma));
+                                if ($effective) {
+                                    $entry['messages'][] = "¡Forma efectiva! +1 daño (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                                } elseif ($resistant) {
+                                    $entry['messages'][] = "Resistencia de forma −1 daño (Forma {$hab->forma} vs Forma {$oppLastForma})";
+                                }
+                            }
+                            $dmg += self::formaBono($myCurrentForma, 'dano');
+                            $dmgEscudo += self::formaBono($myCurrentForma, 'dano_escudo');
+                            $dmgPerforante += self::formaBono($myCurrentForma, 'dano_perforante');
+                            $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
+
+                            if ($reflejoHab['activo']) {
+                                [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
+                                $actorEscudoAntes = $isAttacker ? $combat->attacker_escudo : $combat->defender_escudo;
+                                if ($isAttacker) {
+                                    [$combat->attacker_hp, $combat->attacker_escudo] =
+                                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                                } else {
+                                    [$combat->defender_hp, $combat->defender_escudo] =
+                                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                                }
+                                $descDano = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $actorEscudoAntes);
+                                $verbo = $reflejoHab['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                                $entry['messages'][] = "¡{$opponentChar->name} {$verbo} el ataque de {$actorChar->name}! {$descDano}";
+                            } else {
+                                $objetivoEsAtacanteHab = $confundidoHab ? $isAttacker : ! $isAttacker;
+                                $oppEscudoAntes = $objetivoEsAtacanteHab ? $combat->attacker_escudo : $combat->defender_escudo;
+
+                                if ($objetivoEsAtacanteHab) {
+                                    [$combat->attacker_hp, $combat->attacker_escudo] =
+                                        self::applyDamage($combat->attacker_hp, $combat->attacker_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                                } else {
+                                    [$combat->defender_hp, $combat->defender_escudo] =
+                                        self::applyDamage($combat->defender_hp, $combat->defender_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                                }
+
+                                $descDano = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $oppEscudoAntes);
+                                $entry['messages'][] = "¡Impacto! {$descDano}";
+                            }
+
+                        } else {
+                            $entry['messages'][] = "{$actorChar->name} falla el ataque";
+                        }
+
+                        /* Debuffs/estados al oponente: se aplican por el solo hecho de usar la habilidad,
+                         * conecte o no el golpe (mismo criterio que el buff propio, que se aplica al gastar
+                         * la fuerza) — la tirada de ataque decide el daño, no el efecto. Incluye el caso de
+                         * deflectar/contraataque: el objetivo evita el daño, no la penalización. Única
+                         * excepción: si la confusión redirigió el golpe contra el propio actor, el oponente
+                         * nunca fue el objetivo real y no recibe nada. */
+                        if (! empty($habDebuff) && ! $confundidoHab) {
+                            foreach ($habDebuff as $stat) {
+                                if (self::esTipoEstado($stat)) {
+                                    $oppEstados = self::aplicarEstadoDeHabilidad($oppEstados, $stat, $habRondas);
+                                } else {
+                                    $oppDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                                }
+                            }
+                            $entry['messages'][] = "{$opponentChar->name} sufre: ".implode(', ', $habDebuff);
                         }
                     }
-                    $entry['messages'][] = "{$opponentChar->name} sufre: ".implode(', ', $habDebuff);
                 }
             }
-        }
 
-        /* ─── Condición de victoria (daño directo del turno) ────────────── */
-        if ($combat->attacker_hp <= 0) {
-            $combat->status = 'defender_won';
-        } elseif ($combat->defender_hp <= 0) {
-            $combat->status = 'attacker_won';
-        }
+            /* ─── Condición de victoria (daño directo del turno) ────────────── */
+            if ($combat->attacker_hp <= 0) {
+                $combat->status = 'defender_won';
+            } elseif ($combat->defender_hp <= 0) {
+                $combat->status = 'attacker_won';
+            }
 
-        /* ─── Fuerza final de cada bando (antes del pre-cobro de ronda) ──── */
-        $attackerFuerzaFinal = $isAttacker ? $myFuerza : ($combat->attacker_fuerza ?? 0);
-        $defenderFuerzaFinal = $isAttacker ? ($combat->defender_fuerza ?? 0) : $myFuerza;
+            /* ─── Fuerza final de cada bando (antes del pre-cobro de ronda) ──── */
+            $attackerFuerzaFinal = $isAttacker ? $myFuerza : ($combat->attacker_fuerza ?? 0);
+            $defenderFuerzaFinal = $isAttacker ? ($combat->defender_fuerza ?? 0) : $myFuerza;
 
-        /* ─── Cambio de turno / rondas ──────────────────────────────────────
-           `$conservaTurno` lo activa una tirada de estancia exitosa: el jugador vuelve a actuar,
-           así que no se pasa el turno ni se cierra la ronda. */
-        if ($combat->status === 'active' && ! $conservaTurno) {
-            $combat->estancia_tirada = false; // arranca un turno nuevo: se habilita otra tirada
-            if ($combat->ronda_turno === 0) {
-                /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
-                $combat->ronda_turno = 1;
-                $combat->current_turn = $opponentUser->id;
-                if ($isAttacker) {
-                    $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
-                } else {
-                    $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
-                }
-            } else {
-                /* Ambos actuaron: termina la ronda — tick de buffs/debuffs/estados (duran N rondas) y nueva iniciativa */
-                $myBuffs = self::tickEffects($myBuffs);
-                $myDebuffs = self::tickEffects($myDebuffs);
-                $oppBuffs = self::tickEffects($oppBuffs);
-                $oppDebuffs = self::tickEffects($oppDebuffs);
-
-                $myHpField = $isAttacker ? 'attacker_hp' : 'defender_hp';
-                $oppHpField = $isAttacker ? 'defender_hp' : 'attacker_hp';
-                $myTick = self::tickEstadosRonda($myEstados, $combat->{$myHpField}, self::getMaxVida($actorChar, $combat->modo), $actorChar->name);
-                $myEstados = $myTick['estados'];
-                $combat->{$myHpField} = $myTick['hp'];
-                $oppTick = self::tickEstadosRonda($oppEstados, $combat->{$oppHpField}, self::getMaxVida($opponentChar, $combat->modo), $opponentChar->name);
-                $oppEstados = $oppTick['estados'];
-                $combat->{$oppHpField} = $oppTick['hp'];
-                foreach (array_merge($myTick['mensajes'], $oppTick['mensajes']) as $mensajeEstado) {
-                    $entry['messages'][] = $mensajeEstado;
-                }
-
-                /* Re-chequear victoria: sangrado/envenenado pudo haber matado a alguien en el tick */
-                if ($combat->attacker_hp <= 0) {
-                    $combat->status = 'defender_won';
-                } elseif ($combat->defender_hp <= 0) {
-                    $combat->status = 'attacker_won';
-                }
-
-                if ($combat->status === 'active') {
-                    $combat->ronda += 1;
-                    $combat->ronda_turno = 0;
-
-                    $attBuffs = $isAttacker ? $myBuffs : $oppBuffs;
-                    $attDebuffs = $isAttacker ? $myDebuffs : $oppDebuffs;
-                    $defBuffs = $isAttacker ? $oppBuffs : $myBuffs;
-                    $defDebuffs = $isAttacker ? $oppDebuffs : $myDebuffs;
-
-                    $attEff = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($combat->attacker->character, $combat->modo), $attBuffs, $attDebuffs), (int) ($combat->attacker_current_forma ?? 1));
-                    $defEff = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($combat->defender->character, $combat->modo), $defBuffs, $defDebuffs), (int) ($combat->defender_current_forma ?? 1));
-
-                    $roll = self::rollIniciativa($attEff['iniciativa'], $defEff['iniciativa']);
-                    $combat->current_turn = $roll['gana_atacante'] ? $combat->attacker_id : $combat->defender_id;
-
-                    $entry['messages'][] = "Ronda {$combat->ronda} — Iniciativa: {$combat->attacker->character->name} "
-                        ."2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$attEff['iniciativa']}={$roll['atk_total']} vs "
-                        ."{$combat->defender->character->name} 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$defEff['iniciativa']}={$roll['def_total']}";
-                    $entry['messages'][] = $roll['gana_atacante']
-                        ? "¡{$combat->attacker->character->name} actúa primero!"
-                        : "¡{$combat->defender->character->name} actúa primero!";
-
-                    if ($roll['gana_atacante']) {
-                        $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
-                    } else {
+            /* ─── Cambio de turno / rondas ──────────────────────────────────────
+               `$conservaTurno` lo activa una tirada de estancia exitosa: el jugador vuelve a actuar,
+               así que no se pasa el turno ni se cierra la ronda. */
+            if ($combat->status === 'active' && ! $conservaTurno) {
+                $combat->estancia_tirada = false; // arranca un turno nuevo: se habilita otra tirada
+                if ($combat->ronda_turno === 0) {
+                    /* Primera acción de la ronda: actúa el otro, sin nueva tirada */
+                    $combat->ronda_turno = 1;
+                    $combat->current_turn = $opponentUser->id;
+                    if ($isAttacker) {
                         $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
+                    } else {
+                        $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
+                    }
+                } else {
+                    /* Ambos actuaron: termina la ronda — tick de buffs/debuffs/estados (duran N rondas) y nueva iniciativa */
+                    $myBuffs = self::tickEffects($myBuffs);
+                    $myDebuffs = self::tickEffects($myDebuffs);
+                    $oppBuffs = self::tickEffects($oppBuffs);
+                    $oppDebuffs = self::tickEffects($oppDebuffs);
+
+                    $myHpField = $isAttacker ? 'attacker_hp' : 'defender_hp';
+                    $oppHpField = $isAttacker ? 'defender_hp' : 'attacker_hp';
+                    $myTick = self::tickEstadosRonda($myEstados, $combat->{$myHpField}, self::getMaxVida($actorChar, $combat->modo), $actorChar->name);
+                    $myEstados = $myTick['estados'];
+                    $combat->{$myHpField} = $myTick['hp'];
+                    $oppTick = self::tickEstadosRonda($oppEstados, $combat->{$oppHpField}, self::getMaxVida($opponentChar, $combat->modo), $opponentChar->name);
+                    $oppEstados = $oppTick['estados'];
+                    $combat->{$oppHpField} = $oppTick['hp'];
+                    foreach (array_merge($myTick['mensajes'], $oppTick['mensajes']) as $mensajeEstado) {
+                        $entry['messages'][] = $mensajeEstado;
+                    }
+
+                    /* Re-chequear victoria: sangrado/envenenado pudo haber matado a alguien en el tick */
+                    if ($combat->attacker_hp <= 0) {
+                        $combat->status = 'defender_won';
+                    } elseif ($combat->defender_hp <= 0) {
+                        $combat->status = 'attacker_won';
+                    }
+
+                    if ($combat->status === 'active') {
+                        $combat->ronda += 1;
+                        $combat->ronda_turno = 0;
+
+                        $attBuffs = $isAttacker ? $myBuffs : $oppBuffs;
+                        $attDebuffs = $isAttacker ? $myDebuffs : $oppDebuffs;
+                        $defBuffs = $isAttacker ? $oppBuffs : $myBuffs;
+                        $defDebuffs = $isAttacker ? $oppDebuffs : $myDebuffs;
+
+                        $attEff = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($combat->attacker->character, $combat->modo), $attBuffs, $attDebuffs), (int) ($combat->attacker_current_forma ?? 1));
+                        $defEff = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($combat->defender->character, $combat->modo), $defBuffs, $defDebuffs), (int) ($combat->defender_current_forma ?? 1));
+
+                        $roll = self::rollIniciativa($attEff['iniciativa'], $defEff['iniciativa']);
+                        $combat->current_turn = $roll['gana_atacante'] ? $combat->attacker_id : $combat->defender_id;
+
+                        $entry['messages'][] = "Ronda {$combat->ronda} — Iniciativa: {$combat->attacker->character->name} "
+                            ."2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$attEff['iniciativa']}={$roll['atk_total']} vs "
+                            ."{$combat->defender->character->name} 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$defEff['iniciativa']}={$roll['def_total']}";
+                        $entry['messages'][] = $roll['gana_atacante']
+                            ? "¡{$combat->attacker->character->name} actúa primero!"
+                            : "¡{$combat->defender->character->name} actúa primero!";
+
+                        if ($roll['gana_atacante']) {
+                            $attackerFuerzaFinal = min($attackerFuerzaCfg['max'], $attackerFuerzaFinal + $attackerFuerzaCfg['gen']);
+                        } else {
+                            $defenderFuerzaFinal = min($defenderFuerzaCfg['max'], $defenderFuerzaFinal + $defenderFuerzaCfg['gen']);
+                        }
                     }
                 }
             }
-        }
 
-        /* ─── Hito de victoria ──────────────────────────────────────────── */
-        if (in_array($combat->status, ['attacker_won', 'defender_won'], true)) {
-            $winnerUser = $combat->status === 'attacker_won' ? $combat->attacker : $combat->defender;
-            $winnerChar = $winnerUser->character;
-            $loserChar = $combat->status === 'attacker_won' ? $combat->defender->character : $combat->attacker->character;
+            /* ─── Hito de victoria ──────────────────────────────────────────── */
+            if (in_array($combat->status, ['attacker_won', 'defender_won'], true)) {
+                $winnerUser = $combat->status === 'attacker_won' ? $combat->attacker : $combat->defender;
+                $winnerChar = $winnerUser->character;
+                $loserChar = $combat->status === 'attacker_won' ? $combat->defender->character : $combat->attacker->character;
 
-            if ($winnerChar && $loserChar) {
-                CharacterHito::firstOrCreate([
-                    'character_id' => $winnerChar->id,
-                    'hito' => "{$loserChar->name} derrotado",
-                ]);
-                MisionProgresoService::registrarHito($winnerUser, "{$loserChar->name} derrotado");
-                MisionProgresoService::registrar($winnerUser, 'combate', 1);
+                if ($winnerChar && $loserChar) {
+                    CharacterHito::firstOrCreate([
+                        'character_id' => $winnerChar->id,
+                        'hito' => "{$loserChar->name} derrotado",
+                    ]);
+                    MisionProgresoService::registrarHito($winnerUser, "{$loserChar->name} derrotado");
+                    MisionProgresoService::registrar($winnerUser, 'combate', 1);
+                }
             }
-        }
 
-        /* ─── Persistir daño de la nave equipada (solo si el combate fue naval) ── */
-        if ($combat->modo === 'naval'
-            && in_array($combat->status, ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'], true)) {
-            self::persistNaveDamage($combat->attacker->character, $combat->attacker_hp, $combat->attacker_escudo);
-            self::persistNaveDamage($combat->defender->character, $combat->defender_hp, $combat->defender_escudo);
-        }
+            /* ─── Persistir daño de la nave equipada (solo si el combate fue naval) ── */
+            if ($combat->modo === 'naval'
+                && in_array($combat->status, ['attacker_won', 'defender_won', 'fled_attacker', 'fled_defender'], true)) {
+                self::persistNaveDamage($combat->attacker->character, $combat->attacker_hp, $combat->attacker_escudo);
+                self::persistNaveDamage($combat->defender->character, $combat->defender_hp, $combat->defender_escudo);
+            }
 
-        /* ─── Guardar estado del actor ────────────────────────────────── */
-        $combat->attacker_fuerza = $attackerFuerzaFinal;
-        $combat->defender_fuerza = $defenderFuerzaFinal;
-        if ($isAttacker) {
-            $combat->attacker_cooldowns = $myCooldowns ?: null;
-            $combat->attacker_buffs = $myBuffs ?: null;
-            $combat->attacker_debuffs = $myDebuffs ?: null;
-            $combat->attacker_estados = $myEstados ?: null;
-            $combat->defender_buffs = $oppBuffs ?: null;
-            $combat->defender_debuffs = $oppDebuffs ?: null;
-            $combat->defender_estados = $oppEstados ?: null;
-        } else {
-            $combat->defender_cooldowns = $myCooldowns ?: null;
-            $combat->defender_buffs = $myBuffs ?: null;
-            $combat->defender_debuffs = $myDebuffs ?: null;
-            $combat->defender_estados = $myEstados ?: null;
-            $combat->attacker_buffs = $oppBuffs ?: null;
-            $combat->attacker_debuffs = $oppDebuffs ?: null;
-            $combat->attacker_estados = $oppEstados ?: null;
-        }
+            /* ─── Guardar estado del actor ────────────────────────────────── */
+            $combat->attacker_fuerza = $attackerFuerzaFinal;
+            $combat->defender_fuerza = $defenderFuerzaFinal;
+            if ($isAttacker) {
+                $combat->attacker_cooldowns = $myCooldowns ?: null;
+                $combat->attacker_buffs = $myBuffs ?: null;
+                $combat->attacker_debuffs = $myDebuffs ?: null;
+                $combat->attacker_estados = $myEstados ?: null;
+                $combat->defender_buffs = $oppBuffs ?: null;
+                $combat->defender_debuffs = $oppDebuffs ?: null;
+                $combat->defender_estados = $oppEstados ?: null;
+            } else {
+                $combat->defender_cooldowns = $myCooldowns ?: null;
+                $combat->defender_buffs = $myBuffs ?: null;
+                $combat->defender_debuffs = $myDebuffs ?: null;
+                $combat->defender_estados = $myEstados ?: null;
+                $combat->attacker_buffs = $oppBuffs ?: null;
+                $combat->attacker_debuffs = $oppDebuffs ?: null;
+                $combat->attacker_estados = $oppEstados ?: null;
+            }
 
-        $log[] = $entry;
-        $combat->log = $log;
-        $combat->save();
+            $log[] = $entry;
+            $combat->log = $log;
+            $combat->save();
 
-        /* ─── Notificar al oponente ───────────────────────────────────── */
-        if ($combat->status === 'active') {
-            // Sin notificación inmediata: la UI del combate (polling) ya refleja el cambio de turno.
-            // Push diferido: solo llega si el oponente sigue sin responder pasado el plazo configurado
+            /* ─── Notificar al oponente ───────────────────────────────────── */
+            if ($combat->status === 'active') {
+                // Sin notificación inmediata: la UI del combate (polling) ya refleja el cambio de turno.
+                // Push diferido: solo llega si el oponente sigue sin responder pasado el plazo configurado
 
-            $delaySeg = (int) Configuracion::valor('pvp_notif_push_delay_seg', 30);
-            $opponentUser->notify(
-                (new PvpTurnoPushRecordatorio($combat->id, $actorChar->name, count($log)))
-                    ->delay(now()->addSeconds($delaySeg))
-            );
-        } else {
-            $opponentUser->notify(new PvpCombatNotification(
-                'Combate PvP terminado',
-                $this->endMessage($combat, $opponentUser->id),
-                $combat->id
-            ));
-        }
+                $delaySeg = (int) Configuracion::valor('pvp_notif_push_delay_seg', 30);
+                $opponentUser->notify(
+                    (new PvpTurnoPushRecordatorio($combat->id, $actorChar->name, count($log)))
+                        ->delay(now()->addSeconds($delaySeg))
+                );
+            } else {
+                $opponentUser->notify(new PvpCombatNotification(
+                    'Combate PvP terminado',
+                    $this->endMessage($combat, $opponentUser->id),
+                    $combat->id
+                ));
+            }
 
-        return response()->json([
-            'combat' => $this->formatCombat(
-                $combat->fresh(self::WITHS),
-                $user->id
-            ),
-        ]);
+            return response()->json([
+                'combat' => $this->formatCombat(
+                    $combat->fresh(self::WITHS),
+                    $user->id
+                ),
+            ]);
         });
     }
 

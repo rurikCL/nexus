@@ -14,6 +14,7 @@ use App\Models\MapNpc;
 use App\Models\RaidCombat;
 use App\Models\RaidCombatPlayer;
 use App\Models\RolHabilidad;
+use App\Services\HabilidadDamageParser;
 use App\Services\MisionProgresoService;
 use App\Services\RecompensaRollService;
 use App\Support\Combat\AplicaEstadosCombate;
@@ -367,425 +368,161 @@ class RaidCombatController extends Controller
     public function action(Request $request, int $id): JsonResponse
     {
         return DB::transaction(function () use ($request, $id) {
-        $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->lockForUpdate()->findOrFail($id);
-        $user = $request->user();
+            $raid = RaidCombat::with(['npc', 'jugadores.user.character'])->lockForUpdate()->findOrFail($id);
+            $user = $request->user();
 
-        if (! $raid->isActive()) {
-            return response()->json(['error' => 'El combate no está activo.'], 422);
-        }
-
-        $myPlayer = $raid->jugadores->firstWhere('user_id', $user->id);
-        if (! $myPlayer) {
-            return response()->json(['error' => 'No participas en este combate.'], 403);
-        }
-        if ($myPlayer->status !== 'activo' || $myPlayer->hp <= 0) {
-            return response()->json(['error' => 'Ya no participas activamente en este combate.'], 422);
-        }
-
-        $current = $raid->turn_order[$raid->turn_index] ?? null;
-        if (! $current || $current['type'] !== 'player' || (int) $current['user_id'] !== $user->id) {
-            return response()->json(['error' => 'No es tu turno.'], 422);
-        }
-
-        $data = $request->validate([
-            'skill' => 'required',
-            'forma' => 'nullable|integer|min:1|max:7',
-            'target_user_id' => 'nullable|integer',
-        ]);
-
-        $skill = $data['skill'];
-        $actorChar = $myPlayer->user->character;
-
-        $myCooldowns = array_filter(array_map(fn ($v) => $v - 1, $myPlayer->cooldowns ?? []), fn ($v) => $v > 0);
-        $myBuffs = $myPlayer->buffs ?? [];
-        $myDebuffs = $myPlayer->debuffs ?? [];
-        $myEstados = $myPlayer->estados ?? [];
-        $npcEstados = $raid->npc_estados ?? [];
-        $myFuerza = $myPlayer->fuerza;
-
-        $actorStats = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($actorChar), $myBuffs, $myDebuffs), (int) $myPlayer->current_forma);
-        $npcEffective = self::getEffectiveStats(self::getNpcStats($raid->npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
-
-        $log = $raid->log ?? [];
-        $entry = ['turn' => count($log) + 1, 'actor' => 'jugador', 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
-        /* Lo activa una tirada de estancia exitosa (ver la rama 'stance'): el turno no avanza. */
-        $conservaTurno = false;
-
-        /* Parálisis: pierde el turno sin importar el skill enviado, y queda inmune al próximo intento */
-        $paralisisInfo = self::resolverParalisisAlEmpezarTurno($myEstados);
-        $myEstados = $paralisisInfo['estados'];
-
-        if ($paralisisInfo['paralizado']) {
-            $entry['messages'][] = "{$actorChar->name} está paralizado y pierde el turno";
-        } elseif ($skill === 'flee') {
-            $roll = self::rollIniciativa($actorStats['iniciativa'], $npcEffective['iniciativa']);
-            $entry['messages'][] = "{$actorChar->name} intenta huir: 2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
-                ."vs 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$npcEffective['iniciativa']}={$roll['def_total']}";
-            if ($roll['gana_atacante']) {
-                $myPlayer->status = 'huido';
-                $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
-            } else {
-                $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
-            }
-            $entry['dice'] = ['atk' => $roll['atk_dado'], 'def' => $roll['def_dado']];
-            $entry['hit'] = $roll['gana_atacante'];
-        } elseif ($skill === 'stance') {
-            $forma = (int) ($data['forma'] ?? 1);
-            if ($forma < 1 || $forma > 7) {
-                return response()->json(['error' => 'Forma inválida'], 422);
-            }
-            /* Solo se puede cambiar a una forma aprendida (con slots de habilidad asignados). El
-               frontend ya las deshabilita, pero esto es lo autoritativo. */
-            if (! in_array($forma, $actorChar->formasAprendidas(), true)) {
-                return response()->json(['error' => 'No tienes habilidades asignadas en esa forma.'], 422);
-            }
-            $myPlayer->current_forma = $forma;
-            $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
-
-            /* INI + 2d6 >= 10: si supera, el cambio de estancia no consume el turno. La forma
-               queda cambiada en cualquier caso — es la acción del turno. Una sola tirada por
-               turno: si ya tiró (o sea, sigue actuando gracias a un cambio anterior), este
-               segundo cambio no tira y cierra el turno. */
-            if ($raid->estancia_tirada) {
-                $entry['messages'][] = TiradaEstancia::mensajeSinTirada($actorChar->name);
-            } else {
-                $tirada = TiradaEstancia::resolver(
-                    $actorChar->iniciativaEstancia(),
-                    TiradaEstancia::deltaBuffs($myBuffs, $myDebuffs)
-                );
-                $entry['messages'][] = TiradaEstancia::mensaje($actorChar->name, $tirada);
-                $entry['estancia'] = $tirada;
-                $raid->estancia_tirada = true;
-                $conservaTurno = $tirada['exito'];
-            }
-        } elseif ($skill === 'unarmed') {
-            $confundido = self::resolverConfundido($myEstados);
-            if ($confundido) {
-                $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
-            }
-            $statsObjetivo = $confundido ? $actorStats : $npcEffective;
-
-            $arma = $actorChar->armaEfectiva();
-            $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
-            $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
-            $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
-            $atkTirada = self::tirarDados();
-            $defTirada = self::tirarDados();
-            $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
-            $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $npcEstados, $defTirada['total']);
-            $atkRoll = $atkDado + $atkVal;
-            $defRoll = $defDado + $defVal;
-            $critico = $arma['critico'] ?? 0;
-            $esCritico = $atkDado >= (12 - $critico);
-            /* Agro: golpe básico sin habilidad = +1 fijo, conecte o no; +1 extra si es
-             * crítico (ver elegirObjetivoPorAgro). Una habilidad usa su propio campo
-             * `agro` en vez de estos valores fijos — ver las otras ramas de action(). */
-            $myPlayer->agro_puntos += 1 + ($esCritico ? 1 : 0);
-            $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
-            $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
-            $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
-
-            $estadosObjetivo = $confundido ? $myEstados : $npcEstados;
-            $protegidoInfo = self::consumirProtegido($estadosObjetivo);
-            $estadosObjetivo = $protegidoInfo['estados'];
-            $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
-            $estadosObjetivo = $marcaInfo['estados'];
-
-            $hit = $esCritico || $atkRoll >= $defRoll;
-            if ($protegidoInfo['activo']) {
-                $hit = false;
-                $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
-            } elseif ($marcaInfo['activo']) {
-                $hit = $marcaInfo['forzar_exito'];
-                $entry['messages'][] = $hit
-                    ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
-                    : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
+            if (! $raid->isActive()) {
+                return response()->json(['error' => 'El combate no está activo.'], 422);
             }
 
-            $reflejoInfo = ['activo' => false, 'tipo' => null];
-            if ($hit && ! $confundido) {
-                $reflejoInfo = self::consumirDeflectarOContraataque($estadosObjetivo, $esDistancia);
-                $estadosObjetivo = $reflejoInfo['estados'];
+            $myPlayer = $raid->jugadores->firstWhere('user_id', $user->id);
+            if (! $myPlayer) {
+                return response()->json(['error' => 'No participas en este combate.'], 403);
             }
-            if ($confundido) {
-                $myEstados = $estadosObjetivo;
-            } else {
-                $npcEstados = $estadosObjetivo;
+            if ($myPlayer->status !== 'activo' || $myPlayer->hp <= 0) {
+                return response()->json(['error' => 'Ya no participas activamente en este combate.'], 422);
             }
 
-            $entry['hit'] = $hit && ! $reflejoInfo['activo'];
-            $entry['crit'] = $esCritico;
+            $current = $raid->turn_order[$raid->turn_index] ?? null;
+            if (! $current || $current['type'] !== 'player' || (int) $current['user_id'] !== $user->id) {
+                return response()->json(['error' => 'No es tu turno.'], 422);
+            }
 
-            if ($hit) {
-                $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myPlayer->current_forma, 'dano'));
-                $dmgEscudo = self::formaBono($myPlayer->current_forma, 'dano_escudo');
-                $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myPlayer->current_forma, 'dano_perforante');
+            $data = $request->validate([
+                'skill' => 'required',
+                'forma' => 'nullable|integer|min:1|max:7',
+                'target_user_id' => 'nullable|integer',
+            ]);
 
-                if ($reflejoInfo['activo']) {
-                    [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
-                    $escudoAntes = $myPlayer->escudo;
-                    [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $mitadDmg, $mitadEsc, $mitadPerf);
-                    if ($myPlayer->hp <= 0) {
-                        $myPlayer->status = 'derrotado';
-                    }
-                    $desc = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $escudoAntes);
-                    $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
-                    $entry['messages'][] = "¡{$raid->npc->nombre} {$verbo} el golpe de {$actorChar->name}! {$desc}";
-                } elseif ($confundido) {
-                    $escudoAntes = $myPlayer->escudo;
-                    [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                    if ($myPlayer->hp <= 0) {
-                        $myPlayer->status = 'derrotado';
-                    }
-                    $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                    $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
+            $skill = $data['skill'];
+            $actorChar = $myPlayer->user->character;
+
+            $myCooldowns = array_filter(array_map(fn ($v) => $v - 1, $myPlayer->cooldowns ?? []), fn ($v) => $v > 0);
+            $myBuffs = $myPlayer->buffs ?? [];
+            $myDebuffs = $myPlayer->debuffs ?? [];
+            $myEstados = $myPlayer->estados ?? [];
+            $npcEstados = $raid->npc_estados ?? [];
+            $myFuerza = $myPlayer->fuerza;
+
+            $actorStats = self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($actorChar), $myBuffs, $myDebuffs), (int) $myPlayer->current_forma);
+            $npcEffective = self::getEffectiveStats(self::getNpcStats($raid->npc), $raid->npc_buffs ?? [], $raid->npc_debuffs ?? []);
+
+            $log = $raid->log ?? [];
+            $entry = ['turn' => count($log) + 1, 'actor' => 'jugador', 'actor_id' => $user->id, 'messages' => [], 'effects' => []];
+            /* Lo activa una tirada de estancia exitosa (ver la rama 'stance'): el turno no avanza. */
+            $conservaTurno = false;
+
+            /* Parálisis: pierde el turno sin importar el skill enviado, y queda inmune al próximo intento */
+            $paralisisInfo = self::resolverParalisisAlEmpezarTurno($myEstados);
+            $myEstados = $paralisisInfo['estados'];
+
+            if ($paralisisInfo['paralizado']) {
+                $entry['messages'][] = "{$actorChar->name} está paralizado y pierde el turno";
+            } elseif ($skill === 'flee') {
+                $roll = self::rollIniciativa($actorStats['iniciativa'], $npcEffective['iniciativa']);
+                $entry['messages'][] = "{$actorChar->name} intenta huir: 2d6({$roll['atk_dado1']}+{$roll['atk_dado2']})+{$actorStats['iniciativa']}={$roll['atk_total']} "
+                    ."vs 2d6({$roll['def_dado1']}+{$roll['def_dado2']})+{$npcEffective['iniciativa']}={$roll['def_total']}";
+                if ($roll['gana_atacante']) {
+                    $myPlayer->status = 'huido';
+                    $entry['messages'][] = "¡{$actorChar->name} logra huir del combate!";
                 } else {
-                    $escudoAntes = $raid->npc_escudo;
-                    [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                    $myPlayer->dano_al_jefe += $dmg + $dmgEscudo + $dmgPerforante;
-                    $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                    $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
+                    $entry['messages'][] = "{$actorChar->name} no logra huir y pierde el turno";
                 }
-            } else {
-                $entry['messages'][] = "{$actorChar->name} falla el golpe";
-            }
-        } else {
-            $skillId = (int) $skill;
-            $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
-            $slotIds = array_filter($porForma[(string) $myPlayer->current_forma] ?? []);
-
-            if (! in_array($skillId, $slotIds)) {
-                return response()->json(['error' => 'Habilidad no disponible en esta forma'], 422);
-            }
-
-            $hab = RolHabilidad::find($skillId);
-            if (! $hab) {
-                return response()->json(['error' => 'Habilidad no encontrada'], 422);
-            }
-            if (($myCooldowns[(string) $skillId] ?? 0) > 0) {
-                return response()->json(['error' => 'Habilidad en cooldown'], 422);
-            }
-            if ($myFuerza < $hab->costo_fuerza) {
-                return response()->json(['error' => "Fuerza insuficiente ({$myFuerza}/{$hab->costo_fuerza})"], 422);
-            }
-
-            $myFuerza -= $hab->costo_fuerza;
-            if ($hab->cooldown > 0) {
-                $myCooldowns[(string) $skillId] = $hab->cooldown;
-            }
-
-            $habBuff = is_array($hab->buff) ? $hab->buff : [];
-            $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
-            $habRondas = $hab->duracion ?: 2;
-            $dmg = (int) ($hab->damage ?? 0);
-            $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
-            $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
-
-            /* 'revivir' (si está en el buff) es una acción instantánea, no un estado que
-             * persista — se intercepta acá y se excluye del buff genérico de abajo (ver
-             * AplicaEstadosCombate::esEfectoRevivir/sinEfectoRevivir). Solo tiene sentido en
-             * una habilidad "self", que es la única que permite elegir un objetivo distinto
-             * de quien la usa (ver más abajo). */
-            $esRevivirHab = self::esEfectoRevivir($habBuff);
-            $habBuffAplicable = self::sinEfectoRevivir($habBuff);
-
-            /* El buff (si la habilidad tiene uno) SIEMPRE se aplica al usarla, sin importar
-             * si además es una habilidad de ataque contra el jefe (igual que en PvP) — solo
-             * las habilidades "self" permiten elegir a cuál de los combatientes del grupo
-             * afecta; el resto siempre beneficia a quien la usa. */
-            $buffTargetPlayer = $myPlayer;
-            $esBuffUnoMismo = true;
-            if ($hab->objetivo === 'self') {
-                /* En RAID, una habilidad "self" no afecta automáticamente a quien la usa:
-                 * el jugador elige a cuál de los 4 combatientes (incluso él mismo) afecta. */
-                $targetUserId = (int) ($data['target_user_id'] ?? $user->id);
-                $targetPlayer = $raid->jugadores->firstWhere('user_id', $targetUserId);
-                if (! $targetPlayer) {
-                    return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente del grupo.'], 422);
+                $entry['dice'] = ['atk' => $roll['atk_dado'], 'def' => $roll['def_dado']];
+                $entry['hit'] = $roll['gana_atacante'];
+            } elseif ($skill === 'stance') {
+                $forma = (int) ($data['forma'] ?? 1);
+                if ($forma < 1 || $forma > 7) {
+                    return response()->json(['error' => 'Forma inválida'], 422);
                 }
-                if ($esRevivirHab) {
-                    if ($targetPlayer->status !== 'derrotado') {
-                        return response()->json(['error' => 'Ese combatiente no está caído — no puedes revivirlo.'], 422);
-                    }
-                } elseif ($targetPlayer->status !== 'activo') {
-                    return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente activo del grupo.'], 422);
+                /* Solo se puede cambiar a una forma aprendida (con slots de habilidad asignados). El
+                   frontend ya las deshabilita, pero esto es lo autoritativo. */
+                if (! in_array($forma, $actorChar->formasAprendidas(), true)) {
+                    return response()->json(['error' => 'No tienes habilidades asignadas en esa forma.'], 422);
                 }
-                $buffTargetPlayer = $targetPlayer;
-                $esBuffUnoMismo = $targetPlayer->id === $myPlayer->id;
-            }
-            $buffTargetChar = $buffTargetPlayer->user->character;
-            $buffTargetUserId = $buffTargetPlayer->user_id;
+                $myPlayer->current_forma = $forma;
+                $entry['messages'][] = "{$actorChar->name} cambia a Forma {$forma}";
 
-            $buffDesc = ! empty($habBuffAplicable) ? ' (+'.implode(', +', $habBuffAplicable).')' : '';
-            if (! empty($habBuffAplicable)) {
-                $targetBuffsArr = $esBuffUnoMismo ? $myBuffs : ($buffTargetPlayer->buffs ?? []);
-                $targetEstadosArr = $esBuffUnoMismo ? $myEstados : ($buffTargetPlayer->estados ?? []);
-                foreach ($habBuffAplicable as $stat) {
-                    if (self::esTipoEstado($stat)) {
-                        $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat, $habRondas);
-                    } else {
-                        $targetBuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
-                    }
-                }
-                if ($esBuffUnoMismo) {
-                    $myBuffs = $targetBuffsArr;
-                    $myEstados = $targetEstadosArr;
+                /* INI + 2d6 >= 10: si supera, el cambio de estancia no consume el turno. La forma
+                   queda cambiada en cualquier caso — es la acción del turno. Una sola tirada por
+                   turno: si ya tiró (o sea, sigue actuando gracias a un cambio anterior), este
+                   segundo cambio no tira y cierra el turno. */
+                if ($raid->estancia_tirada) {
+                    $entry['messages'][] = TiradaEstancia::mensajeSinTirada($actorChar->name);
                 } else {
-                    $buffTargetPlayer->buffs = $targetBuffsArr;
-                    $buffTargetPlayer->estados = $targetEstadosArr;
+                    $tirada = TiradaEstancia::resolver(
+                        $actorChar->iniciativaEstancia(),
+                        TiradaEstancia::deltaBuffs($myBuffs, $myDebuffs)
+                    );
+                    $entry['messages'][] = TiradaEstancia::mensaje($actorChar->name, $tirada);
+                    $entry['estancia'] = $tirada;
+                    $raid->estancia_tirada = true;
+                    $conservaTurno = $tirada['exito'];
                 }
-                $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $buffTargetUserId];
-            }
-
-            if ($hab->objetivo === 'self') {
-                /* Agro: usar CUALQUIER habilidad suma su propio campo `agro` (configurado en
-                 * Admin, default 1, puede ser negativo) — una sola vez por uso, sin importar
-                 * qué efecto tenga (buff, curación, debuff al jefe, revivir...). Reemplaza las
-                 * reglas fijas anteriores (curar compañero +1, debuff +1 por separado). */
-                $myPlayer->agro_puntos += $hab->agro ?? 1;
-
-                $entry['target_user_id'] = $buffTargetUserId;
-                $entry['messages'][] = $esBuffUnoMismo
-                    ? "{$actorChar->name} usa {$hab->nombre}{$buffDesc}"
-                    : "{$actorChar->name} usa {$hab->nombre} en {$buffTargetChar->name}{$buffDesc}";
-
-                $targetMax = self::getCombatStats($buffTargetChar);
-
-                if ($esRevivirHab) {
-                    $vidaRevivido = self::vidaAlRevivir($targetMax['vida']);
-                    if ($esBuffUnoMismo) {
-                        $myPlayer->hp = $vidaRevivido;
-                        $myPlayer->status = 'activo';
-                    } else {
-                        $buffTargetPlayer->hp = $vidaRevivido;
-                        $buffTargetPlayer->status = 'activo';
-                    }
-                    $entry['effects'][] = ['type' => 'revivir', 'target_user_id' => $buffTargetUserId];
-                    $entry['messages'][] = "¡{$buffTargetChar->name} ha revivido con la mitad de su vida!";
-                }
-
-                $targetHp = $esBuffUnoMismo ? $myPlayer->hp : $buffTargetPlayer->hp;
-                $targetEscudo = $esBuffUnoMismo ? $myPlayer->escudo : $buffTargetPlayer->escudo;
-
-                if ($dmg < 0) {
-                    $heal = -$dmg;
-                    $newHp = min($targetMax['vida'], $targetHp + $heal);
-                    if ($esBuffUnoMismo) {
-                        $myPlayer->hp = $newHp;
-                    } else {
-                        $buffTargetPlayer->hp = $newHp;
-                    }
-                    $myPlayer->curacion_total += $heal;
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
-                    $entry['messages'][] = "¡Curación! +{$heal} vida".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
-                }
-                if ($dmgEscudo < 0) {
-                    $healEsc = -$dmgEscudo;
-                    $newEsc = min($targetMax['escudo'], $targetEscudo + $healEsc);
-                    if ($esBuffUnoMismo) {
-                        $myPlayer->escudo = $newEsc;
-                    } else {
-                        $buffTargetPlayer->escudo = $newEsc;
-                    }
-                    $myPlayer->curacion_total += $healEsc;
-                    $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
-                    $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
-                }
-
-                if (! $esBuffUnoMismo) {
-                    $buffTargetPlayer->save();
-                }
-
-                /* Una habilidad "self" no tiene tirada de ataque — si además carga un debuff
-                 * (p.ej. un estado) para el jefe, se aplica sin condición de impacto. */
-                if (! empty($habDebuff)) {
-                    $npcDebuffsArr = $raid->npc_debuffs ?? [];
-                    foreach ($habDebuff as $stat) {
-                        if (self::esTipoEstado($stat)) {
-                            $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
-                        } else {
-                            $npcDebuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
-                        }
-                    }
-                    $raid->npc_debuffs = $npcDebuffsArr;
-                    $myPlayer->debuffs_aplicados += count($habDebuff);
-                    $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
-                }
-            } elseif ($dmg < 0) {
-                /* Agro: usar CUALQUIER habilidad suma su propio campo `agro` (ver arriba, rama "self"). */
-                $myPlayer->agro_puntos += $hab->agro ?? 1;
-
-                $heal = -$dmg;
-                $maxHp = self::getNpcStats($raid->npc)['vida'];
-                $raid->npc_hp = min($maxHp, $raid->npc_hp + $heal);
-                $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$raid->npc->nombre}";
-            } else {
-                $confundidoHab = self::resolverConfundido($myEstados);
-                if ($confundidoHab) {
+            } elseif ($skill === 'unarmed') {
+                $confundido = self::resolverConfundido($myEstados);
+                if ($confundido) {
                     $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
                 }
-                /* Agro: usar CUALQUIER habilidad suma su propio campo `agro`, una sola vez por
-                 * uso, conecte o no (las habilidades no tienen crítico propio en RAID, a
-                 * diferencia del arma equipada en un ataque desarmado). */
-                $myPlayer->agro_puntos += $hab->agro ?? 1;
-                $statsObjetivoHab = $confundidoHab ? $actorStats : $npcEffective;
+                $statsObjetivo = $confundido ? $actorStats : $npcEffective;
 
-                $useAtq = $hab->tipo === 'melee';
-                $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
-                $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
+                $arma = $actorChar->armaEfectiva();
+                $esDistancia = ($arma['tipo_ataque'] ?? null) === 'distancia';
+                $atkVal = $esDistancia ? $actorStats['punteria'] : $actorStats['ataque'];
+                $defVal = $esDistancia ? $statsObjetivo['movimiento'] : $statsObjetivo['defensa'];
                 $atkTirada = self::tirarDados();
                 $defTirada = self::tirarDados();
                 $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
-                $defDado = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $npcEstados, $defTirada['total']);
+                $defDado = self::mitigarTiradaAturdido($confundido ? $myEstados : $npcEstados, $defTirada['total']);
                 $atkRoll = $atkDado + $atkVal;
                 $defRoll = $defDado + $defVal;
-
-                $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre} contra {$raid->npc->nombre}: "
-                    ."2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
+                $critico = $arma['critico'] ?? 0;
+                $esCritico = $atkDado >= (12 - $critico);
+                /* Agro: golpe básico sin habilidad = +1 fijo, conecte o no; +1 extra si es
+                 * crítico (ver elegirObjetivoPorAgro). Una habilidad usa su propio campo
+                 * `agro` en vez de estos valores fijos — ver las otras ramas de action(). */
+                $myPlayer->agro_puntos += 1 + ($esCritico ? 1 : 0);
+                $accion = $arma ? "ataca con {$arma['nombre']}" : 'ataca desarmado';
+                $entry['messages'][] = "{$actorChar->name} {$accion} a {$raid->npc->nombre}: 2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
                 $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
 
-                $estadosObjetivoHab = $confundidoHab ? $myEstados : $npcEstados;
-                $protegidoHab = self::consumirProtegido($estadosObjetivoHab);
-                $estadosObjetivoHab = $protegidoHab['estados'];
-                $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDado);
-                $estadosObjetivoHab = $marcaHab['estados'];
+                $estadosObjetivo = $confundido ? $myEstados : $npcEstados;
+                $protegidoInfo = self::consumirProtegido($estadosObjetivo);
+                $estadosObjetivo = $protegidoInfo['estados'];
+                $marcaInfo = self::consumirMarcado($estadosObjetivo, $atkDado);
+                $estadosObjetivo = $marcaInfo['estados'];
 
-                $hitHab = $atkRoll >= $defRoll;
-                if ($protegidoHab['activo']) {
-                    $hitHab = false;
+                $hit = $esCritico || $atkRoll >= $defRoll;
+                if ($protegidoInfo['activo']) {
+                    $hit = false;
                     $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
-                } elseif ($marcaHab['activo']) {
-                    $hitHab = $marcaHab['forzar_exito'];
-                    $entry['messages'][] = $hitHab
+                } elseif ($marcaInfo['activo']) {
+                    $hit = $marcaInfo['forzar_exito'];
+                    $entry['messages'][] = $hit
                         ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
                         : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
                 }
 
-                $reflejoHab = ['activo' => false, 'tipo' => null];
-                if ($hitHab && ! $confundidoHab) {
-                    $reflejoHab = self::consumirDeflectarOContraataque($estadosObjetivoHab, ! $useAtq);
-                    $estadosObjetivoHab = $reflejoHab['estados'];
+                $reflejoInfo = ['activo' => false, 'tipo' => null];
+                if ($hit && ! $confundido) {
+                    $reflejoInfo = self::consumirDeflectarOContraataque($estadosObjetivo, $esDistancia);
+                    $estadosObjetivo = $reflejoInfo['estados'];
                 }
-                if ($confundidoHab) {
-                    $myEstados = $estadosObjetivoHab;
+                if ($confundido) {
+                    $myEstados = $estadosObjetivo;
                 } else {
-                    $npcEstados = $estadosObjetivoHab;
+                    $npcEstados = $estadosObjetivo;
                 }
 
-                $entry['hit'] = $hitHab && ! $reflejoHab['activo'];
+                $entry['hit'] = $hit && ! $reflejoInfo['activo'];
+                $entry['crit'] = $esCritico;
 
-                if ($hitHab) {
-                    $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
-                    $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $raid->npc_forma);
-                    if (! $confundidoHab) {
-                        $dmg = max(0, $dmg + self::formaBonoDano((int) $hab->forma, (int) $raid->npc_forma));
-                    }
-                    $dmg += self::formaBono($myPlayer->current_forma, 'dano');
-                    $dmgEscudo += self::formaBono($myPlayer->current_forma, 'dano_escudo');
-                    $dmgPerforante += self::formaBono($myPlayer->current_forma, 'dano_perforante');
-                    $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
+                if ($hit) {
+                    $dmg = self::mitigarDanoDebilitado($myEstados, ($arma['dano'] ?? 3) + ($esCritico ? 1 : 0) + self::formaBono($myPlayer->current_forma, 'dano'));
+                    $dmgEscudo = self::formaBono($myPlayer->current_forma, 'dano_escudo');
+                    $dmgPerforante = (int) ($arma['dano_perforante'] ?? 0) + self::formaBono($myPlayer->current_forma, 'dano_perforante');
 
-                    if ($reflejoHab['activo']) {
+                    if ($reflejoInfo['activo']) {
                         [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
                         $escudoAntes = $myPlayer->escudo;
                         [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $mitadDmg, $mitadEsc, $mitadPerf);
@@ -793,87 +530,384 @@ class RaidCombatController extends Controller
                             $myPlayer->status = 'derrotado';
                         }
                         $desc = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $escudoAntes);
-                        $verbo = $reflejoHab['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
-                        $entry['messages'][] = "¡{$raid->npc->nombre} {$verbo} el ataque de {$actorChar->name}! {$desc}";
-                    } elseif ($confundidoHab) {
+                        $verbo = $reflejoInfo['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                        $entry['messages'][] = "¡{$raid->npc->nombre} {$verbo} el golpe de {$actorChar->name}! {$desc}";
+                    } elseif ($confundido) {
                         $escudoAntes = $myPlayer->escudo;
                         [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
                         if ($myPlayer->hp <= 0) {
                             $myPlayer->status = 'derrotado';
                         }
                         $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                        $entry['messages'][] = "¡Impacto! {$desc}";
+                        $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
                     } else {
                         $escudoAntes = $raid->npc_escudo;
                         [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
-                        $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
-
+                        $myPlayer->dano_al_jefe += $dmg + $dmgEscudo + $dmgPerforante;
                         $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
-                        $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
-                        $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
+                        $entry['messages'][] = $esCritico ? "¡CRÍTICO! {$desc}" : "¡Impacto! {$desc}";
                     }
                 } else {
-                    $entry['messages'][] = "{$actorChar->name} falla el ataque";
+                    $entry['messages'][] = "{$actorChar->name} falla el golpe";
+                }
+            } else {
+                $skillId = (int) $skill;
+                $porForma = is_array($actorChar->habilidades_por_forma) ? $actorChar->habilidades_por_forma : [];
+                $slotIds = array_filter($porForma[(string) $myPlayer->current_forma] ?? []);
+
+                if (! in_array($skillId, $slotIds)) {
+                    return response()->json(['error' => 'Habilidad no disponible en esta forma'], 422);
                 }
 
-                /* Debuffs/estados al jefe: se aplican por el solo hecho de usar la habilidad,
-                 * conecte o no el golpe (mismo criterio que el buff propio) — la tirada decide el
-                 * daño, no el efecto. Incluye deflectar/contraataque del jefe. Única excepción: si
-                 * la confusión redirigió el golpe contra el propio jugador, el jefe nunca fue el
-                 * objetivo real y no recibe nada. */
-                if (! empty($habDebuff) && ! $confundidoHab) {
-                    $npcDebuffs = $raid->npc_debuffs ?? [];
-                    foreach ($habDebuff as $stat) {
+                $hab = RolHabilidad::find($skillId);
+                if (! $hab) {
+                    return response()->json(['error' => 'Habilidad no encontrada'], 422);
+                }
+                if (($myCooldowns[(string) $skillId] ?? 0) > 0) {
+                    return response()->json(['error' => 'Habilidad en cooldown'], 422);
+                }
+                if ($myFuerza < $hab->costo_fuerza) {
+                    return response()->json(['error' => "Fuerza insuficiente ({$myFuerza}/{$hab->costo_fuerza})"], 422);
+                }
+
+                $myFuerza -= $hab->costo_fuerza;
+                if ($hab->cooldown > 0) {
+                    $myCooldowns[(string) $skillId] = $hab->cooldown;
+                }
+
+                $habBuff = is_array($hab->buff) ? $hab->buff : [];
+                $habDebuff = is_array($hab->debuff) ? $hab->debuff : [];
+                $habRondas = $hab->duracion ?: 2;
+                $dmgEscudo = (int) ($hab->damage_escudo ?? 0);
+                $dmgPerforante = (int) ($hab->damage_perforante ?? 0);
+                $parsedDmg = HabilidadDamageParser::parse((string) ($hab->damage ?? '0'));
+
+                /* 'revivir' (si está en el buff) es una acción instantánea, no un estado que
+                 * persista — se intercepta acá y se excluye del buff genérico de abajo (ver
+                 * AplicaEstadosCombate::esEfectoRevivir/sinEfectoRevivir). Solo tiene sentido en
+                 * una habilidad "self", que es la única que permite elegir un objetivo distinto
+                 * de quien la usa (ver más abajo). */
+                $esRevivirHab = self::esEfectoRevivir($habBuff);
+                $habBuffAplicable = self::sinEfectoRevivir($habBuff);
+
+                /* El buff (si la habilidad tiene uno) SIEMPRE se aplica al usarla, sin importar
+                 * si además es una habilidad de ataque contra el jefe (igual que en PvP) — solo
+                 * las habilidades "self" permiten elegir a cuál de los combatientes del grupo
+                 * afecta; el resto siempre beneficia a quien la usa. */
+                $buffTargetPlayer = $myPlayer;
+                $esBuffUnoMismo = true;
+                if ($hab->objetivo === 'self') {
+                    /* En RAID, una habilidad "self" no afecta automáticamente a quien la usa:
+                     * el jugador elige a cuál de los 4 combatientes (incluso él mismo) afecta. */
+                    $targetUserId = (int) ($data['target_user_id'] ?? $user->id);
+                    $targetPlayer = $raid->jugadores->firstWhere('user_id', $targetUserId);
+                    if (! $targetPlayer) {
+                        return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente del grupo.'], 422);
+                    }
+                    if ($esRevivirHab) {
+                        if ($targetPlayer->status !== 'derrotado') {
+                            return response()->json(['error' => 'Ese combatiente no está caído — no puedes revivirlo.'], 422);
+                        }
+                    } elseif ($targetPlayer->status !== 'activo') {
+                        return response()->json(['error' => 'Objetivo inválido — debe ser un combatiente activo del grupo.'], 422);
+                    }
+                    $buffTargetPlayer = $targetPlayer;
+                    $esBuffUnoMismo = $targetPlayer->id === $myPlayer->id;
+                }
+                $buffTargetChar = $buffTargetPlayer->user->character;
+                $buffTargetUserId = $buffTargetPlayer->user_id;
+
+                $buffDesc = ! empty($habBuffAplicable) ? ' (+'.implode(', +', $habBuffAplicable).')' : '';
+                if (! empty($habBuffAplicable)) {
+                    $targetBuffsArr = $esBuffUnoMismo ? $myBuffs : ($buffTargetPlayer->buffs ?? []);
+                    $targetEstadosArr = $esBuffUnoMismo ? $myEstados : ($buffTargetPlayer->estados ?? []);
+                    foreach ($habBuffAplicable as $stat) {
                         if (self::esTipoEstado($stat)) {
-                            $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
+                            $targetEstadosArr = self::aplicarEstadoDeHabilidad($targetEstadosArr, $stat, $habRondas);
                         } else {
-                            $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                            $targetBuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
                         }
                     }
-                    $raid->npc_debuffs = $npcDebuffs;
-                    $myPlayer->debuffs_aplicados += count($habDebuff);
-                    $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
+                    if ($esBuffUnoMismo) {
+                        $myBuffs = $targetBuffsArr;
+                        $myEstados = $targetEstadosArr;
+                    } else {
+                        $buffTargetPlayer->buffs = $targetBuffsArr;
+                        $buffTargetPlayer->estados = $targetEstadosArr;
+                    }
+                    $entry['effects'][] = ['type' => 'buff', 'target_user_id' => $buffTargetUserId];
+                }
+
+                if ($parsedDmg['kind'] === 'force') {
+                    /* Habilidad de modificación de fuerza (+FX / -FX): no aplica daño, solo
+                     * suma/resta fuerza acumulada al objetivo (self = cualquier combatiente
+                     * elegido del grupo; target = el jefe, que en RAID no tiene fuerza propia). */
+                    $fuerzaDelta = $parsedDmg['value'];
+                    $signoFuerza = $fuerzaDelta >= 0 ? "+{$fuerzaDelta}" : (string) $fuerzaDelta;
+                    $myPlayer->agro_puntos += $hab->agro ?? 1;
+
+                    if ($hab->objetivo === 'self') {
+                        if ($esBuffUnoMismo) {
+                            $myFuerza = max(0, $myFuerza + $fuerzaDelta);
+                        } else {
+                            $buffTargetPlayer->fuerza = max(0, ($buffTargetPlayer->fuerza ?? 0) + $fuerzaDelta);
+                            $buffTargetPlayer->save();
+                        }
+                        $entry['target_user_id'] = $buffTargetUserId;
+                        $entry['messages'][] = $esBuffUnoMismo
+                            ? "{$actorChar->name} usa {$hab->nombre}: {$signoFuerza} de fuerza"
+                            : "{$actorChar->name} usa {$hab->nombre} en {$buffTargetChar->name}: {$signoFuerza} de fuerza";
+                    } else {
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}, pero {$raid->npc->nombre} no acumula fuerza";
+                    }
+                } else {
+                    if ($parsedDmg['kind'] === 'heal') {
+                        $dmg = -$parsedDmg['value'];
+                    } elseif ($parsedDmg['kind'] === 'weapon') {
+                        $armaHab = $actorChar->armaEfectiva();
+                        $dmg = max(0, ($armaHab['dano'] ?? 3) + $parsedDmg['value']);
+                    } else {
+                        $dmg = $parsedDmg['value'];
+                    }
+
+                    if ($hab->objetivo === 'self') {
+                        /* Agro: usar CUALQUIER habilidad suma su propio campo `agro` (configurado en
+                         * Admin, default 1, puede ser negativo) — una sola vez por uso, sin importar
+                         * qué efecto tenga (buff, curación, debuff al jefe, revivir...). Reemplaza las
+                         * reglas fijas anteriores (curar compañero +1, debuff +1 por separado). */
+                        $myPlayer->agro_puntos += $hab->agro ?? 1;
+
+                        $entry['target_user_id'] = $buffTargetUserId;
+                        $entry['messages'][] = $esBuffUnoMismo
+                            ? "{$actorChar->name} usa {$hab->nombre}{$buffDesc}"
+                            : "{$actorChar->name} usa {$hab->nombre} en {$buffTargetChar->name}{$buffDesc}";
+
+                        $targetMax = self::getCombatStats($buffTargetChar);
+
+                        if ($esRevivirHab) {
+                            $vidaRevivido = self::vidaAlRevivir($targetMax['vida']);
+                            if ($esBuffUnoMismo) {
+                                $myPlayer->hp = $vidaRevivido;
+                                $myPlayer->status = 'activo';
+                            } else {
+                                $buffTargetPlayer->hp = $vidaRevivido;
+                                $buffTargetPlayer->status = 'activo';
+                            }
+                            $entry['effects'][] = ['type' => 'revivir', 'target_user_id' => $buffTargetUserId];
+                            $entry['messages'][] = "¡{$buffTargetChar->name} ha revivido con la mitad de su vida!";
+                        }
+
+                        $targetHp = $esBuffUnoMismo ? $myPlayer->hp : $buffTargetPlayer->hp;
+                        $targetEscudo = $esBuffUnoMismo ? $myPlayer->escudo : $buffTargetPlayer->escudo;
+
+                        if ($dmg < 0) {
+                            $heal = -$dmg;
+                            $newHp = min($targetMax['vida'], $targetHp + $heal);
+                            if ($esBuffUnoMismo) {
+                                $myPlayer->hp = $newHp;
+                            } else {
+                                $buffTargetPlayer->hp = $newHp;
+                            }
+                            $myPlayer->curacion_total += $heal;
+                            $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
+                            $entry['messages'][] = "¡Curación! +{$heal} vida".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
+                        }
+                        if ($dmgEscudo < 0) {
+                            $healEsc = -$dmgEscudo;
+                            $newEsc = min($targetMax['escudo'], $targetEscudo + $healEsc);
+                            if ($esBuffUnoMismo) {
+                                $myPlayer->escudo = $newEsc;
+                            } else {
+                                $buffTargetPlayer->escudo = $newEsc;
+                            }
+                            $myPlayer->curacion_total += $healEsc;
+                            $entry['effects'][] = ['type' => 'heal', 'target_user_id' => $buffTargetUserId];
+                            $entry['messages'][] = "¡Escudo restaurado! +{$healEsc}".($esBuffUnoMismo ? '' : " a {$buffTargetChar->name}");
+                        }
+
+                        if (! $esBuffUnoMismo) {
+                            $buffTargetPlayer->save();
+                        }
+
+                        /* Una habilidad "self" no tiene tirada de ataque — si además carga un debuff
+                         * (p.ej. un estado) para el jefe, se aplica sin condición de impacto. */
+                        if (! empty($habDebuff)) {
+                            $npcDebuffsArr = $raid->npc_debuffs ?? [];
+                            foreach ($habDebuff as $stat) {
+                                if (self::esTipoEstado($stat)) {
+                                    $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
+                                } else {
+                                    $npcDebuffsArr[] = ['stat' => $stat, 'turns' => $habRondas];
+                                }
+                            }
+                            $raid->npc_debuffs = $npcDebuffsArr;
+                            $myPlayer->debuffs_aplicados += count($habDebuff);
+                            $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
+                        }
+                    } elseif ($dmg < 0) {
+                        /* Agro: usar CUALQUIER habilidad suma su propio campo `agro` (ver arriba, rama "self"). */
+                        $myPlayer->agro_puntos += $hab->agro ?? 1;
+
+                        $heal = -$dmg;
+                        $maxHp = self::getNpcStats($raid->npc)['vida'];
+                        $raid->npc_hp = min($maxHp, $raid->npc_hp + $heal);
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre}: cura +{$heal} vida a {$raid->npc->nombre}";
+                    } else {
+                        $confundidoHab = self::resolverConfundido($myEstados);
+                        if ($confundidoHab) {
+                            $entry['messages'][] = "¡{$actorChar->name} está confundido y ataca hacia sí mismo!";
+                        }
+                        /* Agro: usar CUALQUIER habilidad suma su propio campo `agro`, una sola vez por
+                         * uso, conecte o no (las habilidades no tienen crítico propio en RAID, a
+                         * diferencia del arma equipada en un ataque desarmado). */
+                        $myPlayer->agro_puntos += $hab->agro ?? 1;
+                        $statsObjetivoHab = $confundidoHab ? $actorStats : $npcEffective;
+
+                        $useAtq = $hab->tipo === 'melee';
+                        $atkVal = $useAtq ? $actorStats['ataque'] : $actorStats['punteria'];
+                        $defVal = $useAtq ? $statsObjetivoHab['defensa'] : $statsObjetivoHab['movimiento'];
+                        $atkTirada = self::tirarDados();
+                        $defTirada = self::tirarDados();
+                        $atkDado = self::mitigarTiradaAturdido($myEstados, $atkTirada['total']);
+                        $defDado = self::mitigarTiradaAturdido($confundidoHab ? $myEstados : $npcEstados, $defTirada['total']);
+                        $atkRoll = $atkDado + $atkVal;
+                        $defRoll = $defDado + $defVal;
+
+                        $entry['messages'][] = "{$actorChar->name} usa {$hab->nombre} contra {$raid->npc->nombre}: "
+                            ."2d6({$atkTirada['dado1']}+{$atkTirada['dado2']})+{$atkVal}={$atkRoll} vs 2d6({$defTirada['dado1']}+{$defTirada['dado2']})+{$defVal}={$defRoll}";
+                        $entry['dice'] = ['atk' => $atkDado, 'def' => $defDado];
+
+                        $estadosObjetivoHab = $confundidoHab ? $myEstados : $npcEstados;
+                        $protegidoHab = self::consumirProtegido($estadosObjetivoHab);
+                        $estadosObjetivoHab = $protegidoHab['estados'];
+                        $marcaHab = self::consumirMarcado($estadosObjetivoHab, $atkDado);
+                        $estadosObjetivoHab = $marcaHab['estados'];
+
+                        $hitHab = $atkRoll >= $defRoll;
+                        if ($protegidoHab['activo']) {
+                            $hitHab = false;
+                            $entry['messages'][] = '¡El objetivo estaba protegido y bloquea el golpe automáticamente!';
+                        } elseif ($marcaHab['activo']) {
+                            $hitHab = $marcaHab['forzar_exito'];
+                            $entry['messages'][] = $hitHab
+                                ? '¡El objetivo estaba marcado — el golpe conecta automáticamente!'
+                                : '¡El objetivo estaba marcado, pero el ataque falla igual (natural 1)!';
+                        }
+
+                        $reflejoHab = ['activo' => false, 'tipo' => null];
+                        if ($hitHab && ! $confundidoHab) {
+                            $reflejoHab = self::consumirDeflectarOContraataque($estadosObjetivoHab, ! $useAtq);
+                            $estadosObjetivoHab = $reflejoHab['estados'];
+                        }
+                        if ($confundidoHab) {
+                            $myEstados = $estadosObjetivoHab;
+                        } else {
+                            $npcEstados = $estadosObjetivoHab;
+                        }
+
+                        $entry['hit'] = $hitHab && ! $reflejoHab['activo'];
+
+                        if ($hitHab) {
+                            $effective = $confundidoHab ? false : self::isEffective((int) $hab->forma, (int) $raid->npc_forma);
+                            $resistant = $confundidoHab ? false : self::isResistant((int) $hab->forma, (int) $raid->npc_forma);
+                            if (! $confundidoHab) {
+                                $dmg = max(0, $dmg + self::formaBonoDano((int) $hab->forma, (int) $raid->npc_forma));
+                            }
+                            $dmg += self::formaBono($myPlayer->current_forma, 'dano');
+                            $dmgEscudo += self::formaBono($myPlayer->current_forma, 'dano_escudo');
+                            $dmgPerforante += self::formaBono($myPlayer->current_forma, 'dano_perforante');
+                            $dmg = self::mitigarDanoDebilitado($myEstados, $dmg);
+
+                            if ($reflejoHab['activo']) {
+                                [$mitadDmg, $mitadEsc, $mitadPerf] = self::mitadDano($dmg, $dmgEscudo, $dmgPerforante);
+                                $escudoAntes = $myPlayer->escudo;
+                                [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $mitadDmg, $mitadEsc, $mitadPerf);
+                                if ($myPlayer->hp <= 0) {
+                                    $myPlayer->status = 'derrotado';
+                                }
+                                $desc = self::describeDano($mitadDmg, $mitadEsc, $mitadPerf, $escudoAntes);
+                                $verbo = $reflejoHab['tipo'] === 'deflectar' ? 'deflecta' : 'contraataca';
+                                $entry['messages'][] = "¡{$raid->npc->nombre} {$verbo} el ataque de {$actorChar->name}! {$desc}";
+                            } elseif ($confundidoHab) {
+                                $escudoAntes = $myPlayer->escudo;
+                                [$myPlayer->hp, $myPlayer->escudo] = self::applyDamage($myPlayer->hp, $myPlayer->escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                                if ($myPlayer->hp <= 0) {
+                                    $myPlayer->status = 'derrotado';
+                                }
+                                $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
+                                $entry['messages'][] = "¡Impacto! {$desc}";
+                            } else {
+                                $escudoAntes = $raid->npc_escudo;
+                                [$raid->npc_hp, $raid->npc_escudo] = self::applyDamage($raid->npc_hp, $raid->npc_escudo, $dmg, $dmgEscudo, $dmgPerforante);
+                                $myPlayer->dano_al_jefe += max(0, $dmg) + max(0, $dmgEscudo) + max(0, $dmgPerforante);
+
+                                $desc = self::describeDano($dmg, $dmgEscudo, $dmgPerforante, $escudoAntes);
+                                $formaMsg = $effective ? '¡Forma efectiva! +1 daño — ' : ($resistant ? 'Resistencia de forma −1 daño — ' : '');
+                                $entry['messages'][] = $formaMsg."¡Impacto! {$desc}";
+                            }
+                        } else {
+                            $entry['messages'][] = "{$actorChar->name} falla el ataque";
+                        }
+
+                        /* Debuffs/estados al jefe: se aplican por el solo hecho de usar la habilidad,
+                         * conecte o no el golpe (mismo criterio que el buff propio) — la tirada decide el
+                         * daño, no el efecto. Incluye deflectar/contraataque del jefe. Única excepción: si
+                         * la confusión redirigió el golpe contra el propio jugador, el jefe nunca fue el
+                         * objetivo real y no recibe nada. */
+                        if (! empty($habDebuff) && ! $confundidoHab) {
+                            $npcDebuffs = $raid->npc_debuffs ?? [];
+                            foreach ($habDebuff as $stat) {
+                                if (self::esTipoEstado($stat)) {
+                                    $npcEstados = self::aplicarEstadoDeHabilidad($npcEstados, $stat, $habRondas);
+                                } else {
+                                    $npcDebuffs[] = ['stat' => $stat, 'turns' => $habRondas];
+                                }
+                            }
+                            $raid->npc_debuffs = $npcDebuffs;
+                            $myPlayer->debuffs_aplicados += count($habDebuff);
+                            $entry['messages'][] = "{$raid->npc->nombre} sufre: ".implode(', ', $habDebuff);
+                        }
+                    }
                 }
             }
-        }
 
-        $myPlayer->fuerza = $myFuerza;
-        $myPlayer->cooldowns = $myCooldowns ?: null;
-        $myPlayer->buffs = $myBuffs ?: null;
-        $myPlayer->debuffs = $myDebuffs ?: null;
-        $myPlayer->estados = $myEstados ?: null;
-        $raid->npc_estados = $npcEstados ?: null;
+            $myPlayer->fuerza = $myFuerza;
+            $myPlayer->cooldowns = $myCooldowns ?: null;
+            $myPlayer->buffs = $myBuffs ?: null;
+            $myPlayer->debuffs = $myDebuffs ?: null;
+            $myPlayer->estados = $myEstados ?: null;
+            $raid->npc_estados = $npcEstados ?: null;
 
-        if ($raid->npc_hp <= 0 && $raid->status === 'activo') {
-            $raid->status = 'ganado';
-            $entry['messages'][] = "¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo.";
-            foreach ($this->grantVictoryRewards($raid) as $mensaje) {
-                $entry['messages'][] = $mensaje;
+            if ($raid->npc_hp <= 0 && $raid->status === 'activo') {
+                $raid->status = 'ganado';
+                $entry['messages'][] = "¡{$raid->npc->nombre} ha sido derrotado! Victoria del grupo.";
+                foreach ($this->grantVictoryRewards($raid) as $mensaje) {
+                    $entry['messages'][] = $mensaje;
+                }
+            } elseif ($raid->status === 'activo' && $raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count() === 0) {
+                /* Puede pasar si la confusión hizo que el último jugador activo se golpeara a sí mismo. */
+                $raid->status = 'perdido';
+                $entry['messages'][] = 'Todos los jugadores han caído. El jefe los ha derrotado.';
             }
-        } elseif ($raid->status === 'activo' && $raid->jugadores->where('status', 'activo')->where('hp', '>', 0)->count() === 0) {
-            /* Puede pasar si la confusión hizo que el último jugador activo se golpeara a sí mismo. */
-            $raid->status = 'perdido';
-            $entry['messages'][] = 'Todos los jugadores han caído. El jefe los ha derrotado.';
-        }
 
-        $entry['snapshot'] = self::snapshotEstado($raid);
-        $log[] = $entry;
+            $entry['snapshot'] = self::snapshotEstado($raid);
+            $log[] = $entry;
 
-        /* `$conservaTurno` lo activa una tirada de estancia exitosa: el jugador vuelve a actuar,
-           así que no se avanza el puntero de turno. Se refresca `turn_started_at` para que el
-           contador regresivo del turno arranque de nuevo en vez de seguir consumiéndose. */
-        if ($raid->status === 'activo' && $conservaTurno) {
-            $raid->turn_started_at = now();
-        } elseif ($raid->status === 'activo') {
-            $this->advanceIndex($raid, $log);
-            $this->settleFromCurrentPosition($raid, $log);
-        }
+            /* `$conservaTurno` lo activa una tirada de estancia exitosa: el jugador vuelve a actuar,
+               así que no se avanza el puntero de turno. Se refresca `turn_started_at` para que el
+               contador regresivo del turno arranque de nuevo en vez de seguir consumiéndose. */
+            if ($raid->status === 'activo' && $conservaTurno) {
+                $raid->turn_started_at = now();
+            } elseif ($raid->status === 'activo') {
+                $this->advanceIndex($raid, $log);
+                $this->settleFromCurrentPosition($raid, $log);
+            }
 
-        $myPlayer->save();
-        $raid->log = $log;
-        $raid->save();
+            $myPlayer->save();
+            $raid->log = $log;
+            $raid->save();
 
-        return response()->json(['raid' => $this->formatRaid($raid->fresh(['npc', 'jugadores.user.character']), $user->id)]);
+            return response()->json(['raid' => $this->formatRaid($raid->fresh(['npc', 'jugadores.user.character']), $user->id)]);
         });
     }
 
@@ -1159,9 +1193,48 @@ class RaidCombatController extends Controller
             $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} se refuerza: +".implode(', +', $habBuffNpc)], 'snapshot' => self::snapshotEstado($raid)];
         }
 
+        $parsedNpcDmg = HabilidadDamageParser::parse((string) ($hab->damage ?? '0'));
+
+        if ($hab && $hab->cooldown > 0) {
+            $npcCooldowns[(string) $hab->id] = $hab->cooldown;
+        }
+        $raid->npc_cooldowns = $npcCooldowns ?: null;
+
+        /* Habilidad de modificación de fuerza (+FX / -FX): no aplica daño, solo suma/resta
+         * fuerza acumulada al jugador objetivo (el jefe no acumula fuerza, así que solo tiene
+         * efecto cuando el "objetivo" real es un jugador, no cuando el jefe confundido se
+         * apunta a sí mismo). Corta acá el turno del jefe, sin tirada de ataque. */
+        if ($hab && $parsedNpcDmg['kind'] === 'force') {
+            $fuerzaDelta = $parsedNpcDmg['value'];
+            $signoFuerza = $fuerzaDelta >= 0 ? "+{$fuerzaDelta}" : (string) $fuerzaDelta;
+            if ($targetEsNpc) {
+                $log[] = ['turn' => count($log) + 1, 'actor' => 'npc', 'messages' => ["{$npc->nombre} usa {$hab->nombre}, pero no tiene efecto"], 'snapshot' => self::snapshotEstado($raid)];
+            } else {
+                $target->fuerza = max(0, ($target->fuerza ?? 0) + $fuerzaDelta);
+                $target->save();
+                $log[] = [
+                    'turn' => count($log) + 1, 'actor' => 'npc', 'target_user_id' => $target->user_id,
+                    'messages' => ["{$npc->nombre} usa {$hab->nombre}: {$targetChar->name} {$signoFuerza} de fuerza"],
+                    'snapshot' => self::snapshotEstado($raid),
+                ];
+            }
+
+            return;
+        }
+
         /* Daño base de un ataque normal (sin habilidad): configurado en la ficha del Jefe
          * (dano/dano_escudo/dano_perforante) — el stat de Ataque solo decide si conecta. */
-        $dmgBase = $hab ? (int) ($hab->damage ?? 0) : (int) ($npc->dano ?? 0);
+        if ($hab) {
+            if ($parsedNpcDmg['kind'] === 'heal') {
+                $dmgBase = -$parsedNpcDmg['value'];
+            } elseif ($parsedNpcDmg['kind'] === 'weapon') {
+                $dmgBase = max(0, (int) ($npc->dano ?? 0) + $parsedNpcDmg['value']);
+            } else {
+                $dmgBase = $parsedNpcDmg['value'];
+            }
+        } else {
+            $dmgBase = (int) ($npc->dano ?? 0);
+        }
         $dmgEscudoBase = $hab ? (int) ($hab->damage_escudo ?? 0) : (int) ($npc->dano_escudo ?? 0);
         $dmgPerfBase = $hab ? (int) ($hab->damage_perforante ?? 0) : (int) ($npc->dano_perforante ?? 0);
         $formaAtaque = $hab ? (int) $hab->forma : (int) $raid->npc_forma;
@@ -1170,11 +1243,6 @@ class RaidCombatController extends Controller
         /* Bono por nivel de dificultad (0 en nivel 1, +4 en nivel 5): +daño, o +curación si dmgBase es negativo */
         $bonoNivel = $npc->bonoAtributoPorNivel();
         $dmgBase += $dmgBase >= 0 ? $bonoNivel : -$bonoNivel;
-
-        if ($hab && $hab->cooldown > 0) {
-            $npcCooldowns[(string) $hab->id] = $hab->cooldown;
-        }
-        $raid->npc_cooldowns = $npcCooldowns ?: null;
 
         $targetStats = $targetEsNpc ? $npcStats : self::aplicarBonoFormaStats(self::getEffectiveStats(self::getCombatStats($targetChar), $target->buffs ?? [], $target->debuffs ?? []), (int) $target->current_forma);
         $targetEstadosPrevios = $targetEsNpc ? $npcEstados : ($target->estados ?? []);

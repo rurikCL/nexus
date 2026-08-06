@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { NX } from '../data/seed.js';
 import { Icon, Panel, Btn, Chip, Avatar, TierBadge, Stat, MedalIcon, MedallaBadge, Modal, toast, ImageSlot } from '../components/ui.jsx';
 import { playClickHabilidad, playClickOpcion } from '../utils/sounds.js';
+import { describeHabilidadDamage } from '../utils/habilidadDamage.js';
 import { BONUS_FIELDS } from './ArmadoSable.jsx';
 import CharacterCardModal from '../components/CharacterCard.jsx';
 
@@ -1554,6 +1555,8 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
   const isSelf   = habilidad.objetivo === 'self';
   const buffs    = groupStats(habilidad.buff);
   const debuffs  = groupStats(habilidad.debuff);
+  const dmgInfo  = describeHabilidadDamage(habilidad.damage);
+  const DMG_BADGE = { flat: 'DMG', dice: 'DMG', heal: 'CURA', weapon: 'ARMA', force: 'FUERZA' };
 
   const Badge = ({ children, color, bg }) => (
     <span style={{
@@ -1610,8 +1613,8 @@ function HabilidadPickerRow({ habilidad, onAssign }) {
             <Badge color="#38cdf0">⚡ {habilidad.costo_fuerza} FRZ</Badge>
           )}
           {/* Daño */}
-          {habilidad.damage > 0 && (
-            <Badge color="#ff6b6b">✦ {habilidad.damage} DMG</Badge>
+          {(dmgInfo.kind !== 'flat' || dmgInfo.display !== '0') && (
+            <Badge color="#ff6b6b">✦ {dmgInfo.display} {DMG_BADGE[dmgInfo.kind]}</Badge>
           )}
           {habilidad.damage_perforante > 0 && (
             <Badge color="#8aa0c0">✦ {habilidad.damage_perforante} DMG PERF</Badge>
