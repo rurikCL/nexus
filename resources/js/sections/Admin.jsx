@@ -419,7 +419,7 @@ const ENTITY_CONFIG = {
       { key: 'objetivo',     label: 'Objetivo',              type: 'select',    options: HABILIDAD_OBJETIVO_OPTS, hint: 'target = se aplica al rival · self = se aplica al usuario' },
       { key: 'forma',        label: 'Forma (0–7)',           type: 'number',    min: 0, max: 7, hint: 'Forma de sable que habilita esta habilidad (0 = todas)' },
       { key: 'costo_fuerza', label: 'Costo de Fuerza',      type: 'number',    min: 0 },
-      { key: 'damage',       label: 'Daño base',             type: 'number',    min: -999, hint: 'Negativo = cura esa cantidad de vida en vez de dañar (al usuario si Objetivo=self, al rival si Objetivo=target)' },
+      { key: 'damage',       label: 'Daño base',             type: 'text', hint: 'Admite varios formatos: número plano ("30") = daño base fijo · dados ("2d6") = tirada de N dados de M caras como daño · "C10" = cura 10 de vida (al usuario si Objetivo=self, al rival si Objetivo=target) · "+5"/"-5" = bono/penalización al daño del arma equipada (objeto o sable) en vez de reemplazarlo · "+F5"/"-F5" = no daña, solo suma/resta 5 a la fuerza acumulada del objetivo (self o target)' },
       { key: 'damage_escudo', label: 'Daño a Escudo',         type: 'number',    min: -999, hint: 'Extra que se SUMA al Daño base pero solo golpea escudo (mientras el objetivo tenga escudo). Si el escudo ya está en 0, este extra no se aplica y solo pega el Daño base a la vida. Negativo = restaura esa cantidad de escudo.' },
       { key: 'damage_perforante', label: 'Daño Perforante',   type: 'number',    min: 0, hint: 'Ignora el escudo por completo: siempre pasa directo a la vida, tenga o no tenga escudo el objetivo.' },
       { key: 'cooldown',     label: 'Cooldown (turnos)',     type: 'number',    min: 0, hint: 'Turnos que deben pasar antes de poder usar de nuevo esta habilidad' },
@@ -430,7 +430,7 @@ const ENTITY_CONFIG = {
       { key: 'agro',         label: 'Agro (Combate RAID)',   type: 'number', min: -99, hint: 'Puntos de agro del jefe que suma usar esta habilidad (sin importar si conecta, ni qué efecto tenga) — puede ser negativo para reducir el agro propio. Un golpe básico sin habilidad siempre suma +1 fijo (+1 extra si es crítico); esto no aplica ahí.' },
       { key: 'sonido',       label: 'Sonido al usar',        type: 'text', hint: 'Nombre del sonido en el catálogo de Sonidos (rol_sonidos) que se reproduce al usar esta habilidad. Vacío = sin sonido.' },
     ],
-    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: 0, damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
+    defaults: { tipo: 'melee', objetivo: 'target', forma: 0, costo_fuerza: 0, damage: '0', damage_escudo: 0, damage_perforante: 0, cooldown: 0, duracion: 2 },
   },
 
   rol_sonidos: {
@@ -1939,7 +1939,7 @@ function ActionBtn({ icon, title, onClick, tone = 'holo' }) {
 
 /* ─── TARJETA DE ENTIDAD (grid) — misma info que las columnas de la tabla,
    pero en formato card, con el mismo look del Catálogo ── */
-function EntityCard({ entityKey, config, record, deleting, onEdit, onAskDelete, onConfirmDelete, onCancelDelete, onAssignHabilidad, onAssignObjeto }) {
+function EntityCard({ entityKey, config, record, deleting, onEdit, onRevisar, onAskDelete, onConfirmDelete, onCancelDelete, onAssignHabilidad, onAssignObjeto }) {
   const img = resolveEntityImage(record);
   // La columna "bold" de cada config es la que hoy hace de título en la tabla
   // (nombre/name/handle según la entidad) — la usamos también como título de la card.
@@ -2017,6 +2017,9 @@ function EntityCard({ entityKey, config, record, deleting, onEdit, onAskDelete, 
           </span>
         ) : (
           <>
+            {entityKey === 'sistemas' && (
+              <ActionBtn icon="eye" title="Revisar" onClick={onRevisar} tone="gold" />
+            )}
             <ActionBtn icon="edit" title="Editar" onClick={onEdit} tone="holo" />
             {entityKey === 'rol_habilidades' && (
               <ActionBtn icon="user" title="Asignar a un personaje" onClick={onAssignHabilidad} tone="gold" />
@@ -2031,6 +2034,185 @@ function EntityCard({ entityKey, config, record, deleting, onEdit, onAskDelete, 
         )}
       </div>
     </div>
+  );
+}
+
+/* ─── REVISAR SISTEMA (árbol jerárquico de solo lectura) ────
+   Sistema → Planetas → Zonas → Lugares → NPCs. Carga perezosa por nivel
+   (mismos filtros que ya expone AdminController::filterableColumns) para no
+   traer de golpe un sistema completo. Marca "SIN IMAGEN" en cada nodo sin foto
+   para detectar rápido dónde falta rellenar contenido. */
+function TreeThumb({ img, icon, size = 28 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
+      background: 'rgba(255,255,255,.04)', display: 'grid', placeItems: 'center', color: 'var(--holo)',
+    }}>
+      {img
+        ? <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <Icon name={icon} size={size * 0.45} />}
+    </div>
+  );
+}
+
+async function loadTreeLevel(entity, filterKey, id) {
+  const res = await api('GET', `/admin/${entity}?${filterKey}=${id}&per_page=100`);
+  const items = res.data ?? [];
+  return { items, total: res.total ?? items.length };
+}
+
+function TreeNode({ depth, icon, title, record, badgeCols, loadChildren, renderChildren, emptyLabel, leaf }) {
+  const [open, setOpen]         = useState(false);
+  const [children, setChildren] = useState(null); // null = aún no cargado
+  const [loading, setLoading]   = useState(false);
+  const [total, setTotal]       = useState(null);
+  const img = resolveEntityImage(record);
+
+  const toggle = async () => {
+    if (leaf) return;
+    const next = !open;
+    setOpen(next);
+    if (next && children === null) {
+      setLoading(true);
+      try {
+        const { items, total: t } = await loadChildren();
+        setChildren(items);
+        setTotal(t);
+      } catch {
+        setChildren([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  return (
+    <div>
+      <div
+        onClick={toggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+          marginLeft: depth * 20, borderRadius: 6, cursor: leaf ? 'default' : 'pointer',
+        }}
+        onMouseEnter={e => { if (!leaf) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >
+        {!leaf && (
+          <Icon name={open ? 'chevdown' : 'chevron'} size={11} style={{ color: 'var(--txt-faint)', flexShrink: 0 }} />
+        )}
+        <TreeThumb img={img} icon={icon} />
+        <span style={{
+          fontSize: 12, fontWeight: 600, color: 'var(--txt)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220,
+        }}>
+          {title}
+        </span>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+          {(badgeCols ?? []).map(col => {
+            const raw = record[col.key];
+            if (raw == null || raw === '') return null;
+            return <CellValue key={col.key} col={col} record={record} />;
+          })}
+        </div>
+        {!img && (
+          <span style={{
+            fontSize: 9, color: '#f0a020', border: '1px solid rgba(240,160,32,0.35)',
+            background: 'rgba(240,160,32,0.1)', borderRadius: 4, padding: '2px 6px',
+            fontFamily: 'var(--font-data)', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+          }}>SIN IMAGEN</span>
+        )}
+        {record.visible === false && (
+          <span style={{ fontSize: 9, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)', whiteSpace: 'nowrap' }}>oculto</span>
+        )}
+      </div>
+
+      {!leaf && open && (
+        <div style={{ marginLeft: depth * 20 + 14, borderLeft: '1px solid var(--holo-line)', paddingLeft: 8 }}>
+          {loading ? (
+            <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--txt-faint)' }}>Cargando...</div>
+          ) : children && children.length > 0 ? (
+            <>
+              {renderChildren(children)}
+              {total != null && total > children.length && (
+                <div style={{ padding: '4px 8px', fontSize: 10, color: 'var(--txt-faint)', fontFamily: 'var(--font-data)' }}>
+                  +{total - children.length} más — usa el mantenedor para verlos todos
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ padding: '6px 8px', fontSize: 11, color: 'var(--txt-faint)', fontStyle: 'italic' }}>{emptyLabel}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const RAREZA_COL = { key: 'rareza', type: 'rareza' };
+const HOSTILIDAD_COL = { key: 'hostilidad', type: 'hostilidad' };
+
+function RevisarSistemaModal({ sistema, onClose }) {
+  return (
+    <Modal open onClose={onClose} kicker="REVISIÓN DE JERARQUÍA" title={sistema.nombre} width={680}>
+      <div style={{ maxHeight: '64vh', overflowY: 'auto', paddingRight: 4, marginTop: -4 }}>
+        <TreeNode
+          depth={0}
+          icon="star"
+          title={sistema.nombre}
+          record={sistema}
+          badgeCols={[RAREZA_COL, HOSTILIDAD_COL]}
+          loadChildren={() => loadTreeLevel('planetas', 'SistemaID', sistema.id)}
+          emptyLabel="Sin planetas"
+          renderChildren={planetas => planetas.map(p => (
+            <TreeNode
+              key={p.id}
+              depth={1}
+              icon="target"
+              title={p.nombre}
+              record={p}
+              badgeCols={[RAREZA_COL, HOSTILIDAD_COL]}
+              loadChildren={() => loadTreeLevel('zonas', 'PlanetaID', p.id)}
+              emptyLabel="Sin zonas"
+              renderChildren={zonas => zonas.map(z => (
+                <TreeNode
+                  key={z.id}
+                  depth={2}
+                  icon="shield"
+                  title={z.nombre}
+                  record={z}
+                  badgeCols={[HOSTILIDAD_COL]}
+                  loadChildren={() => loadTreeLevel('lugares', 'ZonaID', z.id)}
+                  emptyLabel="Sin lugares"
+                  renderChildren={lugares => lugares.map(l => (
+                    <TreeNode
+                      key={l.id}
+                      depth={3}
+                      icon="target"
+                      title={l.nombre}
+                      record={l}
+                      badgeCols={[RAREZA_COL, { key: 'tipo', dim: true }]}
+                      loadChildren={() => loadTreeLevel('npcs', 'LugarID', l.id)}
+                      emptyLabel="Sin NPCs"
+                      renderChildren={npcs => npcs.map(n => (
+                        <TreeNode
+                          key={n.id}
+                          leaf
+                          depth={4}
+                          icon="user"
+                          title={n.nombre}
+                          record={n}
+                          badgeCols={[{ key: 'tipo', dim: true }, { key: 'profesion', dim: true }]}
+                        />
+                      ))}
+                    />
+                  ))}
+                />
+              ))}
+            />
+          ))}
+        />
+      </div>
+    </Modal>
   );
 }
 
@@ -2211,6 +2393,7 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated, head
   const [activeFilters, setActiveFilters] = useState({});
   const [assignHabilidad, setAssignHabilidad] = useState(null); // registro de rol_habilidades a asignar a un personaje
   const [assignObjeto, setAssignObjeto] = useState(null); // registro de rol_objetos a asignar a uno o más personajes
+  const [revisarSistema, setRevisarSistema] = useState(null); // registro de sistemas a revisar en el árbol jerárquico
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2376,6 +2559,7 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated, head
                   record={r}
                   deleting={deleteId === r.id}
                   onEdit={() => setEditRecord(r)}
+                  onRevisar={() => setRevisarSistema(r)}
                   onAskDelete={() => setDeleteId(r.id)}
                   onConfirmDelete={() => handleDelete(r.id)}
                   onCancelDelete={() => setDeleteId(null)}
@@ -2612,6 +2796,14 @@ function EntityTable({ entityKey, config, relatedOptions, onRefreshRelated, head
         <AssignObjetoModal
           objeto={assignObjeto}
           onClose={() => setAssignObjeto(null)}
+        />
+      )}
+
+      {/* modal revisar árbol jerárquico de un sistema */}
+      {revisarSistema && (
+        <RevisarSistemaModal
+          sistema={revisarSistema}
+          onClose={() => setRevisarSistema(null)}
         />
       )}
     </div>

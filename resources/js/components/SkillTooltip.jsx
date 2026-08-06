@@ -1,4 +1,8 @@
 import { Icon } from './ui.jsx';
+import { describeHabilidadDamage } from '../utils/habilidadDamage.js';
+
+const DAMAGE_CHIP_COLOR = { flat: '#ff7043', dice: '#ff7043', heal: '#38cdf0', weapon: '#E6B325', force: '#a78bfa' };
+const DAMAGE_CHIP_PREFIX = { flat: 'DMG', dice: 'DMG', heal: 'CURA', weapon: 'ARMA', force: 'FUERZA' };
 
 const STAT_LABEL = { ataque: 'Ataque', defensa: 'Defensa', punteria: 'Puntería', movimiento: 'Agilidad', iniciativa: 'Iniciativa' };
 const formaLabel = (f) => ['―', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][f] ?? String(f);
@@ -24,6 +28,7 @@ export function SkillTooltip({ hab }) {
   const isSelf    = hab.objetivo === 'self';
   const rondas    = hab.duracion ?? 2;
   const rondaTxt  = `${rondas} ronda${rondas === 1 ? '' : 's'}`;
+  const dmgInfo   = describeHabilidadDamage(hab.damage);
 
   return (
     <div style={{
@@ -53,7 +58,7 @@ export function SkillTooltip({ hab }) {
             />
           </Chip>
         )}
-        {!isSelf && <Chip color="#ff7043">DMG {hab.damage}</Chip>}
+        {!isSelf && <Chip color={DAMAGE_CHIP_COLOR[dmgInfo.kind]}>{DAMAGE_CHIP_PREFIX[dmgInfo.kind]} {dmgInfo.display}</Chip>}
         {!!hab.damage_escudo && (
           hab.damage_escudo > 0
             ? <Chip color="#ff7043">DMG ESC +{hab.damage_escudo}</Chip>

@@ -7,6 +7,7 @@ import {
   drawIcon as drawIconRaw, drawImageRounded, fitText, wrapText, printCardImage, printTokenSheet, paintCardLogo, paintVignetteBackground, paintEdgeFade, paintBoxBg,
   COMBAT_STAT_META, PRINT_ACCENT, INK, formaAccent, paintDropShadow, frameEdge, drawHeartPip, drawShieldPip,
 } from '../utils/printableCard.js';
+import { describeHabilidadDamage } from '../utils/habilidadDamage.js';
 
 const drawIcon = (ctx, name, cx, cy, size, color, strokeWidth) =>
   drawIconRaw(ctx, ICON_PATHS, name, cx, cy, size, color, strokeWidth);
@@ -508,7 +509,11 @@ export async function drawHabilidadCard(habilidad) {
 
   const rows = [];
   rows.push({ icon: 'zap', label: 'Costo Fuerza', color: PRINT_ACCENT.costo, value: habilidad.costo_fuerza ?? 0 });
-  if (habilidad.damage) rows.push({ icon: 'sword', label: 'Daño', color: PRINT_ACCENT.dano, value: habilidad.damage });
+  const dmgInfo = describeHabilidadDamage(habilidad.damage);
+  const DMG_ROW_LABEL = { flat: 'Daño', dice: 'Daño', heal: 'Curación', weapon: 'Bono de Arma', force: 'Mod. de Fuerza' };
+  if (dmgInfo.kind !== 'flat' || dmgInfo.display !== '0') {
+    rows.push({ icon: 'sword', label: DMG_ROW_LABEL[dmgInfo.kind], color: PRINT_ACCENT.dano, value: dmgInfo.display });
+  }
   if (habilidad.damage_escudo) rows.push({ icon: 'shield', label: 'Daño a Escudo', color: PRINT_ACCENT.danoEscudo, value: habilidad.damage_escudo });
   if (habilidad.damage_perforante) rows.push({ icon: 'fire', label: 'Daño Perforante', color: PRINT_ACCENT.danoPerforante, value: habilidad.damage_perforante });
   rows.push({

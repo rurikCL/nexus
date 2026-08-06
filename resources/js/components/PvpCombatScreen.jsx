@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion, playCombatePvp, playSound } from '../utils/sounds.js';
+import { describeHabilidadDamage } from '../utils/habilidadDamage.js';
 import { useDiceRoller, useDragToThrow, renderDiceText } from './DiceRoller.jsx';
 import { SkillTooltip } from './SkillTooltip.jsx';
 import { getRelativeCenter } from './combatFx.jsx';
@@ -612,7 +613,8 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
   const clickSkill = (hab) => {
     void playClickHabilidad();
     if (hab.sonido) void playSound(hab.sonido);
-    const needsRoll = !(hab.objetivo === 'self' || (hab.objetivo === 'target' && (hab.damage ?? 0) < 0));
+    const dmgKind = describeHabilidadDamage(hab.damage).kind;
+    const needsRoll = !(hab.objetivo === 'self' || dmgKind === 'heal' || dmgKind === 'force');
     void doAction(hab.id, { needsRoll });
   };
 
@@ -1040,6 +1042,7 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                 const dmgMult = formaMultiplier(hab.forma, oppLastForma);
                 const disabled = lockActions || busy || cdLeft > 0 || noFuerza;
                 const isSelf   = hab.objetivo === 'self';
+                const dmgInfo  = describeHabilidadDamage(hab.damage);
 
                 return (
                   <button key={hab.id}
@@ -1105,7 +1108,11 @@ export default function PvpCombatScreen({ combat: initialCombat, userId, onClose
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                           {!isSelf && (
                             <span style={{ fontSize: 7, color: effective ? '#10b981' : resistant ? '#ef4444' : '#ff7043', fontFamily: 'var(--font-data)', fontWeight: (effective || resistant) ? 700 : 400 }}>
-                              DMG {Math.round(hab.damage * dmgMult)}
+                              {dmgInfo.kind === 'flat' && <>DMG {Math.round(Number(dmgInfo.display) * dmgMult)}</>}
+                              {dmgInfo.kind === 'dice' && <>DMG {dmgInfo.display}</>}
+                              {dmgInfo.kind === 'weapon' && <>ARMA {dmgInfo.display}</>}
+                              {dmgInfo.kind === 'heal' && <>CURA {dmgInfo.display}</>}
+                              {dmgInfo.kind === 'force' && <>FUERZA {dmgInfo.display}</>}
                               {!!hab.damage_perforante && (
                                 <span style={{ color: '#8aa0c0' }}>
                                   {' '}+{Math.round(hab.damage_perforante * dmgMult)}P

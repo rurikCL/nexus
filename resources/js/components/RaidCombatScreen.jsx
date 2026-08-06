@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './ui.jsx';
 import { NX } from '../data/seed.js';
 import { playClickHabilidad, playClickOpcion, playCombateJefe, playSound } from '../utils/sounds.js';
+import { describeHabilidadDamage } from '../utils/habilidadDamage.js';
 import { getRelativeCenter } from './combatFx.jsx';
 import EnergyStrikeEffect from './EnergyStrikeEffect.jsx';
 import FloatingCombatText from './FloatingCombatText.jsx';
@@ -1139,6 +1140,8 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                           const noFuerza = me.fuerza < hab.costo_fuerza;
                           const disabled = !canAct || cdLeft > 0 || noFuerza;
                           const isSelf = hab.objetivo === 'self';
+                          const dmgInfo = describeHabilidadDamage(hab.damage);
+                          const DMG_PREFIX = { flat: 'DMG', dice: 'DMG', heal: 'CURA', weapon: 'ARMA', force: 'FUERZA' };
                           return (
                             <button key={hab.id} onClick={() => !disabled && clickHabilidad(hab)} disabled={disabled}
                               style={{
@@ -1173,7 +1176,7 @@ export default function RaidCombatScreen({ raidId, lugarImagen, onClose }) {
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                                     {!isSelf && (
                                       <span style={{ fontSize: 7, color: '#ff7043', fontFamily: 'var(--font-data)' }}>
-                                        DMG {hab.damage}
+                                        {DMG_PREFIX[dmgInfo.kind]} {dmgInfo.display}
                                         {!!hab.damage_perforante && <span style={{ color: '#8aa0c0' }}> +{hab.damage_perforante}P</span>}
                                       </span>
                                     )}
