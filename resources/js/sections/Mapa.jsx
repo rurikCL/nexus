@@ -4327,7 +4327,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
 
   const consultarMision = useCallback(() => {
     if (!misionInfo || typing) return;
-    setMessages(prev => [...prev, { from: 'player', text: 'Consultar por misión', ts: Date.now() }]);
+    setMessages(prev => [...prev, { from: 'player', text: misionInfo.puede_completar ? 'Completar misión' : 'Consultar por misión', ts: Date.now() }]);
     setTyping(true);
     setTimeout(() => {
       showNpcMsg(misionInfo.descripcion || misionInfo.mision || '...');
@@ -4633,7 +4633,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
                 >
                   <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>!</span>
-                  <span>Consultar por misión</span>
+                  <span>{misionInfo.puede_completar ? 'Completar misión' : 'Consultar por misión'}</span>
                 </button>
               </div>
             )}
@@ -4750,7 +4750,7 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(230,179,37,0.10)'; e.currentTarget.style.borderColor = 'rgba(230,179,37,0.35)'; }}
                 >
                   <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(230,179,37,0.20)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 900, flexShrink: 0 }}>!</span>
-                  <span>Consultar por misión</span>
+                  <span>{misionInfo.puede_completar ? 'Completar misión' : 'Consultar por misión'}</span>
                 </button>
               )}
               {(isVendedor || isVendedorNaves) && (
