@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Jobs\GenerarInteraccionNpcJob;
 use App\Models\Configuracion;
 use App\Models\MapNpc;
 use App\Models\RolHabilidad;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -25,8 +27,9 @@ class NpcInteraccionService
 
     /**
      * Si el NPC está en modo `interaccion_ia` y su `interaccion` está vencida o nunca se
-     * generó, la regenera vía IA y la persiste. Si la IA falla, deja la `interaccion`
-     * existente intacta (no interrumpe al llamador) y registra el error.
+     * generó, despacha un job que la regenera vía IA en segundo plano. No bloquea al
+     * llamador (la llamada a Mistral puede tardar segundos); mientras tanto se sigue
+     * sirviendo la `interaccion` existente.
      */
     public function ensureFresh(MapNpc $npc): void
     {
@@ -43,6 +46,17 @@ class NpcInteraccionService
             return;
         }
 
+        // Evita despachar el job en cada request mientras uno ya está en curso (o acaba de fallar).
+        if (! Cache::lock("npc-interaccion-generando:{$npc->id}", 120)->get()) {
+            return;
+        }
+
+        GenerarInteraccionNpcJob::dispatch($npc->id);
+    }
+
+    /** Genera la interacción vía IA y la persiste. Si la IA falla, deja la existente intacta. */
+    public function regenerar(MapNpc $npc): void
+    {
         $texto = $this->generar($npc);
 
         if ($texto === null) {
@@ -71,6 +85,7 @@ class NpcInteraccionService
                 'tool_choice' => 'auto',
                 'max_tokens' => 500,
                 'temperature' => 0.8,
+                'response_format' => ['type' => 'json_object'],
             ]);
 
         if ($response->failed()) {
@@ -109,6 +124,7 @@ class NpcInteraccionService
                     'messages' => $messages,
                     'max_tokens' => 500,
                     'temperature' => 0.8,
+                    'response_format' => ['type' => 'json_object'],
                 ]);
 
             if ($response->failed()) {
@@ -123,7 +139,7 @@ class NpcInteraccionService
 
         $contenido = (string) $response->json('choices.0.message.content', '');
 
-        $texto = $this->sanitizar($contenido);
+        $texto = $this->parsearRespuesta($contenido);
 
         if ($texto === null) {
             Log::warning('NpcInteraccionService: respuesta de IA no tenía el formato esperado', [
@@ -149,27 +165,45 @@ class NpcInteraccionService
             $habilidades ? "Habilidades de este NPC (menciónalas solo si son relevantes para alguna pregunta): {$habilidades}." : null,
             'Puedes usar las herramientas disponibles para consultar datos reales del juego '
                 .'(personajes, ubicaciones, eventos) si eso hace más precisas las respuestas.',
-            'Responde con EXACTAMENTE entre '.self::MIN_LINEAS.' y '.self::MAX_LINEAS.' líneas — nunca menos de '
-                .self::MIN_LINEAS.'. Cada línea es una interacción distinta, con este formato EXACTO '
-                .'(sin numerar, sin markdown, sin saludos ni texto antes o después):'
-                ."\n".'- pregunta o frase que el jugador elegiría decirle al NPC: respuesta del NPC'
-                ."\n".'La parte antes de los dos puntos NO debe ser una sola palabra clave: escribe la pregunta '
-                .'o frase completa tal como la diría el jugador (puede tener varias palabras y signos de '
-                .'interrogación), como si fuera la opción de un menú de diálogo.'
-                ."\n\n".'Ejemplo con '.self::MIN_LINEAS.' líneas para un NPC distinto (solo de referencia, no la copies):'
-                ."\n".'- ¿Puedes entrenarme?: Si buscas mejorar tu forma de combate, puedo ayudarte con eso.'
-                ."\n".'- ¿Has escuchado algún rumor por aquí?: Dicen que hay actividad sospechosa cerca del sector norte.'
-                ."\n".'- ¿Tienes algo para vender?: Tengo algunas piezas de repuesto si te interesan.',
+            'Responde ÚNICAMENTE con un objeto JSON válido (sin markdown, sin texto antes o después), '
+                .'con EXACTAMENTE este formato:'
+                ."\n".'{"interacciones": [{"pregunta": "...", "respuesta": "..."}, ...]}'
+                ."\n".'El array "interacciones" debe tener entre '.self::MIN_LINEAS.' y '.self::MAX_LINEAS
+                .' elementos — nunca menos de '.self::MIN_LINEAS.'. Cada "pregunta" es la frase completa '
+                .'que el jugador elegiría decirle al NPC (puede tener varias palabras y signos de interrogación, '
+                .'como si fuera la opción de un menú de diálogo, nunca una sola palabra clave). Cada "respuesta" '
+                .'es lo que contesta el NPC, en un solo párrafo corto.'
+                ."\n\n".'Ejemplo de JSON válido para un NPC distinto (solo de referencia, no lo copies):'
+                ."\n".'{"interacciones": ['
+                .'{"pregunta": "¿Puedes entrenarme?", "respuesta": "Si buscas mejorar tu forma de combate, puedo ayudarte con eso."}, '
+                .'{"pregunta": "¿Has escuchado algún rumor por aquí?", "respuesta": "Dicen que hay actividad sospechosa cerca del sector norte."}, '
+                .'{"pregunta": "¿Tienes algo para vender?", "respuesta": "Tengo algunas piezas de repuesto si te interesan."}'
+                .']}',
         ])));
     }
 
-    /** Conserva solo líneas "- palabra_clave: respuesta" válidas; exige al menos MIN_LINEAS. */
-    private function sanitizar(string $texto): ?string
+    /** Extrae "interacciones" del JSON devuelto por la IA y las serializa a líneas "- pregunta: respuesta". */
+    private function parsearRespuesta(string $contenido): ?string
     {
-        $lineas = collect(explode("\n", $texto))
-            ->map(fn ($l) => trim($l))
-            ->filter(fn ($l) => (bool) preg_match('/^-\s*[^:]+:\s*.+$/', $l))
-            ->map(fn ($l) => '- '.ltrim($l, "- \t"))
+        $json = trim($contenido);
+        // Por si el modelo igual envuelve el JSON en un bloque ```json ... ``` pese a lo pedido.
+        $json = preg_replace('/^```(?:json)?\s*|\s*```$/', '', $json) ?? $json;
+
+        $data = json_decode($json, true);
+
+        $items = is_array($data) ? ($data['interacciones'] ?? null) : null;
+
+        if (! is_array($items)) {
+            return null;
+        }
+
+        $lineas = collect($items)
+            ->map(fn ($item) => [
+                'pregunta' => trim((string) ($item['pregunta'] ?? '')),
+                'respuesta' => trim((string) ($item['respuesta'] ?? '')),
+            ])
+            ->filter(fn ($item) => $item['pregunta'] !== '' && $item['respuesta'] !== '')
+            ->map(fn ($item) => "- {$item['pregunta']}: {$item['respuesta']}")
             ->slice(0, self::MAX_LINEAS)
             ->values();
 
