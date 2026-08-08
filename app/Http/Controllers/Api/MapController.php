@@ -263,6 +263,11 @@ class MapController extends Controller
      * de dos formas: como quien la ofrece (misiones.npc_id) o como quien la recibe una
      * vez cumplida (misiones.npc_termina_id) — este segundo caso solo se muestra si el
      * usuario ya la aceptó, para no permitir "entregarla" antes de haberla pedido.
+     *
+     * Varias misiones activas pueden compartir el mismo npc_id/npc_termina_id: se
+     * encadenan por 'orden' ascendente, y solo se expone la primera que el usuario
+     * no haya completado todavía (siguienteEnCadena). Así, completar la misión de
+     * orden más bajo —sin importar en qué NPC se entregó— desbloquea la siguiente.
      */
     private function attachMisionInfo(Collection $npcs, ?User $user): Collection
     {
@@ -287,12 +292,17 @@ class MapController extends Controller
             ->filter(fn ($m) => $npcIds->contains($m->npc_termina_id) && $pivots->has($m->id))
             ->groupBy('npc_termina_id');
 
+        $siguienteEnCadena = fn (?Collection $grupo) => $grupo?->first(
+            fn ($m) => ($pivots->get($m->id)?->status) !== 'completada'
+        );
+
         $characterHitos = $user?->character
             ? $user->character->hitos()->pluck('hito')->all()
             : [];
 
-        return $npcs->map(function (MapNpc $npc) use ($misionesComoOferente, $misionesComoReceptor, $pivots, $characterHitos) {
-            $mision = $misionesComoOferente->get($npc->id)?->first() ?? $misionesComoReceptor->get($npc->id)?->first();
+        return $npcs->map(function (MapNpc $npc) use ($misionesComoOferente, $misionesComoReceptor, $siguienteEnCadena, $pivots, $characterHitos) {
+            $mision = $siguienteEnCadena($misionesComoOferente->get($npc->id))
+                ?? $siguienteEnCadena($misionesComoReceptor->get($npc->id));
 
             if (! $mision) {
                 $npc->setAttribute('mision_disponible', null);
