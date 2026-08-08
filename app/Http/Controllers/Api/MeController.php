@@ -80,7 +80,7 @@ class MeController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        $user = $request->user()->load('character', 'roles', 'sede');
+        $user = $request->user()->load('character', 'roles', 'sede', 'tutor.character');
         $character = $user->character;
 
         if ($character) {
@@ -106,6 +106,14 @@ class MeController extends Controller
             'is_tutor' => $user->isTutor(),
             'roles' => $user->roles->pluck('name'),
             'sede' => $this->formatSede($user->sede),
+            'tutor' => $user->tutor
+                ? [
+                    'id' => $user->tutor->id,
+                    'name' => $user->tutor->character?->name ?? $user->tutor->name,
+                    'handle' => $user->tutor->character?->handle,
+                    'tier' => $user->tutor->tier,
+                ]
+                : null,
             'character' => $character ? [
                 'id' => $character->id,
                 'handle' => $character->handle,

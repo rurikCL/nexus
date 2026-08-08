@@ -768,7 +768,7 @@ export function ComandoView({ S, go, user, onUserUpdate, onGoToCombat }) {
               </Panel>
             ),
             tareas: (
-              <Panel title="Tareas Asignadas" kicker="Tutor · Diego Fuentes" icon="tasks"
+              <Panel title="Tareas Asignadas" kicker={`Tutor · ${user?.tutor?.name ?? 'Sin Tutor'}`} icon="tasks"
                 right={panelRight(<Btn sm icon="arrow" iconRight={null} onClick={() => go('tareas')}>Ver todas</Btn>)}>
                 <div style={{ display: 'grid', gap: 10 }}>
                   {myTasks.length === 0 && <Empty label="Sin Tareas" />}
