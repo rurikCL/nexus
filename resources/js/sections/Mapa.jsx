@@ -4082,7 +4082,8 @@ function DialogoRPG({ npc, userCharacter, lugarImagen, onClose, onCombatStart, o
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [npc.id, onMisionChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [npc.id]);
 
   /* Bloquea el scroll de la página mientras el diálogo está en pantalla */
   useEffect(() => {
